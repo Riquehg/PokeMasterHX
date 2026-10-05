@@ -1,6 +1,8 @@
 // --- BASE DE DADOS OFICIAL: ITENS (HEX Edition) ---
 // Classificação baseada no Manual do Jogo (Comuns, Rápidos, Captura, Batalha e Evolução).
 
+const SUPABASE_STORAGE_URL = "https://juowcnkjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
+
 const ITEM_CATALOG = [
     // ==========================================
     // --- ITENS COMUNS (Usados no seu Turno) ---
@@ -10,7 +12,7 @@ const ITEM_CATALOG = [
         name: 'Bicycle',
         category: 'common',
         icon: '🚲',
-        image: 'assets/items/bicycle.png',
+        image: `${SUPABASE_STORAGE_URL}items/bicycle.png`,
         desc: 'Permite jogar um turno extra após o seu turno atual. Você pode usar mais de uma bicicleta no mesmo turno.'
     },
     {
@@ -18,7 +20,7 @@ const ITEM_CATALOG = [
         name: 'Escape Rope',
         category: 'common',
         icon: '🪢',
-        image: 'assets/items/escape_rope.png',
+        image: `${SUPABASE_STORAGE_URL}items/escape_rope.png`,
         desc: 'Permite usar seu turno não para mover, mas para ativar o espaço em que você está ou um adjacente no tabuleiro.'
     },
     {
@@ -26,7 +28,7 @@ const ITEM_CATALOG = [
         name: 'Fly',
         category: 'common',
         icon: '🦅',
-        image: 'assets/items/fly.png',
+        image: `${SUPABASE_STORAGE_URL}items/fly.png`,
         desc: 'Move seu peão para qualquer espaço no hexágono atual e ativa o espaço após chegar lá. Deve ser sua única ação no turno.'
     },
     {
@@ -34,7 +36,7 @@ const ITEM_CATALOG = [
         name: 'Fishing Rod',
         category: 'common',
         icon: '🎣',
-        image: 'assets/items/fishing_rod.png',
+        image: `${SUPABASE_STORAGE_URL}items/fishing_rod.png`,
         desc: 'Equipamento que pode ser mantido nos slots de equipamento do Treinador para interagir com áreas de pesca/água.'
     },
     {
@@ -42,7 +44,7 @@ const ITEM_CATALOG = [
         name: 'Honey',
         category: 'common',
         icon: '🍯',
-        image: 'assets/items/honey.png',
+        image: `${SUPABASE_STORAGE_URL}items/honey.png`,
         desc: 'Pode ser usado para tentar capturar um Pokémon que esteja no mesmo hexágono que você.'
     },
     {
@@ -50,7 +52,7 @@ const ITEM_CATALOG = [
         name: 'PokéNav Plus',
         category: 'common',
         icon: '📱',
-        image: 'assets/items/pokenav.png',
+        image: `${SUPABASE_STORAGE_URL}items/pokenav.png`,
         desc: 'Força um jogador a descartar seu Card de Treinador e comprar outros dois do monte.'
     },
     {
@@ -58,7 +60,7 @@ const ITEM_CATALOG = [
         name: 'Rare Candy',
         category: 'common',
         icon: '🍬',
-        image: 'assets/items/rare_candy.png',
+        image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`,
         desc: 'Pode ser usado para dar XP imediato e subir de nível o seu Anima, ou capturar Pokémon elegíveis da mesma família evolutiva.'
     },
     {
@@ -66,7 +68,7 @@ const ITEM_CATALOG = [
         name: 'Repel',
         category: 'common',
         icon: '💨',
-        image: 'assets/items/repel.png',
+        image: `${SUPABASE_STORAGE_URL}items/repel.png`,
         desc: 'Troca um Pokémon revelado no tabuleiro pelo próximo Pokémon da mesma cor da pilha.'
     },
     {
@@ -74,7 +76,7 @@ const ITEM_CATALOG = [
         name: 'Rocket Attack',
         category: 'common',
         icon: '🚀',
-        image: 'assets/items/rocket_attack.png',
+        image: `${SUPABASE_STORAGE_URL}items/rocket_attack.png`,
         desc: 'Escolhe um oponente e rouba aleatoriamente um Item da mão dele.'
     },
 
@@ -86,7 +88,7 @@ const ITEM_CATALOG = [
         name: 'Poké Doll',
         category: 'quick',
         icon: '🧸',
-        image: 'assets/items/poke_doll.png',
+        image: `${SUPABASE_STORAGE_URL}items/poke_doll.png`,
         desc: 'Bloqueia qualquer efeito direto causado a você (seja de um Item, Evento ou espaço de cidade).'
     },
     {
@@ -94,7 +96,7 @@ const ITEM_CATALOG = [
         name: 'Time Travel',
         category: 'quick',
         icon: '⏳',
-        image: 'assets/items/time_travel.png',
+        image: `${SUPABASE_STORAGE_URL}items/time_travel.png`,
         desc: 'Força a rerrolagem de qualquer dado, podendo ser usado a qualquer momento após uma rolagem sua ou de um oponente.'
     },
     {
@@ -102,7 +104,7 @@ const ITEM_CATALOG = [
         name: 'Exp. Share',
         category: 'quick',
         icon: '📈',
-        image: 'assets/items/exp_share.png',
+        image: `${SUPABASE_STORAGE_URL}items/exp_share.png`,
         desc: 'Ativado quando um oponente ativa um Evento ou Super Evento: resolve o evento e copia os efeitos para você.'
     },
     {
@@ -110,7 +112,7 @@ const ITEM_CATALOG = [
         name: 'Lure Module',
         category: 'quick',
         icon: '🔮',
-        image: 'assets/items/lure_module.png',
+        image: `${SUPABASE_STORAGE_URL}items/lure_module.png`,
         desc: 'Troca as posições de dois Pokémon da mesma cor no tabuleiro (revelados ou não).'
     },
     {
@@ -118,7 +120,7 @@ const ITEM_CATALOG = [
         name: 'Poké Flute',
         category: 'quick',
         icon: '🎶',
-        image: 'assets/items/poke_flute.png',
+        image: `${SUPABASE_STORAGE_URL}items/poke_flute.png`,
         desc: 'Pode ser usado quando um Evento é ativado para cancelá-lo, puxar outro e ativar o novo em seu lugar.'
     },
 
@@ -131,7 +133,7 @@ const ITEM_CATALOG = [
         category: 'capture',
         value: 0,
         icon: '🔴',
-        image: 'assets/items/poke_ball.png',
+        image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`,
         desc: 'Esfera clássica padrão para tentativas de captura.'
     },
     {
@@ -140,7 +142,7 @@ const ITEM_CATALOG = [
         category: 'capture',
         value: 1,
         icon: '🔵',
-        image: 'assets/items/great_ball.png',
+        image: `${SUPABASE_STORAGE_URL}items/great_ball.png`,
         desc: 'Adiciona +1 no resultado do dado de captura.'
     },
     {
@@ -149,7 +151,7 @@ const ITEM_CATALOG = [
         category: 'capture',
         value: 2,
         icon: '🟡',
-        image: 'assets/items/ultra_ball.png',
+        image: `${SUPABASE_STORAGE_URL}items/ultra_ball.png`,
         desc: 'Adiciona +2 no resultado do dado de captura.'
     },
     {
@@ -158,7 +160,7 @@ const ITEM_CATALOG = [
         category: 'capture',
         value: 4,
         icon: '🟣',
-        image: 'assets/items/master_ball.png',
+        image: `${SUPABASE_STORAGE_URL}items/master_ball.png`,
         desc: 'Adiciona +4 no resultado do dado de captura.'
     },
     // --- 3 POKÉ BALLS COM EFEITOS ESPECIAIS E AURAS ---
@@ -169,7 +171,7 @@ const ITEM_CATALOG = [
         value: 2,
         aura: 'aura-mystic',
         icon: '🔮',
-        image: 'assets/items/mystic_ball.png',
+        image: `${SUPABASE_STORAGE_URL}items/mystic_ball.png`,
         desc: 'Esfera arcana. Adiciona +2 na captura e reveste o Anima com uma Aura Mística roxa permanente.'
     },
     {
@@ -179,7 +181,7 @@ const ITEM_CATALOG = [
         value: 2,
         aura: 'aura-flame',
         icon: '🔥',
-        image: 'assets/items/flame_ball.png',
+        image: `${SUPABASE_STORAGE_URL}items/flame_ball.png`,
         desc: 'Esfera ígnea. Adiciona +2 na captura e reveste o Anima com uma Aura de Fogo permanente.'
     },
     {
@@ -189,7 +191,7 @@ const ITEM_CATALOG = [
         value: 2,
         aura: 'aura-aqua',
         icon: '💧',
-        image: 'assets/items/aqua_ball.png',
+        image: `${SUPABASE_STORAGE_URL}items/aqua_ball.png`,
         desc: 'Esfera hidro. Adiciona +2 na captura e reveste o Anima com uma Aura Aquática permanente.'
     },
 
@@ -202,7 +204,7 @@ const ITEM_CATALOG = [
         category: 'evolution',
         value: 1,
         icon: '💎',
-        image: 'assets/items/evolution_stone.png',
+        image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`,
         desc: 'Pedra mística capaz de forçar a evolução imediata de um Pokémon compatível na equipa.'
     },
 
@@ -215,7 +217,7 @@ const ITEM_CATALOG = [
         category: 'battle',
         value: 2,
         icon: '🧪',
-        image: 'assets/items/vitamin.png',
+        image: `${SUPABASE_STORAGE_URL}items/vitamin.png`,
         desc: 'Aumenta o poder do seu Pokémon em 2 pontos durante uma batalha.'
     },
     {
@@ -224,7 +226,7 @@ const ITEM_CATALOG = [
         category: 'battle',
         value: 2,
         icon: '⚔️',
-        image: 'assets/items/x_attack.png',
+        image: `${SUPABASE_STORAGE_URL}items/x_attack.png`,
         desc: 'Aumenta o poder do Pokémon em 2 pontos (durante uma batalha).'
     },
     {
@@ -234,7 +236,7 @@ const ITEM_CATALOG = [
         categorySub: 'heal',
         value: 20,
         icon: '💊',
-        image: 'assets/items/potion.png',
+        image: `${SUPABASE_STORAGE_URL}items/potion.png`,
         desc: 'Restaura 20 de HP de um Anima ou pode ser usado para reviver/curar após embates.'
     }
 ];
