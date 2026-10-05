@@ -1,12 +1,7 @@
 // --- MOTOR DO JOGO DIGITAL: POKÉMON MASTER TRAINER (HEX Edition) ---
 
-socket.on('login_response', (response) => {
-    if (response.success) {
-        // Avançar para a criação de personagem ou carregar o jogo
-    } else {
-        showCustomPopup("Erro", response.message, false);
-    }
-});
+// 1. Inicializar a conexão Socket.io com o servidor backend na nuvem (Render)
+const socket = io('https://pokemasterhx.onrender.com');
 
 // URL base do Supabase Storage para garantir o carregamento correto de sprites em PCs e Telemóveis
 const SUPABASE_STORAGE_URL = "https://juowcnkjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
@@ -1372,7 +1367,7 @@ function openEncounterModalWithPokemon(pokemon) {
     if (!modal) return;
 
     if (cp.activeTeam.length === 0) {
-        showCustomPopup("Aviso", "🚫 Precisas de ter pelo menos um Pokémon na Equipa Ativa!");
+        showCustomPopup("Aviso", "🚫 Precisas de pelo menos um Pokémon na Equipa Ativa!");
         return;
     }
 
@@ -2605,7 +2600,7 @@ window.handleAccountLoginOrRegister = function() {
     socket.emit('login_request', { email: emailInput, password: passInput });
 };
 
-// Resposta recebida do servidor backend
+// Resposta recebida do servidor backend (Apenas UMA declaração correta aqui)
 socket.on('login_response', (response) => {
     if (!response.success) {
         showCustomPopup("Erro de Autenticação", response.message, false);
