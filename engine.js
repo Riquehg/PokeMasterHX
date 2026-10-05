@@ -1,7 +1,10 @@
 // --- MOTOR DO JOGO DIGITAL: POKÉMON MASTER TRAINER (HEX Edition) ---
 
-// 1. Inicializar a conexão Socket.io com o servidor backend
+// 1. Inicializar a conexão Socket.io com o servidor backend na nuvem (Render)
 const socket = io('https://pokemasterhx.onrender.com');
+
+// URL base do Supabase Storage para garantir o carregamento correto de sprites em PCs e Telemóveis
+const SUPABASE_STORAGE_URL = "https://juowcnkjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
 
 // Variável global de autenticação declarada apenas uma vez no início
 let currentAuthenticatedAccount = null;
@@ -245,7 +248,7 @@ function updateTrainerCardBadges(cp) {
 
 window.openSpecificTrainerCardModal = function(playerIndex) {
     const cp = gameState.players[playerIndex] || gameState.players[0];
-    const loggedPlayer = getCurrentPlayer(); // Jogador da vez / ativo
+    const loggedPlayer = getCurrentPlayer();
     
     const areOnSameTile = (loggedPlayer.currentZone === cp.currentZone) && (loggedPlayer.name !== cp.name);
 
@@ -266,6 +269,8 @@ window.openSpecificTrainerCardModal = function(playerIndex) {
             const shinyBadgeModal = mon.isShiny ? '<span class="bg-amber-400 text-black font-black text-[7px] px-1 rounded-full animate-pulse">✨ SHINY</span>' : '';
             const tierColorBg = getTierColorClass(mon.tier || 1);
             const auraClassModal = mon.auraEffect || '';
+            const monImgSrc = mon.isShiny && mon.shinyImage ? mon.shinyImage : (mon.image || '');
+            
             teamSlotsHtml += `
                 <div class="${tierColorBg} border-2 ${mon.isShiny ? 'border-amber-400 shiny-card-glow' : ''} ${auraClassModal} rounded-xl p-2 flex flex-col justify-between h-28 text-white shadow relative">
                     <div class="flex justify-between items-center text-[9px] font-bold">
@@ -274,7 +279,7 @@ window.openSpecificTrainerCardModal = function(playerIndex) {
                         <span>Nv.${mon.level || 1}</span>
                     </div>
                     <div class="my-auto flex justify-center bg-black/40 rounded-lg p-1">
-                        <img src="${mon.isShiny && mon.shinyImage ? mon.shinyImage : (mon.image || '')}" class="w-10 h-10 object-contain drop-shadow" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                        <img src="${monImgSrc}" class="w-10 h-10 object-contain drop-shadow" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                     </div>
                     <div class="text-[8px] text-center font-black bg-black/60 text-amber-300 rounded p-0.5">
                         HP: ${curHp}/${maxHp} | STR: ${mon.str || 4}
@@ -305,7 +310,7 @@ window.openSpecificTrainerCardModal = function(playerIndex) {
     allBadgesDef.forEach(b => {
         const hasIt = badgesArray.includes(b.key);
         const cls = hasIt ? 'drop-shadow-[0_0_8px_rgba(255,215,0,0.8)] scale-110' : 'grayscale opacity-40';
-        badgesHtml += `<img src="assets/badges/${b.key}.png" class="w-7 h-7 object-contain transition-transform ${cls}" alt="${b.key}" title="${b.title}">`;
+        badgesHtml += `<img src="${SUPABASE_STORAGE_URL}badges/${b.key}.png" class="w-7 h-7 object-contain transition-transform ${cls}" alt="${b.key}" title="${b.title}">`;
     });
 
     let interactionButtonsHtml = '';
@@ -334,7 +339,7 @@ window.openSpecificTrainerCardModal = function(playerIndex) {
 
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
                 <div class="bg-black/60 border-2 border-blue-900 p-4 rounded-xl flex flex-col items-center justify-center space-y-2">
-                    <img src="assets/player_0${cp.avatarId || 1}.png" class="w-20 h-20 object-contain drop-shadow-[0_0_10px_rgba(59,130,246,0.6)]" onerror="this.src='https://api.iconify.design/noto:boy.svg'">
+                    <img src="${SUPABASE_STORAGE_URL}player_0${cp.avatarId || 1}.png" class="w-20 h-20 object-contain drop-shadow-[0_0_10px_rgba(59,130,246,0.6)]" onerror="this.src='https://api.iconify.design/noto:boy.svg'">
                     <span class="text-xs font-black text-amber-400">${cp.name}</span>
                     <span class="text-[10px] text-slate-300">Ouro: ${cp.gold} 🪙</span>
                 </div>
@@ -478,14 +483,14 @@ window.startMainGame = function() {
             }],
             pcBox: [],
             inventory: [
-                { id: 'poke_ball', name: 'Poké Ball', type: 'sphere', value: 0, icon: '🔴', image: 'assets/items/poke_ball.png', count: 5, cost: 50, desc: 'Esfera clássica.' },
-                { id: 'ball_great', name: 'Great Ball', type: 'sphere', value: 1, icon: '🔵', image: 'assets/items/great_ball.png', count: 3, cost: 100, desc: 'Adiciona +1 na captura.' },
-                { id: 'ball_ultra', name: 'Ultra Ball', type: 'sphere', value: 2, icon: '🟡', image: 'assets/items/ultra_ball.png', count: 2, cost: 200, desc: 'Adiciona +2 na captura.' },
-                { id: 'item_rarecandy', name: 'Rare Candy', type: 'rarecandy', value: 100, icon: '🍬', image: 'assets/items/rare_candy.png', count: 2, cost: 300, desc: 'Dá 100 XP imediato (Sobe de Nível).' },
-                { id: 'evolution_stone', name: 'Evolution Stone', type: 'evolution', value: 1, icon: '💎', image: 'assets/items/evolution_stone.png', count: 1, cost: 500, desc: 'Evolve um Anima compatível.' },
-                { id: 'item_vitamin', name: 'Vitamin', type: 'battle', value: 2, icon: '🧪', image: 'assets/items/vitamin.png', count: 2, cost: 150, desc: 'Aumenta o STR do Pokémon em +2 na batalha.' },
-                { id: 'item_potion', name: 'Potion', type: 'heal', value: 20, icon: '💊', image: 'assets/items/potion.png', count: 3, cost: 50, desc: 'Restaura 20 HP de um Anima.' },
-                { id: 'item_revive', name: 'Revive', type: 'revive', value: 50, icon: '🌟', image: 'assets/items/revive.png', count: 1, cost: 250, desc: 'Revive um Anima desmaiado (HP 0).' }
+                { id: 'poke_ball', name: 'Poké Ball', type: 'sphere', value: 0, icon: '🔴', image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`, count: 5, cost: 50, desc: 'Esfera clássica.' },
+                { id: 'ball_great', name: 'Great Ball', type: 'sphere', value: 1, icon: '🔵', image: `${SUPABASE_STORAGE_URL}items/great_ball.png`, count: 3, cost: 100, desc: 'Adiciona +1 na captura.' },
+                { id: 'ball_ultra', name: 'Ultra Ball', type: 'sphere', value: 2, icon: '🟡', image: `${SUPABASE_STORAGE_URL}items/ultra_ball.png`, count: 2, cost: 200, desc: 'Adiciona +2 na captura.' },
+                { id: 'item_rarecandy', name: 'Rare Candy', type: 'rarecandy', value: 100, icon: '🍬', image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`, count: 2, cost: 300, desc: 'Dá 100 XP imediato (Sobe de Nível).' },
+                { id: 'evolution_stone', name: 'Evolution Stone', type: 'evolution', value: 1, icon: '💎', image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`, count: 1, cost: 500, desc: 'Evolve um Anima compatível.' },
+                { id: 'item_vitamin', name: 'Vitamin', type: 'battle', value: 2, icon: '🧪', image: `${SUPABASE_STORAGE_URL}items/vitamin.png`, count: 2, cost: 150, desc: 'Aumenta o STR do Pokémon em +2 na batalha.' },
+                { id: 'item_potion', name: 'Potion', type: 'heal', value: 20, icon: '💊', image: `${SUPABASE_STORAGE_URL}items/potion.png`, count: 3, cost: 50, desc: 'Restaura 20 HP de um Anima.' },
+                { id: 'item_revive', name: 'Revive', type: 'revive', value: 50, icon: '🌟', image: `${SUPABASE_STORAGE_URL}items/revive.png`, count: 1, cost: 250, desc: 'Revive um Anima desmaiado (HP 0).' }
             ],
             equipmentSlots: [null, null]
         });
@@ -527,14 +532,14 @@ window.startMainGame = function() {
                     }],
                     pcBox: [],
                     inventory: [
-                        { id: 'poke_ball', name: 'Poké Ball', type: 'sphere', value: 0, icon: '🔴', image: 'assets/items/poke_ball.png', count: 5, cost: 50, desc: 'Esfera clássica.' },
-                        { id: 'ball_great', name: 'Great Ball', type: 'sphere', value: 1, icon: '🔵', image: 'assets/items/great_ball.png', count: 3, cost: 100, desc: 'Adiciona +1 na captura.' },
-                        { id: 'ball_ultra', name: 'Ultra Ball', type: 'sphere', value: 2, icon: '🟡', image: 'assets/items/ultra_ball.png', count: 2, cost: 200, desc: 'Adiciona +2 na captura.' },
-                        { id: 'item_rarecandy', name: 'Rare Candy', type: 'rarecandy', value: 100, icon: '🍬', image: 'assets/items/rare_candy.png', count: 2, cost: 300, desc: 'Dá 100 XP imediato (Sobe de Nível).' },
-                        { id: 'evolution_stone', name: 'Evolution Stone', type: 'evolution', value: 1, icon: '💎', image: 'assets/items/evolution_stone.png', count: 1, cost: 500, desc: 'Evolve um Anima compatível.' },
-                        { id: 'item_vitamin', name: 'Vitamin', type: 'battle', value: 2, icon: '🧪', image: 'assets/items/vitamin.png', count: 2, cost: 150, desc: 'Aumenta o STR do Pokémon em +2 na batalha.' },
-                        { id: 'item_potion', name: 'Potion', type: 'heal', value: 20, icon: '💊', image: 'assets/items/potion.png', count: 3, cost: 50, desc: 'Restaura 20 HP de um Anima.' },
-                        { id: 'item_revive', name: 'Revive', type: 'revive', value: 50, icon: '🌟', image: 'assets/items/revive.png', count: 1, cost: 250, desc: 'Revive um Anima desmaiado (HP 0).' }
+                        { id: 'poke_ball', name: 'Poké Ball', type: 'sphere', value: 0, icon: '🔴', image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`, count: 5, cost: 50, desc: 'Esfera clássica.' },
+                        { id: 'ball_great', name: 'Great Ball', type: 'sphere', value: 1, icon: '🔵', image: `${SUPABASE_STORAGE_URL}items/great_ball.png`, count: 3, cost: 100, desc: 'Adiciona +1 na captura.' },
+                        { id: 'ball_ultra', name: 'Ultra Ball', type: 'sphere', value: 2, icon: '🟡', image: `${SUPABASE_STORAGE_URL}items/ultra_ball.png`, count: 2, cost: 200, desc: 'Adiciona +2 na captura.' },
+                        { id: 'item_rarecandy', name: 'Rare Candy', type: 'rarecandy', value: 100, icon: '🍬', image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`, count: 2, cost: 300, desc: 'Dá 100 XP imediato (Sobe de Nível).' },
+                        { id: 'evolution_stone', name: 'Evolution Stone', type: 'evolution', value: 1, icon: '💎', image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`, count: 1, cost: 500, desc: 'Evolve um Anima compatível.' },
+                        { id: 'item_vitamin', name: 'Vitamin', type: 'battle', value: 2, icon: '🧪', image: `${SUPABASE_STORAGE_URL}items/vitamin.png`, count: 2, cost: 150, desc: 'Aumenta o STR do Pokémon em +2 na batalha.' },
+                        { id: 'item_potion', name: 'Potion', type: 'heal', value: 20, icon: '💊', image: `${SUPABASE_STORAGE_URL}items/potion.png`, count: 3, cost: 50, desc: 'Restaura 20 HP de um Anima.' },
+                        { id: 'item_revive', name: 'Revive', type: 'revive', value: 50, icon: '🌟', image: `${SUPABASE_STORAGE_URL}items/revive.png`, count: 1, cost: 250, desc: 'Revive um Anima desmaiado (HP 0).' }
                     ],
                     equipmentSlots: [null, null]
                 });
@@ -719,6 +724,7 @@ window.openPokemonDetailModal = function(monsterIdOrUniqueId, fromArea = 'team')
     const shinyBanner = monster.isShiny ? '<div class="bg-amber-400 text-black font-black text-[9px] text-center rounded py-0.5 animate-pulse">✨ POKÉMON SHINY RARO ✨</div>' : '';
     const tierCardBg = getTierColorClass(monster.tier || 1);
     const auraDetailClass = monster.auraEffect || '';
+    const monImgUrl = monster.isShiny && monster.shinyImage ? monster.shinyImage : (monster.image || '');
 
     const showVaultButton = (monster.uniqueId && (fromArea === 'team' || fromArea === 'pcbox')) ? `
         <button onclick="saveMonsterToVault('${monster.uniqueId}'); document.getElementById('pokemon-detail-modal').remove();" class="w-full bg-blue-700 hover:bg-blue-600 text-white font-black py-2 rounded-xl text-xs uppercase shadow transition-all">
@@ -738,7 +744,7 @@ window.openPokemonDetailModal = function(monsterIdOrUniqueId, fromArea = 'team')
 
             <div class="grid grid-cols-2 gap-3 items-center">
                 <div class="bg-black/60 border-2 border-amber-700/60 p-3 rounded-xl flex flex-col items-center justify-center h-32">
-                    <img src="${monster.isShiny && monster.shinyImage ? monster.shinyImage : (monster.image || '')}" alt="${monster.name}" class="w-20 h-20 object-contain drop-shadow-[0_0_10px_rgba(255,215,0,0.6)] ${isFainted ? 'grayscale opacity-50' : ''}" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                    <img src="${monImgUrl}" alt="${monster.name}" class="w-20 h-20 object-contain drop-shadow-[0_0_10px_rgba(255,215,0,0.6)] ${isFainted ? 'grayscale opacity-50' : ''}" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                 </div>
                 <div class="space-y-1.5 text-xs">
                     <div>
@@ -896,7 +902,7 @@ window.openCityModal = function(cityName) {
             <div class="bg-red-950/40 border-2 border-red-600/60 p-3 rounded-2xl space-y-2">
                 <div class="flex justify-between items-center border-b border-red-900 pb-1">
                     <div class="flex items-center gap-2">
-                        <img src="assets/leaders/${gymInfo.leader.toLowerCase()}.png" class="w-8 h-8 object-contain rounded-full bg-black border border-amber-400" onerror="this.src='https://api.iconify.design/noto:man-raising-hand.svg'">
+                        <img src="${SUPABASE_STORAGE_URL}leaders/${gymInfo.leader.toLowerCase()}.png" class="w-8 h-8 object-contain rounded-full bg-black border border-amber-400" onerror="this.src='https://api.iconify.design/noto:man-raising-hand.svg'">
                         <div>
                             <span class="text-xs font-black text-red-300">Líder: ${gymInfo.leader}</span>
                             <p class="text-[9px] text-slate-300">Formato: ${gymInfo.format}x${gymInfo.format}</p>
@@ -972,17 +978,17 @@ window.openPokemartModal = function() {
 function renderMartContent(modalEl) {
     const cp = getCurrentPlayer();
     let itemsForSale = [
-        { id: 'poke_ball', name: 'Poké Ball', type: 'sphere', value: 0, cost: 50, icon: '🔴', image: 'assets/items/poke_ball.png', desc: 'Esfera clássica.' },
-        { id: 'ball_great', name: 'Great Ball', type: 'sphere', value: 1, cost: 100, icon: '🔵', image: 'assets/items/great_ball.png', desc: '+1 na captura.' },
-        { id: 'ball_ultra', name: 'Ultra Ball', type: 'sphere', value: 2, cost: 200, icon: '🟡', image: 'assets/items/ultra_ball.png', desc: '+2 na captura.' },
-        { id: 'ball_mystic', name: 'Mystic Ball', type: 'sphere', value: 2, aura: 'aura-mystic', cost: 350, icon: '🔮', image: 'assets/items/mystic_ball.png', desc: '+2 captura com Aura Mística.' },
-        { id: 'ball_flame', name: 'Flame Ball', type: 'sphere', value: 2, aura: 'aura-flame', cost: 350, icon: '🔥', image: 'assets/items/flame_ball.png', desc: '+2 captura com Aura de Fogo.' },
-        { id: 'ball_aqua', name: 'Aqua Ball', type: 'sphere', value: 2, aura: 'aura-aqua', cost: 350, icon: '💧', image: 'assets/items/aqua_ball.png', desc: '+2 captura com Aura Aquática.' },
-        { id: 'item_rarecandy', name: 'Rare Candy', type: 'rarecandy', value: 100, cost: 300, icon: '🍬', image: 'assets/items/rare_candy.png', desc: 'Dá 100 XP (Sobe de Nível).' },
-        { id: 'evolution_stone', name: 'Evolution Stone', type: 'evolution', value: 1, cost: 500, icon: '💎', image: 'assets/items/evolution_stone.png', desc: 'Evolve um Anima compatível.' },
-        { id: 'item_potion', name: 'Potion', type: 'heal', value: 20, cost: 50, icon: '💊', image: 'assets/items/potion.png', desc: 'Restaura 20 HP.' },
-        { id: 'item_revive', name: 'Revive', type: 'revive', value: 50, cost: 250, icon: '🌟', image: 'assets/items/revive.png', desc: 'Revive um Anima desmaiado.' },
-        { id: 'item_vitamin', name: 'Vitamin', type: 'battle', value: 2, cost: 150, icon: '🧪', image: 'assets/items/vitamin.png', desc: '+2 STR na batalha.' }
+        { id: 'poke_ball', name: 'Poké Ball', type: 'sphere', value: 0, cost: 50, icon: '🔴', image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`, desc: 'Esfera clássica.' },
+        { id: 'ball_great', name: 'Great Ball', type: 'sphere', value: 1, cost: 100, icon: '🔵', image: `${SUPABASE_STORAGE_URL}items/great_ball.png`, desc: '+1 na captura.' },
+        { id: 'ball_ultra', name: 'Ultra Ball', type: 'sphere', value: 2, cost: 200, icon: '🟡', image: `${SUPABASE_STORAGE_URL}items/ultra_ball.png`, desc: '+2 na captura.' },
+        { id: 'ball_mystic', name: 'Mystic Ball', type: 'sphere', value: 2, aura: 'aura-mystic', cost: 350, icon: '🔮', image: `${SUPABASE_STORAGE_URL}items/mystic_ball.png`, desc: '+2 captura com Aura Mística.' },
+        { id: 'ball_flame', name: 'Flame Ball', type: 'sphere', value: 2, aura: 'aura-flame', cost: 350, icon: '🔥', image: `${SUPABASE_STORAGE_URL}items/flame_ball.png`, desc: '+2 captura com Aura de Fogo.' },
+        { id: 'ball_aqua', name: 'Aqua Ball', type: 'sphere', value: 2, aura: 'aura-aqua', cost: 350, icon: '💧', image: `${SUPABASE_STORAGE_URL}items/aqua_ball.png`, desc: '+2 captura com Aura Aquática.' },
+        { id: 'item_rarecandy', name: 'Rare Candy', type: 'rarecandy', value: 100, cost: 300, icon: '🍬', image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`, desc: 'Dá 100 XP (Sobe de Nível).' },
+        { id: 'evolution_stone', name: 'Evolution Stone', type: 'evolution', value: 1, cost: 500, icon: '💎', image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`, desc: 'Evolve um Anima compatível.' },
+        { id: 'item_potion', name: 'Potion', type: 'heal', value: 20, cost: 50, icon: '💊', image: `${SUPABASE_STORAGE_URL}items/potion.png`, desc: 'Restaura 20 HP.' },
+        { id: 'item_revive', name: 'Revive', type: 'revive', value: 50, cost: 250, icon: '🌟', image: `${SUPABASE_STORAGE_URL}items/revive.png`, desc: 'Revive um Anima desmaiado.' },
+        { id: 'item_vitamin', name: 'Vitamin', type: 'battle', value: 2, cost: 150, icon: '🧪', image: `${SUPABASE_STORAGE_URL}items/vitamin.png`, desc: '+2 STR na batalha.' }
     ];
 
     let shopHTML = `
@@ -1039,17 +1045,17 @@ window.buyItemFromMart = function(itemId, cost) {
         existingItem.count++;
     } else {
         let baseItemsCatalog = {
-            poke_ball: { id: 'poke_ball', name: 'Poké Ball', type: 'sphere', value: 0, icon: '🔴', image: 'assets/items/poke_ball.png', count: 1, desc: 'Esfera clássica.' },
-            ball_great: { id: 'ball_great', name: 'Great Ball', type: 'sphere', value: 1, icon: '🔵', image: 'assets/items/great_ball.png', count: 1, desc: '+1 na captura.' },
-            ball_ultra: { id: 'ball_ultra', name: 'Ultra Ball', type: 'sphere', value: 2, icon: '🟡', image: 'assets/items/ultra_ball.png', count: 1, desc: '+2 na captura.' },
-            ball_mystic: { id: 'ball_mystic', name: 'Mystic Ball', type: 'sphere', value: 2, aura: 'aura-mystic', icon: '🔮', image: 'assets/items/mystic_ball.png', count: 1, desc: '+2 captura com Aura Mística.' },
-            ball_flame: { id: 'ball_flame', name: 'Flame Ball', type: 'sphere', value: 2, aura: 'aura-flame', icon: '🔥', image: 'assets/items/flame_ball.png', count: 1, desc: '+2 captura com Aura de Fogo.' },
-            ball_aqua: { id: 'ball_aqua', name: 'Aqua Ball', type: 'sphere', value: 2, aura: 'aura-aqua', icon: '💧', image: 'assets/items/aqua_ball.png', count: 1, desc: '+2 captura com Aura Aquática.' },
-            item_rarecandy: { id: 'item_rarecandy', name: 'Rare Candy', type: 'rarecandy', value: 100, icon: '🍬', image: 'assets/items/rare_candy.png', count: 1, desc: 'Dá 100 XP (Sobe de Nível).' },
-            evolution_stone: { id: 'evolution_stone', name: 'Evolution Stone', type: 'evolution', value: 1, icon: '💎', image: 'assets/items/evolution_stone.png', count: 1, desc: 'Evolve um Anima compatível.' },
-            item_potion: { id: 'item_potion', name: 'Potion', type: 'heal', value: 20, icon: '💊', image: 'assets/items/potion.png', count: 1, desc: 'Restaura 20 HP.' },
-            item_revive: { id: 'item_revive', name: 'Revive', type: 'revive', value: 50, icon: '🌟', image: 'assets/items/revive.png', count: 1, desc: 'Revive um Anima desmaiado.' },
-            item_vitamin: { id: 'item_vitamin', name: 'Vitamin', type: 'battle', value: 2, icon: '🧪', image: 'assets/items/vitamin.png', count: 1, desc: 'Aumenta o STR do Pokémon.' }
+            poke_ball: { id: 'poke_ball', name: 'Poké Ball', type: 'sphere', value: 0, icon: '🔴', image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`, count: 1, desc: 'Esfera clássica.' },
+            ball_great: { id: 'ball_great', name: 'Great Ball', type: 'sphere', value: 1, icon: '🔵', image: `${SUPABASE_STORAGE_URL}items/great_ball.png`, count: 1, desc: '+1 na captura.' },
+            ball_ultra: { id: 'ball_ultra', name: 'Ultra Ball', type: 'sphere', value: 2, icon: '🟡', image: `${SUPABASE_STORAGE_URL}items/ultra_ball.png`, count: 1, desc: '+2 na captura.' },
+            ball_mystic: { id: 'ball_mystic', name: 'Mystic Ball', type: 'sphere', value: 2, aura: 'aura-mystic', icon: '🔮', image: `${SUPABASE_STORAGE_URL}items/mystic_ball.png`, count: 1, desc: '+2 captura com Aura Mística.' },
+            ball_flame: { id: 'ball_flame', name: 'Flame Ball', type: 'sphere', value: 2, aura: 'aura-flame', icon: '🔥', image: `${SUPABASE_STORAGE_URL}items/flame_ball.png`, count: 1, desc: '+2 captura com Aura de Fogo.' },
+            ball_aqua: { id: 'ball_aqua', name: 'Aqua Ball', type: 'sphere', value: 2, aura: 'aura-aqua', icon: '💧', image: `${SUPABASE_STORAGE_URL}items/aqua_ball.png`, count: 1, desc: '+2 captura com Aura Aquática.' },
+            item_rarecandy: { id: 'item_rarecandy', name: 'Rare Candy', type: 'rarecandy', value: 100, icon: '🍬', image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`, count: 1, desc: 'Dá 100 XP (Sobe de Nível).' },
+            evolution_stone: { id: 'evolution_stone', name: 'Evolution Stone', type: 'evolution', value: 1, icon: '💎', image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`, count: 1, desc: 'Evolve um Anima compatível.' },
+            item_potion: { id: 'item_potion', name: 'Potion', type: 'heal', value: 20, icon: '💊', image: `${SUPABASE_STORAGE_URL}items/potion.png`, count: 1, desc: 'Restaura 20 HP.' },
+            item_revive: { id: 'item_revive', name: 'Revive', type: 'revive', value: 50, icon: '🌟', image: `${SUPABASE_STORAGE_URL}items/revive.png`, count: 1, desc: 'Revive um Anima desmaiado.' },
+            item_vitamin: { id: 'item_vitamin', name: 'Vitamin', type: 'battle', value: 2, icon: '🧪', image: `${SUPABASE_STORAGE_URL}items/vitamin.png`, count: 1, desc: 'Aumenta o STR do Pokémon.' }
         };
         if (baseItemsCatalog[itemId]) {
             cp.inventory.push(baseItemsCatalog[itemId]);
@@ -1117,7 +1123,7 @@ function showGymVsScreen(gymInfo) {
 
         <div class="flex items-center justify-center gap-8 my-4 w-full max-w-2xl">
             <div class="flex flex-col items-center border-4 border-amber-500 rounded-3xl p-5 bg-gradient-to-b from-amber-950 to-black shadow-2xl w-48">
-                <img src="assets/leaders/${gymInfo.leader.toLowerCase()}.png" class="w-24 h-24 object-contain mb-2 drop-shadow-[0_0_10px_rgba(255,215,0,0.6)]" onerror="this.src='https://api.iconify.design/noto:man-raising-hand.svg'">
+                <img src="${SUPABASE_STORAGE_URL}leaders/${gymInfo.leader.toLowerCase()}.png" class="w-24 h-24 object-contain mb-2 drop-shadow-[0_0_10px_rgba(255,215,0,0.6)]" onerror="this.src='https://api.iconify.design/noto:man-raising-hand.svg'">
                 <span class="text-xs font-black text-amber-300 uppercase">Líder</span>
             </div>
             
@@ -1158,6 +1164,8 @@ function openTeamSelectionModalForGym() {
             const isSelected = selectedIndices.includes(idx);
             const tierCardBg = getTierColorClass(mon.tier || 1);
             const auraGymSelClass = mon.auraEffect || '';
+            const monImgSrc = mon.isShiny && mon.shinyImage ? mon.shinyImage : (mon.image || '');
+
             teamGridHtml += `
                 <div onclick="${isFainted ? '' : `toggleGymTeamSelection(${idx})`}" class="${tierCardBg} ${auraGymSelClass} p-3 rounded-2xl border-2 ${isSelected ? 'border-amber-400 bg-amber-950/80 scale-105' : 'border-amber-900/60'} ${isFainted ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-amber-500'} flex flex-col justify-between h-36 transition-all text-white">
                     <div class="flex justify-between items-center text-[10px] font-bold text-amber-300">
@@ -1165,7 +1173,7 @@ function openTeamSelectionModalForGym() {
                         <span>Nv.${mon.level || 1}</span>
                     </div>
                     <div class="my-auto flex justify-center bg-black/40 rounded p-1">
-                        <img src="${mon.isShiny && mon.shinyImage ? mon.shinyImage : (mon.image || '')}" class="w-14 h-14 object-contain">
+                        <img src="${monImgSrc}" class="w-14 h-14 object-contain">
                     </div>
                     <div class="text-[9px] text-center font-bold ${isFainted ? 'text-red-400' : 'text-emerald-400'}">
                         ${isFainted ? 'DESMAIADO' : `HP: ${mon.currentHp !== undefined ? mon.currentHp : mon.maxHp}/${mon.maxHp}`}
@@ -1409,6 +1417,8 @@ function updateEncounterUIInfo() {
     const playerCardBg = getTierColorClass(activeMon.tier || 1);
     const enemyCardBg = getTierColorClass(pokemon.tier || 1);
     const auraEncPlayerClass = activeMon.auraEffect || '';
+    const activeMonImg = activeMon.isShiny && activeMon.shinyImage ? activeMon.shinyImage : (activeMon.image || '');
+    const wildMonImg = pokemon.isShiny && pokemon.shinyImage ? pokemon.shinyImage : (pokemon.image || '');
 
     const playerVisual = document.getElementById('player-card-visual');
     if (playerVisual) {
@@ -1422,7 +1432,7 @@ function updateEncounterUIInfo() {
             <div class="flex flex-col items-center justify-center my-auto space-y-3">
                 <h3 class="text-base font-black text-white text-center truncate w-full">${activeMon.name}</h3>
                 <div class="flex items-center justify-center bg-black/60 w-36 h-36 rounded-2xl border-2 border-amber-400 shadow-inner p-3 relative">
-                    <img src="${activeMon.isShiny && activeMon.shinyImage ? activeMon.shinyImage : (activeMon.image || '')}" alt="${activeMon.name}" class="max-h-32 max-w-full object-contain drop-shadow-md" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                    <img src="${activeMonImg}" alt="${activeMon.name}" class="max-h-32 max-w-full object-contain drop-shadow-md" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                 </div>
             </div>
 
@@ -1453,7 +1463,7 @@ function updateEncounterUIInfo() {
             <div class="flex flex-col items-center justify-center my-auto space-y-3">
                 <h3 class="text-base font-black text-white text-center truncate w-full">${pokemon.name}</h3>
                 <div class="flex items-center justify-center bg-black/60 w-36 h-36 rounded-2xl border-2 ${pokemon.isShiny ? 'border-amber-400 shiny-card-glow' : 'border-red-800'} shadow-inner p-3 relative">
-                    <img src="${pokemon.isShiny && pokemon.shinyImage ? pokemon.shinyImage : (pokemon.image || '')}" alt="${pokemon.name}" class="max-h-32 max-w-full object-contain drop-shadow-md" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                    <img src="${wildMonImg}" alt="${pokemon.name}" class="max-h-32 max-w-full object-contain drop-shadow-md" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                     ${pokemon.weakened ? '<span class="absolute top-2 right-2 bg-red-500 text-xs px-2 py-0.5 rounded-md shadow">🩹</span>' : ''}
                 </div>
             </div>
@@ -1751,12 +1761,14 @@ function showEvolutionModalUI(oldName, evolvedMonster) {
         document.body.appendChild(evoModal);
     }
 
+    const evoImgUrl = evolvedMonster.isShiny && evolvedMonster.shinyImage ? evolvedMonster.shinyImage : evolvedMonster.image;
+
     evoModal.innerHTML = `
         <div class="trainer-card max-w-sm w-full p-6 text-center space-y-4 border-4 border-amber-400 rounded-2xl bg-gradient-to-b from-amber-950 to-black shadow-2xl animate-bounce">
             <h2 class="text-lg font-black text-amber-300 font-cinzel">✨ EVOLUÇÃO! ✨</h2>
             <p class="text-xs text-slate-300">O teu <span class="font-bold text-white">${oldName}</span> está a evoluir...</p>
             <div class="my-3 flex justify-center">
-                <img src="${evolvedMonster.isShiny && evolvedMonster.shinyImage ? evolvedMonster.shinyImage : evolvedMonster.image}" alt="${evolvedMonster.name}" class="w-24 h-24 object-contain drop-shadow-[0_0_15px_rgba(255,215,0,0.8)]" onerror="this.src='https://api.iconify.design/noto:star.svg'">
+                <img src="${evoImgUrl}" alt="${evolvedMonster.name}" class="w-24 h-24 object-contain drop-shadow-[0_0_15px_rgba(255,215,0,0.8)]" onerror="this.src='https://api.iconify.design/noto:star.svg'">
             </div>
             <h3 class="text-xl font-black text-amber-400 uppercase tracking-wider">${evolvedMonster.name}!</h3>
             <p class="text-[10px] text-emerald-400 font-bold">Atributos melhorados: STR ${evolvedMonster.str} | HP ${evolvedMonster.maxHp}</p>
@@ -2046,7 +2058,7 @@ function updatePlayerUI() {
     
     const avatarImg = document.getElementById('trainer-avatar-img');
     if (avatarImg) {
-        avatarImg.src = `assets/player_0${cp.avatarId || 1}.png`;
+        avatarImg.src = `${SUPABASE_STORAGE_URL}player_0${cp.avatarId || 1}.png`;
     }
 
     const cardNameDisplay = document.getElementById('trainer-card-name-display');
@@ -2099,7 +2111,7 @@ const GYM_LEADERS_CATALOG = [
         rewardGold: 300, 
         format: 1,
         pokemons: [
-            { id: 'onix', name: "Onix", level: 3, str: 6, hp: 24, type: "Pedra/Terra", image: "assets/monsters/095.png" }
+            { id: 'onix', name: "Onix", level: 3, str: 6, hp: 24, type: "Pedra/Terra", image: `${SUPABASE_STORAGE_URL}monsters/095.png` }
         ] 
     },
     { 
@@ -2111,7 +2123,7 @@ const GYM_LEADERS_CATALOG = [
         rewardGold: 400, 
         format: 1,
         pokemons: [
-            { id: 'starmie', name: "Starmie", level: 4, str: 7, hp: 28, type: "Água/Psíquico", image: "assets/monsters/121.png" }
+            { id: 'starmie', name: "Starmie", level: 4, str: 7, hp: 28, type: "Água/Psíquico", image: `${SUPABASE_STORAGE_URL}monsters/121.png` }
         ] 
     },
     { 
@@ -2123,8 +2135,8 @@ const GYM_LEADERS_CATALOG = [
         rewardGold: 500, 
         format: 3,
         pokemons: [
-            { id: 'voltorb', name: "Voltorb", level: 4, str: 7, hp: 26, type: "Elétrico", image: "assets/monsters/101.png" },
-            { id: 'raichu', name: "Raichu", level: 5, str: 8, hp: 32, type: "Elétrico", image: "assets/monsters/026.png" }
+            { id: 'voltorb', name: "Voltorb", level: 4, str: 7, hp: 26, type: "Elétrico", image: `${SUPABASE_STORAGE_URL}monsters/101.png` },
+            { id: 'raichu', name: "Raichu", level: 5, str: 8, hp: 32, type: "Elétrico", image: `${SUPABASE_STORAGE_URL}monsters/026.png` }
         ] 
     },
     { 
@@ -2136,8 +2148,8 @@ const GYM_LEADERS_CATALOG = [
         rewardGold: 600, 
         format: 3,
         pokemons: [
-            { id: 'tangela', name: "Tangela", level: 5, str: 8, hp: 30, type: "Grama", image: "assets/monsters/114.png" },
-            { id: 'vileplume', name: "Vileplume", level: 6, str: 9, hp: 36, type: "Grama/Veneno", image: "assets/monsters/045.png" }
+            { id: 'tangela', name: "Tangela", level: 5, str: 8, hp: 30, type: "Grama", image: `${SUPABASE_STORAGE_URL}monsters/114.png` },
+            { id: 'vileplume', name: "Vileplume", level: 6, str: 9, hp: 36, type: "Grama/Veneno", image: `${SUPABASE_STORAGE_URL}monsters/045.png` }
         ] 
     },
     { 
@@ -2149,8 +2161,8 @@ const GYM_LEADERS_CATALOG = [
         rewardGold: 700, 
         format: 3,
         pokemons: [
-            { id: 'koffing', name: "Koffing", level: 5, str: 8, hp: 30, type: "Veneno", image: "assets/monsters/109.png" },
-            { id: 'weezing', name: "Weezing", level: 6, str: 9, hp: 38, type: "Veneno", image: "assets/monsters/110.png" }
+            { id: 'koffing', name: "Koffing", level: 5, str: 8, hp: 30, type: "Veneno", image: `${SUPABASE_STORAGE_URL}monsters/109.png` },
+            { id: 'weezing', name: "Weezing", level: 6, str: 9, hp: 38, type: "Veneno", image: `${SUPABASE_STORAGE_URL}monsters/110.png` }
         ] 
     },
     { 
@@ -2162,8 +2174,8 @@ const GYM_LEADERS_CATALOG = [
         rewardGold: 850, 
         format: 3,
         pokemons: [
-            { id: 'arcanine', name: "Arcanine", level: 6, str: 9, hp: 38, type: "Fogo", image: "assets/monsters/059.png" },
-            { id: 'magmar', name: "Magmar", level: 6, str: 9, hp: 36, type: "Fogo", image: "assets/monsters/126.png" }
+            { id: 'arcanine', name: "Arcanine", level: 6, str: 9, hp: 38, type: "Fogo", image: `${SUPABASE_STORAGE_URL}monsters/059.png` },
+            { id: 'magmar', name: "Magmar", level: 6, str: 9, hp: 36, type: "Fogo", image: `${SUPABASE_STORAGE_URL}monsters/126.png` }
         ]
     },
     { 
@@ -2175,8 +2187,8 @@ const GYM_LEADERS_CATALOG = [
         rewardGold: 1000, 
         format: 3,
         pokemons: [
-            { id: 'arcanine', name: "Arcanine", level: 6, str: 9, hp: 38, type: "Fogo", image: "assets/monsters/059.png" },
-            { id: 'dragonite', name: "Dragonite", level: 7, str: 10, hp: 44, type: "Dragão/Voador", image: "assets/monsters/149.png" }
+            { id: 'arcanine', name: "Arcanine", level: 6, str: 9, hp: 38, type: "Fogo", image: `${SUPABASE_STORAGE_URL}monsters/059.png` },
+            { id: 'dragonite', name: "Dragonite", level: 7, str: 10, hp: 44, type: "Dragão/Voador", image: `${SUPABASE_STORAGE_URL}monsters/149.png` }
         ] 
     }
 ];
