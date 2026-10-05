@@ -1,10 +1,11 @@
 // --- MOTOR DO JOGO DIGITAL: POKÉMON MASTER TRAINER (HEX Edition) ---
 
+if (typeof SUPABASE_STORAGE_URL === 'undefined') {
+    var SUPABASE_STORAGE_URL = "https://juowcnkjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
+}
+
 // 1. Inicializar a conexão Socket.io com o servidor backend na nuvem (Render)
 const socket = io('https://pokemasterhx.onrender.com');
-
-// URL base do Supabase Storage para garantir o carregamento correto de sprites em PCs e Telemóveis
-const SUPABASE_STORAGE_URL = "https://juowcnkjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
 
 // Variável global de autenticação declarada apenas uma vez no início
 let currentAuthenticatedAccount = null;
@@ -310,7 +311,7 @@ window.openSpecificTrainerCardModal = function(playerIndex) {
     allBadgesDef.forEach(b => {
         const hasIt = badgesArray.includes(b.key);
         const cls = hasIt ? 'drop-shadow-[0_0_8px_rgba(255,215,0,0.8)] scale-110' : 'grayscale opacity-40';
-        badgesHtml += `<img src="${SUPABASE_STORAGE_URL}badges/${b.key}.png" class="w-7 h-7 object-contain transition-transform ${cls}" alt="${b.key}" title="${b.title}">`;
+        badgesHtml += `<img id="badge-${b.key}" src="${SUPABASE_STORAGE_URL}badges/${b.key}.png" class="w-7 h-7 object-contain transition-transform ${cls}" alt="${b.key}" title="${b.title}">`;
     });
 
     let interactionButtonsHtml = '';
@@ -320,7 +321,7 @@ window.openSpecificTrainerCardModal = function(playerIndex) {
                 <span class="text-[10px] text-purple-300 font-bold">📍 Estão na mesma casa! Ações disponíveis:</span>
                 <div class="flex gap-2 w-full">
                     <button onclick="document.getElementById('trainer-card-modal-full').remove(); triggerPvPBattleArena('${cp.name}');" class="flex-1 bg-red-700 hover:bg-red-600 text-white font-black py-2 rounded-lg text-[10px] uppercase shadow">
-                        ⚔️ Desafiar PvP
+                        ⚔️️ Desafiar PvP
                     </button>
                     <button onclick="document.getElementById('trainer-card-modal-full').remove(); openTradeModal('${loggedPlayer.name}', '${cp.name}');" class="flex-1 bg-blue-700 hover:bg-blue-600 text-white font-black py-2 rounded-lg text-[10px] uppercase shadow">
                         🔄 Propor Troca
@@ -352,7 +353,7 @@ window.openSpecificTrainerCardModal = function(playerIndex) {
             ${interactionButtonsHtml}
 
             <div class="border-t border-blue-900/60 pt-3 flex justify-between items-center">
-                <span class="text-xs font-bold text-slate-300">LEAGUE BADGES: (${badgeCount} / 6)</span>
+                <span class="text-xs font-bold text-slate-300">LEAGUE BADGES: (<span id="badges-count-text">${badgeCount}</span> / 6)</span>
                 <div class="flex items-center gap-2">
                     ${badgesHtml}
                 </div>
@@ -727,7 +728,7 @@ window.openPokemonDetailModal = function(monsterIdOrUniqueId, fromArea = 'team')
     const monImgUrl = monster.isShiny && monster.shinyImage ? monster.shinyImage : (monster.image || '');
 
     const showVaultButton = (monster.uniqueId && (fromArea === 'team' || fromArea === 'pcbox')) ? `
-        <button onclick="saveMonsterToVault('${monster.uniqueId}'); document.getElementById('pokemon-detail-modal').remove();" class="w-full bg-blue-700 hover:bg-blue-600 text-white font-black py-2 rounded-xl text-xs uppercase shadow transition-all">
+        <button onclick="saveMonsterToVault('${monster.uniqueId}'); document.getElementById('pokemon-detail-modal').remove();" class="w-full bg-blue-700 hover:bg-blue-600 text-white font-black py-2 rounded-xl text-xs uppercase shadow transition-all cursor-pointer">
             📦 Guardar no Cofre Global
         </button>
     ` : '';
@@ -782,7 +783,7 @@ window.openPokemonDetailModal = function(monsterIdOrUniqueId, fromArea = 'team')
 
             ${showVaultButton}
 
-            <button onclick="document.getElementById('pokemon-detail-modal').remove()" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2 rounded-xl text-xs uppercase shadow transition-all">
+            <button onclick="document.getElementById('pokemon-detail-modal').remove()" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2 rounded-xl text-xs uppercase shadow transition-all cursor-pointer">
                 Fechar Ficha
             </button>
         </div>
@@ -919,7 +920,7 @@ window.openCityModal = function(cityName) {
                     <span>Prémio: <strong class="text-amber-400">${gymInfo.rewardGold} 🪙</strong></span>
                     <span>Insígnia: <strong class="text-amber-300 uppercase">${gymInfo.badgeKey}</strong></span>
                 </div>
-                <button onclick="document.getElementById('city-hub-modal').remove(); initiateGymSequence('${gymInfo.city}');" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2 rounded-xl text-xs uppercase shadow transition-all">
+                <button onclick="document.getElementById('city-hub-modal').remove(); initiateGymSequence('${gymInfo.city}');" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2 rounded-xl text-xs uppercase shadow transition-all cursor-pointer">
                     ⚔️ Desafiar Ginásio de ${gymInfo.city}
                 </button>
             </div>
@@ -934,17 +935,17 @@ window.openCityModal = function(cityName) {
             </div>
             
             <div class="grid grid-cols-2 gap-2">
-                <button onclick="document.getElementById('city-hub-modal').remove(); openPokemonCenterModal();" class="bg-emerald-700 hover:bg-emerald-600 text-white font-black py-2 px-3 rounded-xl text-[10px] uppercase shadow flex items-center justify-center gap-1.5">
+                <button onclick="document.getElementById('city-hub-modal').remove(); openPokemonCenterModal();" class="bg-emerald-700 hover:bg-emerald-600 text-white font-black py-2 px-3 rounded-xl text-[10px] uppercase shadow flex items-center justify-center gap-1.5 cursor-pointer">
                     🏥 Centro Pokémon
                 </button>
-                <button onclick="document.getElementById('city-hub-modal').remove(); openPokemartModal();" class="bg-blue-700 hover:bg-blue-600 text-white font-black py-2 px-3 rounded-xl text-[10px] uppercase shadow flex items-center justify-center gap-1.5">
+                <button onclick="document.getElementById('city-hub-modal').remove(); openPokemartModal();" class="bg-blue-700 hover:bg-blue-600 text-white font-black py-2 px-3 rounded-xl text-[10px] uppercase shadow flex items-center justify-center gap-1.5 cursor-pointer">
                     🏪 Poké Mart
                 </button>
             </div>
 
             ${gymSectionHtml}
 
-            <button onclick="document.getElementById('city-hub-modal').remove()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs">Continuar Viagem</button>
+            <button onclick="document.getElementById('city-hub-modal').remove()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs cursor-pointer">Continuar Viagem</button>
         </div>
     `;
     cityModal.classList.remove('hidden');
@@ -1013,7 +1014,7 @@ function renderMartContent(modalEl) {
                 </div>
                 <div class="flex items-center gap-2">
                     <span class="text-xs font-black text-amber-400">${item.cost} 🪙</span>
-                    <button onclick="buyItemFromMart('${item.id}', ${item.cost})" class="bg-blue-600 hover:bg-blue-500 text-white font-black px-3 py-1 rounded-lg text-[10px] shadow">
+                    <button onclick="buyItemFromMart('${item.id}', ${item.cost})" class="bg-blue-600 hover:bg-blue-500 text-white font-black px-3 py-1 rounded-lg text-[10px] shadow cursor-pointer">
                         Comprar
                     </button>
                 </div>
@@ -1023,7 +1024,7 @@ function renderMartContent(modalEl) {
 
     shopHTML += `
             </div>
-            <button onclick="document.getElementById('pokemart-modal').remove()" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-black py-2 rounded-xl text-xs uppercase shadow">
+            <button onclick="document.getElementById('pokemart-modal').remove()" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-black py-2 rounded-xl text-xs uppercase shadow cursor-pointer">
                 Sair da Loja
             </button>
         </div>
@@ -1137,7 +1138,7 @@ function showGymVsScreen(gymInfo) {
             </div>
         </div>
 
-        <button onclick="document.getElementById('gym-vs-modal').remove(); openTeamSelectionModalForGym();" class="mt-8 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-black font-black px-8 py-3 rounded-2xl text-xs uppercase tracking-wider shadow-2xl transition-all transform hover:scale-105">
+        <button onclick="document.getElementById('gym-vs-modal').remove(); openTeamSelectionModalForGym();" class="mt-8 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-black font-black px-8 py-3 rounded-2xl text-xs uppercase tracking-wider shadow-2xl transition-all transform hover:scale-105 cursor-pointer">
             Preparar Equipa e Aceitar Desafio <i class="fa-solid fa-arrow-right ml-1"></i>
         </button>
     `;
@@ -1194,7 +1195,7 @@ function openTeamSelectionModalForGym() {
                     ${teamGridHtml}
                 </div>
                 <div class="flex gap-2">
-                    <button onclick="document.getElementById('team-selection-modal').remove();" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all">
+                    <button onclick="document.getElementById('team-selection-modal').remove();" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer">
                         Voltar / Desistir
                     </button>
                     <button onclick="confirmGymTeamSelection([${selectedIndices.join(',')}])" ${canConfirm ? '' : 'disabled'} class="flex-2 ${canConfirm ? 'bg-amber-500 hover:bg-amber-400 text-black cursor-pointer shadow-lg' : 'bg-slate-800 text-slate-500 cursor-not-allowed'} font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-all">
@@ -1322,23 +1323,23 @@ function openMultiplayerInteractionModal(playerA, playerB) {
         <div class="trainer-card max-w-md w-full p-6 space-y-4 border-4 border-purple-500 rounded-2xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
             <div class="flex justify-between items-center border-b border-purple-900 pb-2">
                 <span class="text-xs font-black text-purple-400 font-cinzel">🤝 ENCONTRO DE TREINADORES</span>
-                <button onclick="document.getElementById('mp-interaction-modal').remove()" class="text-purple-400 font-bold text-sm px-2 bg-purple-950 rounded">✕</button>
+                <button onclick="document.getElementById('mp-interaction-modal').remove()" class="text-purple-400 font-bold text-sm px-2 bg-purple-950 rounded cursor-pointer">✕</button>
             </div>
             <p class="text-xs text-slate-300 text-center"><span class="text-amber-300 font-bold">${playerA.name}</span> e <span class="text-amber-300 font-bold">${playerB.name}</span> pararam na mesma casa!</p>
             <div class="space-y-2.5">
-                <button onclick="document.getElementById('mp-interaction-modal').remove(); triggerPvPBattleArena('${playerB.name}');" class="w-full bg-red-700 hover:bg-red-600 text-white font-black py-2.5 rounded-xl text-xs uppercase shadow">
+                <button onclick="document.getElementById('mp-interaction-modal').remove(); triggerPvPBattleArena('${playerB.name}');" class="w-full bg-red-700 hover:bg-red-600 text-white font-black py-2.5 rounded-xl text-xs uppercase shadow cursor-pointer">
                     ⚔️ Desafiar para Batalha PvP na Arena
                 </button>
                 
-                <button onclick="document.getElementById('mp-interaction-modal').remove(); openTradeModal('${playerA.name}', '${playerB.name}');" class="w-full bg-blue-700 hover:bg-blue-600 text-white font-black py-2.5 rounded-xl text-xs uppercase shadow">
+                <button onclick="document.getElementById('mp-interaction-modal').remove(); openTradeModal('${playerA.name}', '${playerB.name}');" class="w-full bg-blue-700 hover:bg-blue-600 text-white font-black py-2.5 rounded-xl text-xs uppercase shadow cursor-pointer">
                     🔄 Propor Troca de Anima / Itens
                 </button>
 
-                <button onclick="document.getElementById('mp-interaction-modal').remove(); openSpecificTrainerCardModal(${gameState.players.findIndex(p => p.name === playerB.name)});" class="w-full bg-amber-700 hover:bg-amber-600 text-black font-black py-2.5 rounded-xl text-xs uppercase shadow">
+                <button onclick="document.getElementById('mp-interaction-modal').remove(); openSpecificTrainerCardModal(${gameState.players.findIndex(p => p.name === playerB.name)});" class="w-full bg-amber-700 hover:bg-amber-600 text-black font-black py-2.5 rounded-xl text-xs uppercase shadow cursor-pointer">
                     📋 Ver Trainer Card de ${playerB.name}
                 </button>
             </div>
-            <button onclick="document.getElementById('mp-interaction-modal').remove()" class="w-full bg-slate-800 text-slate-300 font-bold py-2 rounded-xl text-xs">Continuar Viagem</button>
+            <button onclick="document.getElementById('mp-interaction-modal').remove()" class="w-full bg-slate-800 text-slate-300 font-bold py-2 rounded-xl text-xs cursor-pointer">Continuar Viagem</button>
         </div>
     `;
     interModal.classList.remove('hidden');
@@ -1441,7 +1442,7 @@ function updateEncounterUIInfo() {
                 <p class="text-[11px] font-black text-emerald-400 bg-emerald-950/90 rounded-xl px-2.5 py-1 border border-emerald-600">⚡ Pré-Soma: ~${estimatedPlayerPower} + [🎲 1-6]</p>
             </div>
             
-            <button onclick="cyclePlayerEncounterPokemon()" class="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-amber-600 hover:bg-amber-500 text-black font-black text-[10px] px-3 py-1 rounded-full shadow border border-amber-300 uppercase tracking-wider">
+            <button onclick="cyclePlayerEncounterPokemon()" class="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-amber-600 hover:bg-amber-500 text-black font-black text-[10px] px-3 py-1 rounded-full shadow border border-amber-300 uppercase tracking-wider cursor-pointer">
                 🔄 Trocar Anima
             </button>
         `;
@@ -1507,7 +1508,7 @@ function renderEncounterItemsList() {
     cp.inventory.forEach((item, index) => {
         if (!item || item.count <= 0) return;
         const btn = document.createElement('button');
-        btn.className = "bg-blue-900/60 hover:bg-blue-800 text-blue-200 px-2.5 py-1 rounded-lg border border-blue-600 text-[10px] flex items-center gap-1.5 shadow";
+        btn.className = "bg-blue-900/60 hover:bg-blue-800 text-blue-200 px-2.5 py-1 rounded-lg border border-blue-600 text-[10px] flex items-center gap-1.5 shadow cursor-pointer";
         const itemImg = item.image ? `<img src="${item.image}" class="w-4 h-4 object-contain">` : `<span>${item.icon}</span>`;
         btn.innerHTML = `${itemImg} <span>${item.name} (${item.count})</span>`;
         btn.onclick = () => useItemInEncounter(item, index);
@@ -1636,7 +1637,7 @@ function showCustomPopup(title, message, isSuccess = true) {
             <div class="text-xs text-slate-200 whitespace-pre-line leading-relaxed bg-black/40 p-3 rounded-xl border border-amber-900/50">
                 ${message}
             </div>
-            <button onclick="document.getElementById('game-custom-popup').remove()" class="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-black font-black py-2.5 rounded-xl text-xs uppercase shadow transition-all">
+            <button onclick="document.getElementById('game-custom-popup').remove()" class="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-black font-black py-2.5 rounded-xl text-xs uppercase shadow transition-all cursor-pointer">
                 Continuar
             </button>
         </div>
@@ -1772,7 +1773,7 @@ function showEvolutionModalUI(oldName, evolvedMonster) {
             </div>
             <h3 class="text-xl font-black text-amber-400 uppercase tracking-wider">${evolvedMonster.name}!</h3>
             <p class="text-[10px] text-emerald-400 font-bold">Atributos melhorados: STR ${evolvedMonster.str} | HP ${evolvedMonster.maxHp}</p>
-            <button onclick="document.getElementById('evolution-popup-modal').remove()" class="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 rounded-xl text-xs uppercase shadow transition-all">
+            <button onclick="document.getElementById('evolution-popup-modal').remove()" class="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 rounded-xl text-xs uppercase shadow transition-all cursor-pointer">
                 Continuar Aventura
             </button>
         </div>
@@ -2024,10 +2025,10 @@ function checkAndRenderPassTurnButton() {
 
         btnContainer.innerHTML = `
             <div class="flex items-center gap-2">
-                <button onclick="rollDiceForMovement()" class="bg-amber-600 hover:bg-amber-500 text-black font-black px-3 py-2 rounded-xl text-xs shadow-lg flex items-center gap-1.5 border border-amber-300 animate-pulse" title="Rolar o Dado para Mover">
+                <button onclick="rollDiceForMovement()" class="bg-amber-600 hover:bg-amber-500 text-black font-black px-3 py-2 rounded-xl text-xs shadow-lg flex items-center gap-1.5 border border-amber-300 animate-pulse cursor-pointer" title="Rolar o Dado para Mover">
                     <i class="fa-solid fa-dice-d20 text-sm"></i> Rolar Dado
                 </button>
-                <button onclick="passTurnToNextPlayer()" class="bg-purple-700 hover:bg-purple-600 text-white font-black px-3 py-2 rounded-xl text-xs shadow-lg border border-purple-400" title="Avançar Turno">
+                <button onclick="passTurnToNextPlayer()" class="bg-purple-700 hover:bg-purple-600 text-white font-black px-3 py-2 rounded-xl text-xs shadow-lg border border-purple-400 cursor-pointer" title="Avançar Turno">
                     ${buttonText}
                 </button>
             </div>
@@ -2401,7 +2402,7 @@ window.openVaultModal = function() {
                     <div class="text-[9px] text-center text-slate-300">
                         Nv.${mon.level || 1} | STR: ${mon.str || 4}
                     </div>
-                    <button onclick="withdrawMonsterFromVault(${index})" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-1 rounded text-[9px] uppercase shadow">
+                    <button onclick="withdrawMonsterFromVault(${index})" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-1 rounded text-[9px] uppercase shadow cursor-pointer">
                         Resgatar
                     </button>
                 </div>
@@ -2439,7 +2440,7 @@ function withdrawMonsterFromVault(vaultIndex) {
     renderBottomPanel();
 }
 
-// --- SISTEMA DE TROCAS (TRADE SYSTEM) ENTRE JOGADORES CORRIGIDO ---
+// --- SISTEMA DE TROCAS (TRADE SYSTEM) ENTRE JOGADORES ---
 
 function openTradeModal(playerAName, playerBName) {
     const playerA = gameState.players.find(p => p.name === playerAName);
@@ -2600,7 +2601,7 @@ window.handleAccountLoginOrRegister = function() {
     socket.emit('login_request', { email: emailInput, password: passInput });
 };
 
-// Resposta recebida do servidor backend (Apenas UMA declaração correta aqui)
+// Resposta recebida do servidor backend
 socket.on('login_response', (response) => {
     if (!response.success) {
         showCustomPopup("Erro de Autenticação", response.message, false);
