@@ -1,7 +1,12 @@
 // --- MOTOR DO JOGO DIGITAL: POKÉMON MASTER TRAINER (HEX Edition) ---
 
-// 1. Inicializar a conexão Socket.io com o servidor backend na nuvem (Render)
-const socket = io('https://pokemasterhx.onrender.com');
+socket.on('login_response', (response) => {
+    if (response.success) {
+        // Avançar para a criação de personagem ou carregar o jogo
+    } else {
+        showCustomPopup("Erro", response.message, false);
+    }
+});
 
 // URL base do Supabase Storage para garantir o carregamento correto de sprites em PCs e Telemóveis
 const SUPABASE_STORAGE_URL = "https://juowcnkjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
