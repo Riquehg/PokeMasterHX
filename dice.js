@@ -1,6 +1,8 @@
 // --- SISTEMA DE DADOS E MOVIMENTO TRADICIONAL DE TABULEIRO (DICE.JS) ---
 
-const SUPABASE_STORAGE_URL = "https://juowcnkjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
+if (typeof SUPABASE_STORAGE_URL === 'undefined') {
+    var SUPABASE_STORAGE_URL = "https://juowcnkjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
+}
 
 let movementState = {
     isMoving: false,
@@ -37,7 +39,7 @@ function rollDiceForMovement() {
 
     if (movementState.hasRolledThisTurn) {
         if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Movimento Esgotado", "⚠️ Já rodaste o dado e realizaste o teu movimento neste turno!\n\nPassa a vez ou termina as tuas ações.", false);
+            showCustomPopup("Movimento Esgotado", "⚠️️ Já rodaste o dado e realizaste o teu movimento neste turno!\n\nPassa a vez ou termina as tuas ações.", false);
         }
         return;
     }
