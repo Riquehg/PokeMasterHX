@@ -1,0 +1,177 @@
+/* --- ESTILOS DO MAPA E LAYOUT LATERAL --- */
+
+.map-viewport {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#map-zoom-wrapper {
+    position: relative;
+    transform-origin: center center;
+    transition: transform 0.15s ease-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.map-container {
+    position: relative;
+    width: 100%;
+    max-width: 1000px;
+    height: auto;
+    aspect-ratio: 2618 / 1226;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.9);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    transform-origin: center center;
+    transition: transform 0.2s ease-out;
+}
+
+.player-token {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    transform: translate(-50%, -85%);
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 50;
+    filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.95));
+    animation: bounceSlow 2s infinite ease-in-out;
+}
+
+@keyframes bounceSlow {
+    0%, 100% { transform: translate(-50%, -85%) translateY(0); }
+    50% { transform: translate(-50%, -85%) translateY(-6px); }
+}
+
+/* Animação de Flip da Carta TCG */
+.perspective-1000 {
+    perspective: 1000px;
+}
+
+.card-inner {
+    transition: transform 0.6s;
+    transform-style: preserve-3d;
+}
+
+.card-flipped {
+    transform: rotateY(180deg);
+}
+
+.card-front, .card-back {
+    backface-visibility: hidden;
+}
+
+.card-back {
+    transform: rotateY(180deg);
+}/* --- ESTILOS DO MAPA E LAYOUT LATERAL --- */
+
+.map-viewport {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#map-zoom-wrapper {
+    position: relative;
+    transform-origin: center center;
+    transition: transform 0.15s ease-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.map-container {
+    position: relative;
+    width: 100%;
+    max-width: 1000px;
+    height: auto;
+    aspect-ratio: 2618 / 1226;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.9);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    transform-origin: center center;
+    transition: transform 0.2s ease-out;
+}
+
+.player-token {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    transform: translate(-50%, -85%);
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 50;
+    filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.95));
+    animation: bounceSlow 2s infinite ease-in-out;
+}
+
+@keyframes bounceSlow {
+    0%, 100% { transform: translate(-50%, -85%) translateY(0); }
+    50% { transform: translate(-50%, -85%) translateY(-6px); }
+}
+
+/* Animação de Flip da Carta TCG */
+.perspective-1000 {
+    perspective: 1000px;
+}
+
+.card-inner {
+    transition: transform 0.6s;
+    transform-style: preserve-3d;
+}
+
+.card-flipped {
+    transform: rotateY(180deg);
+}
+
+.card-front, .card-back {
+    backface-visibility: hidden;
+}
+
+.card-back {
+    transform: rotateY(180deg);
+}
+
+/* --- EFEITOS VISUAIS DE SHINIES E AURAS (HEX Edition) --- */
+
+.shiny-card-glow {
+    border: 3px solid #fbbf24 !important;
+    box-shadow: 0 0 15px rgba(251, 191, 36, 0.9), inset 0 0 10px rgba(251, 191, 36, 0.6);
+    animation: shinyPulse 2s infinite alternate;
+    background: linear-gradient(135deg, #1c1410 0%, #3d2508 50%, #1c1410 100%) !important;
+}
+
+@keyframes shinyPulse {
+    0% {
+        box-shadow: 0 0 10px rgba(251, 191, 36, 0.6), inset 0 0 5px rgba(251, 191, 36, 0.3);
+    }
+    100% {
+        box-shadow: 0 0 25px rgba(252, 211, 77, 1), inset 0 0 14px rgba(252, 211, 77, 0.8);
+    }
+}
+
+/* Auras Especiais para Pokéballs e Itens */
+.aura-mystic {
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.8);
+    border-color: #c084fc !important;
+}
+
+.aura-flame {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.8);
+    border-color: #f87171 !important;
+}
+
+.aura-aqua {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.8);
+    border-color: #60a5fa !important;
+}

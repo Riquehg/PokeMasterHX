@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokémon Master Trainer: HEX Edition (Digital)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Socket.io Client para Multiplayer Online -->
+    <script src="http://localhost:3000/socket.io/socket.io.js"></script>
+    <!-- Estilos Personalizados -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="p-3 lg:p-5 min-h-screen flex flex-col justify-between bg-[#0b0806] text-slate-200">
+
+    <!-- === TELA INICIAL / AUTENTICAÇÃO E CRIAÇÃO DE CONTA === -->
+    <div id="setup-screen" class="fixed inset-0 bg-[#070504] z-[200] flex items-center justify-center p-4 overflow-y-auto">
+        <div class="trainer-card max-w-xl w-full p-6 space-y-5 border-4 border-amber-900 rounded-2xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl relative">
+            
+            <!-- Botão de Acesso Admin Discreto no Topo -->
+            <button onclick="openAdminPanelModal()" class="absolute top-4 right-4 text-[10px] bg-slate-900 border border-slate-700 text-slate-400 hover:text-amber-300 px-2.5 py-1 rounded-lg transition-all" title="Painel do Administrador">
+                <i class="fa-solid fa-shield-halved"></i> Admin
+            </button>
+
+            <div class="text-center space-y-1">
+                <h1 class="text-xl font-black text-amber-300 font-cinzel tracking-wider">Pokémon Master Trainer</h1>
+                <p class="text-xs text-amber-500 uppercase tracking-widest font-bold">HEX Edition - Versão Online / Cloud Ready</p>
+            </div>
+
+            <!-- PASSO 1: AUTENTICAÇÃO (LOGIN / VERIFICAÇÃO DE CONTA) -->
+            <div id="auth-container" class="space-y-3 bg-black/40 p-4 rounded-xl border border-amber-900/60">
+                <h3 class="text-xs font-bold text-amber-400"><i class="fa-solid fa-lock"></i> 1. Acesso à Conta (Login)</h3>
+                <div class="space-y-2">
+                    <div>
+                        <label class="text-[10px] text-slate-300 font-bold block mb-0.5">E-mail do Treinador:</label>
+                        <input type="email" id="auth-email-input" placeholder="treinador@kanto.com" class="w-full bg-black/80 border border-amber-900/60 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500 font-bold">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-slate-300 font-bold block mb-0.5">Senha:</label>
+                        <input type="password" id="auth-password-input" placeholder="••••••••" class="w-full bg-black/80 border border-amber-900/60 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500 font-bold">
+                    </div>
+                </div>
+                <button type="button" onclick="handleAccountLoginOrRegister()" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2.5 rounded-xl text-xs uppercase tracking-wider shadow transition-all">
+                    Entrar na Conta <i class="fa-solid fa-arrow-right ml-1"></i>
+                </button>
+            </div>
+
+            <!-- PASSO 2: CRIAÇÃO DE PERSONAGEM (Oculto até autenticar com sucesso) -->
+            <div id="character-creation-container" class="hidden space-y-4 bg-black/40 p-4 rounded-xl border border-amber-700/60">
+                <div class="bg-amber-950/40 p-3 rounded-xl border border-amber-700/60 text-center">
+                    <p class="text-xs text-amber-300 font-bold">✨ Conta verificada! Configure abaixo o seu único personagem.</p>
+                </div>
+
+                <!-- Modo de Jogo -->
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-amber-400 block"><i class="fa-solid fa-gamepad"></i> Modo de Jogo:</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button type="button" onclick="setGameMode('solo')" id="btn-mode-solo" class="py-2.5 px-4 rounded-xl border-2 border-amber-600 bg-amber-950/60 text-amber-300 font-bold text-xs transition-all flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-user"></i> Solo (Campanha)
+                        </button>
+                        <button type="button" onclick="setGameMode('local_multi')" id="btn-mode-multi" class="py-2.5 px-4 rounded-xl border-2 border-slate-700 bg-slate-900/60 text-slate-400 font-bold text-xs transition-all flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-users"></i> Multiplayer Local
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Nome do Personagem -->
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-amber-400 block"><i class="fa-solid fa-user-pen"></i> Nome do Personagem:</label>
+                    <input type="text" id="setup-trainer-name" value="Ash Ketchum" class="w-full bg-black/60 border-2 border-amber-900/60 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500 font-bold">
+                </div>
+
+                <!-- Escolha do Avatar -->
+                <div class="space-y-2">
+                    <label class="text-xs font-bold text-amber-400 block"><i class="fa-solid fa-id-badge"></i> Escolha o seu Avatar:</label>
+                    <div class="grid grid-cols-4 gap-2.5">
+                        <div onclick="selectAvatar(1)" class="avatar-option cursor-pointer border-2 border-amber-500 bg-black/50 p-2 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="1">
+                            <img src="assets/player_01.png" alt="Avatar 1" class="w-10 h-10 object-contain" onerror="this.src='https://api.iconify.design/noto:boy.svg'">
+                        </div>
+                        <div onclick="selectAvatar(2)" class="avatar-option cursor-pointer border-2 border-amber-900/60 bg-black/50 p-2 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="2">
+                            <img src="assets/player_02.png" alt="Avatar 2" class="w-10 h-10 object-contain" onerror="this.src='https://api.iconify.design/noto:girl.svg'">
+                        </div>
+                        <div onclick="selectAvatar(3)" class="avatar-option cursor-pointer border-2 border-amber-900/60 bg-black/50 p-2 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="3">
+                            <img src="assets/player_03.png" alt="Avatar 3" class="w-10 h-10 object-contain" onerror="this.src='https://api.iconify.design/noto:man-beard.svg'">
+                        </div>
+                        <div onclick="selectAvatar(4)" class="avatar-option cursor-pointer border-2 border-amber-900/60 bg-black/50 p-2 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="4">
+                            <img src="assets/player_04.png" alt="Avatar 4" class="w-10 h-10 object-contain" onerror="this.src='https://api.iconify.design/noto:woman-blonde-hair.svg'">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pokémon Inicial -->
+                <div class="space-y-2">
+                    <label class="text-xs font-bold text-amber-400 block"><i class="fa-solid fa-paw"></i> Pokémon Inicial (Starter):</label>
+                    <div class="grid grid-cols-3 gap-2.5">
+                        <div onclick="selectStarter('bulbasaur')" id="starter-bulbasaur" class="starter-option cursor-pointer border-2 border-amber-500 bg-amber-950/40 p-2 rounded-xl flex flex-col items-center text-center transition-all">
+                            <img src="assets/monsters/001.png" alt="Bulbasaur" class="w-8 h-8 object-contain mb-1" onerror="this.src='https://api.iconify.design/noto:seedling.svg'">
+                            <span class="text-[10px] font-bold text-white">Bulbasaur</span>
+                        </div>
+                        <div onclick="selectStarter('charmander')" id="starter-charmander" class="starter-option cursor-pointer border-2 border-amber-900/60 bg-black/40 p-2 rounded-xl flex flex-col items-center text-center transition-all">
+                            <img src="assets/monsters/004.png" alt="Charmander" class="w-8 h-8 object-contain mb-1" onerror="this.src='https://api.iconify.design/noto:fire.svg'">
+                            <span class="text-[10px] font-bold text-white">Charmander</span>
+                        </div>
+                        <div onclick="selectStarter('squirtle')" id="starter-squirtle" class="starter-option cursor-pointer border-2 border-amber-900/60 bg-black/40 p-2 rounded-xl flex flex-col items-center text-center transition-all">
+                            <img src="assets/monsters/007.png" alt="Squirtle" class="w-8 h-8 object-contain mb-1" onerror="this.src='https://api.iconify.design/noto:droplet.svg'">
+                            <span class="text-[10px] font-bold text-white">Squirtle</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="button" onclick="finalizeCharacterCreation()" class="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-black font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all">
+                    Concluir Registo de Personagem <i class="fa-solid fa-arrow-right ml-1"></i>
+                </button>
+            </div>
+
+            <button type="button" onclick="loadGameProgress()" class="w-full bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold py-2.5 rounded-xl text-xs uppercase tracking-wider border border-amber-600/40 shadow transition-all">
+                📂 Carregar Jogo Salvo Anteriormente
+            </button>
+        </div>
+    </div>
+
+    <!-- === INTERFACE PRINCIPAL DO JOGO (OCULTA ATÉ COMEÇAR) === -->
+    <div id="main-game-layout" class="flex flex-col justify-between flex-1 hidden">
+        <!-- HUD SUPERIOR -->
+        <header class="rounded-xl p-3 mb-3 flex flex-wrap justify-between items-center gap-3 trainer-card border-2 border-amber-900 bg-gradient-to-r from-[#16110d] to-[#0d0906]">
+            <div class="flex items-center gap-3">
+                <div>
+                    <h1 class="text-sm font-bold text-amber-300 font-cinzel">Pokémon Master Trainer: HEX Edition</h1>
+                    <p class="text-[10px] text-slate-400" id="current-location">Local: Base de Partida</p>
+                </div>
+            </div>
+            
+            <!-- CONTROLOGENS E SAVE -->
+            <div class="flex items-center gap-3 flex-wrap">
+                <!-- BOTÃO DE DADO E PASSAR VEZ FIXOS E OTIMIZADOS -->
+                <div id="pass-turn-btn-container" class="flex items-center gap-2">
+                    <button onclick="rollDiceForMovement()" class="bg-amber-600 hover:bg-amber-500 text-black font-black px-3 py-2 rounded-xl text-xs shadow-lg flex items-center gap-1.5 border border-amber-300 animate-pulse" title="Rolar o Dado para Mover">
+                        <i class="fa-solid fa-dice-d20 text-sm"></i> Rolar Dado
+                    </button>
+                    <button onclick="passTurnToNextPlayer()" class="bg-purple-700 hover:bg-purple-600 text-white font-black px-3 py-2 rounded-xl text-xs shadow-lg border border-purple-400" title="Avançar Turno">
+                        🔄 Passar Vez
+                    </button>
+                </div>
+
+                <!-- CONTROLES DO JOGO -->
+                <div class="flex items-center gap-2 text-xs bg-black/50 px-3 py-1.5 rounded-lg border border-amber-900/60">
+                    <div>Turno: <span id="turn-counter" class="font-bold text-amber-400">1</span></div>
+                    <div>🪙 <span id="gold-counter" class="font-bold text-yellow-400">350</span></div>
+                    <div>🏅 <span id="badges-counter" class="font-bold text-purple-400">0 / 6</span></div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button onclick="saveGameProgress()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-2 py-1.5 rounded-lg text-[10px] font-bold shadow" title="Salvar Jogo na Nuvem / Navegador">💾 Salvar</button>
+                    <button onclick="exportSaveToFile()" class="bg-blue-700 hover:bg-blue-600 text-white px-2 py-1.5 rounded-lg text-[10px] font-bold shadow" title="Baixar Save para o PC (.json)">📥 Exportar</button>
+                    <label class="bg-indigo-700 hover:bg-indigo-600 text-white px-2 py-1.5 rounded-lg text-[10px] font-bold shadow cursor-pointer" title="Carregar Save do PC">
+                        📂 Importar <input type="file" id="import-file-input" accept=".json" onchange="importSaveFromFile(event)" class="hidden">
+                    </label>
+                    <button onclick="deleteGameSave()" class="bg-red-800 hover:bg-red-700 text-white px-2 py-1.5 rounded-lg text-[10px] font-bold shadow" title="Deletar Save Atual">🗑️ Deletar</button>
+                    <!-- BOTÃO DA POKÉDEX -->
+                    <button onclick="openPokedexModal()" class="bg-amber-600 hover:bg-amber-500 text-black px-2.5 py-1.5 rounded-lg text-[10px] font-black shadow flex items-center gap-1 cursor-pointer" title="Abrir Pokédex">
+                        📖 Pokédex
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- CONTEÚDO PRINCIPAL (LAYOUT LADO A LADO) -->
+        <main class="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 items-start">
+            
+            <!-- COLUNA ESQUERDA: MAPA DO TABULEIRO + CHAT E LOG -->
+            <section class="lg:col-span-7 flex flex-col space-y-3">
+                <div class="w-full">
+                    <div class="flex justify-between items-center mb-1 px-1 text-xs">
+                        <span class="text-amber-300 font-cinzel"><i class="fa-solid fa-map"></i> Tabuleiro Modular (HEX Edition)</span>
+                        
+                        <!-- BOTÕES DE ZOOM -->
+                        <div class="flex gap-1">
+                            <button onclick="zoomMap('in')" class="bg-amber-900/60 hover:bg-amber-800 text-amber-300 px-2 py-0.5 rounded text-[10px] border border-amber-700 shadow" title="Aumentar Zoom">🔍+</button>
+                            <button onclick="zoomMap('reset')" class="bg-amber-900/60 hover:bg-amber-800 text-amber-300 px-2 py-0.5 rounded text-[10px] border border-amber-700 shadow" title="Repor Zoom">1:1</button>
+                            <button onclick="zoomMap('out')" class="bg-amber-900/60 hover:bg-amber-800 text-amber-300 px-2 py-0.5 rounded text-[10px] border border-amber-700 shadow" title="Diminuir Zoom">🔍-</button>
+                        </div>
+                    </div>
+                    <div id="board-path" class="map-viewport w-full h-[580px] bg-black/80 border-2 border-amber-900/60 rounded-xl flex items-center justify-center relative overflow-auto">
+                        <p class="text-slate-500 text-xs">[Tabuleiro Modular por Tiers será renderizado aqui]</p>
+                    </div>
+                </div>
+
+                <!-- CHAT E LOG -->
+                <div class="grid grid-cols-2 gap-3 bg-[#16110d] border-2 border-amber-900/70 p-3 rounded-xl h-40">
+                    <div class="flex flex-col h-full bg-black/40 p-2 rounded border border-amber-900/40">
+                        <span class="text-[10px] font-bold text-amber-400 mb-1">📜 Log de Aventura</span>
+                        <div id="adventure-log-box" class="overflow-y-auto flex-1 space-y-1">
+                            <p class="text-[9px] text-slate-400">[Sistema] Jogo carregado com sucesso.</p>
+                        </div>
+                    </div>
+                    <div class="flex flex-col h-full bg-black/40 p-2 rounded border border-amber-900/40 justify-between">
+                        <span class="text-[10px] font-bold text-amber-400 mb-1">💬 Chat Multiplayer</span>
+                        <div id="chat-messages-box" class="overflow-y-auto flex-1 space-y-1 mb-1">
+                            <p class="text-[9px] text-amber-300">[Global] Canal conectado.</p>
+                        </div>
+                        <div class="flex gap-1">
+                            <input type="text" id="chat-input-field" placeholder="Escrever mensagem..." class="bg-black/80 border border-amber-900/60 rounded px-2 py-1 text-[9px] text-white flex-1 focus:outline-none focus:border-amber-500">
+                            <button onclick="sendChatMessage()" class="bg-amber-600 hover:bg-amber-500 text-black px-2 py-1 rounded text-[9px] font-bold">Enviar</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- COLUNA DIREITA: TRAINER'S CARD E PAINEL DINÂMICO -->
+            <section class="lg:col-span-5 space-y-3">
+                
+                <!-- TRAINER'S CARD ESTILO MOCKUP + 2 SLOTS DE EQUIPAMENTOS AO LADO -->
+                <div onclick="openTrainerCardModal()" class="cursor-pointer bg-gradient-to-br from-blue-950 via-slate-900 to-blue-900 border-2 border-blue-600 rounded-xl p-3 shadow-xl relative text-white hover:border-amber-400 transition-all">
+                    <div class="flex justify-between items-center border-b border-blue-500/40 pb-2 mb-2">
+                        <span class="text-xs font-bold text-amber-300 font-cinzel tracking-wider">TRAINER'S CARD (Ver Completo)</span>
+                        <span class="text-[10px] text-blue-300">ID: #HEX-2026</span>
+                    </div>
+
+                    <div class="grid grid-cols-12 gap-3 items-center">
+                        <!-- AVATAR DO TREINADOR + 2 SLOTS DE EQUIPAMENTO -->
+                        <div class="col-span-3 flex flex-col items-center bg-blue-950/60 p-2 rounded border border-blue-500/30 gap-2">
+                            <div id="trainer-card-avatar-container" class="w-14 h-16 bg-slate-900 rounded flex items-center justify-center overflow-hidden border border-blue-400/40">
+                                <img id="trainer-avatar-img" src="assets/player_01.png" alt="Avatar" class="w-full h-full object-contain" onerror="this.src='https://api.iconify.design/noto:boy.svg'">
+                            </div>
+                            <span id="trainer-card-name-display" class="text-[9px] font-bold truncate w-full text-center text-amber-300">Ash Ketchum</span>
+                            
+                            <!-- 2 SLOTS DE EQUIPAMENTO -->
+                            <div class="w-full grid grid-cols-2 gap-1 pt-1 border-t border-blue-500/30">
+                                <div id="equipment-slot-0" title="Slot de Equipamento 1" class="h-8 bg-black/60 border border-amber-600/60 rounded flex items-center justify-center cursor-pointer hover:bg-amber-950/40 text-[10px]">
+                                    <i class="fa-solid fa-backpack text-amber-400"></i>
+                                </div>
+                                <div id="equipment-slot-1" title="Slot de Equipamento 2" class="h-8 bg-black/60 border border-amber-600/60 rounded flex items-center justify-center cursor-pointer hover:bg-amber-950/40 text-[10px]">
+                                    <i class="fa-solid fa-shield text-amber-400"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 6 SLOTS DE POKÉMON ATIVOS -->
+                        <div class="col-span-7 grid grid-cols-3 gap-1.5 h-28">
+                            <div id="trainer-card-slot-0" class="h-full"></div>
+                            <div id="trainer-card-slot-1" class="h-full"></div>
+                            <div id="trainer-card-slot-2" class="h-full"></div>
+                            <div id="trainer-card-slot-3" class="h-full"></div>
+                            <div id="trainer-card-slot-4" class="h-full"></div>
+                            <div id="trainer-card-slot-5" class="h-full"></div>
+                        </div>
+
+                        <!-- BOTÕES DE ATALHO (MOCHILA E PC BOX) -->
+                        <div class="col-span-2 flex flex-col gap-2 justify-center">
+                            <button onclick="event.stopPropagation(); switchBottomView('inventory')" title="Abrir Mochila" class="bg-amber-600 hover:bg-amber-500 text-black p-2 rounded-lg flex flex-col items-center justify-center shadow transition-transform hover:scale-105">
+                                <i class="fa-solid fa-backpack text-sm"></i>
+                                <span class="text-[8px] font-bold mt-0.5">Mochila</span>
+                            </button>
+                            <button onclick="event.stopPropagation(); switchBottomView('pcbox')" title="Abrir PC Box" class="bg-sky-700 hover:bg-sky-600 text-white p-2 rounded-lg flex flex-col items-center justify-center shadow transition-transform hover:scale-105">
+                                <i class="fa-solid fa-box-archive text-sm"></i>
+                                <span class="text-[8px] font-bold mt-0.5">Box PC</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- LEAGUE BADGES COM IMAGENS PNG -->
+                    <div class="mt-3 pt-2 border-t border-blue-500/30 flex justify-between items-center text-[10px]">
+                        <span class="text-amber-300 font-bold">LEAGUE BADGES:</span>
+                        <div class="flex items-center gap-2">
+                            <img id="badge-boulder" src="assets/badges/boulder.png" class="w-6 h-6 object-contain grayscale opacity-40 transition-transform" alt="Boulder" title="Insígnia da Rocha">
+                            <img id="badge-cascade" src="assets/badges/cascade.png" class="w-6 h-6 object-contain grayscale opacity-40 transition-transform" alt="Cascade" title="Insígnia da Cascata">
+                            <img id="badge-thunder" src="assets/badges/thunder.png" class="w-6 h-6 object-contain grayscale opacity-40 transition-transform" alt="Thunder" title="Insígnia do Trovão">
+                            <img id="badge-rainbow" src="assets/badges/rainbow.png" class="w-6 h-6 object-contain grayscale opacity-40 transition-transform" alt="Rainbow" title="Insígnia do Arco-Íris">
+                            <img id="badge-soul" src="assets/badges/soul.png" class="w-6 h-6 object-contain grayscale opacity-40 transition-transform" alt="Soul" title="Insígnia da Alma">
+                            <img id="badge-volcano" src="assets/badges/volcano.png" class="w-6 h-6 object-contain grayscale opacity-40 transition-transform" alt="Volcano" title="Insígnia do Vulcão">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PAINEL DINÂMICO INFERIOR -->
+                <div class="trainer-card p-3 space-y-2 border-2 border-amber-900 rounded-xl bg-[#16110d]">
+                    <div class="card-header text-xs text-amber-400 font-bold border-b border-amber-900/50 pb-1 flex justify-between items-center">
+                        <span id="bottom-panel-title">Mochila (Itens & Orbes)</span>
+                    </div>
+                    <div id="bottom-dynamic-container" class="grid grid-cols-4 gap-2 min-h-[140px] max-h-[180px] overflow-y-auto p-1"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- === MODAL DE COMBATE TCG (FORMATO VERTICAL TIPO CARTA) === -->
+    <div id="encounter-modal" class="fixed inset-0 bg-black/85 z-[350] hidden items-center justify-center p-4 backdrop-blur-sm">
+        <div class="trainer-card max-w-4xl w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
+            
+            <!-- Título -->
+            <div class="text-center border-b border-amber-900/60 pb-2">
+                <h2 class="text-sm font-black text-amber-400 font-cinzel tracking-wider">⚔️ Combate TCG & Captura HEX</h2>
+            </div>
+
+            <!-- GRELHA DOS CARDS TCG -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 justify-items-center">
+                <!-- CARD 1: O TEU POKÉMON -->
+                <div id="player-card-visual" class="w-72 h-[420px] bg-gradient-to-b from-amber-100 via-amber-50 to-amber-200 border-4 border-amber-600 rounded-3xl p-4 flex flex-col justify-between text-black shadow-2xl relative"></div>
+                <!-- CARD 2: POKÉMON SELVAGEM -->
+                <div id="enc-card-visual" class="w-72 h-[420px] bg-gradient-to-b from-red-950 via-stone-900 to-black border-4 border-red-600 rounded-3xl p-4 flex flex-col justify-between text-white shadow-2xl relative"></div>
+            </div>
+
+            <!-- Itens Disponíveis -->
+            <div class="bg-black/60 p-3 rounded-xl border border-amber-900/60 flex items-center gap-3 overflow-x-auto">
+                <span class="text-xs font-bold text-amber-300 whitespace-nowrap">Itens:</span>
+                <div id="encounter-items-container" class="flex items-center gap-2"></div>
+            </div>
+
+            <!-- Botões de Ação -->
+            <div class="grid grid-cols-3 gap-3 pt-2">
+                <button onclick="resolveBattleAttempt()" class="bg-red-700 hover:bg-red-600 text-white font-black py-3 rounded-xl text-xs uppercase shadow-lg transition-all flex items-center justify-center gap-2">
+                    ⚔️ Batalhar
+                </button>
+                <button onclick="resolveCaptureAttempt()" class="bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl text-xs uppercase shadow-lg transition-all flex items-center justify-center gap-2">
+                    🔴 Capturar
+                </button>
+                <button onclick="fleeEncounter()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-black py-3 rounded-xl text-xs uppercase shadow-lg transition-all flex items-center justify-center gap-2">
+                    🏃‍♂️ Fugir
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPTS MODULARES -->
+    <script src="cards-data.js"></script>
+    <script src="items.js"></script>
+    <script src="events.js"></script>
+    <script src="super-events.js"></script>
+    <script src="map.js"></script>
+    <script src="dice.js"></script>
+    <script src="engine.js"></script>
+    <script src="battle-arena.js"></script>
+	<button onclick="handleAccountLoginOrRegister()">Entrar</button>
+</body>
+</html>
