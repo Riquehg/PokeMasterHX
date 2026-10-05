@@ -1,7 +1,7 @@
 // --- MOTOR DO JOGO DIGITAL: POKÉMON MASTER TRAINER (HEX Edition) ---
 
 // 1. Inicializar a conexão Socket.io com o servidor backend
-const socket = io('http://localhost:3000');
+const socket = io('https://pokemasterhx.onrender.com');
 
 // Variável global de autenticação declarada apenas uma vez no início
 let currentAuthenticatedAccount = null;
