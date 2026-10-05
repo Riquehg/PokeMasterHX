@@ -1,7 +1,9 @@
 // --- MÓDULO DO MAPA E CAMINHOS (MAP.JS) ---
 // Modo completo: Exibe os pontos de movimento, os balões de Pokémon enfraquecidos, mini-ícones de ginásio e os peões de TODOS os jogadores.
 
-const FULL_MAP_IMAGE = "assets/board/full_map_01.png"; 
+const SUPABASE_STORAGE_URL = "https://juowcnkjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
+
+const FULL_MAP_IMAGE = `${SUPABASE_STORAGE_URL}board/full_map_01.png`; 
 
 const BOARD_WAYPOINTS = [
   // --- HEXÁGONO A ---
@@ -189,8 +191,8 @@ function getValidDestinations(startWaypointId, steps) {
             }
 
             const isIndigoPlateauOrEnd = neighborWp.name.toLowerCase().includes("indigo plateau") || 
-                                     neighborWp.name.toLowerCase().includes("liga pokémon") || 
-                                     neighborWp.name.toLowerCase().includes("arena final");
+                                   neighborWp.name.toLowerCase().includes("liga pokémon") || 
+                                   neighborWp.name.toLowerCase().includes("arena final");
             if (isIndigoPlateauOrEnd && playerBadges < 6) return;
 
             let nextVisited = new Set(current.visitedInPath);
@@ -361,10 +363,18 @@ function renderBoardMap(highlightIds = []) {
             if (pokeCard && pokeCard.weakened) {
                 const wpInfo = BOARD_WAYPOINTS.find(w => w.id == wpId);
                 if (wpInfo) {
+                    let pokeImg = pokeCard.image || '';
+                    if (pokeCard.dexNumber) {
+                        const paddedDex = String(pokeCard.dexNumber).padStart(3, '0');
+                        pokeImg = pokeCard.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${paddedDex}.png` : `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
+                    } else if (pokeCard.isShiny && pokeCard.shinyImage) {
+                        pokeImg = pokeCard.shinyImage;
+                    }
+
                     mapOverlayHtml += `
                         <div onclick="tryInteractWithWeakenedPokemon(${wpInfo.id})" class="absolute -translate-x-1/2 -translate-y-1/2 z-30 cursor-pointer group" style="top: ${wpInfo.top - 3}%; left: ${wpInfo.left}%;" title="${pokeCard.name}">
                             <div class="bg-red-950/90 border-2 border-amber-400 rounded-lg p-1.5 shadow-2xl flex items-center gap-1.5 animate-pulse hover:scale-110 transition-transform">
-                                <img src="${pokeCard.isShiny && pokeCard.shinyImage ? pokeCard.shinyImage : (pokeCard.image || '')}" class="w-7 h-7 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                                <img src="${pokeImg}" class="w-7 h-7 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                                 <div class="text-left">
                                     <p class="text-[9px] font-black text-white leading-none">${pokeCard.name}</p>
                                     <span class="text-[8px] font-bold text-amber-300">🩹 Nv.${pokeCard.level}</span>
@@ -409,7 +419,7 @@ function renderBoardMap(highlightIds = []) {
             <div id="player-token-${idx}" onclick="openSpecificTrainerCardModal(${idx})" class="absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2 transition-all duration-500 z-50 cursor-pointer group" style="top: ${offsetTop}%; left: ${offsetLeft}%;" title="${player.name}">
                 <div class="relative flex flex-col items-center">
                     ${isCurrentTurn ? '<span class="absolute -top-3 bg-amber-400 text-black text-[8px] font-black px-1.5 rounded-full shadow animate-bounce">VEZ</span>' : ''}
-                    <img src="assets/player_0${avatarId}.png" alt="${player.name}" class="w-7 h-7 object-contain ${isCurrentTurn ? 'animate-bounce drop-shadow-[0_0_12px_rgba(255,215,0,0.9)]' : 'opacity-80'} group-hover:scale-125 transition-transform" onerror="this.src='https://api.iconify.design/noto:boy.svg'">
+                    <img src="${SUPABASE_STORAGE_URL}player_0${avatarId}.png" alt="${player.name}" class="w-7 h-7 object-contain ${isCurrentTurn ? 'animate-bounce drop-shadow-[0_0_12px_rgba(255,215,0,0.9)]' : 'opacity-80'} group-hover:scale-125 transition-transform" onerror="this.src='https://api.iconify.design/noto:boy.svg'">
                     <span class="bg-black/80 text-[8px] text-white font-bold px-1 rounded border border-amber-600/60 truncate max-w-[60px]">${player.name.split(' ')[0]}</span>
                 </div>
             </div>
