@@ -50,20 +50,7 @@
             <!-- PASSO 2: CRIAÇÃO DE PERSONAGEM (Oculto até autenticar com sucesso) -->
             <div id="character-creation-container" class="hidden space-y-4 bg-black/40 p-4 rounded-xl border border-amber-700/60">
                 <div class="bg-amber-950/40 p-3 rounded-xl border border-amber-700/60 text-center">
-                    <p class="text-xs text-amber-300 font-bold">✨ Conta verificada! Configure abaixo o seu único personagem.</p>
-                </div>
-
-                <!-- Modo de Jogo -->
-                <div class="space-y-1">
-                    <label class="text-xs font-bold text-amber-400 block"><i class="fa-solid fa-gamepad"></i> Modo de Jogo:</label>
-                    <div class="grid grid-cols-2 gap-3">
-                        <button type="button" onclick="setGameMode('solo')" id="btn-mode-solo" class="py-2.5 px-4 rounded-xl border-2 border-amber-600 bg-amber-950/60 text-amber-300 font-bold text-xs transition-all flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-user"></i> Solo (Campanha)
-                        </button>
-                        <button type="button" onclick="setGameMode('local_multi')" id="btn-mode-multi" class="py-2.5 px-4 rounded-xl border-2 border-slate-700 bg-slate-900/60 text-slate-400 font-bold text-xs transition-all flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-users"></i> Multiplayer Local
-                        </button>
-                    </div>
+                    <p class="text-xs text-amber-300 font-bold">✨ Conta verificada! Configure abaixo o seu personagem.</p>
                 </div>
 
                 <!-- Nome do Personagem -->
@@ -91,27 +78,97 @@
                     </div>
                 </div>
 
-                <!-- Pokémon Inicial -->
+                <!-- Pokémon Inicial (8 Opções) -->
                 <div class="space-y-2">
-                    <label class="text-xs font-bold text-amber-400 block"><i class="fa-solid fa-paw"></i> Pokémon Inicial (Starter):</label>
-                    <div class="grid grid-cols-3 gap-2.5">
+                    <label class="text-xs font-bold text-amber-400 block"><i class="fa-solid fa-paw"></i> Pokémon Inicial (8 Opções):</label>
+                    <div class="grid grid-cols-4 gap-2">
+                        <!-- 1. Bulbasaur -->
                         <div onclick="selectStarter('bulbasaur')" id="starter-bulbasaur" class="starter-option cursor-pointer border-2 border-amber-500 bg-amber-950/40 p-2 rounded-xl flex flex-col items-center text-center transition-all">
-                            <img src="assets/monsters/001.png" alt="Bulbasaur" class="w-8 h-8 object-contain mb-1" onerror="this.src='https://api.iconify.design/noto:seedling.svg'">
-                            <span class="text-[10px] font-bold text-white">Bulbasaur</span>
+                            <img src="assets/monsters/001.png" alt="Bulbasaur" class="w-7 h-7 object-contain mb-1" onerror="this.src='https://api.iconify.design/noto:seedling.svg'">
+                            <span class="text-[9px] font-bold text-white">Bulbasaur</span>
                         </div>
+                        <!-- 2. Charmander -->
                         <div onclick="selectStarter('charmander')" id="starter-charmander" class="starter-option cursor-pointer border-2 border-amber-900/60 bg-black/40 p-2 rounded-xl flex flex-col items-center text-center transition-all">
-                            <img src="assets/monsters/004.png" alt="Charmander" class="w-8 h-8 object-contain mb-1" onerror="this.src='https://api.iconify.design/noto:fire.svg'">
-                            <span class="text-[10px] font-bold text-white">Charmander</span>
+                            <img src="assets/monsters/004.png" alt="Charmander" class="w-7 h-7 object-contain mb-1" onerror="this.src='https://api.iconify.design/noto:fire.svg'">
+                            <span class="text-[9px] font-bold text-white">Charmander</span>
                         </div>
+                        <!-- 3. Squirtle -->
                         <div onclick="selectStarter('squirtle')" id="starter-squirtle" class="starter-option cursor-pointer border-2 border-amber-900/60 bg-black/40 p-2 rounded-xl flex flex-col items-center text-center transition-all">
-                            <img src="assets/monsters/007.png" alt="Squirtle" class="w-8 h-8 object-contain mb-1" onerror="this.src='https://api.iconify.design/noto:droplet.svg'">
-                            <span class="text-[10px] font-bold text-white">Squirtle</span>
+                            <img src="assets/monsters/007.png" alt="Squirtle" class="w-7 h-7 object-contain mb-1" onerror="this.src='https://api.iconify.design/noto:droplet.svg'">
+                            <span class="text-[9px] font-bold text-white">Squirtle</span>
+                        </div>
+                        <!-- 4. Pikachu -->
+                        <div onclick="selectStarter('pikachu')" id="starter-pikachu" class="starter-option cursor-pointer border-2 border-amber-900/60 bg-black/40 p-2 rounded-xl flex flex-col items-center text-center transition-all">
+                            <img src="assets/monsters/025.png" alt="Pikachu" class="w-7 h-7 object-contain mb-1" onerror="this.src='https://api.iconify.design/noto:high-voltage.svg'">
+                            <span class="text-[9px] font-bold text-white">Pikachu</span>
+                        </div>
+                        <!-- 5. Chikorita -->
+                        <div onclick="selectStarter('chikorita')" id="starter-chikorita" class="starter-option cursor-pointer border-2 border-amber-900/60 bg-black/40 p-2 rounded-xl flex flex-col items-center text-center transition-all">
+                            <img src="assets/monsters/152.png" alt="Chikorita" class="w-7 h-7 object-contain mb-1" onerror="this.src='https://api.iconify.design/noto:herb.svg'">
+                            <span class="text-[9px] font-bold text-white">Chikorita</span>
+                        </div>
+                        <!-- 6. Cyndaquil -->
+                        <div onclick="selectStarter('cyndaquil')" id="starter-cyndaquil" class="starter-option cursor-pointer border-2 border-amber-900/60 bg-black/40 p-2 rounded-xl flex flex-col items-center text-center transition-all">
+                            <img src="assets/monsters/155.png" alt="Cyndaquil" class="w-7 h-7 object-contain mb-1" onerror="this.src='https://api.iconify.design/noto:fire.svg'">
+                            <span class="text-[9px] font-bold text-white">Cyndaquil</span>
+                        </div>
+                        <!-- 7. Totodile -->
+                        <div onclick="selectStarter('totodile')" id="starter-totodile" class="starter-option cursor-pointer border-2 border-amber-900/60 bg-black/40 p-2 rounded-xl flex flex-col items-center text-center transition-all">
+                            <img src="assets/monsters/158.png" alt="Totodile" class="w-7 h-7 object-contain mb-1" onerror="this.src='https://api.iconify.design/noto:crocodile.svg'">
+                            <span class="text-[9px] font-bold text-white">Totodile</span>
+                        </div>
+                        <!-- 8. Eevee -->
+                        <div onclick="selectStarter('eevee')" id="starter-eevee" class="starter-option cursor-pointer border-2 border-amber-900/60 bg-black/40 p-2 rounded-xl flex flex-col items-center text-center transition-all">
+                            <img src="assets/monsters/133.png" alt="Eevee" class="w-7 h-7 object-contain mb-1" onerror="this.src='https://api.iconify.design/noto:dog.svg'">
+                            <span class="text-[9px] font-bold text-white">Eevee</span>
                         </div>
                     </div>
                 </div>
 
                 <button type="button" onclick="finalizeCharacterCreation()" class="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-black font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all">
-                    Concluir Registo de Personagem <i class="fa-solid fa-arrow-right ml-1"></i>
+                    Avançar para Lobby Online <i class="fa-solid fa-arrow-right ml-1"></i>
+                </button>
+            </div>
+
+            <!-- PASSO 3: LOBBY ONLINE & PROCURA DE SALAS (Aparece após registrar o personagem) -->
+            <div id="online-lobby-container" class="hidden space-y-4 bg-black/40 p-4 rounded-xl border border-blue-600/60">
+                <div class="flex justify-between items-center border-b border-blue-900 pb-2">
+                    <h3 class="text-xs font-black text-blue-400 font-cinzel"><i class="fa-solid fa-users-rectangle"></i> Salas Online & Lobby</h3>
+                    <span id="lobby-username-display" class="text-[10px] text-amber-300 font-bold">Treinador</span>
+                </div>
+
+                <!-- Painel de Criação / Entrada em Salas -->
+                <div class="grid grid-cols-2 gap-2">
+                    <button type="button" onclick="createOnlineRoom()" class="bg-emerald-700 hover:bg-emerald-600 text-white font-black py-2 px-3 rounded-xl text-[10px] uppercase shadow flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-plus-circle"></i> Criar Nova Sala
+                    </button>
+                    <button type="button" onclick="refreshRoomsList()" class="bg-blue-700 hover:bg-blue-600 text-white font-black py-2 px-3 rounded-xl text-[10px] uppercase shadow flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-rotate"></i> Atualizar Salas
+                    </button>
+                </div>
+
+                <!-- Lista de Salas Ativas -->
+                <div class="space-y-1">
+                    <label class="text-[10px] text-slate-300 font-bold">Salas Disponíveis na Nuvem:</label>
+                    <div id="rooms-list-box" class="bg-black/60 border border-blue-900/60 rounded-xl h-28 overflow-y-auto p-2 space-y-1">
+                        <p class="text-[10px] text-slate-500 text-center py-6">Nenhuma sala encontrada. Crie uma sala para começar!</p>
+                    </div>
+                </div>
+
+                <!-- Chat do Lobby Online -->
+                <div class="space-y-1 bg-slate-950/80 p-2.5 rounded-xl border border-blue-900/50">
+                    <span class="text-[10px] font-bold text-blue-300 flex items-center gap-1"><i class="fa-solid fa-comments"></i> Chat do Lobby Global</span>
+                    <div id="lobby-chat-messages" class="h-24 overflow-y-auto space-y-1 bg-black/60 p-2 rounded border border-blue-950 text-[10px]">
+                        <p class="text-amber-300">[Sistema]: Bem-vindo ao lobby online de Kanto!</p>
+                    </div>
+                    <div class="flex gap-1 pt-1">
+                        <input type="text" id="lobby-chat-input" placeholder="Escrever mensagem no lobby..." class="bg-black/90 border border-blue-900 rounded px-2 py-1 text-[10px] text-white flex-1 focus:outline-none focus:border-blue-500 font-bold">
+                        <button type="button" onclick="sendLobbyChatMessage()" class="bg-blue-600 hover:bg-blue-500 text-white font-black px-3 py-1 rounded text-[10px]">Enviar</button>
+                    </div>
+                </div>
+
+                <button type="button" id="start-online-game-btn" onclick="joinAndStartOnlineGame()" class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all">
+                    🚀 Entrar na Partida Online
                 </button>
             </div>
 
@@ -310,7 +367,7 @@
             <!-- Botões de Ação -->
             <div class="grid grid-cols-3 gap-3 pt-2">
                 <button onclick="resolveBattleAttempt()" class="bg-red-700 hover:bg-red-600 text-white font-black py-3 rounded-xl text-xs uppercase shadow-lg transition-all flex items-center justify-center gap-2">
-                    ⚔️ Batalhar
+                    ⚔️️ Batalhar
                 </button>
                 <button onclick="resolveCaptureAttempt()" class="bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl text-xs uppercase shadow-lg transition-all flex items-center justify-center gap-2">
                     🔴 Capturar
@@ -331,6 +388,5 @@
     <script src="dice.js"></script>
     <script src="engine.js"></script>
     <script src="battle-arena.js"></script>
-	<button onclick="handleAccountLoginOrRegister()">Entrar</button>
 </body>
 </html>
