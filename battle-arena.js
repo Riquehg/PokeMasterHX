@@ -1,5 +1,7 @@
 // --- MÓDULO DE ARENA DE BATALHA TCG (battle-arena.js) ---
 
+const SUPABASE_STORAGE_URL = "https://juowcnkjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
+
 let currentBattleSession = {
     mode: 'gym', // 'gym' ou 'pvp'
     challenger: null,
@@ -76,6 +78,15 @@ function openArenaTeamSelectionModal() {
             const tierBg = typeof getTierColorClass === 'function' ? getTierColorClass(mon.tier || 1) : 'bg-slate-900 border-amber-600';
             const auraCls = mon.auraEffect || '';
 
+            // Tratamento da imagem via Supabase
+            let imgSrc = mon.image || '';
+            if (mon.isShiny && mon.shinyImage) {
+                imgSrc = mon.shinyImage;
+            } else if (mon.dexNumber) {
+                const paddedDex = String(mon.dexNumber).padStart(3, '0');
+                imgSrc = mon.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${paddedDex}.png` : `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
+            }
+
             html += `
                 <div onclick="${isFainted ? '' : `toggleArenaSelection(${idx})`}" class="${tierBg} ${auraCls} p-3 rounded-2xl border-2 ${isSelected ? 'border-amber-400 bg-amber-950/80 scale-105 shadow-[0_0_15px_rgba(255,215,0,0.5)]' : 'border-amber-900/60'} ${isFainted ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-amber-500'} flex flex-col justify-between h-36 transition-all text-white">
                     <div class="flex justify-between items-center text-[10px] font-bold text-amber-300">
@@ -83,7 +94,7 @@ function openArenaTeamSelectionModal() {
                         <span>Nv.${mon.level || 1}</span>
                     </div>
                     <div class="my-auto flex justify-center bg-black/40 rounded p-1">
-                        <img src="${mon.isShiny && mon.shinyImage ? mon.shinyImage : (mon.image || '')}" class="w-14 h-14 object-contain">
+                        <img src="${imgSrc}" class="w-14 h-14 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                     </div>
                     <div class="text-[9px] text-center font-bold ${isFainted ? 'text-red-400' : 'text-emerald-400'}">
                         ${isFainted ? 'DESMAIADO' : `HP: ${mon.currentHp !== undefined ? mon.currentHp : mon.maxHp}/${mon.maxHp}`}
@@ -162,174 +173,11 @@ function renderPreBattleContent(modalEl) {
         `;
     });
 
-    modalEl.innerHTML = `
-        <div class="trainer-card max-w-md w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
-            <div class="flex justify-between items-center border-b border-amber-900/60 pb-2">
-                <span class="text-xs font-black text-amber-400 font-cinzel">🧪 FASE PRÉ-BATALHA</span>
-                <button onclick="document.getElementById('arena-prebattle-modal').remove();" class="text-amber-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-amber-800">✕ Desistir</button>
-            </div>
-
-            <div class="bg-black/50 p-3 rounded-2xl border border-amber-900/40 flex items-center gap-3">
-                <img src="${activeMon.image}" class="w-12 h-12 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
-                <div>
-                    <p class="text-xs font-bold text-white">${activeMon.name} (Nv.${activeMon.level})</p>
-                    <p class="text-[10px] text-emerald-400 font-bold">HP: ${activeMon.currentHp} / ${activeMon.maxHp} | STR: ${activeMon.str}</p>
-                </div>
-            </div>
-
-            <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
-                ${inventoryHtml || '<p class="text-[10px] text-slate-400 text-center py-4">Sem itens de suporte/cura disponíveis na mochila.</p>'}
-            </div>
-
-            <div class="flex gap-2">
-                <button onclick="document.getElementById('arena-prebattle-modal').remove();" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl text-xs uppercase tracking-wider">
-                    Fugir / Cancelar
-                </button>
-                <button onclick="closePreBattleAndLaunchArena()" class="flex-2 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-black font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-xl transition-all cursor-pointer">
-                    Iniciar Combate ⚔️
-                </button>
-            </div>
-        </div>
-    `;
-}
-
-function renderArenaCombatUI(modalEl) {
-    const pMon = currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
-    const eMon = currentBattleSession.enemyTeam[currentBattleSession.activeEnemyIndex];
-
-    let pReservesHtml = '';
-    currentBattleSession.playerTeam.forEach((m, idx) => {
-        if (idx === currentBattleSession.activePlayerIndex) return;
-        const isFaint = m.currentHp <= 0;
-        pReservesHtml += `
-            <div class="flex items-center gap-1.5 bg-black/60 border ${isFaint ? 'border-red-800 opacity-40' : 'border-amber-600'} rounded-xl p-1.5 px-3 text-[10px]">
-                <img src="${m.image}" class="w-6 h-6 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
-                <div>
-                    <p class="font-bold text-white">${m.name}</p>
-                    <p class="${isFaint ? 'text-red-400' : 'text-emerald-400'}">HP: ${m.currentHp}/${m.maxHp}</p>
-                </div>
-            </div>
-        `;
-    });
-
-    modalEl.innerHTML = `
-        <div class="flex justify-between items-center bg-black/80 px-4 py-2 border-b border-red-900">
-            <span class="text-xs font-bold text-amber-400">ARENA DE BATALHA (${currentBattleSession.format}x${currentBattleSession.format})</span>
-            <button onclick="if(confirm('Tem a certeza que deseja abandonar a batalha? Irá contar como derrota.')) { document.getElementById('main-battle-arena-modal').remove(); concludeArenaBattle(false); }" class="bg-red-950 border border-red-600 hover:bg-red-900 text-red-200 text-xs px-3 py-1 rounded font-bold">🏳 Desistir / Fugir</button>
-        </div>
-
-        <!-- TOPO: INIMIGO EM DESTAQUE -->
-        <div class="flex justify-between items-center bg-gradient-to-b from-red-950/80 to-black/80 border-2 border-red-600 p-4 rounded-3xl shadow-2xl my-2">
-            <div class="flex items-center gap-4">
-                <div class="w-24 h-24 bg-black/60 rounded-2xl border border-red-500 flex items-center justify-center p-2">
-                    <img src="${eMon.image}" class="w-20 h-20 object-contain drop-shadow-[0_0_10px_rgba(239,68,68,0.6)]" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
-                </div>
-                <div>
-                    <span class="text-[10px] font-black text-red-400 uppercase tracking-widest">${currentBattleSession.defender.name}</span>
-                    <h3 class="text-lg font-black text-white">${eMon.name} <span class="text-xs text-amber-400">(Nv.${eMon.level})</span></h3>
-                    <p class="text-xs font-bold text-red-300 mt-1">HP: ${eMon.currentHp} / ${eMon.maxHp} | STR: ${eMon.str}</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- CENTRO: AVISO / STATUS -->
-        <div class="text-center my-auto space-y-2">
-            <h2 class="text-2xl font-black text-amber-400 font-cinzel tracking-widest animate-pulse">TURNO DE COMBATE TCG</h2>
-            <p class="text-xs text-slate-300">Pressione para resolver a ronda com base na força e dados!</p>
-            <button onclick="executeArenaTurn()" class="bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black px-8 py-3 rounded-2xl text-xs uppercase tracking-wider shadow-2xl transition-all transform hover:scale-105 cursor-pointer">
-                ⚔️ Atacar / Rolar Dado de Combate
-            </button>
-        </div>
-
-        <!-- FUNDO: JOGADOR ATIVO -->
-        <div class="space-y-3 my-2">
-            <div class="flex gap-2 overflow-x-auto pb-1 justify-center">
-                ${pReservesHtml}
-            </div>
-
-            <div class="flex justify-between items-center bg-gradient-to-t from-amber-950/80 to-black/80 border-2 border-amber-500 p-4 rounded-3xl shadow-2xl">
-                <div class="flex items-center gap-4">
-                    <div class="w-24 h-24 bg-black/60 rounded-2xl border border-amber-400 flex items-center justify-center p-2">
-                        <img src="${pMon.image}" class="w-20 h-20 object-contain drop-shadow-[0_0_10px_rgba(255,215,0,0.6)]" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
-                    </div>
-                    <div>
-                        <span class="text-[10px] font-black text-amber-400 uppercase tracking-widest">${currentBattleSession.challenger.name} (Você)</span>
-                        <h3 class="text-lg font-black text-white">${pMon.name} <span class="text-xs text-amber-300">(Nv.${pMon.level})</span></h3>
-                        <p class="text-xs font-bold text-emerald-400 mt-1">HP: ${pMon.currentHp} / ${pMon.maxHp} | STR: ${pMon.str}</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-window.confirmArenaTeamAndStart = function(indexes) {
-    const modal = document.getElementById('arena-team-sel-modal');
-    if (modal) modal.remove();
-
-    const cp = getCurrentPlayer();
-    currentBattleSession.playerTeam = indexes.map(i => {
-        let m = cp.activeTeam[i];
-        return { ...m, currentHp: m.currentHp !== undefined ? m.currentHp : m.maxHp };
-    });
-
-    currentBattleSession.enemyTeam = currentBattleSession.defender.team.map(m => ({
-        ...m,
-        currentHp: m.hp || 25,
-        maxHp: m.hp || 25,
-        str: m.str || 5,
-        level: m.level || 5
-    }));
-
-    currentBattleSession.activePlayerIndex = 0;
-    currentBattleSession.activeEnemyIndex = 0;
-
-    // Abre estritamente a fase pré-batalha sem rodar dados
-    openPreBattlePhaseModal();
-};
-
-// --- FASE PRÉ-BATALHA: USO DE ITENS & POÇÕES ---
-function openPreBattlePhaseModal() {
-    let modal = document.getElementById('arena-prebattle-modal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'arena-prebattle-modal';
-        modal.className = 'fixed inset-0 bg-black/90 z-[460] flex items-center justify-center p-4 backdrop-blur-md';
-        document.body.appendChild(modal);
+    let activeImg = activeMon.image || '';
+    if (activeMon.dexNumber) {
+        const paddedDex = String(activeMon.dexNumber).padStart(3, '0');
+        activeImg = activeMon.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${paddedDex}.png` : `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
     }
-
-    renderPreBattleContent(modal);
-    modal.classList.remove('hidden');
-}
-
-function renderPreBattleContent(modalEl) {
-    const cp = getCurrentPlayer();
-    const activeMon = currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
-
-    let inventoryHtml = '';
-    cp.inventory.forEach((item, itemIdx) => {
-        if (!item || item.count <= 0) return;
-        const isRevive = item.type === 'revive';
-        const isHeal = item.type === 'heal';
-        const isBattle = item.type === 'battle';
-
-        if (!isHeal && !isBattle && !isRevive) return;
-
-        inventoryHtml += `
-            <div class="flex items-center justify-between bg-black/60 p-2.5 rounded-xl border border-amber-900/60">
-                <div class="flex items-center gap-2">
-                    <span class="text-xl">${item.icon || '🎒'}</span>
-                    <div>
-                        <p class="text-xs font-bold text-white">${item.name} (${item.count})</p>
-                        <p class="text-[9px] text-slate-400">${item.desc}</p>
-                    </div>
-                </div>
-                <button onclick="useItemInPreBattle('${item.id}', ${itemIdx})" class="bg-amber-600 hover:bg-amber-500 text-black font-black px-3 py-1 rounded-lg text-[10px] shadow">
-                    Usar
-                </button>
-            </div>
-        `;
-    });
 
     modalEl.innerHTML = `
         <div class="trainer-card max-w-md w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
@@ -339,7 +187,7 @@ function renderPreBattleContent(modalEl) {
             </div>
 
             <div class="bg-black/50 p-3 rounded-2xl border border-amber-900/40 flex items-center gap-3">
-                <img src="${activeMon.image}" class="w-12 h-12 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                <img src="${activeImg}" class="w-12 h-12 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                 <div>
                     <p class="text-xs font-bold text-white">${activeMon.name} (Nv.${activeMon.level})</p>
                     <p class="text-[10px] text-emerald-400 font-bold">HP: ${activeMon.currentHp} / ${activeMon.maxHp} | STR: ${activeMon.str}</p>
@@ -355,6 +203,52 @@ function renderPreBattleContent(modalEl) {
             </button>
         </div>
     `;
+}
+
+window.confirmArenaTeamAndStart = function(indexes) {
+    const modal = document.getElementById('arena-team-sel-modal');
+    if (modal) modal.remove();
+
+    const cp = getCurrentPlayer();
+    currentBattleSession.playerTeam = indexes.map(i => {
+        let m = cp.activeTeam[i];
+        return { ...m, currentHp: m.currentHp !== undefined ? m.currentHp : m.maxHp };
+    });
+
+    currentBattleSession.enemyTeam = currentBattleSession.defender.team.map(m => {
+        let enemyImg = m.image || '';
+        if (m.dexNumber) {
+            const paddedDex = String(m.dexNumber).padStart(3, '0');
+            enemyImg = m.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${paddedDex}.png` : `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
+        }
+        return {
+            ...m,
+            image: enemyImg,
+            currentHp: m.hp || 25,
+            maxHp: m.hp || 25,
+            str: m.str || 5,
+            level: m.level || 5
+        };
+    });
+
+    currentBattleSession.activePlayerIndex = 0;
+    currentBattleSession.activeEnemyIndex = 0;
+
+    openPreBattlePhaseModal();
+};
+
+// --- FASE PRÉ-BATALHA: USO DE ITENS & POÇÕES ---
+function openPreBattlePhaseModal() {
+    let modal = document.getElementById('arena-prebattle-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'arena-prebattle-modal';
+        modal.className = 'fixed inset-0 bg-black/90 z-[460] flex items-center justify-center p-4 backdrop-blur-md';
+        document.body.appendChild(modal);
+    }
+
+    renderPreBattleContent(modal);
+    modal.classList.remove('hidden');
 }
 
 window.closePreBattleAndLaunchArena = function() {
@@ -418,9 +312,14 @@ function renderArenaCombatUI(modalEl) {
     currentBattleSession.playerTeam.forEach((m, idx) => {
         if (idx === currentBattleSession.activePlayerIndex) return;
         const isFaint = m.currentHp <= 0;
+        let mImg = m.image || '';
+        if (m.dexNumber) {
+            const paddedDex = String(m.dexNumber).padStart(3, '0');
+            mImg = m.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${paddedDex}.png` : `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
+        }
         pReservesHtml += `
             <div class="flex items-center gap-1.5 bg-black/60 border ${isFaint ? 'border-red-800 opacity-40' : 'border-amber-600'} rounded-xl p-1.5 px-3 text-[10px]">
-                <img src="${m.image}" class="w-6 h-6 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                <img src="${mImg}" class="w-6 h-6 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                 <div>
                     <p class="font-bold text-white">${m.name}</p>
                     <p class="${isFaint ? 'text-red-400' : 'text-emerald-400'}">HP: ${m.currentHp}/${m.maxHp}</p>
@@ -433,9 +332,14 @@ function renderArenaCombatUI(modalEl) {
     currentBattleSession.enemyTeam.forEach((m, idx) => {
         if (idx === currentBattleSession.activeEnemyIndex) return;
         const isFaint = m.currentHp <= 0;
+        let mImg = m.image || '';
+        if (m.dexNumber) {
+            const paddedDex = String(m.dexNumber).padStart(3, '0');
+            mImg = m.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${paddedDex}.png` : `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
+        }
         eReservesHtml += `
             <div class="flex items-center gap-1.5 bg-black/60 border ${isFaint ? 'border-red-800 opacity-40' : 'border-red-600'} rounded-xl p-1.5 px-3 text-[10px]">
-                <img src="${m.image}" class="w-6 h-6 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                <img src="${mImg}" class="w-6 h-6 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                 <div>
                     <p class="font-bold text-white">${m.name}</p>
                     <p class="${isFaint ? 'text-red-400' : 'text-amber-400'}">HP: ${m.currentHp}/${m.maxHp}</p>
@@ -444,12 +348,24 @@ function renderArenaCombatUI(modalEl) {
         `;
     });
 
+    let pActiveImg = pMon.image || '';
+    if (pMon.dexNumber) {
+        const paddedDex = String(pMon.dexNumber).padStart(3, '0');
+        pActiveImg = pMon.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${paddedDex}.png` : `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
+    }
+
+    let eActiveImg = eMon.image || '';
+    if (eMon.dexNumber) {
+        const paddedDex = String(eMon.dexNumber).padStart(3, '0');
+        eActiveImg = eMon.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${paddedDex}.png` : `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
+    }
+
     modalEl.innerHTML = `
         <!-- TOPO: INIMIGO EM DESTAQUE -->
         <div class="flex justify-between items-center bg-gradient-to-b from-red-950/80 to-black/80 border-2 border-red-600 p-4 rounded-3xl shadow-2xl">
             <div class="flex items-center gap-4">
                 <div class="w-24 h-24 bg-black/60 rounded-2xl border border-red-500 flex items-center justify-center p-2">
-                    <img src="${eMon.image}" class="w-20 h-20 object-contain drop-shadow-[0_0_10px_rgba(239,68,68,0.6)]" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                    <img src="${eActiveImg}" class="w-20 h-20 object-contain drop-shadow-[0_0_10px_rgba(239,68,68,0.6)]" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                 </div>
                 <div>
                     <span class="text-[10px] font-black text-red-400 uppercase tracking-widest">${currentBattleSession.defender.name}</span>
@@ -480,7 +396,7 @@ function renderArenaCombatUI(modalEl) {
             <div class="flex justify-between items-center bg-gradient-to-t from-amber-950/80 to-black/80 border-2 border-amber-500 p-4 rounded-3xl shadow-2xl">
                 <div class="flex items-center gap-4">
                     <div class="w-24 h-24 bg-black/60 rounded-2xl border border-amber-400 flex items-center justify-center p-2">
-                        <img src="${pMon.image}" class="w-20 h-20 object-contain drop-shadow-[0_0_10px_rgba(255,215,0,0.6)]" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                        <img src="${pActiveImg}" class="w-20 h-20 object-contain drop-shadow-[0_0_10px_rgba(255,215,0,0.6)]" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                     </div>
                     <div>
                         <span class="text-[10px] font-black text-amber-400 uppercase tracking-widest">${currentBattleSession.challenger.name} (Você)</span>
@@ -533,7 +449,7 @@ function executeArenaTurn() {
                     if (currentBattleSession.activePlayerIndex < currentBattleSession.playerTeam.length - 1) {
                         currentBattleSession.activePlayerIndex++;
                         let nextP = currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
-                        showCustomPopup("Substituição Obrigatória", `💀 O seu Anima desmaiou em campo!\n\n🔄 O próximo reserva entra automaticamente: ${nextP.name}!`, false);
+                        showCustomPopup("Substituição Obrigatória", `💀 O seu Pokémon desmaiou em campo!\n\n🔄 O próximo reserva entra automaticamente: ${nextP.name}!`, false);
                     } else {
                         concludeArenaBattle(false);
                         return;
