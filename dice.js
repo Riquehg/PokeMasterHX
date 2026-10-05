@@ -1,5 +1,7 @@
 // --- SISTEMA DE DADOS E MOVIMENTO TRADICIONAL DE TABULEIRO (DICE.JS) ---
 
+const SUPABASE_STORAGE_URL = "https://juowcnkjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
+
 let movementState = {
     isMoving: false,
     diceRolledValue: 0,
