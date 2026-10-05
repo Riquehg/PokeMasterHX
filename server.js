@@ -1,3 +1,5 @@
+// --- SERVIDOR NODE.JS & SOCKET.IO (SERVER.JS) ---
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -13,9 +15,10 @@ const io = new Server(server, {
     cors: { origin: "*" }
 });
 
-// Credenciais oficiais do Supabase
+// Credenciais do Supabase
 const SUPABASE_URL = 'https://juowcnkjhfrbfttnwge.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_vy21ggMI3l16SmZtmagQHg_M7fWs1vi';
+// Nota: No backend (server.js), é recomendado usar a chave service_role (secreta) para evitar bloqueios de RLS.
+const SUPABASE_KEY = 'sb_publishable_vy21ggMI3l16SmZtmagQHg_M7fWs1vi'; 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Gestão de Eventos Online via Socket.io
