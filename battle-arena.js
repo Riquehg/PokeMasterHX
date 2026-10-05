@@ -1,6 +1,8 @@
 // --- MÓDULO DE ARENA DE BATALHA TCG (battle-arena.js) ---
 
-const SUPABASE_STORAGE_URL = "https://juowcnkjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
+if (typeof SUPABASE_STORAGE_URL === 'undefined') {
+    var SUPABASE_STORAGE_URL = "https://juowcnkjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
+}
 
 let currentBattleSession = {
     mode: 'gym', // 'gym' ou 'pvp'
@@ -109,13 +111,13 @@ function openArenaTeamSelectionModal() {
             <div class="trainer-card max-w-2xl w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
                 <div class="flex justify-between items-center border-b border-amber-900/60 pb-2">
                     <span class="text-xs font-black text-amber-400 font-cinzel">🏟 SELEÇÃO DE EQUIPA TCG (${selectedIndices.length}/${formatLimit})</span>
-                    <button onclick="document.getElementById('arena-team-sel-modal').remove();" class="text-amber-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-amber-800">✕ Cancelar</button>
+                    <button onclick="document.getElementById('arena-team-sel-modal').remove();" class="text-amber-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-amber-800 cursor-pointer">✕ Cancelar</button>
                 </div>
                 <div class="grid grid-cols-3 gap-3 max-h-72 overflow-y-auto p-1">
                     ${html}
                 </div>
                 <div class="flex gap-2">
-                    <button onclick="document.getElementById('arena-team-sel-modal').remove();" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all">
+                    <button onclick="document.getElementById('arena-team-sel-modal').remove();" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer">
                         Voltar / Desistir
                     </button>
                     <button onclick="confirmArenaTeamAndStart([${selectedIndices.join(',')}])" ${canProceed ? '' : 'disabled'} class="flex-2 ${canProceed ? 'bg-amber-500 hover:bg-amber-400 text-black cursor-pointer shadow-lg' : 'bg-slate-800 text-slate-500 cursor-not-allowed'} font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-all">
@@ -166,7 +168,7 @@ function renderPreBattleContent(modalEl) {
                         <p class="text-[9px] text-slate-400">${item.desc}</p>
                     </div>
                 </div>
-                <button onclick="useItemInPreBattle('${item.id}', ${itemIdx})" class="bg-amber-600 hover:bg-amber-500 text-black font-black px-3 py-1 rounded-lg text-[10px] shadow">
+                <button onclick="useItemInPreBattle('${item.id}', ${itemIdx})" class="bg-amber-600 hover:bg-amber-500 text-black font-black px-3 py-1 rounded-lg text-[10px] shadow cursor-pointer">
                     Usar
                 </button>
             </div>
