@@ -10,6 +10,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Servir os ficheiros estáticos (HTML, CSS, JS e assets) da raiz do projeto
+app.use(express.static(__dirname));
+
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: { origin: "*" }
@@ -17,7 +20,6 @@ const io = new Server(server, {
 
 // Credenciais do Supabase
 const SUPABASE_URL = 'https://juowcnkjhfrbfttnwge.supabase.co';
-// Nota: No backend (server.js), é recomendado usar a chave service_role (secreta) para evitar bloqueios de RLS.
 const SUPABASE_KEY = 'sb_publishable_vy21ggMI3l16SmZtmagQHg_M7fWs1vi'; 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
