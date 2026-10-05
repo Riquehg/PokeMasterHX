@@ -1,7 +1,10 @@
 // --- BASE DE DADOS OFICIAL: ITENS (HEX Edition) ---
 // Classificação baseada no Manual do Jogo (Comuns, Rápidos, Captura, Batalha e Evolução).
 
-const SUPABASE_STORAGE_URL = "https://juowcnkjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
+// Declaração segura para evitar conflitos se já existir noutro script
+if (typeof SUPABASE_STORAGE_URL === 'undefined') {
+    var SUPABASE_STORAGE_URL = "https://juowcnkjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
+}
 
 const ITEM_CATALOG = [
     // ==========================================
@@ -163,7 +166,6 @@ const ITEM_CATALOG = [
         image: `${SUPABASE_STORAGE_URL}items/master_ball.png`,
         desc: 'Adiciona +4 no resultado do dado de captura.'
     },
-    // --- 3 POKÉ BALLS COM EFEITOS ESPECIAIS E AURAS ---
     {
         id: 'ball_mystic',
         name: 'Mystic Ball',
@@ -209,7 +211,7 @@ const ITEM_CATALOG = [
     },
 
     // ==========================================
-    // --- ITENS DE BATALHA (Somam Poder) ---
+    // --- ITENS DE BATALHA ---
     // ==========================================
     {
         id: 'vitamin',
@@ -268,7 +270,7 @@ function renderInventoryUI(player) {
             <div class="bg-black/50 border border-amber-900/60 rounded-lg p-2 flex flex-col items-center justify-between text-center relative group">
                 <span class="text-lg">${itemInfo.icon}</span>
                 <span class="text-[9px] font-bold text-amber-300 truncate w-full">${itemInfo.name}${countText}</span>
-                <button onclick="usePlayerItem('${itemInfo.id}', ${index})" class="mt-1 bg-amber-600 hover:bg-amber-500 text-black px-2 py-0.5 rounded text-[8px] font-black w-full shadow">Usar</button>
+                <button onclick="usePlayerItem('${itemInfo.id}', ${index})" class="mt-1 bg-amber-600 hover:bg-amber-500 text-black px-2 py-0.5 rounded text-[8px] font-black w-full shadow cursor-pointer">Usar</button>
             </div>
         `;
     });
@@ -283,7 +285,6 @@ function usePlayerItem(itemId, itemIndex) {
         appendAdventureLog(`🎒 ${cp.name} usou o item ${itemInfo.name}.`);
     }
 
-    // Lógica básica de consumo de item do inventário
     if (cp.inventory[itemIndex].count && cp.inventory[itemIndex].count > 1) {
         cp.inventory[itemIndex].count--;
     } else {
