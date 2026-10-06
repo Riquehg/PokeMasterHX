@@ -55,7 +55,7 @@ io.on('connection', (socket) => {
                 console.log(`ℹ️ [LOG DEBUG] Conta não encontrada para ${email}. A criar nova conta...`);
                 
                // Se a conta não existe, cria automaticamente
-                let { data: newAccount, error: insertError } = await supabase
+               let { data: newAccount, error: insertError } = await supabase
                     .from('accounts')
                     .insert([{ 
                         email: email, 
@@ -81,6 +81,13 @@ io.on('connection', (socket) => {
                 socket.emit('login_response', { success: true, isNew: true, message: 'Conta criada com sucesso!' });
             } else if (account.password === password) {
                 console.log(`✅ [LOG DEBUG] Login bem-sucedido para: ${email}`);
+                
+                // Atualizar o último login na base de dados
+                await supabase
+                    .from('accounts')
+                    .update({ last_login: new Date().toISOString() })
+                    .eq('email', email);
+
                 // Login bem-sucedido
                 socket.emit('login_response', { 
                     success: true, 
@@ -125,6 +132,73 @@ io.on('connection', (socket) => {
             }
         } catch (err) {
             console.error("🔥 ERRO CRÍTICO AO SALVAR PROGRESSO:", err);
+        }
+    });
+
+    // === EVENTOS DO PAINEL DO ADMINISTRADOR ===
+    
+    // 1. Obter lista de todos os utilizadores para gerir no painel admin
+    socket.on('admin_get_users', async () => {
+        try {
+            console.log(`🛡️ [ADMIN] A carregar lista de utilizadores...`);
+            let { data: users, error } = await supabase
+                .from('accounts')
+                .select('email, character_name, last_login, game_state');
+
+            if (error) {
+                console.error("❌ Erro ao buscar utilizadores para o admin:", error);
+                return;
+            }
+
+            // Mapear dados para enviar de forma amigável ao painel (incluindo ouro extraído do game_state se existir)
+            const formattedUsers = (users || []).map(u => {
+                let goldVal = 350;
+                if (u.game_state && typeof u.game_state === 'object') {
+                    goldVal = u.game_state.gold !== undefined ? u.game_state.gold : (u.game_state.money || 350);
+                }
+                return {
+                    email: u.email,
+                    trainerName: u.character_name || u.email.split('@')[0],
+                    lastLogin: u.last_login || null,
+                    gold: goldVal
+                };
+            });
+
+            socket.emit('admin_users_list', formattedUsers);
+        } catch (err) {
+            console.error("🔥 Erro crítico em admin_get_users:", err);
+        }
+    });
+
+    // 2. Executar ações administrativas (Dar Ouro, Resetar Senha, Apagar Conta)
+    socket.on('admin_action', async ({ action, email, amount, newPass }) => {
+        try {
+            console.log(`🛡️ [ADMIN AÇÃO] A executar '${action}' para o email: ${email}`);
+
+            if (action === 'give_gold') {
+                // Buscar estado atual para modificar o ouro
+                let { data: acc } = await supabase.from('accounts').select('game_state').eq('email', email).single();
+                if (acc) {
+                    let gameState = acc.game_state || {};
+                    let currentGold = gameState.gold !== undefined ? gameState.gold : 350;
+                    gameState.gold = currentGold + (amount || 100);
+
+                    await supabase.from('accounts').update({ game_state: gameState }).eq('email', email);
+                    console.log(`🪙 [ADMIN] Adicionado ${amount} de ouro para ${email}`);
+                }
+            } 
+            else if (action === 'reset_password') {
+                if (newPass) {
+                    await supabase.from('accounts').update({ password: newPass }).eq('email', email);
+                    console.log(`🔑 [ADMIN] Senha redefinida para a conta ${email}`);
+                }
+            } 
+            else if (action === 'delete_account') {
+                await supabase.from('accounts').delete().eq('email', email);
+                console.log(`🗑️ [ADMIN] Conta ${email} apagada com sucesso da base de dados.`);
+            }
+        } catch (err) {
+            console.error("🔥 Erro crítico ao executar ação administrativa:", err);
         }
     });
 
