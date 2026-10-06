@@ -54,14 +54,14 @@ io.on('connection', (socket) => {
             if (!account) {
                 console.log(`ℹ️ [LOG DEBUG] Conta não encontrada para ${email}. A criar nova conta...`);
                 
-                // Se a conta não existe, cria automaticamente
+               // Se a conta não existe, cria automaticamente
                 let { data: newAccount, error: insertError } = await supabase
                     .from('accounts')
                     .insert([{ 
                         email: email, 
                         password: password, 
-                        game_state: null, 
-                        board_pokemon_cards: null 
+                        game_state: {}, 
+                        board_pokemon_cards: {} 
                     }])
                     .select()
                     .single();
