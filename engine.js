@@ -196,7 +196,25 @@ function importSaveFromFile(event) {
     };
     reader.readAsText(file);
 }
+window.logoutToSetupScreen = function() {
+    if (confirm("⚠️ Deseja realmente sair da sessão atual? Certifique-se de que salvou o seu progresso!")) {
+        // Ocultar a interface principal do jogo
+        const mainLayout = document.getElementById('main-game-layout');
+        if (mainLayout) mainLayout.classList.add('hidden');
 
+        // Mostrar novamente a tela inicial / setup
+        const setupScreen = document.getElementById('setup-screen');
+        if (setupScreen) setupScreen.classList.remove('hidden');
+
+        // Opcional: reativar o container de login ou lobby
+        const authContainer = document.getElementById('auth-container');
+        const onlineLobby = document.getElementById('online-lobby-container');
+        if (authContainer) authContainer.classList.remove('hidden');
+        if (onlineLobby) onlineLobby.classList.add('hidden');
+
+        console.log("🚪 Sessão encerrada. Retornado ao menu inicial.");
+    }
+};
 // --- TABELA DE VANTAGENS DE TIPO (HEX Edition TCG) ---
 const TYPE_ADVANTAGES = {
     "Fogo": { strongAgainst: ["Grama", "Inseto", "Gelo", "Aço"], weakAgainst: ["Água", "Fogo", "Pedra", "Dragão"] },
