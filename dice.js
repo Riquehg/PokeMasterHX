@@ -1,7 +1,7 @@
 // --- SISTEMA DE DADOS E MOVIMENTO TRADICIONAL DE TABULEIRO (DICE.JS) ---
 
 if (typeof SUPABASE_STORAGE_URL === 'undefined') {
-    var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
+    var SUPABASE_STORAGE_URL = "https://juowcnkjhfbfttnwge.supabase.co/storage/v1/object/public/sprites/";
 }
 
 let movementState = {
