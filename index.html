@@ -243,9 +243,12 @@
                     <label class="bg-indigo-700 hover:bg-indigo-600 text-white px-2 py-1.5 rounded-lg text-[10px] font-bold shadow cursor-pointer" title="Carregar Save">
                         📂 Importar <input type="file" id="import-file-input" accept=".json" onchange="importSaveFromFile(event)" class="hidden">
                     </label>
-                    <button onclick="deleteGameSave()" class="bg-red-800 hover:bg-red-700 text-white px-2 py-1.5 rounded-lg text-[10px] font-bold shadow cursor-pointer" title="Deletar Save">🗑️ Deletar</button>
                     <button onclick="openPokedexModal()" class="bg-amber-600 hover:bg-amber-500 text-black px-2.5 py-1.5 rounded-lg text-[10px] font-black shadow flex items-center gap-1 cursor-pointer" title="Abrir Pokédex">
                         📖 Pokédex
+                    </button>
+                    <!-- BOTÃO DE LOGOUT ADICIONADO -->
+                    <button onclick="logoutToSetupScreen()" class="bg-red-900 hover:bg-red-800 text-amber-300 px-2.5 py-1.5 rounded-lg text-[10px] font-black shadow flex items-center gap-1 border border-red-600 cursor-pointer" title="Sair para a Tela Inicial / Lobby">
+                        🚪 Sair
                     </button>
                 </div>
             </div>
@@ -370,7 +373,7 @@
     <div id="encounter-modal" class="fixed inset-0 bg-black/85 z-[350] hidden items-center justify-center p-4 backdrop-blur-sm">
         <div class="trainer-card max-w-4xl w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
             <div class="text-center border-b border-amber-900/60 pb-2">
-                <h2 class="text-sm font-black text-amber-400 font-cinzel tracking-wider">⚔️️ Combate TCG & Captura HEX</h2>
+                <h2 class="text-sm font-black text-amber-400 font-cinzel tracking-wider">⚔ Combate TCG & Captura HEX</h2>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 justify-items-center">
                 <div id="player-card-visual" class="w-72 h-[420px] bg-gradient-to-b from-amber-100 via-amber-50 to-amber-200 border-4 border-amber-600 rounded-3xl p-4 flex flex-col justify-between text-black shadow-2xl relative"></div>
