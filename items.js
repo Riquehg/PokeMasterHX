@@ -3,7 +3,7 @@
 
 // Declaração segura para evitar conflitos se já existir noutro script
 if (typeof SUPABASE_STORAGE_URL === 'undefined') {
-    var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
+    var SUPABASE_STORAGE_URL = "https://juowcnkjhfbfttnwge.supabase.co/storage/v1/object/public/sprites/";
 }
 
 const ITEM_CATALOG = [
