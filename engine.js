@@ -2856,16 +2856,39 @@ window.openNewGameSetupFromDashboard = function() {
     showCustomPopup("Nova Partida", "Escolha o seu novo Iniciante e Avatar preservando o seu cofre e progresso global da conta!", true);
 };
 
-window.openOnlineLobbyFromDashboard = function() {
-    const dashboard = document.getElementById('post-login-dashboard');
-    if (dashboard) dashboard.classList.add('hidden');
-
-    const onlineLobby = document.getElementById('online-lobby-container');
-    if (onlineLobby) onlineLobby.classList.remove('hidden');
-    else {
-        showCustomPopup("Lobby Online", "Painel de Salas Online ativado! Conectado com sucesso.", true);
-    }
+// --- EVENTOS DO LOBBY ONLINE ---
+window.createOnlineRoom = function() {
+    const roomName = prompt("Insira o nome da sala online:", "Sala de Kanto");
+    if (!roomName) return;
+    
+    socket.emit('create_room', { roomName, host: currentAuthenticatedAccount || "Treinador" });
 };
+
+window.searchOnlineRooms = function() {
+    socket.emit('get_rooms_list');
+    showCustomPopup("Procurando...", "A procurar salas online disponíveis...", true);
+};
+
+socket.on('rooms_list_response', (rooms) => {
+    let lobbyContainer = document.getElementById('online-rooms-list-container');
+    if (!lobbyContainer) return;
+    
+    if (!rooms || rooms.length === 0) {
+        lobbyContainer.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">Nenhuma sala online ativa no momento. Crie a sua!</p>`;
+        return;
+    }
+
+    let html = '';
+    rooms.forEach(room => {
+        html += `
+            <div class="flex justify-between items-center bg-black/60 p-2.5 rounded-xl border border-amber-600/50 text-white text-xs my-1">
+                <span>${room.name} (Host: ${room.host})</span>
+                <button onclick="socket.emit('join_room', { roomId: '${room.id}' })" class="bg-amber-600 hover:bg-amber-500 text-black font-bold px-3 py-1 rounded cursor-pointer">Entrar</button>
+            </div>
+        `;
+    });
+    lobbyContainer.innerHTML = html;
+});
 
 window.finalizeCharacterCreation = function() {
     const nameInput = document.getElementById('setup-trainer-name');
