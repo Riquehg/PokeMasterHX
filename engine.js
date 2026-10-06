@@ -2950,3 +2950,40 @@ window.adminDeleteAccount = function(email) {
         setTimeout(() => socket.emit('admin_get_users'), 500);
     }
 };
+
+// Funções de ponte para o menu inicial do index.html
+window.resumeSavedGame = function() {
+    if (typeof loadGameProgress === 'function') {
+        loadGameProgress();
+    }
+}
+
+window.openCharacterCreationMode = function(keepProfile) {
+    const authContainer = document.getElementById('auth-container');
+    const mainMenu = document.getElementById('trainer-main-menu');
+    const charCreation = document.getElementById('character-creation-container');
+    
+    if (authContainer) authContainer.classList.add('hidden');
+    if (mainMenu) mainMenu.classList.add('hidden');
+    if (charCreation) charCreation.classList.remove('hidden');
+}
+
+window.showOnlineLobbyView = function() {
+    const authContainer = document.getElementById('auth-container');
+    const mainMenu = document.getElementById('trainer-main-menu');
+    const onlineLobby = document.getElementById('online-lobby-container');
+    
+    if (authContainer) authContainer.classList.add('hidden');
+    if (mainMenu) mainMenu.classList.add('hidden');
+    if (onlineLobby) onlineLobby.classList.remove('hidden');
+}
+
+window.backToMainMenu = function() {
+    const charCreation = document.getElementById('character-creation-container');
+    const onlineLobby = document.getElementById('online-lobby-container');
+    const mainMenu = document.getElementById('trainer-main-menu');
+    
+    if (charCreation) charCreation.classList.add('hidden');
+    if (onlineLobby) onlineLobby.classList.add('hidden');
+    if (mainMenu) mainMenu.classList.remove('hidden');
+}
