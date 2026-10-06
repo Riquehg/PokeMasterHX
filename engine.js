@@ -59,22 +59,34 @@ let currentEncounterState = {
 // Variável temporária para armazenar a aura da Poké Ball selecionada no turno atual
 let selectedBallAura = null;
 
-// Atalho rápido para obter o jogador atual da vez com segurança absoluta
-function getCurrentPlayer() {
-    if (!gameState.players || !Array.isArray(gameState.players) || gameState.players.length === 0) {
-        return {
-            name: "Ash Ketchum",
-            avatarId: 1,
-            currentZone: 5,
-            level: 1,
-            gold: 350,
-            badges: [],
-            activeTeam: [],
-            pcBox: [],
-            inventory: [],
-            equipmentSlots: [null, null]
+// Fallback preventivo de estado válido para evitar travamentos ao limpar o navegador
+function ensureValidGameState() {
+    if (!gameState || !Array.isArray(gameState.players) || gameState.players.length === 0) {
+        gameState = {
+            setupDone: false,
+            players: [{
+                name: "Ash Ketchum",
+                avatarId: 1,
+                currentZone: 5,
+                level: 1,
+                gold: 350,
+                badges: [],
+                activeTeam: [],
+                pcBox: [],
+                inventory: [],
+                equipmentSlots: [null, null]
+            }],
+            currentPlayerIndex: 0,
+            turn: 1,
+            currentBottomView: 'inventory',
+            pcBoxCurrentPage: 0
         };
     }
+}
+
+// Atalho rápido para obter o jogador atual da vez com segurança absoluta
+function getCurrentPlayer() {
+    ensureValidGameState();
     const idx = gameState.currentPlayerIndex || 0;
     return gameState.players[idx] || gameState.players[0];
 }
@@ -121,21 +133,7 @@ function loadGameProgress() {
         gameState = saveData.gameState || gameState;
         boardPokemonCards = saveData.boardPokemonCards || {};
 
-        if (!gameState.players || !Array.isArray(gameState.players) || gameState.players.length === 0) {
-            gameState.players = [{
-                name: "Ash Ketchum",
-                avatarId: 1,
-                currentZone: 5,
-                level: 1,
-                gold: 350,
-                badges: [],
-                activeTeam: [],
-                pcBox: [],
-                inventory: [],
-                equipmentSlots: [null, null]
-            }];
-            gameState.currentPlayerIndex = 0;
-        }
+        ensureValidGameState();
 
         const setupScreen = document.getElementById('setup-screen');
         const mainGameLayout = document.getElementById('main-game-layout');
@@ -195,6 +193,7 @@ function importSaveFromFile(event) {
 
             gameState = saveData.gameState;
             boardPokemonCards = saveData.boardPokemonCards || {};
+            ensureValidGameState();
 
             localStorage.setItem('pokemon_master_trainer_save', JSON.stringify(saveData));
 
@@ -232,8 +231,6 @@ window.logoutToSetupScreen = function() {
         if (authContainer) authContainer.classList.remove('hidden');
         if (onlineLobby) onlineLobby.classList.add('hidden');
         if (postLoginDashboard) postLoginDashboard.classList.add('hidden');
-
-        console.log("🚪 Sessão encerrada. Retornado ao menu inicial.");
     }
 };
 
@@ -593,6 +590,7 @@ window.startMainGame = function() {
 };
 
 function launchGameSession() {
+    ensureValidGameState();
     gameState.currentPlayerIndex = 0;
     gameState.turn = 1;
 
@@ -612,6 +610,7 @@ function launchGameSession() {
 // --- MOTOR DO JOGO PRINCIPAL ---
 
 function initGameEngine() {
+    ensureValidGameState();
     initializeBoardPokemonCards(); 
     if (typeof renderBoardMap === 'function') renderBoardMap(); 
     renderTeamCardSlots();
@@ -833,18 +832,18 @@ window.resolveBattleAttempt = function() {
         const wildPower = (wild.str || 3) + wildDice;
 
         if (playerPower >= wildPower) {
-            // Dano infligido ao Pokémon selvagem
             const damageToWild = Math.max(10, playerPower - wildPower + 10);
             wild.currentHp = Math.max(0, (wild.currentHp !== undefined ? wild.currentHp : wild.maxHp) - damageToWild);
 
             if (wild.currentHp <= 0) {
-                showCustomPopup("🏆 POKÉMON SELVAGEM DERROTADO!", `O teu ${activeMon.name} venceu e desmaiou o ${wild.name} selvagem!\n\n✨ Ganhaste XP e podes capturá-lo com bónus máximo!`, true);
+                showCustomPopup("🏆 POKÉMON SELVAGEM DERROTADO!", `O teu ${activeMon.name} venceu e desmaiou o ${wild.name} selvagem!\n\nPodes agora escolher uma Pokébola para tentar capturá-lo ou fechar a janela.`, true);
                 wild.weakened = true;
                 if (wild.waypointId && boardPokemonCards[wild.waypointId]) {
                     boardPokemonCards[wild.waypointId].weakened = true;
                     boardPokemonCards[wild.waypointId].currentHp = 0;
                 }
                 addExperienceToMonster(activeMon, 50);
+                triggerCaptureFlow(wild);
             } else {
                 showCustomPopup("⚔️ ATAQUE BEM-SUCEDIDO!", `O teu ${activeMon.name} causou ${damageToWild} de dano ao ${wild.name}!\n\nHP Restante do Selvagem: ${wild.currentHp}/${wild.maxHp || wild.hp}`, true);
             }
@@ -862,6 +861,37 @@ window.resolveBattleAttempt = function() {
             updateEncounterUIInfo();
         }
     });
+};
+
+function triggerCaptureFlow(wildPokemon) {
+    let captureModal = document.getElementById('capture-flow-modal');
+    if (!captureModal) {
+        captureModal = document.createElement('div');
+        captureModal.id = 'capture-flow-modal';
+        captureModal.className = 'fixed inset-0 bg-black/90 z-[600] flex items-center justify-center p-4 backdrop-blur-md';
+        document.body.appendChild(captureModal);
+    }
+
+    captureModal.innerHTML = `
+        <div class="trainer-card max-w-md w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] text-white text-center">
+            <h3 class="text-sm font-black text-amber-400 uppercase">🎯 TENTATIVA DE CAPTURA</h3>
+            <p class="text-xs text-slate-300">O ${wildPokemon.name} está debilitado! Escolha uma Pokébola para tentar capturá-lo:</p>
+            <div class="flex justify-center gap-3 my-4">
+                <button onclick="document.getElementById('capture-flow-modal').remove(); attemptCatchWithBall('pokeball', '${wildPokemon.waypointId}')" class="bg-red-600 hover:bg-red-500 text-white font-bold px-4 py-2 rounded-xl text-xs cursor-pointer">Pokébola</button>
+                <button onclick="document.getElementById('capture-flow-modal').remove(); attemptCatchWithBall('greatball', '${wildPokemon.waypointId}')" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-xl text-xs cursor-pointer">Great Ball</button>
+            </div>
+            <button onclick="document.getElementById('capture-flow-modal').remove()" class="text-xs text-slate-400 hover:text-white underline">Fugir / Ignorar</button>
+        </div>
+    `;
+    captureModal.classList.remove('hidden');
+}
+
+window.attemptCatchWithBall = function(ballType, waypointId) {
+    let bonus = 0;
+    if (ballType === 'greatball') bonus = 1;
+    if (ballType === 'ultraball') bonus = 2;
+    currentEncounterState.itemBonus = bonus;
+    resolveCaptureAttempt();
 };
 
 // --- MODAL DETALHADO DO POKÉMON ---
@@ -1143,7 +1173,7 @@ window.openPokemonCenterModal = function() {
     renderTeamCardSlots();
     renderBottomPanel();
     updatePlayerUI();
-    showCustomPopup("🏥 Centro Pokémon", `A enfermeira Joy cuidou da equipa de ${cp.name}!\n\n✨ Todos os Pokémon foram totalmente curados!`, true);
+    showCustomPopup("🏥 Centro Pokémon", `A enfermeira Joy cuidou da equipa de ${cp.name}!\n\n✨ Todos los Pokémon foram totalmente curados!`, true);
     appendAdventureLog(`${cp.name} visitou o Centro Pokémon: Equipa totalmente curada.`);
 };
 
@@ -1276,7 +1306,6 @@ function initiateGymSequence(cityName) {
         challengerTeam: []
     };
 
-    // Integração perfeita com a Arena TCG (`battle-arena.js`) se disponível
     if (typeof openBattleArena === 'function') {
         openBattleArena({
             type: 'gym',
@@ -1617,11 +1646,6 @@ function useItemInEncounter(item, itemIndex) {
     if (!activeMon) return;
 
     if (item.type === 'sphere') {
-        if (currentEncounterState.hasAttemptedCapture) {
-            showCustomPopup("Ação Bloqueada", "⚠ Já fizeste a tua tentativa de captura neste encontro! Podes apenas lutar ou fugir.", false);
-            return;
-        }
-
         item.count--;
         currentEncounterState.itemBonus = item.value || 0;
         
@@ -1746,13 +1770,6 @@ function resolveCaptureAttempt() {
     const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex];
     if (!wild) return;
 
-    if (currentEncounterState.hasAttemptedCapture) {
-        showCustomPopup("Ação Bloqueada", "⚠️ Já fizeste a tua tentativa de captura neste encontro! Podes apenas lutar ou fugir.", false);
-        return;
-    }
-
-    currentEncounterState.hasAttemptedCapture = true;
-
     let requiredTarget = 4;
     const tier = wild.tier || 1;
     const isLegendary = (tier === 5) || (wild.color && wild.color.toLowerCase() === 'amarelo');
@@ -1803,7 +1820,7 @@ function resolveCaptureAttempt() {
             if (typeof renderBoardMap === 'function') renderBoardMap();
 
             const weakenedNotice = (!isLegendary) ? "\n🩹 O Pokémon ficou enfraquecido no tabuleiro (+1 bónus permanente na próxima tentativa)!" : "";
-            showCustomPopup("❌ A CAPTURA FALHOU!", `O ${wild.name} libertou-se!\n(Dado: ${roll} + Bónus: ${currentEncounterState.itemBonus + weakenedBonus} = ${totalCaptureValue} | Necessário: ${requiredTarget}+).${weakenedNotice}\n\n⚠️ A tentativa de captura deste turno esgotou-se. Podes continuar a lutar ou fugir.`, false);
+            showCustomPopup("❌ A CAPTURA FALHOU!", `O ${wild.name} libertou-se!\n(Dado: ${roll} + Bónus: ${currentEncounterState.itemBonus + weakenedBonus} = ${totalCaptureValue} | Necessário: ${requiredTarget}+).${weakenedNotice}`, false);
             
             updateEncounterUIInfo();
         }
@@ -2782,11 +2799,9 @@ socket.on('login_response', (response) => {
     } else {
         const accData = response.accountData;
         if (accData && accData.gameState && accData.gameState.players) {
-            // Restaura o gameState exato guardado no Supabase
             gameState = accData.gameState;
             boardPokemonCards = accData.boardPokemonCards || {};
         } else {
-            // Fallback caso a conta exista mas o gameState estivesse vazio
             gameState.players = [{
                 name: accData.name || "Treinador",
                 avatarId: 1,
@@ -2800,12 +2815,13 @@ socket.on('login_response', (response) => {
                 equipmentSlots: [null, null]
             }];
         }
-
+        ensureValidGameState();
         showPostLoginDashboard();
     }
 });
 
 function showPostLoginDashboard() {
+    ensureValidGameState();
     const authContainer = document.getElementById('auth-container');
     if (authContainer) authContainer.classList.add('hidden');
 
@@ -2874,7 +2890,7 @@ window.openNewGameSetupFromDashboard = function() {
     showCustomPopup("Nova Partida", "Escolha o seu novo Iniciante e Avatar preservando o seu cofre e progresso global da conta!", true);
 };
 
-// --- EVENTOS DO LOBBY ONLINE ---
+// --- EVENTOS DO LOBBY ONLINE E FUNÇÕES GLOBAIS DE SUPORTE AO CONSOLE ---
 window.createOnlineRoom = function() {
     const roomName = prompt("Insira o nome da sala online:", "Sala de Kanto");
     if (!roomName) return;
@@ -2885,6 +2901,22 @@ window.createOnlineRoom = function() {
 window.searchOnlineRooms = function() {
     socket.emit('get_rooms_list');
     showCustomPopup("Procurando...", "A procurar salas online disponíveis...", true);
+};
+
+window.refreshRoomsList = function() {
+    socket.emit('get_rooms_list');
+    showCustomPopup("Atualizando...", "A procurar salas online disponíveis...", true);
+};
+
+window.sendLobbyChatMessage = function() {
+    const input = document.getElementById('lobby-chat-input');
+    if (!input || !input.value.trim()) return;
+    socket.emit('lobby_chat_message', { message: input.value.trim(), sender: currentAuthenticatedAccount || "Treinador" });
+    input.value = '';
+};
+
+window.joinAndStartOnlineGame = function() {
+    showCustomPopup("Modo Online", "Selecione uma sala ativa na lista para entrar na partida online.", true);
 };
 
 socket.on('rooms_list_response', (rooms) => {
