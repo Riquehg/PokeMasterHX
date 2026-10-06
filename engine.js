@@ -29,7 +29,8 @@ let gameState = {
     chatMessages: [
         { sender: "Sistema", text: "Bem-vindo ao Pokémon Master Trainer HEX Edition!" }
     ],
-    currentBottomView: 'inventory'
+    currentBottomView: 'inventory',
+    pcBoxCurrentPage: 0
 };
 
 // --- VARIÁVEIS DE CONFIGURAÇÃO DA TELA INICIAL ---
@@ -88,7 +89,17 @@ function saveGameProgress() {
             timestamp: new Date().toISOString()
         };
         localStorage.setItem('pokemon_master_trainer_save', JSON.stringify(saveData));
-        showCustomPopup("💾 Jogo Salvo", "O progresso da aventura foi guardado com sucesso neste navegador!", true);
+
+        // Ponto 4: Sincronização automática com o servidor online se autenticado
+        if (currentAuthenticatedAccount) {
+            socket.emit('save_game_state', {
+                email: currentAuthenticatedAccount,
+                gameState: gameState,
+                boardPokemonCards: boardPokemonCards
+            });
+        }
+
+        showCustomPopup("💾 Jogo Salvo", "O progresso da aventura foi guardado com sucesso neste navegador e sincronizado na nuvem!", true);
         appendAdventureLog("Progresso do jogo salvo com sucesso.");
     } catch (error) {
         showCustomPopup("Erro ao Salvar", "❌ Não foi possível guardar o jogo no navegador.", false);
@@ -125,7 +136,10 @@ function loadGameProgress() {
 
         const setupScreen = document.getElementById('setup-screen');
         const mainGameLayout = document.getElementById('main-game-layout');
+        const postLoginDashboard = document.getElementById('post-login-dashboard');
+
         if (setupScreen) setupScreen.classList.add('hidden');
+        if (postLoginDashboard) postLoginDashboard.classList.add('hidden');
         if (mainGameLayout) mainGameLayout.classList.remove('hidden');
 
         initGameEngine();
@@ -183,7 +197,10 @@ function importSaveFromFile(event) {
 
             const setupScreen = document.getElementById('setup-screen');
             const mainGameLayout = document.getElementById('main-game-layout');
+            const postLoginDashboard = document.getElementById('post-login-dashboard');
+
             if (setupScreen) setupScreen.classList.add('hidden');
+            if (postLoginDashboard) postLoginDashboard.classList.add('hidden');
             if (mainGameLayout) mainGameLayout.classList.remove('hidden');
 
             initGameEngine();
@@ -711,6 +728,36 @@ function renderEquipmentSlots() {
     }
 }
 
+// --- CORREÇÃO PONTO 1: FUNÇÃO DE BATALHA CONTRA POKEMON SELVAGEM ---
+window.resolveBattleAttempt = function() {
+    const cp = getCurrentPlayer();
+    const wild = currentEncounterState.wildPokemon;
+    const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex];
+    if (!wild || !activeMon) return;
+
+    rollDiceWithAnimation((playerDice, wildDice) => {
+        const typeMult = calculateTypeAdvantageMultiplier(activeMon.type, wild.type);
+        const playerPower = Math.round(((activeMon.str || 4) + currentEncounterState.battlePowerBonus + playerDice) * typeMult);
+        const wildPower = (wild.str || 3) + wildDice;
+
+        if (playerPower >= wildPower) {
+            showCustomPopup("⚔️ VITÓRIA NO COMBATE!", `O teu ${activeMon.name} derrotou o ${wild.name} selvagem!\n\n✨ Ganhaste XP e o Pokémon ficou debilitado para captura imediata!`, true);
+            wild.weakened = true;
+            if (wild.waypointId && boardPokemonCards[wild.waypointId]) {
+                boardPokemonCards[wild.waypointId].weakened = true;
+            }
+            addExperienceToMonster(activeMon, 40);
+            updateEncounterUIInfo();
+        } else {
+            const damage = 15;
+            activeMon.currentHp = Math.max(0, (activeMon.currentHp || activeMon.maxHp) - damage);
+            showCustomPopup("💥 DERROTA NO COMBATE", `O ${wild.name} selvagem contra-atacou com força!\n\n💔 ${activeMon.name} sofreu ${damage} de dano.`, false);
+            renderTeamCardSlots();
+            updateEncounterUIInfo();
+        }
+    });
+};
+
 // --- MODAL DETALHADO DO POKÉMON ---
 
 window.openPokemonDetailModal = function(monsterIdOrUniqueId, fromArea = 'team') {
@@ -884,6 +931,7 @@ function useInventoryItemMainScreen(itemId) {
     }
 }
 
+// --- CORREÇÃO PONTO 3: SPRITES DOS GINÁSIOS CORRIGIDOS (leaders/) ---
 window.openCityModal = function(cityName) {
     let cityModal = document.getElementById('city-hub-modal');
     if (!cityModal) {
@@ -911,6 +959,11 @@ window.openCityModal = function(cityName) {
     let gymSectionHtml = `<p class="text-xs text-slate-400 text-center">Esta localidade não possui um ginásio oficial registado.</p>`;
 
     if (gymInfo) {
+        // Tratamento exato para o nome do ficheiro do líder dentro de sprites/leaders/ (ex: Brock.png, misty.png, Lt. Surge.png)
+        let leaderFileName = gymInfo.leader;
+        if (leaderFileName === "Misty") leaderFileName = "misty";
+        const leaderSpriteUrl = `${SUPABASE_STORAGE_URL}leaders/${encodeURIComponent(leaderFileName)}.png`;
+
         const leaderTeam = gymInfo.pokemons || [gymInfo.pokemon];
         let teamPokesHtml = '';
         leaderTeam.forEach(pk => {
@@ -929,7 +982,7 @@ window.openCityModal = function(cityName) {
             <div class="bg-red-950/40 border-2 border-red-600/60 p-3 rounded-2xl space-y-2">
                 <div class="flex justify-between items-center border-b border-red-900 pb-1">
                     <div class="flex items-center gap-2">
-                        <img src="${SUPABASE_STORAGE_URL}leaders/${gymInfo.leader.toLowerCase()}.png" class="w-8 h-8 object-contain rounded-full bg-black border border-amber-400" onerror="this.src='https://api.iconify.design/noto:man-raising-hand.svg'">
+                        <img src="${leaderSpriteUrl}" class="w-10 h-10 object-contain rounded-full bg-black border border-amber-400 shadow" onerror="this.src='https://api.iconify.design/noto:man-raising-hand.svg'">
                         <div>
                             <span class="text-xs font-black text-red-300">Líder: ${gymInfo.leader}</span>
                             <p class="text-[9px] text-slate-300">Formato: ${gymInfo.format}x${gymInfo.format}</p>
@@ -1008,9 +1061,6 @@ function renderMartContent(modalEl) {
         { id: 'poke_ball', name: 'Poké Ball', type: 'sphere', value: 0, cost: 50, icon: '🔴', image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`, desc: 'Esfera clássica.' },
         { id: 'ball_great', name: 'Great Ball', type: 'sphere', value: 1, cost: 100, icon: '🔵', image: `${SUPABASE_STORAGE_URL}items/great_ball.png`, desc: '+1 na captura.' },
         { id: 'ball_ultra', name: 'Ultra Ball', type: 'sphere', value: 2, cost: 200, icon: '🟡', image: `${SUPABASE_STORAGE_URL}items/ultra_ball.png`, desc: '+2 na captura.' },
-        { id: 'ball_mystic', name: 'Mystic Ball', type: 'sphere', value: 2, aura: 'aura-mystic', cost: 350, icon: '🔮', image: `${SUPABASE_STORAGE_URL}items/mystic_ball.png`, desc: '+2 captura com Aura Mística.' },
-        { id: 'ball_flame', name: 'Flame Ball', type: 'sphere', value: 2, aura: 'aura-flame', cost: 350, icon: '🔥', image: `${SUPABASE_STORAGE_URL}items/flame_ball.png`, desc: '+2 captura com Aura de Fogo.' },
-        { id: 'ball_aqua', name: 'Aqua Ball', type: 'sphere', value: 2, aura: 'aura-aqua', cost: 350, icon: '💧', image: `${SUPABASE_STORAGE_URL}items/aqua_ball.png`, desc: '+2 captura com Aura Aquática.' },
         { id: 'item_rarecandy', name: 'Rare Candy', type: 'rarecandy', value: 100, cost: 300, icon: '🍬', image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`, desc: 'Dá 100 XP (Sobe de Nível).' },
         { id: 'evolution_stone', name: 'Evolution Stone', type: 'evolution', value: 1, cost: 500, icon: '💎', image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`, desc: 'Evolve um Anima compatível.' },
         { id: 'item_potion', name: 'Potion', type: 'heal', value: 20, cost: 50, icon: '💊', image: `${SUPABASE_STORAGE_URL}items/potion.png`, desc: 'Restaura 20 HP.' },
@@ -1076,9 +1126,6 @@ window.buyItemFromMart = function(itemId, cost) {
             poke_ball: { id: 'poke_ball', name: 'Poké Ball', type: 'sphere', value: 0, icon: '🔴', image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`, count: 1, desc: 'Esfera clássica.' },
             ball_great: { id: 'ball_great', name: 'Great Ball', type: 'sphere', value: 1, icon: '🔵', image: `${SUPABASE_STORAGE_URL}items/great_ball.png`, count: 1, desc: '+1 na captura.' },
             ball_ultra: { id: 'ball_ultra', name: 'Ultra Ball', type: 'sphere', value: 2, icon: '🟡', image: `${SUPABASE_STORAGE_URL}items/ultra_ball.png`, count: 1, desc: '+2 na captura.' },
-            ball_mystic: { id: 'ball_mystic', name: 'Mystic Ball', type: 'sphere', value: 2, aura: 'aura-mystic', icon: '🔮', image: `${SUPABASE_STORAGE_URL}items/mystic_ball.png`, count: 1, desc: '+2 captura com Aura Mística.' },
-            ball_flame: { id: 'ball_flame', name: 'Flame Ball', type: 'sphere', value: 2, aura: 'aura-flame', icon: '🔥', image: `${SUPABASE_STORAGE_URL}items/flame_ball.png`, count: 1, desc: '+2 captura com Aura de Fogo.' },
-            ball_aqua: { id: 'ball_aqua', name: 'Aqua Ball', type: 'sphere', value: 2, aura: 'aura-aqua', icon: '💧', image: `${SUPABASE_STORAGE_URL}items/aqua_ball.png`, count: 1, desc: '+2 captura com Aura Aquática.' },
             item_rarecandy: { id: 'item_rarecandy', name: 'Rare Candy', type: 'rarecandy', value: 100, icon: '🍬', image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`, count: 1, desc: 'Dá 100 XP (Sobe de Nível).' },
             evolution_stone: { id: 'evolution_stone', name: 'Evolution Stone', type: 'evolution', value: 1, icon: '💎', image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`, count: 1, desc: 'Evolve um Anima compatível.' },
             item_potion: { id: 'item_potion', name: 'Potion', type: 'heal', value: 20, icon: '💊', image: `${SUPABASE_STORAGE_URL}items/potion.png`, count: 1, desc: 'Restaura 20 HP.' },
@@ -1136,6 +1183,10 @@ function showGymVsScreen(gymInfo) {
         document.body.appendChild(vsModal);
     }
 
+    let leaderFileName = gymInfo.leader;
+    if (leaderFileName === "Misty") leaderFileName = "misty";
+    const leaderSpriteUrl = `${SUPABASE_STORAGE_URL}leaders/${encodeURIComponent(leaderFileName)}.png`;
+
     let leaderPokemonsHtml = '';
     const leaderTeam = gymInfo.pokemons || [gymInfo.pokemon];
     leaderTeam.forEach(pk => {
@@ -1151,7 +1202,7 @@ function showGymVsScreen(gymInfo) {
 
         <div class="flex items-center justify-center gap-8 my-4 w-full max-w-2xl">
             <div class="flex flex-col items-center border-4 border-amber-500 rounded-3xl p-5 bg-gradient-to-b from-amber-950 to-black shadow-2xl w-48">
-                <img src="${SUPABASE_STORAGE_URL}leaders/${gymInfo.leader.toLowerCase()}.png" class="w-24 h-24 object-contain mb-2 drop-shadow-[0_0_10px_rgba(255,215,0,0.6)]" onerror="this.src='https://api.iconify.design/noto:man-raising-hand.svg'">
+                <img src="${leaderSpriteUrl}" class="w-24 h-24 object-contain mb-2 drop-shadow-[0_0_10px_rgba(255,215,0,0.6)]" onerror="this.src='https://api.iconify.design/noto:man-raising-hand.svg'">
                 <span class="text-xs font-black text-amber-300 uppercase">Líder</span>
             </div>
             
@@ -1259,19 +1310,7 @@ window.confirmGymTeamSelection = function(chosenIndexes) {
 
     if (currentGymBattleSession) {
         currentGymBattleSession.challengerTeam = chosenIndexes;
-        const gym = currentGymBattleSession.gym;
-
-        if (typeof openBattleArena === 'function') {
-            openBattleArena({
-                type: 'gym',
-                format: gym.format || 1,
-                data: gym
-            });
-        } else if (typeof window.startTCGGymBattle === 'function') {
-            window.startTCGGymBattle(currentGymBattleSession);
-        } else {
-            executeLockedGymBattleSequence();
-        }
+        executeLockedGymBattleSequence();
     }
 };
 
@@ -1928,20 +1967,19 @@ function renderTeamCardSlots() {
 
 window.switchBottomView = function(viewType) {
     gameState.currentBottomView = viewType;
-    const titleElement = document.getElementById('bottom-panel-title');
-    if (titleElement) {
-        titleElement.innerText = viewType === 'inventory' ? 'Mochila (Itens & Orbes) - Clica num item para usar' : 'Banco (Reserva de Animas - PC Box)';
-    }
     renderBottomPanel();
 }
 
+// --- CORREÇÃO PONTO 5: PC BOX COM PAGINAÇÃO DINÂMICA (12 por página) ---
 function renderBottomPanel() {
     const cp = getCurrentPlayer();
     const container = document.getElementById('bottom-dynamic-container');
+    const titleElement = document.getElementById('bottom-panel-title');
     if (!container) return;
     container.innerHTML = '';
 
     if (gameState.currentBottomView === 'inventory') {
+        if (titleElement) titleElement.innerText = 'Mochila (Itens & Orbes) - Clica num item para usar';
         if (cp.inventory) {
             cp.inventory.forEach((item) => {
                 if (!item || item.count <= 0) return;
@@ -1970,15 +2008,34 @@ function renderBottomPanel() {
             });
         }
     } else {
-        for (let i = 0; i < 12; i++) {
-            const monster = cp.pcBox ? cp.pcBox[i] : null;
+        const totalBoxes = cp.pcBox ? cp.pcBox.length : 0;
+        const maxPages = Math.max(0, Math.ceil(totalBoxes / 12) - 1);
+        if ((gameState.pcBoxCurrentPage || 0) > maxPages) gameState.pcBoxCurrentPage = maxPages;
+        const currentPage = gameState.pcBoxCurrentPage || 0;
+
+        if (titleElement) {
+            titleElement.innerHTML = `
+                <span>Banco PC Box (Página ${currentPage + 1} de ${maxPages + 1})</span>
+                <div class="flex gap-2">
+                    <button onclick="changePcBoxPage(-1)" class="bg-amber-600 hover:bg-amber-500 px-2 py-0.5 rounded text-[10px] text-black font-bold cursor-pointer">◀</button>
+                    <button onclick="changePcBoxPage(1)" class="bg-amber-600 hover:bg-amber-500 px-2 py-0.5 rounded text-[10px] text-black font-bold cursor-pointer">▶</button>
+                </div>
+            `;
+        }
+
+        const pageSize = 12;
+        const startIndex = currentPage * pageSize;
+
+        for (let i = 0; i < pageSize; i++) {
+            const realIndex = startIndex + i;
+            const monster = cp.pcBox ? cp.pcBox[realIndex] : null;
             const slot = document.createElement('div');
             
             if (monster) {
                 slot.draggable = true;
-                slot.ondragstart = (e) => handleDragStart(e, 'pcbox', i);
+                slot.ondragstart = (e) => handleDragStart(e, 'pcbox', realIndex);
                 slot.ondragover = handleDragOver;
-                slot.ondrop = (e) => handleDrop(e, 'pcbox', i);
+                slot.ondrop = (e) => handleDrop(e, 'pcbox', realIndex);
                 slot.onclick = () => openPokemonDetailModal(monster.uniqueId, 'pcbox');
                 slot.className = "flex flex-col justify-between p-1 bg-slate-900 border border-sky-600 rounded h-20 cursor-pointer hover:brightness-110 shadow text-white";
                 
@@ -1995,7 +2052,7 @@ function renderBottomPanel() {
                 `;
             } else {
                 slot.ondragover = handleDragOver;
-                slot.ondrop = (e) => handleDrop(e, 'pcbox', i);
+                slot.ondrop = (e) => handleDrop(e, 'pcbox', realIndex);
                 slot.className = "border border-dashed border-slate-700 rounded bg-slate-950/40 h-20 flex items-center justify-center text-slate-600 text-[9px]";
                 slot.innerHTML = `<span>Livre</span>`;
             }
@@ -2003,6 +2060,17 @@ function renderBottomPanel() {
         }
     }
 }
+
+window.changePcBoxPage = function(direction) {
+    const cp = getCurrentPlayer();
+    const totalBoxes = cp.pcBox ? cp.pcBox.length : 0;
+    const maxPages = Math.max(0, Math.ceil(totalBoxes / 12) - 1);
+    
+    gameState.pcBoxCurrentPage = (gameState.pcBoxCurrentPage || 0) + direction;
+    if (gameState.pcBoxCurrentPage < 0) gameState.pcBoxCurrentPage = 0;
+    if (gameState.pcBoxCurrentPage > maxPages) gameState.pcBoxCurrentPage = maxPages;
+    renderBottomPanel();
+};
 
 // --- PASSAR A VEZ ---
 function passTurnToNextPlayer() {
@@ -2674,7 +2742,6 @@ socket.on('login_response', (response) => {
             boardPokemonCards = accData.boardPokemonCards || {};
         }
 
-        // Exibir o Painel Limpo Pós-Login com o Trainer Card salvo
         showPostLoginDashboard();
     }
 });
@@ -2699,7 +2766,6 @@ function showPostLoginDashboard() {
             <h2 class="text-base font-black text-amber-400 font-cinzel tracking-wider">SESSÃO AUTENTICADA</h2>
             <p class="text-xs text-slate-300">Bem-vindo de volta ao <strong class="text-amber-300">Master Trainer HEX</strong>!</p>
 
-            <!-- Trainer Card Resumido Salvo -->
             <div class="bg-black/70 border-2 border-amber-600/80 p-4 rounded-2xl flex items-center gap-4 text-left shadow-inner">
                 <img src="${avatarImgSrc}" class="w-16 h-16 object-contain drop-shadow-[0_0_8px_rgba(255,215,0,0.6)]" onerror="this.src='https://api.iconify.design/noto:boy.svg'">
                 <div>
@@ -2709,7 +2775,6 @@ function showPostLoginDashboard() {
                 </div>
             </div>
 
-            <!-- Três Botões Claros -->
             <div class="space-y-3 pt-2">
                 <button onclick="resumeSavedGameFromDashboard()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer">
                     ▶ Continuar Partida Salva
@@ -2717,8 +2782,8 @@ function showPostLoginDashboard() {
                 <button onclick="openNewGameSetupFromDashboard()" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer">
                     ✨ Nova Partida (Manter Perfil / Pokédex)
                 </button>
-                <button onclick="openOnlineLobbyFromDashboard()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer">
-                    🌐 Entrar em Partida Online (Lobby)
+                <button onclick="openVaultModal()" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer">
+                    📦 Abrir Cofre Global de Herança
                 </button>
             </div>
         </div>
@@ -2771,11 +2836,13 @@ window.finalizeCharacterCreation = function() {
         startMainGame();
     }
 
-    socket.emit('save_game_state', {
-        email: currentAuthenticatedAccount,
-        gameState: gameState,
-        boardPokemonCards: boardPokemonCards
-    });
+    if (currentAuthenticatedAccount) {
+        socket.emit('save_game_state', {
+            email: currentAuthenticatedAccount,
+            gameState: gameState,
+            boardPokemonCards: boardPokemonCards
+        });
+    }
 
     showCustomPopup("Personagem Criado!", `Parabéns ${trainerName}! O seu Trainer Card e jornada foram inicializados.`, true);
 };
