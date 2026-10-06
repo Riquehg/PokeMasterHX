@@ -196,17 +196,15 @@ function importSaveFromFile(event) {
     };
     reader.readAsText(file);
 }
+
 window.logoutToSetupScreen = function() {
-    if (confirm("⚠️ Deseja realmente sair da sessão atual? Certifique-se de que salvou o seu progresso!")) {
-        // Ocultar a interface principal do jogo
+    if (confirm("⚠️️ Deseja realmente sair da sessão atual? Certifique-se de que salvou o seu progresso!")) {
         const mainLayout = document.getElementById('main-game-layout');
         if (mainLayout) mainLayout.classList.add('hidden');
 
-        // Mostrar novamente a tela inicial / setup
         const setupScreen = document.getElementById('setup-screen');
         if (setupScreen) setupScreen.classList.remove('hidden');
 
-        // Opcional: reativar o container de login ou lobby
         const authContainer = document.getElementById('auth-container');
         const onlineLobby = document.getElementById('online-lobby-container');
         if (authContainer) authContainer.classList.remove('hidden');
@@ -215,6 +213,7 @@ window.logoutToSetupScreen = function() {
         console.log("🚪 Sessão encerrada. Retornado ao menu inicial.");
     }
 };
+
 // --- TABELA DE VANTAGENS DE TIPO (HEX Edition TCG) ---
 const TYPE_ADVANTAGES = {
     "Fogo": { strongAgainst: ["Grama", "Inseto", "Gelo", "Aço"], weakAgainst: ["Água", "Fogo", "Pedra", "Dragão"] },
@@ -238,7 +237,6 @@ function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
     return 1.0;
 }
 
-// Obter classe de cor de fundo baseada no Tier / Raridade
 function getTierColorClass(tierOrColor) {
     const val = String(tierOrColor).toLowerCase();
     if (val === '1' || val === 'rosa') return 'bg-gradient-to-b from-pink-950 via-pink-900 to-black border-pink-500';
@@ -249,7 +247,6 @@ function getTierColorClass(tierOrColor) {
     return 'bg-gradient-to-b from-amber-950 via-amber-900 to-black border-amber-600';
 }
 
-// --- ATUALIZAÇÃO VISUAL DAS INSÍGNIAS EM PNG NO TRAINER CARD ---
 function updateTrainerCardBadges(cp) {
     const badgesArray = cp.badges || [];
     const allBadges = ['boulder', 'cascade', 'thunder', 'rainbow', 'soul', 'volcano'];
@@ -2069,7 +2066,6 @@ function checkAndRenderPassTurnButton() {
     }
 }
 
-// CORREÇÃO PRINCIPAL DO ERRO DA CONSOLA (.forEach em undefined)
 function renderChatMessages() {
     const chatBox = document.getElementById('chat-messages-box');
     const lobbyChatBox = document.getElementById('lobby-chat-messages');
@@ -2300,7 +2296,6 @@ window.openPokedexModal = function() {
     dexModal.classList.remove('hidden');
 };
 
-// --- TABELA DE VANTAGENS E FRAQUEZAS DE TIPOS ---
 function getTypeEffectivenessInfo(typeString) {
     if (!typeString) return { strong: 'Nenhum', weak: 'Nenhum' };
     
@@ -2327,7 +2322,6 @@ function getTypeEffectivenessInfo(typeString) {
     return typeChart[primaryType] || { strong: 'Neutro', weak: 'Neutro' };
 }
 
-// --- DETALHES DO POKÉMON NA POKÉDEX ---
 window.openPokedexDetailCard = function(monsterId) {
     if (typeof MONSTER_CATALOG === 'undefined') return;
     const baseMon = MONSTER_CATALOG.find(m => m.id === monsterId);
@@ -2719,7 +2713,6 @@ window.openAdminPanelModal = function() {
         document.body.appendChild(adminModal);
     }
 
-    // Solicitar ao servidor a lista atualizada de utilizadores
     socket.emit('admin_get_users');
 
     socket.on('admin_users_list', (users) => {
@@ -2783,7 +2776,6 @@ function renderAdminDashboard(modalEl, users) {
     adminModal.classList.remove('hidden');
 }
 
-// Funções auxiliares de Ações do Administrador enviadas via Socket
 window.adminGiveGold = function(email) {
     const amountStr = prompt(`Quantas moedas de ouro deseja adicionar à conta de ${email}?`, "1000");
     const amount = parseInt(amountStr);
