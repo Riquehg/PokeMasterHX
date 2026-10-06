@@ -2,7 +2,7 @@
 // Catálogo completo estruturado para o sistema de Tiers do Tabuleiro HEX e Regras Oficiais (Até à 7ª Geração / 806 Pokémon por número de Pokédex).
 
 if (typeof SUPABASE_STORAGE_URL === 'undefined') {
-    var SUPABASE_STORAGE_URL = "https://juowcnkjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
+    var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
 }
 
 const MONSTER_CATALOG = [
