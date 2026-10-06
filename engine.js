@@ -2501,7 +2501,13 @@ function saveMonsterToVault(uniqueId) {
         return;
     }
 
-    let vault = JSON.parse(localStorage.getItem('pokemon_master_trainer_vault') || '[]');
+    let vault = [];
+    try {
+        const rawVault = localStorage.getItem('pokemon_master_trainer_vault');
+        if (rawVault) vault = JSON.parse(rawVault);
+    } catch (e) {
+        vault = [];
+    }
     
     if (vault.some(m => m.uniqueId === monster.uniqueId)) {
         showCustomPopup("Aviso", "Este Pokémon já se encontra guardado no Cofre Global!", false);
@@ -2517,7 +2523,12 @@ function saveMonsterToVault(uniqueId) {
 }
 
 window.openVaultModal = function() {
-    let vault = JSON.parse(localStorage.getItem('pokemon_master_trainer_vault') || '[]');
+    let vault = [];
+    try {
+        vault = JSON.parse(localStorage.getItem('pokemon_master_trainer_vault') || '[]');
+    } catch (e) {
+        vault = [];
+    }
 
     let vaultModal = document.getElementById('vault-modal');
     if (!vaultModal) {
@@ -2564,7 +2575,13 @@ window.openVaultModal = function() {
 };
 
 function withdrawMonsterFromVault(vaultIndex) {
-    let vault = JSON.parse(localStorage.getItem('pokemon_master_trainer_vault') || '[]');
+    let vault = [];
+    try {
+        vault = JSON.parse(localStorage.getItem('pokemon_master_trainer_vault') || '[]');
+    } catch (e) {
+        vault = [];
+    }
+
     const monToWithdraw = vault[vaultIndex];
     if (!monToWithdraw) return;
 
@@ -2575,7 +2592,9 @@ function withdrawMonsterFromVault(vaultIndex) {
     vault.splice(vaultIndex, 1);
     localStorage.setItem('pokemon_master_trainer_vault', JSON.stringify(vault));
 
-    document.getElementById('vault-modal').remove();
+    const modal = document.getElementById('vault-modal');
+    if (modal) modal.remove();
+
     showCustomPopup("Resgatado!", `O ${monToWithdraw.name} foi transferido do cofre para a sua PC Box!`, true);
     renderBottomPanel();
 }
