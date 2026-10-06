@@ -2686,7 +2686,6 @@ window.finalizeCharacterCreation = function() {
     showCustomPopup("Personagem Criado!", `Parabéns ${trainerName}! O seu Trainer Card e jornada foram inicializados.`, true);
 };
 
-// --- PAINEL DE ADMINISTRAÇÃO GLOBAL ---
 window.openAdminPanelModal = function() {
     const password = prompt("🔐 Insira a senha de Administrador:", "");
     if (password !== "admin123" && password !== "pokemonadmin") {
@@ -2702,16 +2701,93 @@ window.openAdminPanelModal = function() {
         document.body.appendChild(adminModal);
     }
 
-    adminModal.innerHTML = `
-        <div class="trainer-card max-w-2xl w-full p-6 space-y-4 border-4 border-red-600 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
+    // Solicitar ao servidor a lista atualizada de utilizadores
+    socket.emit('admin_get_users');
+
+    socket.on('admin_users_list', (users) => {
+        renderAdminDashboard(adminModal, users);
+    });
+};
+
+function renderAdminDashboard(modalEl, users) {
+    let rowsHtml = '';
+    
+    if (!users || users.length === 0) {
+        rowsHtml = `<tr><td colspan="5" class="text-center py-4 text-slate-400">A carregar dados ou nenhum utilizador encontrado...</td></tr>`;
+    } else {
+        users.forEach(u => {
+            rowsHtml += `
+                <tr class="border-b border-red-900/40 text-[10px] hover:bg-red-950/20">
+                    <td class="p-2 font-bold text-amber-300">${u.email}</td>
+                    <td class="p-2 text-slate-300">${u.trainerName || 'N/D'}</td>
+                    <td class="p-2 text-slate-400">${u.lastLogin ? new Date(u.lastLogin).toLocaleString() : 'Nunca'}</td>
+                    <td class="p-2 text-yellow-400 font-bold">${u.gold || 0} 🪙</td>
+                    <td class="p-2 flex gap-1 justify-end">
+                        <button onclick="adminGiveGold('${u.email}')" class="bg-amber-600 hover:bg-amber-500 text-black px-2 py-1 rounded font-bold cursor-pointer" title="Dar Ouro">🪙 Ouro</button>
+                        <button onclick="adminResetPassword('${u.email}')" class="bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded font-bold cursor-pointer" title="Redefinir Senha">🔑 Senha</button>
+                        <button onclick="adminDeleteAccount('${u.email}')" class="bg-red-700 hover:bg-red-600 text-white px-2 py-1 rounded font-bold cursor-pointer" title="Apagar Conta">🗑️ Apagar</button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    modalEl.innerHTML = `
+        <div class="trainer-card max-w-4xl w-full p-6 space-y-4 border-4 border-red-600 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
             <div class="flex justify-between items-center border-b border-red-900 pb-2">
-                <span class="text-xs font-black text-red-400 font-cinzel"><i class="fa-solid fa-shield-halved"></i> PAINEL DO ADMINISTRADOR (ONLINE)</span>
+                <span class="text-xs font-black text-red-400 font-cinzel"><i class="fa-solid fa-shield-halved"></i> PAINEL DO ADMINISTRADOR (GESTÃO ONLINE)</span>
                 <button onclick="document.getElementById('admin-panel-modal').remove()" class="text-red-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-red-800">✕ Fechar</button>
             </div>
-            <div class="space-y-1">
-                <p class="text-[11px] text-slate-300">Painel sincronizado com o servidor backend.</p>
+            
+            <div class="flex justify-between items-center">
+                <span class="text-xs font-bold text-slate-300">Total de Contas Registadas: <span class="text-amber-400">${users ? users.length : 0}</span></span>
+                <button onclick="socket.emit('admin_get_users')" class="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-1 rounded border border-red-700 cursor-pointer">🔄 Atualizar Lista</button>
+            </div>
+
+            <div class="max-h-96 overflow-y-auto border border-red-900/60 rounded-xl bg-black/60 p-2">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-red-900 text-[10px] text-red-300 uppercase">
+                            <th class="p-2">E-mail / Conta</th>
+                            <th class="p-2">Treinador</th>
+                            <th class="p-2">Último Login</th>
+                            <th class="p-2">Ouro</th>
+                            <th class="p-2 text-right">Ações de Gestão</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                    </tbody>
+                </table>
             </div>
         </div>
     `;
     adminModal.classList.remove('hidden');
+}
+
+// Funções auxiliares de Ações do Administrador enviadas via Socket
+window.adminGiveGold = function(email) {
+    const amountStr = prompt(`Quantas moedas de ouro deseja adicionar à conta de ${email}?`, "1000");
+    const amount = parseInt(amountStr);
+    if (isNaN(amount) || amount <= 0) return;
+
+    socket.emit('admin_action', { action: 'give_gold', email, amount });
+    alert(`Comando enviado: +${amount} de ouro para ${email}`);
+    setTimeout(() => socket.emit('admin_get_users'), 500);
+};
+
+window.adminResetPassword = function(email) {
+    const newPass = prompt(`Insira a nova senha temporária para a conta ${email}:`, "pokemon123");
+    if (!newPass) return;
+
+    socket.emit('admin_action', { action: 'reset_password', email, newPass });
+    alert(`Senha redefinida com sucesso para ${email}`);
+};
+
+window.adminDeleteAccount = function(email) {
+    if (confirm(`⚠️ Tem a certeza absoluta que deseja ELIMINAR PERMANENTEMENTE a conta de ${email}? Esta ação é irreversível!`)) {
+        socket.emit('admin_action', { action: 'delete_account', email });
+        alert(`Conta ${email} apagada.`);
+        setTimeout(() => socket.emit('admin_get_users'), 500);
+    }
 };
