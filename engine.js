@@ -728,7 +728,96 @@ function renderEquipmentSlots() {
     }
 }
 
-// --- CORREÇÃO PONTO 1: FUNÇÃO DE BATALHA CONTRA POKEMON SELVAGEM ---
+// --- ATUALIZAÇÃO DA UI DA BATALHA SELVAGEM (Com cartões e pré-soma corretos) ---
+function updateEncounterUIInfo() {
+    const cp = getCurrentPlayer();
+    const wild = currentEncounterState.wildPokemon;
+    const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex] || cp.activeTeam[0];
+    if (!wild || !activeMon) return;
+
+    const activeHp = activeMon.currentHp !== undefined ? activeMon.currentHp : (activeMon.maxHp || 20);
+    const activeMaxHp = activeMon.maxHp || activeMon.hp || 20;
+
+    const typeMult = calculateTypeAdvantageMultiplier(activeMon.type, wild.type);
+    const baseStr = (activeMon.str || 4) + currentEncounterState.battlePowerBonus;
+    const estimatedPlayerPower = Math.round(baseStr * typeMult); 
+    
+    const isLegendary = (wild.tier === 5) || (wild.color && wild.color.toLowerCase() === 'amarelo');
+    const weakenedBonus = (wild.weakened && !isLegendary) ? 1 : 0;
+    const totalCaptureBonusSoFar = currentEncounterState.itemBonus + weakenedBonus;
+
+    let displayTarget = 4;
+    const tier = wild.tier || 1;
+    if (tier === 2) displayTarget = 5;
+    else if (tier === 3 || tier === 4) displayTarget = 6;
+    else if (isLegendary) displayTarget = 7;
+    if (wild.isShiny) displayTarget += 1;
+
+    const playerCardBg = getTierColorClass(activeMon.tier || 1);
+    const enemyCardBg = getTierColorClass(wild.tier || 1);
+    const auraEncPlayerClass = activeMon.auraEffect || '';
+
+    const playerVisual = document.getElementById('player-card-visual');
+    if (playerVisual) {
+        playerVisual.className = `relative flex flex-col justify-between p-4 rounded-3xl border-4 ${playerCardBg} ${auraEncPlayerClass} shadow-2xl w-72 h-96 text-white`;
+        playerVisual.innerHTML = `
+            <div class="flex justify-between items-center font-black text-xs border-b-2 border-amber-400 pb-2">
+                <span class="text-amber-300 font-bold uppercase">NV. ${activeMon.level || 1}</span>
+                <span class="text-amber-900 bg-amber-200 px-2 py-0.5 rounded font-bold uppercase text-[10px] border border-amber-400">${activeMon.type || 'Normal'}</span>
+            </div>
+            
+            <div class="flex flex-col items-center justify-center my-auto space-y-3">
+                <h3 class="text-base font-black text-white text-center truncate w-full">${activeMon.name}</h3>
+                <div class="flex items-center justify-center bg-black/60 w-36 h-36 rounded-2xl border-2 border-amber-400 shadow-inner p-3 relative">
+                    <img src="${activeMon.isShiny && activeMon.shinyImage ? activeMon.shinyImage : (activeMon.image || '')}" alt="${activeMon.name}" class="max-h-32 max-w-full object-contain drop-shadow-md" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                </div>
+            </div>
+
+            <div class="w-full bg-black/90 text-amber-300 rounded-2xl p-3 text-center space-y-1.5 shadow-md">
+                <p class="text-xs font-bold tracking-wide">HP: ${activeHp} / ${activeMaxHp} &nbsp;|&nbsp; STR: ${activeMon.str || 4}</p>
+                <p class="text-[11px] font-black text-emerald-400 bg-emerald-950/90 rounded-xl px-2.5 py-1 border border-emerald-600">⚡ Pré-Soma: ~${estimatedPlayerPower} + [🎲 1-6]</p>
+            </div>
+            
+            <button onclick="cyclePlayerEncounterPokemon()" class="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-amber-600 hover:bg-amber-500 text-black font-black text-[10px] px-3 py-1 rounded-full shadow border border-amber-300 uppercase tracking-wider cursor-pointer">
+                🔄 Trocar Anima
+            </button>
+        `;
+    }
+
+    const encVisual = document.getElementById('enc-card-visual');
+    if (encVisual) {
+        encVisual.className = `relative flex flex-col justify-between p-4 rounded-3xl border-4 ${enemyCardBg} shadow-2xl w-72 h-96 text-white ${wild.isShiny ? 'shiny-card-glow' : ''}`;
+        const weakenedBadge = wild.weakened ? `<span class="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-md font-bold shadow">🩹 Enfraquecido (+1 Cap.)</span>` : '';
+        const shinyWildBadge = wild.isShiny ? `<span class="bg-amber-400 text-black text-[10px] px-2 py-0.5 rounded-md font-black shadow animate-pulse">✨ SHINY SELVAGEM</span>` : '';
+        
+        encVisual.innerHTML = `
+            <div class="flex justify-between items-center font-black text-xs border-b-2 border-red-900 pb-2">
+                <span class="text-red-400 font-bold uppercase">NV. ${wild.level || 1}</span>
+                ${shinyWildBadge}
+                <span class="text-red-300 bg-red-950 px-2 py-0.5 rounded font-bold uppercase text-[10px] border border-red-800">${wild.type}</span>
+            </div>
+
+            <div class="flex flex-col items-center justify-center my-auto space-y-3">
+                <h3 class="text-base font-black text-white text-center truncate w-full">${wild.name}</h3>
+                <div class="flex items-center justify-center bg-black/60 w-36 h-36 rounded-2xl border-2 ${wild.isShiny ? 'border-amber-400 shiny-card-glow' : 'border-red-800'} shadow-inner p-3 relative">
+                    <img src="${wild.isShiny && wild.shinyImage ? wild.shinyImage : (wild.image || '')}" alt="${wild.name}" class="max-h-32 max-w-full object-contain drop-shadow-md" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                    ${wild.weakened ? '<span class="absolute top-2 right-2 bg-red-500 text-xs px-2 py-0.5 rounded-md shadow">🩹</span>' : ''}
+                </div>
+            </div>
+
+            <div class="w-full bg-black/90 text-red-300 rounded-2xl p-3 text-center space-y-1.5 shadow-md">
+                <p class="text-xs font-bold tracking-wide">HP: ${wild.currentHp || wild.hp || 15} &nbsp;|&nbsp; STR: ${wild.str || 3}</p>
+                <p class="text-[11px] font-black text-amber-300 bg-amber-950/90 rounded-xl px-2.5 py-1 border border-amber-600">🎯 Alvo p/ Capturar: ${displayTarget}+ (Bónus: +${totalCaptureBonusSoFar})</p>
+                ${weakenedBadge}
+            </div>
+
+            <div class="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-red-800 text-white font-black text-[10px] px-3 py-1 rounded-full shadow border border-red-600 uppercase tracking-wider pointer-events-none">
+                Inimigo Selvagem
+            </div>
+        `;
+    }
+}
+
 window.resolveBattleAttempt = function() {
     const cp = getCurrentPlayer();
     const wild = currentEncounterState.wildPokemon;
@@ -931,7 +1020,7 @@ function useInventoryItemMainScreen(itemId) {
     }
 }
 
-// --- CORREÇÃO PONTO 3: SPRITES DOS GINÁSIOS CORRIGIDOS (leaders/) ---
+// --- SPRITES DOS GINÁSIOS CORRIGIDOS (leaders/) E FLUXO DE ARENA INTEGRADO ---
 window.openCityModal = function(cityName) {
     let cityModal = document.getElementById('city-hub-modal');
     if (!cityModal) {
@@ -1144,7 +1233,7 @@ window.buyItemFromMart = function(itemId, cost) {
     if (martModal) renderMartContent(martModal);
 };
 
-// --- FLUXO DE GINÁSIO ---
+// --- FLUXO DE GINÁSIO INTEGRADO COM A ARENA TCG ---
 
 let currentGymBattleSession = null;
 let gymAttemptedThisTurn = {}; 
@@ -1170,7 +1259,16 @@ function initiateGymSequence(cityName) {
         challengerTeam: []
     };
 
-    showGymVsScreen(gymInfo);
+    // Integração perfeita com a Arena TCG (`battle-arena.js`) se disponível
+    if (typeof openBattleArena === 'function') {
+        openBattleArena({
+            type: 'gym',
+            format: gymInfo.format,
+            data: gymInfo
+        });
+    } else {
+        showGymVsScreen(gymInfo);
+    }
 }
 
 function showGymVsScreen(gymInfo) {
@@ -1445,7 +1543,6 @@ function openEncounterModalWithPokemon(pokemon) {
         return;
     }
 
-    // Configura o estado original do encontro selvagem direto e rápido por dados
     if (typeof currentEncounterState !== 'undefined') {
         currentEncounterState.wildPokemon = pokemon;
         currentEncounterState.itemBonus = 0;
@@ -1881,7 +1978,7 @@ window.switchBottomView = function(viewType) {
     renderBottomPanel();
 }
 
-// --- CORREÇÃO PONTO 5: PC BOX COM PAGINAÇÃO DINÂMICA (12 por página) ---
+// --- PC BOX COM PAGINAÇÃO DINÂMICA (12 por página) ---
 function renderBottomPanel() {
     const cp = getCurrentPlayer();
     const container = document.getElementById('bottom-dynamic-container');
@@ -2355,7 +2452,7 @@ window.openPokedexDetailCard = function(monsterId) {
 
                 <div class="grid grid-cols-2 gap-2 w-full bg-black/40 p-2.5 rounded-xl border border-amber-900/50 text-xs">
                     <div>❤ HP Base/Máx: <span class="font-bold text-emerald-400">${currentHp}</span></div>
-                    <div>⚔️️ Força (STR): <span class="font-bold text-amber-400">${currentStr}</span></div>
+                    <div>⚔ Força (STR): <span class="font-bold text-amber-400">${currentStr}</span></div>
                     <div>⭐ Raridade Tier: <span class="font-bold text-purple-400">${baseMon.rarity || 'Normal'}</span></div>
                     <div>📈 Nível: <span class="font-bold text-blue-400">Nv.${currentLevel}</span></div>
                 </div>
@@ -2862,7 +2959,6 @@ window.adminDeleteAccount = function(email) {
     }
 };
 
-// Funções de ponte para o menu inicial do index.html
 window.resumeSavedGame = function() {
     if (typeof loadGameProgress === 'function') {
         loadGameProgress();
