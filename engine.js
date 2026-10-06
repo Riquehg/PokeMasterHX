@@ -959,7 +959,6 @@ window.openCityModal = function(cityName) {
     let gymSectionHtml = `<p class="text-xs text-slate-400 text-center">Esta localidade não possui um ginásio oficial registado.</p>`;
 
     if (gymInfo) {
-        // Tratamento exato para o nome do ficheiro do líder dentro de sprites/leaders/ (ex: Brock.png, misty.png, Lt. Surge.png)
         let leaderFileName = gymInfo.leader;
         if (leaderFileName === "Misty") leaderFileName = "misty";
         const leaderSpriteUrl = `${SUPABASE_STORAGE_URL}leaders/${encodeURIComponent(leaderFileName)}.png`;
@@ -1428,36 +1427,38 @@ function triggerPvPBattleArena(opponentName) {
     }
 }
 
-// --- SISTEMA DE ENCONTRO / BATALHA TCG ---
-
-// --- SISTEMA DE ENCONTRO / BATALHA TCG ---
+// --- SISTEMA DE ENCONTRO / BATALHA TCG (SELVAGENS) ---
 
 function openEncounterModalWithPokemon(pokemon) {
     const cp = getCurrentPlayer();
-    
+    const modal = document.getElementById('encounter-modal');
+    if (!modal) return;
+
     if (!cp.activeTeam || cp.activeTeam.length === 0) {
-        showCustomPopup("Aviso", "🚫 Precisas de ter pelo menos um Pokémon na Equipa Ativa!", false);
+        showCustomPopup("Aviso", "🚫 Precisas de pelo menos um Pokémon na Equipa Ativa!", false);
         return;
     }
 
-    // Verificar se há pelo menos um Pokémon com vida
     let validIndex = cp.activeTeam.findIndex(m => (m.currentHp !== undefined ? m.currentHp : m.maxHp) > 0);
     if (validIndex === -1) {
         showCustomPopup("Equipa Desmaiada!", "⚠ Todos os Pokémon da tua Equipa Ativa estão desmaiados (HP 0)!", false);
         return;
     }
 
-    // Abre diretamente a Arena de Batalha TCG em modo selvagem (battle-arena.js)
-    if (typeof openBattleArena === 'function') {
-        openBattleArena({
-            type: 'wild',
-            format: 1,
-            opponent: pokemon
-        });
-    } else {
-        console.error("battle-arena.js não está carregado ou a função openBattleArena não existe.");
-        showCustomPopup("Erro", "O módulo de arena de batalha não foi encontrado.", false);
+    // Configura o estado original do encontro selvagem direto e rápido por dados
+    if (typeof currentEncounterState !== 'undefined') {
+        currentEncounterState.wildPokemon = pokemon;
+        currentEncounterState.itemBonus = 0;
+        currentEncounterState.battlePowerBonus = 0;
+        currentEncounterState.selectedTeamMemberIndex = validIndex;
+        currentEncounterState.hasAttemptedCapture = false;
     }
+
+    if (typeof updateEncounterUIInfo === 'function') updateEncounterUIInfo();
+    if (typeof renderEncounterItemsList === 'function') renderEncounterItemsList();
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
 }
 
 function cyclePlayerEncounterPokemon() {
@@ -2354,7 +2355,7 @@ window.openPokedexDetailCard = function(monsterId) {
 
                 <div class="grid grid-cols-2 gap-2 w-full bg-black/40 p-2.5 rounded-xl border border-amber-900/50 text-xs">
                     <div>❤ HP Base/Máx: <span class="font-bold text-emerald-400">${currentHp}</span></div>
-                    <div>⚔️ Força (STR): <span class="font-bold text-amber-400">${currentStr}</span></div>
+                    <div>⚔️️ Força (STR): <span class="font-bold text-amber-400">${currentStr}</span></div>
                     <div>⭐ Raridade Tier: <span class="font-bold text-purple-400">${baseMon.rarity || 'Normal'}</span></div>
                     <div>📈 Nível: <span class="font-bold text-blue-400">Nv.${currentLevel}</span></div>
                 </div>
