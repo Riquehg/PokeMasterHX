@@ -2781,9 +2781,24 @@ socket.on('login_response', (response) => {
         showCustomPopup("Criar Personagem", "Conta autenticada com sucesso! Crie o seu personagem único.", true);
     } else {
         const accData = response.accountData;
-        if (accData && accData.gameState) {
+        if (accData && accData.gameState && accData.gameState.players) {
+            // Restaura o gameState exato guardado no Supabase
             gameState = accData.gameState;
             boardPokemonCards = accData.boardPokemonCards || {};
+        } else {
+            // Fallback caso a conta exista mas o gameState estivesse vazio
+            gameState.players = [{
+                name: accData.name || "Treinador",
+                avatarId: 1,
+                currentZone: 5,
+                level: 1,
+                gold: 350,
+                badges: [],
+                activeTeam: [],
+                pcBox: [],
+                inventory: [],
+                equipmentSlots: [null, null]
+            }];
         }
 
         showPostLoginDashboard();
