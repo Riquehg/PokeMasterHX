@@ -15,7 +15,7 @@
 </head>
 <body class="p-3 lg:p-5 min-h-screen flex flex-col justify-between bg-[#0b0806] text-slate-200">
 
-    <!-- === TELA INICIAL / AUTENTICAÇÃO E CRIAÇÃO DE CONTA === -->
+    <!-- === TELA INICIAL / HUB CENTRAL DE AUTENTICAÇÃO E MENU === -->
     <div id="setup-screen" class="fixed inset-0 bg-[#070504] z-[200] flex items-center justify-center p-4 overflow-y-auto">
         <div class="trainer-card max-w-xl w-full p-6 space-y-5 border-4 border-amber-900 rounded-2xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl relative">
             
@@ -29,9 +29,9 @@
                 <p class="text-xs text-amber-500 uppercase tracking-widest font-bold">HEX Edition - Versão Online / Cloud Ready</p>
             </div>
 
-            <!-- PASSO 1: AUTENTICAÇÃO (LOGIN / VERIFICAÇÃO DE CONTA) -->
+            <!-- 1. BLOCO DE AUTENTICAÇÃO (LOGIN / REGISTO) -->
             <div id="auth-container" class="space-y-3 bg-black/40 p-4 rounded-xl border border-amber-900/60">
-                <h3 class="text-xs font-bold text-amber-400"><i class="fa-solid fa-lock"></i> 1. Acesso à Conta (Login)</h3>
+                <h3 class="text-xs font-bold text-amber-400"><i class="fa-solid fa-lock"></i> Acesso à Conta (Login)</h3>
                 <div class="space-y-2">
                     <div>
                         <label class="text-[10px] text-slate-300 font-bold block mb-0.5">E-mail do Treinador:</label>
@@ -47,39 +47,62 @@
                 </button>
             </div>
 
-            <!-- PASSO 2: CRIAÇÃO DE PERSONAGEM (ESTILO TRAINER CARD COM 8 AVATARES) -->
+            <!-- 2. NOVO MENU PRINCIPAL DO TREINADOR (EXIBIDO APÓS O LOGIN SE JÁ TIVER PERSONAGEM) -->
+            <div id="trainer-main-menu" class="hidden space-y-4 bg-gradient-to-br from-blue-950 via-slate-900 to-blue-900 border-4 border-blue-600 p-5 rounded-3xl shadow-2xl text-white">
+                <div class="flex justify-between items-center border-b border-blue-500/40 pb-2">
+                    <span class="text-xs font-black text-amber-300 font-cinzel tracking-wider"><i class="fa-solid fa-id-card"></i> HUB DO TREINADOR</span>
+                    <span class="text-[10px] text-blue-300 font-bold" id="hub-kanto-id">ID: #HEX-2026</span>
+                </div>
+
+                <div class="flex items-center gap-4 bg-blue-950/80 p-3 rounded-2xl border border-blue-500/40">
+                    <div class="w-16 h-20 bg-slate-900 rounded-xl flex items-center justify-center overflow-hidden border-2 border-amber-400 shrink-0">
+                        <img id="hub-avatar-img" src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_01.png" class="w-full h-full object-contain">
+                    </div>
+                    <div class="flex-1 space-y-1">
+                        <h4 class="text-sm font-black text-amber-300" id="hub-trainer-name">Treinador</h4>
+                        <div class="grid grid-cols-2 gap-1 text-[10px] bg-black/50 p-1.5 rounded-lg border border-blue-900 font-bold">
+                            <div>🪙 <span class="text-yellow-400" id="hub-gold-display">350 G</span></div>
+                            <div>⭐ <span class="text-blue-300" id="hub-level-display">Nv. 1</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-2">
+                    <button type="button" onclick="resumeSavedGame()" class="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-wider shadow transition-all cursor-pointer">
+                        ▶ Continuar Partida Salva
+                    </button>
+                    <button type="button" onclick="openCharacterCreationMode(true)" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2.5 rounded-xl text-xs uppercase tracking-wider shadow transition-all cursor-pointer">
+                        ✨ Nova Partida (Manter Perfil & Farmar Pokédex)
+                    </button>
+                    <button type="button" onclick="showOnlineLobbyView()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-wider shadow transition-all cursor-pointer">
+                        🌐 Entrar em Partida Online (Lobby / Salas)
+                    </button>
+                </div>
+            </div>
+
+            <!-- 3. CRIAÇÃO DE PERSONAGEM (8 OPÇÕES DE AVATAR & STARTER) -->
             <div id="character-creation-container" class="hidden space-y-4 bg-gradient-to-br from-blue-950 via-slate-900 to-blue-900 border-4 border-blue-600 p-5 rounded-3xl shadow-2xl text-white relative">
                 
-                <!-- Cabeçalho do Trainer Card -->
                 <div class="flex justify-between items-center border-b border-blue-500/40 pb-2">
-                    <span class="text-xs font-black text-amber-300 font-cinzel tracking-wider"><i class="fa-solid fa-id-card"></i> TRAINER'S CARD REGISTRATION</span>
-                    <span class="text-[10px] text-blue-300 font-bold">KANTO ID: #HEX-2026</span>
+                    <span class="text-xs font-black text-amber-300 font-cinzel tracking-wider"><i class="fa-solid fa-id-card"></i> REGISTO DE TREINADOR</span>
+                    <button onclick="backToMainMenu()" class="text-[10px] text-slate-400 hover:text-white underline cursor-pointer">Voltar ao Menu</button>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
                     
-                    <!-- Coluna Esquerda: Avatar e Info Básica -->
                     <div class="md:col-span-4 flex flex-col items-center bg-blue-950/80 p-3 rounded-2xl border-2 border-blue-500/50 space-y-3 shadow-inner">
                         <div class="w-20 h-24 bg-slate-900 rounded-xl flex items-center justify-center overflow-hidden border-2 border-amber-400 shadow-lg relative">
-                            <!-- Preview Dinâmico do Avatar Selecionado -->
-                            <img id="preview-avatar-img" src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_01.png" alt="Avatar" class="w-full h-full object-contain drop-shadow" onerror="this.src='https://api.iconify.design/noto:boy.svg'">
+                            <img id="preview-avatar-img" src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_01.png" alt="Avatar" class="w-full h-full object-contain drop-shadow">
                         </div>
                         
                         <div class="w-full space-y-1 text-center">
                             <label class="text-[9px] text-amber-400 font-bold uppercase block">Nome do Treinador:</label>
-                            <input type="text" id="setup-trainer-name" value="Ash Ketchum" oninput="document.getElementById('preview-trainer-name').innerText = this.value || 'Ash'" class="w-full bg-black/80 border border-blue-400/60 rounded-lg px-2 py-1 text-[11px] text-amber-300 text-center font-black focus:outline-none focus:border-amber-400">
-                        </div>
-
-                        <div class="w-full grid grid-cols-2 gap-1 text-[9px] bg-black/60 p-2 rounded-lg border border-blue-900 text-center font-bold">
-                            <div>🪙 <span class="text-yellow-400">350 G</span></div>
-                            <div>⭐ <span class="text-blue-300">Nv. 1</span></div>
+                            <input type="text" id="setup-trainer-name" value="Ash Ketchum" class="w-full bg-black/80 border border-blue-400/60 rounded-lg px-2 py-1 text-[11px] text-amber-300 text-center font-black focus:outline-none focus:border-amber-400">
                         </div>
                     </div>
 
-                    <!-- Coluna Direita: Seleção de Avatar (8 Opções) e Pokémon Inicial -->
                     <div class="md:col-span-8 space-y-3">
-                        
-                        <!-- Escolha do Avatar (8 Opções Atualizadas) -->
+                        <!-- Escolha do Avatar (8 Opções) -->
                         <div class="space-y-1">
                             <label class="text-[10px] font-bold text-amber-300 block"><i class="fa-solid fa-user-gear"></i> Escolha o seu Avatar (8 Opções):</label>
                             <div class="grid grid-cols-4 gap-1.5 max-h-28 overflow-y-auto pr-1">
@@ -95,17 +118,17 @@
                                 <div onclick="selectAvatar(4); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_04.png';" class="avatar-option cursor-pointer border-2 border-blue-900 bg-black/50 p-1 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="4">
                                     <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_04.png" class="w-7 h-7 object-contain">
                                 </div>
-                                <div onclick="selectAvatar(5); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_05.png';" class="avatar-option cursor-pointer border-2 border-blue-900 bg-black/50 p-1 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="5" onerror="this.src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_01.png'">
-                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_05.png" class="w-7 h-7 object-contain" onerror="this.src='https://api.iconify.design/noto:girl.svg'">
+                                <div onclick="selectAvatar(5); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_05.png';" class="avatar-option cursor-pointer border-2 border-blue-900 bg-black/50 p-1 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="5">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_05.png" class="w-7 h-7 object-contain">
                                 </div>
-                                <div onclick="selectAvatar(6); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_06.png';" class="avatar-option cursor-pointer border-2 border-blue-900 bg-black/50 p-1 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="6" onerror="this.src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_02.png'">
-                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_06.png" class="w-7 h-7 object-contain" onerror="this.src='https://api.iconify.design/noto:boy-1.svg'">
+                                <div onclick="selectAvatar(6); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_06.png';" class="avatar-option cursor-pointer border-2 border-blue-900 bg-black/50 p-1 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="6">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_06.png" class="w-7 h-7 object-contain">
                                 </div>
-                                <div onclick="selectAvatar(7); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_07.png';" class="avatar-option cursor-pointer border-2 border-blue-900 bg-black/50 p-1 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="7" onerror="this.src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_03.png'">
-                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_07.png" class="w-7 h-7 object-contain" onerror="this.src='https://api.iconify.design/noto:woman.svg'">
+                                <div onclick="selectAvatar(7); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_07.png';" class="avatar-option cursor-pointer border-2 border-blue-900 bg-black/50 p-1 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="7">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_07.png" class="w-7 h-7 object-contain">
                                 </div>
-                                <div onclick="selectAvatar(8); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_08.png';" class="avatar-option cursor-pointer border-2 border-blue-900 bg-black/50 p-1 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="8" onerror="this.src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_04.png'">
-                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_08.png" class="w-7 h-7 object-contain" onerror="this.src='https://api.iconify.design/noto:man.svg'">
+                                <div onclick="selectAvatar(8); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_08.png';" class="avatar-option cursor-pointer border-2 border-blue-900 bg-black/50 p-1 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="8">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_08.png" class="w-7 h-7 object-contain">
                                 </div>
                             </div>
                         </div>
@@ -114,42 +137,34 @@
                         <div class="space-y-1">
                             <label class="text-[10px] font-bold text-amber-300 block"><i class="fa-solid fa-paw"></i> Escolha o Pokémon Inicial (8 Opções):</label>
                             <div class="grid grid-cols-4 gap-1.5 max-h-28 overflow-y-auto pr-1">
-                                <!-- 1. Bulbasaur -->
                                 <div onclick="selectStarter('bulbasaur')" id="starter-bulbasaur" class="starter-option cursor-pointer border-2 border-amber-400 bg-amber-950/60 p-1 rounded-xl flex flex-col items-center text-center transition-all">
                                     <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/001.png" class="w-6 h-6 object-contain mb-0.5">
                                     <span class="text-[8px] font-bold text-white">Bulbasaur</span>
                                 </div>
-                                <!-- 2. Charmander -->
                                 <div onclick="selectStarter('charmander')" id="starter-charmander" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1 rounded-xl flex flex-col items-center text-center transition-all">
                                     <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/004.png" class="w-6 h-6 object-contain mb-0.5">
                                     <span class="text-[8px] font-bold text-white">Charmander</span>
                                 </div>
-                                <!-- 3. Squirtle -->
                                 <div onclick="selectStarter('squirtle')" id="starter-squirtle" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1 rounded-xl flex flex-col items-center text-center transition-all">
                                     <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/007.png" class="w-6 h-6 object-contain mb-0.5">
                                     <span class="text-[8px] font-bold text-white">Squirtle</span>
                                 </div>
-                                <!-- 4. Pikachu -->
                                 <div onclick="selectStarter('pikachu')" id="starter-pikachu" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1 rounded-xl flex flex-col items-center text-center transition-all">
                                     <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/025.png" class="w-6 h-6 object-contain mb-0.5">
                                     <span class="text-[8px] font-bold text-white">Pikachu</span>
                                 </div>
-                                <!-- 5. Chikorita -->
                                 <div onclick="selectStarter('chikorita')" id="starter-chikorita" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1 rounded-xl flex flex-col items-center text-center transition-all">
                                     <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/152.png" class="w-6 h-6 object-contain mb-0.5">
                                     <span class="text-[8px] font-bold text-white">Chikorita</span>
                                 </div>
-                                <!-- 6. Cyndaquil -->
                                 <div onclick="selectStarter('cyndaquil')" id="starter-cyndaquil" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1 rounded-xl flex flex-col items-center text-center transition-all">
                                     <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/155.png" class="w-6 h-6 object-contain mb-0.5">
                                     <span class="text-[8px] font-bold text-white">Cyndaquil</span>
                                 </div>
-                                <!-- 7. Totodile -->
                                 <div onclick="selectStarter('totodile')" id="starter-totodile" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1 rounded-xl flex flex-col items-center text-center transition-all">
                                     <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/158.png" class="w-6 h-6 object-contain mb-0.5">
                                     <span class="text-[8px] font-bold text-white">Totodile</span>
                                 </div>
-                                <!-- 8. Eevee -->
                                 <div onclick="selectStarter('eevee')" id="starter-eevee" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1 rounded-xl flex flex-col items-center text-center transition-all">
                                     <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/133.png" class="w-6 h-6 object-contain mb-0.5">
                                     <span class="text-[8px] font-bold text-white">Eevee</span>
@@ -160,29 +175,16 @@
                     </div>
                 </div>
 
-                <!-- Insígnias Miniatura no Cartão de Registro -->
-                <div class="pt-2 border-t border-blue-500/30 flex justify-between items-center text-[9px]">
-                    <span class="text-slate-300 font-bold">KANTO BADGES (0/6):</span>
-                    <div class="flex items-center gap-1.5 opacity-50">
-                        <span class="w-4 h-4 bg-black/60 rounded-full border border-amber-500 flex items-center justify-center text-[8px]">⭐</span>
-                        <span class="w-4 h-4 bg-black/60 rounded-full border border-amber-500 flex items-center justify-center text-[8px]">⭐</span>
-                        <span class="w-4 h-4 bg-black/60 rounded-full border border-amber-500 flex items-center justify-center text-[8px]">⭐</span>
-                        <span class="w-4 h-4 bg-black/60 rounded-full border border-amber-500 flex items-center justify-center text-[8px]">⭐</span>
-                        <span class="w-4 h-4 bg-black/60 rounded-full border border-amber-500 flex items-center justify-center text-[8px]">⭐</span>
-                        <span class="w-4 h-4 bg-black/60 rounded-full border border-amber-500 flex items-center justify-center text-[8px]">⭐</span>
-                    </div>
-                </div>
-
                 <button type="button" onclick="finalizeCharacterCreation()" class="w-full bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer">
-                    ✨ Emitir Trainer Card e Entrar no Jogo <i class="fa-solid fa-arrow-right ml-1"></i>
+                    ✨ Gravar e Iniciar Nova Partida <i class="fa-solid fa-arrow-right ml-1"></i>
                 </button>
             </div>
 
-            <!-- PASSO 3: LOBBY ONLINE & PROCURA DE SALAS -->
+            <!-- 4. LOBBY ONLINE & PROCURA DE SALAS -->
             <div id="online-lobby-container" class="hidden space-y-4 bg-black/40 p-4 rounded-xl border border-blue-600/60">
                 <div class="flex justify-between items-center border-b border-blue-900 pb-2">
                     <h3 class="text-xs font-black text-blue-400 font-cinzel"><i class="fa-solid fa-users-rectangle"></i> Salas Online & Lobby</h3>
-                    <span id="lobby-username-display" class="text-[10px] text-amber-300 font-bold">Treinador</span>
+                    <button onclick="backToMainMenu()" class="text-[10px] text-slate-400 hover:text-white underline cursor-pointer">Voltar ao Menu</button>
                 </div>
 
                 <div class="grid grid-cols-2 gap-2">
@@ -213,13 +215,9 @@
                 </div>
 
                 <button type="button" id="start-online-game-btn" onclick="joinAndStartOnlineGame()" class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer">
-                    🚀 Entrar na Partida Online
+                    🚀 Entrar na Partida Online Selecionada
                 </button>
             </div>
-
-            <button type="button" onclick="loadGameProgress()" class="w-full bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold py-2.5 rounded-xl text-xs uppercase tracking-wider border border-amber-600/40 shadow transition-all cursor-pointer">
-                📂 Carregar Jogo Salvo Anteriormente
-            </button>
         </div>
     </div>
 
@@ -252,14 +250,11 @@
                 <div class="flex items-center gap-1.5">
                     <button onclick="saveGameProgress()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-2 py-1.5 rounded-lg text-[10px] font-bold shadow cursor-pointer" title="Salvar Jogo">💾 Salvar</button>
                     <button onclick="exportSaveToFile()" class="bg-blue-700 hover:bg-blue-600 text-white px-2 py-1.5 rounded-lg text-[10px] font-bold shadow cursor-pointer" title="Baixar Save (.json)">📥 Exportar</button>
-                    <label class="bg-indigo-700 hover:bg-indigo-600 text-white px-2 py-1.5 rounded-lg text-[10px] font-bold shadow cursor-pointer" title="Carregar Save">
-                        📂 Importar <input type="file" id="import-file-input" accept=".json" onchange="importSaveFromFile(event)" class="hidden">
-                    </label>
                     <button onclick="openPokedexModal()" class="bg-amber-600 hover:bg-amber-500 text-black px-2.5 py-1.5 rounded-lg text-[10px] font-black shadow flex items-center gap-1 cursor-pointer" title="Abrir Pokédex">
                         📖 Pokédex
                     </button>
-                    <!-- BOTÃO DE LOGOUT ADICIONADO -->
-                    <button onclick="logoutToSetupScreen()" class="bg-red-900 hover:bg-red-800 text-amber-300 px-2.5 py-1.5 rounded-lg text-[10px] font-black shadow flex items-center gap-1 border border-red-600 cursor-pointer" title="Sair para a Tela Inicial / Lobby">
+                    <!-- BOTÃO DE LOGOUT / SAIR PARA O HUB -->
+                    <button onclick="logoutToSetupScreen()" class="bg-red-900 hover:bg-red-800 text-amber-300 px-2.5 py-1.5 rounded-lg text-[10px] font-black shadow flex items-center gap-1 border border-red-600 cursor-pointer" title="Sair para o Menu Principal">
                         🚪 Sair
                     </button>
                 </div>
@@ -319,7 +314,7 @@
                     <div class="grid grid-cols-12 gap-3 items-center">
                         <div class="col-span-3 flex flex-col items-center bg-blue-950/60 p-2 rounded border border-blue-500/30 gap-2">
                             <div id="trainer-card-avatar-container" class="w-14 h-16 bg-slate-900 rounded flex items-center justify-center overflow-hidden border border-blue-400/40">
-                                <img id="trainer-avatar-img" src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_01.png" alt="Avatar" class="w-full h-full object-contain" onerror="this.src='https://api.iconify.design/noto:boy.svg'">
+                                <img id="trainer-avatar-img" src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_01.png" alt="Avatar" class="w-full h-full object-contain">
                             </div>
                             <span id="trainer-card-name-display" class="text-[9px] font-bold truncate w-full text-center text-amber-300">Ash Ketchum</span>
                             
