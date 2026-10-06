@@ -333,7 +333,11 @@ function renderBoardMap(highlightIds = []) {
 
     let mapOverlayHtml = '';
 
-    const cp = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : (gameState.players ? gameState.players[0] : null);
+    // PROTEÇÃO: Garante que gameState e os jogadores existem antes de ler propriedades
+    const playersList = (typeof gameState !== 'undefined' && gameState && Array.isArray(gameState.players)) ? gameState.players : ((typeof gameState !== 'undefined' && gameState && gameState.player) ? [gameState.player] : []);
+    const activePlayerIndex = (typeof gameState !== 'undefined' && gameState && gameState.currentPlayerIndex !== undefined) ? gameState.currentPlayerIndex : 0;
+    
+    const cp = playersList.length > 0 ? playersList[activePlayerIndex] || playersList[0] : null;
     const playerBadges = cp && Array.isArray(cp.badges) ? cp.badges : [];
 
     const cityWaypoints = BOARD_WAYPOINTS.filter(w => w.type === 'city');
@@ -403,10 +407,8 @@ function renderBoardMap(highlightIds = []) {
         `;
     });
 
-    const playersList = (typeof gameState !== 'undefined' && gameState.players) ? gameState.players : [gameState.player];
-    const activePlayerIndex = (typeof gameState !== 'undefined' && gameState.currentPlayerIndex !== undefined) ? gameState.currentPlayerIndex : 0;
-
     playersList.forEach((player, idx) => {
+        if (!player) return;
         const zoneId = player.currentZone || 5;
         const waypoint = BOARD_WAYPOINTS.find(wp => wp.id === zoneId);
         if (!waypoint) return;
@@ -418,11 +420,11 @@ function renderBoardMap(highlightIds = []) {
         const offsetTop = waypoint.top + (idx * 1.2) - 1.5;
 
         mapOverlayHtml += `
-            <div id="player-token-${idx}" onclick="openSpecificTrainerCardModal(${idx})" class="absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2 transition-all duration-500 z-50 cursor-pointer group" style="top: ${offsetTop}%; left: ${offsetLeft}%;" title="${player.name}">
+            <div id="player-token-${idx}" onclick="openSpecificTrainerCardModal(${idx})" class="absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2 transition-all duration-500 z-50 cursor-pointer group" style="top: ${offsetTop}%; left: ${offsetLeft}%;" title="${player.name || 'Treinador'}">
                 <div class="relative flex flex-col items-center">
                     ${isCurrentTurn ? '<span class="absolute -top-3 bg-amber-400 text-black text-[8px] font-black px-1.5 rounded-full shadow animate-bounce">VEZ</span>' : ''}
-                    <img src="${SUPABASE_STORAGE_URL}player_0${avatarId}.png" alt="${player.name}" class="w-7 h-7 object-contain ${isCurrentTurn ? 'animate-bounce drop-shadow-[0_0_12px_rgba(255,215,0,0.9)]' : 'opacity-80'} group-hover:scale-125 transition-transform" onerror="this.src='https://api.iconify.design/noto:boy.svg'">
-                    <span class="bg-black/80 text-[8px] text-white font-bold px-1 rounded border border-amber-600/60 truncate max-w-[60px]">${player.name.split(' ')[0]}</span>
+                    <img src="${SUPABASE_STORAGE_URL}player_0${avatarId}.png" alt="${player.name || 'Avatar'}" class="w-7 h-7 object-contain ${isCurrentTurn ? 'animate-bounce drop-shadow-[0_0_12px_rgba(255,215,0,0.9)]' : 'opacity-80'} group-hover:scale-125 transition-transform" onerror="this.src='https://api.iconify.design/noto:boy.svg'">
+                    <span class="bg-black/80 text-[8px] text-white font-bold px-1 rounded border border-amber-600/60 truncate max-w-[60px]">${(player.name || 'Treinador').split(' ')[0]}</span>
                 </div>
             </div>
         `;
