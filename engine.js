@@ -83,26 +83,29 @@ function getCurrentPlayer() {
 
 function saveGameProgress() {
     try {
+        const cp = getCurrentPlayer();
         const saveData = {
             gameState: gameState,
             boardPokemonCards: boardPokemonCards,
             timestamp: new Date().toISOString()
         };
+        // Salva uma cópia de segurança local no navegador
         localStorage.setItem('pokemon_master_trainer_save', JSON.stringify(saveData));
 
-        // Sincronização automática com o servidor online se autenticado
+        // Sincroniza e guarda diretamente na nuvem (Supabase via Socket.io)
         if (currentAuthenticatedAccount) {
             socket.emit('save_game_state', {
                 email: currentAuthenticatedAccount,
+                trainerName: cp ? cp.name : "Treinador",
                 gameState: gameState,
                 boardPokemonCards: boardPokemonCards
             });
         }
 
-        showCustomPopup("💾 Jogo Salvo", "O progresso da aventura foi guardado com sucesso neste navegador e sincronizado na nuvem!", true);
-        appendAdventureLog("Progresso do jogo salvo com sucesso.");
+        showCustomPopup("💾 Jogo Salvo", "O progresso da aventura foi guardado com sucesso na nuvem do Supabase!", true);
+        appendAdventureLog("Progresso do jogo salvo com sucesso na nuvem.");
     } catch (error) {
-        showCustomPopup("Erro ao Salvar", "❌ Não foi possível guardar o jogo no navegador.", false);
+        showCustomPopup("Erro ao Salvar", "❌ Não foi possível guardar o jogo.", false);
     }
 }
 
