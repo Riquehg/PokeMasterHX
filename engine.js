@@ -820,11 +820,18 @@ function updateEncounterUIInfo() {
     }
 }
 
+// 1. Correção rigorosa na verificação de HP zero na Batalha Selvagem
 window.resolveBattleAttempt = function() {
     const cp = getCurrentPlayer();
     const wild = currentEncounterState.wildPokemon;
     const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex];
     if (!wild || !activeMon) return;
+
+    // Se o Pokémon ativo já estiver desmaiado, impede a ação
+    if ((activeMon.currentHp !== undefined ? activeMon.currentHp : activeMon.maxHp) <= 0) {
+        showCustomPopup("Pokémon Desmaiado", "⚠ O teu Anima atual está com 0 de HP e não pode lutar! Troca de Anima ou usa um Revive.", false);
+        return;
+    }
 
     rollDiceWithAnimation((playerDice, wildDice) => {
         const typeMult = calculateTypeAdvantageMultiplier(activeMon.type, wild.type);
@@ -836,7 +843,7 @@ window.resolveBattleAttempt = function() {
             wild.currentHp = Math.max(0, (wild.currentHp !== undefined ? wild.currentHp : wild.maxHp) - damageToWild);
 
             if (wild.currentHp <= 0) {
-                showCustomPopup("🏆 POKÉMON SELVAGEM DERROTADO!", `O teu ${activeMon.name} venceu e desmaiou o ${wild.name} selvagem!\n\nPodes agora escolher uma Pokébola para tentar capturá-lo ou fechar a janela.`, true);
+                showCustomPopup("🏆 POKÉMON SELVAGEM DERROTADO!", `O teu ${activeMon.name} venceu e desmaiou o ${wild.name} selvagem!\n\nPodes agora tentar capturá-lo.`, true);
                 wild.weakened = true;
                 if (wild.waypointId && boardPokemonCards[wild.waypointId]) {
                     boardPokemonCards[wild.waypointId].weakened = true;
@@ -853,7 +860,8 @@ window.resolveBattleAttempt = function() {
             activeMon.currentHp = Math.max(0, (activeMon.currentHp || activeMon.maxHp) - damageToPlayer);
             
             if (activeMon.currentHp <= 0) {
-                showCustomPopup("💀 O TEU POKÉMON DESMAIOU", `O ${wild.name} selvagem desferiu um golpe crítico!\n\n💔 O teu ${activeMon.name} desmaiou (HP 0). Troca de Anima ou usa um Revive!`, false);
+                showCustomPopup("💀 O TEU POKÉMON DESMAIOU", `O ${wild.name} selvagem desferiu um golpe crítico!\n\n💔 O teu ${activeMon.name} desmaiou (HP 0). A batalha contra este selvagem está encerrada para este Anima. Deves fugir ou trocar!`, false);
+                closeEncounterModalUI();
             } else {
                 showCustomPopup("💥 CONTRA-ATAQUE SOFRIDO", `O ${wild.name} selvagem foi mais forte nesta ronda!\n\n💔 ${activeMon.name} sofreu ${damageToPlayer} de dano.`, false);
             }
@@ -862,6 +870,26 @@ window.resolveBattleAttempt = function() {
         }
     });
 };
+
+// 2. Isolamento correto do Cofre Global e Dados da Conta do Treinador
+function saveGlobalTrainerAccountData(trainerName, avatarId) {
+    const globalAccountData = {
+        trainerName: trainerName,
+        avatarId: avatarId,
+        vault: JSON.parse(localStorage.getItem('pokemon_master_trainer_vault') || '[]'),
+        pokedex: JSON.parse(localStorage.getItem('pokemon_master_trainer_pokedex') || '[]'),
+        updatedAt: new Date().toISOString()
+    };
+    localStorage.setItem('pokemon_master_trainer_account_profile', JSON.stringify(globalAccountData));
+}
+
+function loadGlobalTrainerAccountData() {
+    try {
+        const raw = localStorage.getItem('pokemon_master_trainer_account_profile');
+        if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return null;
+}
 
 function triggerCaptureFlow(wildPokemon) {
     let captureModal = document.getElementById('capture-flow-modal');
