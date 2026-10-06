@@ -47,7 +47,7 @@
                 </button>
             </div>
 
-            <!-- PASSO 2: CRIAÇÃO DE PERSONAGEM (ESTILO TRAINER CARD) -->
+            <!-- PASSO 2: CRIAÇÃO DE PERSONAGEM (ESTILO TRAINER CARD COM 8 AVATARES) -->
             <div id="character-creation-container" class="hidden space-y-4 bg-gradient-to-br from-blue-950 via-slate-900 to-blue-900 border-4 border-blue-600 p-5 rounded-3xl shadow-2xl text-white relative">
                 
                 <!-- Cabeçalho do Trainer Card -->
@@ -76,24 +76,36 @@
                         </div>
                     </div>
 
-                    <!-- Coluna Direita: Seleção de Avatar e Pokémon Inicial -->
+                    <!-- Coluna Direita: Seleção de Avatar (8 Opções) e Pokémon Inicial -->
                     <div class="md:col-span-8 space-y-3">
                         
-                        <!-- Escolha do Avatar (4 Opções) -->
+                        <!-- Escolha do Avatar (8 Opções Atualizadas) -->
                         <div class="space-y-1">
-                            <label class="text-[10px] font-bold text-amber-300 block"><i class="fa-solid fa-user-gear"></i> Escolha o seu Avatar (Sprite):</label>
-                            <div class="grid grid-cols-4 gap-1.5">
-                                <div onclick="selectAvatar(1); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_01.png';" class="avatar-option cursor-pointer border-2 border-amber-400 bg-black/50 p-1.5 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="1">
-                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_01.png" class="w-8 h-8 object-contain">
+                            <label class="text-[10px] font-bold text-amber-300 block"><i class="fa-solid fa-user-gear"></i> Escolha o seu Avatar (8 Opções):</label>
+                            <div class="grid grid-cols-4 gap-1.5 max-h-28 overflow-y-auto pr-1">
+                                <div onclick="selectAvatar(1); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_01.png';" class="avatar-option cursor-pointer border-2 border-amber-400 bg-black/50 p-1 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="1">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_01.png" class="w-7 h-7 object-contain">
                                 </div>
-                                <div onclick="selectAvatar(2); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_02.png';" class="avatar-option cursor-pointer border-2 border-blue-900 bg-black/50 p-1.5 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="2">
-                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_02.png" class="w-8 h-8 object-contain">
+                                <div onclick="selectAvatar(2); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_02.png';" class="avatar-option cursor-pointer border-2 border-blue-900 bg-black/50 p-1 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="2">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_02.png" class="w-7 h-7 object-contain">
                                 </div>
-                                <div onclick="selectAvatar(3); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_03.png';" class="avatar-option cursor-pointer border-2 border-blue-900 bg-black/50 p-1.5 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="3">
-                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_03.png" class="w-8 h-8 object-contain">
+                                <div onclick="selectAvatar(3); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_03.png';" class="avatar-option cursor-pointer border-2 border-blue-900 bg-black/50 p-1 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="3">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_03.png" class="w-7 h-7 object-contain">
                                 </div>
-                                <div onclick="selectAvatar(4); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_04.png';" class="avatar-option cursor-pointer border-2 border-blue-900 bg-black/50 p-1.5 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="4">
-                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_04.png" class="w-8 h-8 object-contain">
+                                <div onclick="selectAvatar(4); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_04.png';" class="avatar-option cursor-pointer border-2 border-blue-900 bg-black/50 p-1 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="4">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_04.png" class="w-7 h-7 object-contain">
+                                </div>
+                                <div onclick="selectAvatar(5); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_05.png';" class="avatar-option cursor-pointer border-2 border-blue-900 bg-black/50 p-1 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="5" onerror="this.src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_01.png'">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_05.png" class="w-7 h-7 object-contain" onerror="this.src='https://api.iconify.design/noto:girl.svg'">
+                                </div>
+                                <div onclick="selectAvatar(6); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_06.png';" class="avatar-option cursor-pointer border-2 border-blue-900 bg-black/50 p-1 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="6" onerror="this.src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_02.png'">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_06.png" class="w-7 h-7 object-contain" onerror="this.src='https://api.iconify.design/noto:boy-1.svg'">
+                                </div>
+                                <div onclick="selectAvatar(7); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_07.png';" class="avatar-option cursor-pointer border-2 border-blue-900 bg-black/50 p-1 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="7" onerror="this.src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_03.png'">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_07.png" class="w-7 h-7 object-contain" onerror="this.src='https://api.iconify.design/noto:woman.svg'">
+                                </div>
+                                <div onclick="selectAvatar(8); document.getElementById('preview-avatar-img').src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_08.png';" class="avatar-option cursor-pointer border-2 border-blue-900 bg-black/50 p-1 rounded-xl flex items-center justify-center transition-all hover:scale-105" data-avatar="8" onerror="this.src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_04.png'">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_08.png" class="w-7 h-7 object-contain" onerror="this.src='https://api.iconify.design/noto:man.svg'">
                                 </div>
                             </div>
                         </div>
@@ -101,45 +113,45 @@
                         <!-- Pokémon Inicial (8 Opções) -->
                         <div class="space-y-1">
                             <label class="text-[10px] font-bold text-amber-300 block"><i class="fa-solid fa-paw"></i> Escolha o Pokémon Inicial (8 Opções):</label>
-                            <div class="grid grid-cols-4 gap-1.5 max-h-36 overflow-y-auto pr-1">
+                            <div class="grid grid-cols-4 gap-1.5 max-h-28 overflow-y-auto pr-1">
                                 <!-- 1. Bulbasaur -->
-                                <div onclick="selectStarter('bulbasaur')" id="starter-bulbasaur" class="starter-option cursor-pointer border-2 border-amber-400 bg-amber-950/60 p-1.5 rounded-xl flex flex-col items-center text-center transition-all">
-                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/001.png" class="w-7 h-7 object-contain mb-0.5">
+                                <div onclick="selectStarter('bulbasaur')" id="starter-bulbasaur" class="starter-option cursor-pointer border-2 border-amber-400 bg-amber-950/60 p-1 rounded-xl flex flex-col items-center text-center transition-all">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/001.png" class="w-6 h-6 object-contain mb-0.5">
                                     <span class="text-[8px] font-bold text-white">Bulbasaur</span>
                                 </div>
                                 <!-- 2. Charmander -->
-                                <div onclick="selectStarter('charmander')" id="starter-charmander" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1.5 rounded-xl flex flex-col items-center text-center transition-all">
-                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/004.png" class="w-7 h-7 object-contain mb-0.5">
+                                <div onclick="selectStarter('charmander')" id="starter-charmander" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1 rounded-xl flex flex-col items-center text-center transition-all">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/004.png" class="w-6 h-6 object-contain mb-0.5">
                                     <span class="text-[8px] font-bold text-white">Charmander</span>
                                 </div>
                                 <!-- 3. Squirtle -->
-                                <div onclick="selectStarter('squirtle')" id="starter-squirtle" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1.5 rounded-xl flex flex-col items-center text-center transition-all">
-                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/007.png" class="w-7 h-7 object-contain mb-0.5">
+                                <div onclick="selectStarter('squirtle')" id="starter-squirtle" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1 rounded-xl flex flex-col items-center text-center transition-all">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/007.png" class="w-6 h-6 object-contain mb-0.5">
                                     <span class="text-[8px] font-bold text-white">Squirtle</span>
                                 </div>
                                 <!-- 4. Pikachu -->
-                                <div onclick="selectStarter('pikachu')" id="starter-pikachu" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1.5 rounded-xl flex flex-col items-center text-center transition-all">
-                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/025.png" class="w-7 h-7 object-contain mb-0.5">
+                                <div onclick="selectStarter('pikachu')" id="starter-pikachu" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1 rounded-xl flex flex-col items-center text-center transition-all">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/025.png" class="w-6 h-6 object-contain mb-0.5">
                                     <span class="text-[8px] font-bold text-white">Pikachu</span>
                                 </div>
                                 <!-- 5. Chikorita -->
-                                <div onclick="selectStarter('chikorita')" id="starter-chikorita" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1.5 rounded-xl flex flex-col items-center text-center transition-all">
-                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/152.png" class="w-7 h-7 object-contain mb-0.5">
+                                <div onclick="selectStarter('chikorita')" id="starter-chikorita" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1 rounded-xl flex flex-col items-center text-center transition-all">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/152.png" class="w-6 h-6 object-contain mb-0.5">
                                     <span class="text-[8px] font-bold text-white">Chikorita</span>
                                 </div>
                                 <!-- 6. Cyndaquil -->
-                                <div onclick="selectStarter('cyndaquil')" id="starter-cyndaquil" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1.5 rounded-xl flex flex-col items-center text-center transition-all">
-                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/155.png" class="w-7 h-7 object-contain mb-0.5">
+                                <div onclick="selectStarter('cyndaquil')" id="starter-cyndaquil" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1 rounded-xl flex flex-col items-center text-center transition-all">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/155.png" class="w-6 h-6 object-contain mb-0.5">
                                     <span class="text-[8px] font-bold text-white">Cyndaquil</span>
                                 </div>
                                 <!-- 7. Totodile -->
-                                <div onclick="selectStarter('totodile')" id="starter-totodile" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1.5 rounded-xl flex flex-col items-center text-center transition-all">
-                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/158.png" class="w-7 h-7 object-contain mb-0.5">
+                                <div onclick="selectStarter('totodile')" id="starter-totodile" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1 rounded-xl flex flex-col items-center text-center transition-all">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/158.png" class="w-6 h-6 object-contain mb-0.5">
                                     <span class="text-[8px] font-bold text-white">Totodile</span>
                                 </div>
                                 <!-- 8. Eevee -->
-                                <div onclick="selectStarter('eevee')" id="starter-eevee" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1.5 rounded-xl flex flex-col items-center text-center transition-all">
-                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/133.png" class="w-7 h-7 object-contain mb-0.5">
+                                <div onclick="selectStarter('eevee')" id="starter-eevee" class="starter-option cursor-pointer border-2 border-blue-900 bg-black/40 p-1 rounded-xl flex flex-col items-center text-center transition-all">
+                                    <img src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/133.png" class="w-6 h-6 object-contain mb-0.5">
                                     <span class="text-[8px] font-bold text-white">Eevee</span>
                                 </div>
                             </div>
