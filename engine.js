@@ -3,7 +3,7 @@
 if (typeof SUPABASE_STORAGE_URL === 'undefined') {
     var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
 }
-var SUPABASE_STORAGE_URL = "https://juowcnkjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
+var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
 // 1. Inicializar a conexão Socket.io com o servidor backend na nuvem (Render)
 const socket = io('https://pokemasterhx.onrender.com');
 
@@ -321,7 +321,7 @@ window.openSpecificTrainerCardModal = function(playerIndex) {
                 <span class="text-[10px] text-purple-300 font-bold">📍 Estão na mesma casa! Ações disponíveis:</span>
                 <div class="flex gap-2 w-full">
                     <button onclick="document.getElementById('trainer-card-modal-full').remove(); triggerPvPBattleArena('${cp.name}');" class="flex-1 bg-red-700 hover:bg-red-600 text-white font-black py-2 rounded-lg text-[10px] uppercase shadow">
-                        ⚔️️ Desafiar PvP
+                        ⚔ Desafiar PvP
                     </button>
                     <button onclick="document.getElementById('trainer-card-modal-full').remove(); openTradeModal('${loggedPlayer.name}', '${cp.name}');" class="flex-1 bg-blue-700 hover:bg-blue-600 text-white font-black py-2 rounded-lg text-[10px] uppercase shadow">
                         🔄 Propor Troca
