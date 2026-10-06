@@ -1,7 +1,7 @@
 // --- MÓDULO DE ARENA DE BATALHA TCG (battle-arena.js) ---
 
 if (typeof SUPABASE_STORAGE_URL === 'undefined') {
-    var SUPABASE_STORAGE_URL = "https://juowcnkjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
+    var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
 }
 
 let currentBattleSession = {
