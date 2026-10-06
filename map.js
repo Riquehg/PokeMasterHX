@@ -2,7 +2,7 @@
 // Modo completo: Exibe os pontos de movimento, os balões de Pokémon enfraquecidos, mini-ícones de ginásio e os peões de TODOS os jogadores.
 
 if (typeof SUPABASE_STORAGE_URL === 'undefined') {
-    var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
+    var SUPABASE_STORAGE_URL = "https://juowcnkjhfbfttnwge.supabase.co/storage/v1/object/public/sprites/";
 }
 
 const FULL_MAP_IMAGE = `${SUPABASE_STORAGE_URL}board/full_map_01.png`; 
