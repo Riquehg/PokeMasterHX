@@ -90,7 +90,7 @@ function saveGameProgress() {
         };
         localStorage.setItem('pokemon_master_trainer_save', JSON.stringify(saveData));
 
-        // Ponto 4: Sincronização automática com o servidor online se autenticado
+        // Sincronização automática com o servidor online se autenticado
         if (currentAuthenticatedAccount) {
             socket.emit('save_game_state', {
                 email: currentAuthenticatedAccount,
@@ -1707,7 +1707,7 @@ function showCustomPopup(title, message, isSuccess = true) {
             <div class="text-xs text-slate-200 whitespace-pre-line leading-relaxed bg-black/40 p-3 rounded-xl border border-amber-900/50">
                 ${message}
             </div>
-            <button onclick="document.getElementById('game-custom-popup').remove()" class="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-black font-black py-2.5 rounded-xl text-xs uppercase shadow transition-all cursor-pointer">
+            <button onclick="document.getElementById('game-custom-popup').remove()" class="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-400 text-black font-black py-2.5 rounded-xl text-xs uppercase shadow transition-all cursor-pointer">
                 Continuar
             </button>
         </div>
