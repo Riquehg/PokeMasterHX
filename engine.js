@@ -830,17 +830,31 @@ window.resolveBattleAttempt = function() {
         const wildPower = (wild.str || 3) + wildDice;
 
         if (playerPower >= wildPower) {
-            showCustomPopup("⚔️ VITÓRIA NO COMBATE!", `O teu ${activeMon.name} derrotou o ${wild.name} selvagem!\n\n✨ Ganhaste XP e o Pokémon ficou debilitado para captura imediata!`, true);
-            wild.weakened = true;
-            if (wild.waypointId && boardPokemonCards[wild.waypointId]) {
-                boardPokemonCards[wild.waypointId].weakened = true;
+            // Dano infligido ao Pokémon selvagem
+            const damageToWild = Math.max(10, playerPower - wildPower + 10);
+            wild.currentHp = Math.max(0, (wild.currentHp !== undefined ? wild.currentHp : wild.maxHp) - damageToWild);
+
+            if (wild.currentHp <= 0) {
+                showCustomPopup("🏆 POKÉMON SELVAGEM DERROTADO!", `O teu ${activeMon.name} venceu e desmaiou o ${wild.name} selvagem!\n\n✨ Ganhaste XP e podes capturá-lo com bónus máximo!`, true);
+                wild.weakened = true;
+                if (wild.waypointId && boardPokemonCards[wild.waypointId]) {
+                    boardPokemonCards[wild.waypointId].weakened = true;
+                    boardPokemonCards[wild.waypointId].currentHp = 0;
+                }
+                addExperienceToMonster(activeMon, 50);
+            } else {
+                showCustomPopup("⚔️ ATAQUE BEM-SUCEDIDO!", `O teu ${activeMon.name} causou ${damageToWild} de dano ao ${wild.name}!\n\nHP Restante do Selvagem: ${wild.currentHp}/${wild.maxHp || wild.hp}`, true);
             }
-            addExperienceToMonster(activeMon, 40);
             updateEncounterUIInfo();
         } else {
-            const damage = 15;
-            activeMon.currentHp = Math.max(0, (activeMon.currentHp || activeMon.maxHp) - damage);
-            showCustomPopup("💥 DERROTA NO COMBATE", `O ${wild.name} selvagem contra-atacou com força!\n\n💔 ${activeMon.name} sofreu ${damage} de dano.`, false);
+            const damageToPlayer = 15;
+            activeMon.currentHp = Math.max(0, (activeMon.currentHp || activeMon.maxHp) - damageToPlayer);
+            
+            if (activeMon.currentHp <= 0) {
+                showCustomPopup("💀 O TEU POKÉMON DESMAIOU", `O ${wild.name} selvagem desferiu um golpe crítico!\n\n💔 O teu ${activeMon.name} desmaiou (HP 0). Troca de Anima ou usa um Revive!`, false);
+            } else {
+                showCustomPopup("💥 CONTRA-ATAQUE SOFRIDO", `O ${wild.name} selvagem foi mais forte nesta ronda!\n\n💔 ${activeMon.name} sofreu ${damageToPlayer} de dano.`, false);
+            }
             renderTeamCardSlots();
             updateEncounterUIInfo();
         }
