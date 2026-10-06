@@ -5,9 +5,9 @@ if (typeof SUPABASE_STORAGE_URL === 'undefined') {
 }
 
 let currentBattleSession = {
-    mode: 'gym', // 'gym' ou 'pvp'
+    mode: 'gym', // 'gym', 'pvp' ou 'wild'
     challenger: null,
-    defender: null, // Líder de Ginásio ou outro Jogador
+    defender: null, // Líder de Ginásio, Outro Jogador ou Pokémon Selvagem
     format: 1, // 1, 3 ou 6
     playerTeam: [], // Cópia dos Pokémon escolhidos para a batalha
     enemyTeam: [],  // Equipa adversária
@@ -46,29 +46,10 @@ function openBattleArena(config) {
             rewardGold: gym.rewardGold,
             team: gym.pokemons || [gym.pokemon]
         };
-    } else {
-        currentBattleSession.challenger = cp;
-        currentBattleSession.defender = {
-            name: config.opponent.name,
-            isGymLeader: false,
-            team: config.opponent.activeTeam.filter(m => (m.currentHp !== undefined ? m.currentHp : m.maxHp) > 0)
-        };
-
-     // Em openBattleArena(config):
-    if (currentBattleSession.mode === 'gym') {
-        const gym = config.data;
-        currentBattleSession.challenger = cp;
-        currentBattleSession.defender = {
-            name: `Líder ${gym.leader} (${gym.city})`,
-            isGymLeader: true,
-            badgeKey: gym.badgeKey,
-            rewardGold: gym.rewardGold,
-            team: gym.pokemons || [gym.pokemon]
-        };
     } else if (currentBattleSession.mode === 'wild') {
         currentBattleSession.challenger = cp;
         currentBattleSession.defender = {
-            name: `Pokémon Selvagem`,
+            name: config.opponent.name || 'Pokémon Selvagem',
             isGymLeader: false,
             isWild: true,
             team: [config.opponent]
@@ -253,8 +234,8 @@ window.confirmArenaTeamAndStart = function(indexes) {
         return {
             ...m,
             image: enemyImg,
-            currentHp: m.hp || 25,
-            maxHp: m.hp || 25,
+            currentHp: m.currentHp !== undefined ? m.currentHp : (m.hp || 25),
+            maxHp: m.maxHp || m.hp || 25,
             str: m.str || 5,
             level: m.level || 5
         };
@@ -512,6 +493,12 @@ function concludeArenaBattle(isVictory) {
                 `Derrotaste toda a equipa do Líder!\n\n✨ Ganhaste a Insígnia!\n💰 Ouro: +${def.rewardGold}\n🎖️ Total de Insígnias: ${cp.badges.length} / 6`,
                 true
             );
+        } else if (currentBattleSession.mode === 'wild') {
+            showCustomPopup("🏆 VITÓRIA SOBRE O SELVAGEM!", `Derrotaste o Pokémon selvagem em combate! O Anima inimigo desmaiou e ficou enfraquecido.`, true);
+            const defeatedMon = currentBattleSession.enemyTeam[0];
+            if (defeatedMon && defeatedMon.waypointId && typeof boardPokemonCards !== 'undefined' && boardPokemonCards[defeatedMon.waypointId]) {
+                boardPokemonCards[defeatedMon.waypointId].weakened = true;
+            }
         } else {
             cp.gold += 150;
             showCustomPopup("🏆 VITÓRIA NO DUELO PVP!", `Derrotaste a equipa adversária com maestria!\n\n💰 Prémio: +150 Ouro!`, true);
