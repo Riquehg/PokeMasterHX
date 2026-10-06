@@ -143,7 +143,7 @@ io.on('connection', (socket) => {
             console.log(`🛡️ [ADMIN] A carregar lista de utilizadores...`);
             let { data: users, error } = await supabase
                 .from('accounts')
-                .select('email, character_name, last_login, game_state');
+                .select('email, character_name, game_state');
 
             if (error) {
                 console.error("❌ Erro ao buscar utilizadores para o admin:", error);
