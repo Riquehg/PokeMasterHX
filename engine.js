@@ -2526,7 +2526,7 @@ window.openPokedexDetailCard = function(monsterId) {
                 </div>
 
                 <div class="w-full text-center bg-amber-950/40 p-2 rounded-xl border border-amber-800/50 text-[10px] text-amber-200">
-                    ${baseMon.evolvesTo ? `🔄 Evolui para: <span class="font-bold uppercase">${baseMon.evolvesTo}</span> (Nível ${baseMon.evolutionLevel || '?'})` : '✨ Forma final de evolução!'}
+                    ${baseMon.evolvesTo ? `🔄 Evolui para: <span class="font-bold uppercase">${baseMon.evolvesTo}</span> (Nível ${baseMon.evolutionLevel || '?CH?'})` : '✨ Forma final de evolução!'}
                 </div>
             </div>
         </div>
