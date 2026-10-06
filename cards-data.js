@@ -4,6 +4,7 @@
 if (typeof SUPABASE_STORAGE_URL === 'undefined') {
     var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
 }
+var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
 
 const MONSTER_CATALOG = [
     // ==========================================
@@ -49,7 +50,7 @@ const MONSTER_CATALOG = [
     { dexNumber: 38, id: 'ninetales', name: "Ninetales", type: "Fogo", tier: 2, rarity: "Verde", stage: "Estágio 2", icon: "🦊", image: `${SUPABASE_STORAGE_URL}monsters/038.png`, shinyImage: `${SUPABASE_STORAGE_URL}monsters/shiny/038.png`, hp: 25, str: 7, captureRolls: [4, 5], level: 3, xp: 0, evolvesTo: null },
     { dexNumber: 39, id: 'jigglypuff', name: "Jigglypuff", type: "Normal", tier: 1, rarity: "Rosa", stage: "Estágio 1", icon: "🎈", image: `${SUPABASE_STORAGE_URL}monsters/039.png`, shinyImage: `${SUPABASE_STORAGE_URL}monsters/shiny/039.png`, hp: 16, str: 3, captureRolls: [3, 4], level: 1, xp: 0, evolvesTo: "wigglytuff", evolutionLevel: 25 },
     { dexNumber: 40, id: 'wigglytuff', name: "Wigglytuff", type: "Normal", tier: 2, rarity: "Verde", stage: "Estágio 2", icon: "🎈", image: `${SUPABASE_STORAGE_URL}monsters/040.png`, shinyImage: `${SUPABASE_STORAGE_URL}monsters/shiny/040.png`, hp: 28, str: 7, captureRolls: [4, 5], level: 3, xp: 0, evolvesTo: null },
-    { dexNumber: 41, id: 'zubat', name: "Zubat", type: "Voador/Veneno", tier: 1, rarity: "Rosa", stage: "Estágio 1", icon: "🦇", image: `${SUPABASE_STORAGE_URL}monsters/041.png`, shinyImage: `${SUPABASE_STORAGE_URL}monsters/shiny/041.png`, hp: 14, str: 3, captureRolls: [3, 4], level: 1, xp: 0, evolvesTo: "golbat", evolutionLevel: 22 },
+    { dexNumber: 41, id: 'zubat', name: "Voador/Veneno", type: "Voador/Veneno", tier: 1, rarity: "Rosa", stage: "Estágio 1", icon: "🦇", image: `${SUPABASE_STORAGE_URL}monsters/041.png`, shinyImage: `${SUPABASE_STORAGE_URL}monsters/shiny/041.png`, hp: 14, str: 3, captureRolls: [3, 4], level: 1, xp: 0, evolvesTo: "golbat", evolutionLevel: 22 },
     { dexNumber: 42, id: 'golbat', name: "Golbat", type: "Voador/Veneno", tier: 2, rarity: "Verde", stage: "Estágio 2", icon: "🦇", image: `${SUPABASE_STORAGE_URL}monsters/042.png`, shinyImage: `${SUPABASE_STORAGE_URL}monsters/shiny/042.png`, hp: 22, str: 6, captureRolls: [4, 5], level: 3, xp: 0, evolvesTo: "crobat", evolutionLevel: 35 },
     { dexNumber: 43, id: 'oddish', name: "Oddish", type: "Grama/Veneno", tier: 1, rarity: "Rosa", stage: "Estágio 1", icon: "🌿", image: `${SUPABASE_STORAGE_URL}monsters/043.png`, shinyImage: `${SUPABASE_STORAGE_URL}monsters/shiny/043.png`, hp: 15, str: 4, captureRolls: [3, 4], level: 1, xp: 0, evolvesTo: "gloom", evolutionLevel: 21 },
     { dexNumber: 44, id: 'gloom', name: "Gloom", type: "Grama/Veneno", tier: 2, rarity: "Verde", stage: "Estágio 2", icon: "🌿", image: `${SUPABASE_STORAGE_URL}monsters/044.png`, shinyImage: `${SUPABASE_STORAGE_URL}monsters/shiny/044.png`, hp: 21, str: 5, captureRolls: [4, 5], level: 3, xp: 0, evolvesTo: "vileplume", evolutionLevel: 30 },
