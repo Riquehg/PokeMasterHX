@@ -24,6 +24,9 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6Ik
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// Memória temporária para gestão de salas online do Multiplayer
+let activeRooms = [];
+
 // Gestão de Eventos Online via Socket.io
 io.on('connection', (socket) => {
     console.log(`🔌 Novo jogador conectado: ${socket.id}`);
@@ -120,7 +123,6 @@ io.on('connection', (socket) => {
                 board_pokemon_cards: boardPokemonCards
             };
 
-            // Se o nome do treinador foi enviado ou existe no gameState, atualiza o character_name na base de dados
             if (trainerName) {
                 updatePayload.character_name = trainerName;
             } else if (gameState && gameState.trainerName) {
@@ -142,9 +144,44 @@ io.on('connection', (socket) => {
         }
     });
 
+    // === GESTÃO DE SALAS ONLINE (MULTIPLAYER) ===
+    socket.on('get_rooms_list', () => {
+        socket.emit('rooms_list_response', activeRooms);
+    });
+
+    socket.on('create_room', ({ roomName, host }) => {
+        const newRoom = {
+            id: 'room_' + Date.now(),
+            name: roomName || 'Sala de Kanto',
+            host: host || 'Treinador',
+            players: [socket.id]
+        };
+        activeRooms.push(newRoom);
+        socket.join(newRoom.id);
+        
+        console.log(`🏠 [LOBBY] Sala criada: ${newRoom.name} (${newRoom.id}) por ${newRoom.host}`);
+        io.emit('rooms_list_response', activeRooms);
+        socket.emit('room_joined', { success: true, roomId: newRoom.id });
+    });
+
+    socket.on('join_room', ({ roomId }) => {
+        const room = activeRooms.find(r => r.id === roomId);
+        if (room) {
+            room.players.push(socket.id);
+            socket.join(roomId);
+            console.log(`👥 [LOBBY] Jogador entrou na sala: ${room.name}`);
+            io.emit('rooms_list_response', activeRooms);
+            socket.emit('room_joined', { success: true, roomId: roomId });
+        } else {
+            socket.emit('room_joined', { success: false, message: "Sala não encontrada." });
+        }
+    });
+
+    socket.on('lobby_chat_message', ({ message, sender }) => {
+        io.emit('chat_broadcast', { sender: sender || 'Treinador', text: message });
+    });
+
     // === EVENTOS DO PAINEL DO ADMINISTRADOR ===
-    
-    // 1. Obter lista de todos os utilizadores para gerir no painel admin
     socket.on('admin_get_users', async () => {
         try {
             console.log(`🛡️ [ADMIN] A carregar lista de utilizadores...`);
@@ -157,7 +194,6 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            // Mapear dados para enviar de forma amigável ao painel
             const formattedUsers = (users || []).map(u => {
                 let goldVal = 350;
                 if (u.game_state && typeof u.game_state === 'object') {
@@ -176,10 +212,9 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 2. Executar ações administrativas (Dar Ouro, Resetar Senha, Apagar Conta)
     socket.on('admin_action', async ({ action, email, amount, newPass }) => {
         try {
-            console.log(`🛡️ [ADMIN AÇÃO] A executar '${action}' para o email: ${email}`);
+            console.log(`🛡️️ [ADMIN AÇÃO] A executar '${action}' para o email: ${email}`);
 
             if (action === 'give_gold') {
                 let { data: acc } = await supabase.from('accounts').select('game_state').eq('email', email).single();
@@ -214,6 +249,12 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log(`❌ Jogador desconectado: ${socket.id}`);
+        // Remover de salas ativas vazias
+        activeRooms = activeRooms.filter(room => {
+            room.players = room.players.filter(id => id !== socket.id);
+            return room.players.length > 0;
+        });
+        io.emit('rooms_list_response', activeRooms);
     });
 });
 
