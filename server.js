@@ -19,7 +19,7 @@ const io = new Server(server, {
 });
 
 // Credenciais do Supabase configuradas com a sua chave anon oficial
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://juowcnkjhfbfttnwge.supabase.co';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://juowcnkbjhfrbfttnwge.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1b3djbmtiamhmcmJmdHRud2dlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyMTE0MzgsImV4cCI6MjEwNjc4NzQzOH0.nQy5fL4mNwNAycrJczCwRpXf7AT0WlV1dy765v7sn84'; 
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
