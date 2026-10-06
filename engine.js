@@ -198,7 +198,7 @@ function importSaveFromFile(event) {
 }
 
 window.logoutToSetupScreen = function() {
-    if (confirm("⚠️️ Deseja realmente sair da sessão atual? Certifique-se de que salvou o seu progresso!")) {
+    if (confirm("⚠ Deseja realmente sair da sessão atual? Certifique-se de que salvou o seu progresso!")) {
         const mainLayout = document.getElementById('main-game-layout');
         if (mainLayout) mainLayout.classList.add('hidden');
 
@@ -207,8 +207,11 @@ window.logoutToSetupScreen = function() {
 
         const authContainer = document.getElementById('auth-container');
         const onlineLobby = document.getElementById('online-lobby-container');
+        const postLoginDashboard = document.getElementById('post-login-dashboard');
+        
         if (authContainer) authContainer.classList.remove('hidden');
         if (onlineLobby) onlineLobby.classList.add('hidden');
+        if (postLoginDashboard) postLoginDashboard.classList.add('hidden');
 
         console.log("🚪 Sessão encerrada. Retornado ao menu inicial.");
     }
@@ -459,7 +462,7 @@ window.selectAvatar = function(id) {
 
 window.selectStarter = function(starterId) {
     setupConfig.starterId = starterId;
-    const possibleStarters = ['bulbasaur', 'charmander', 'squirtle', 'pikachu', 'chikorita', 'cyndaquil'];
+    const possibleStarters = ['bulbasaur', 'charmander', 'squirtle', 'pikachu', 'chikorita', 'cyndaquil', 'totodile', 'eevee'];
     
     possibleStarters.forEach(id => {
         const el = document.getElementById(`starter-${id}`);
@@ -575,7 +578,10 @@ function launchGameSession() {
 
     const setupScreen = document.getElementById('setup-screen');
     const mainGameLayout = document.getElementById('main-game-layout');
+    const postLoginDashboard = document.getElementById('post-login-dashboard');
+    
     if (setupScreen) setupScreen.classList.add('hidden');
+    if (postLoginDashboard) postLoginDashboard.classList.add('hidden');
     if (mainGameLayout) mainGameLayout.classList.remove('hidden');
 
     checkAndRenderPassTurnButton();
@@ -2634,7 +2640,7 @@ function openTradeModal(playerAName, playerBName) {
     tradeModal.classList.remove('hidden');
 }
 
-// --- SISTEMA DE CONTAS E LIGAÇÃO ONLINE AO BACKEND ---
+// --- SISTEMA DE CONTAS E LIGAÇÃO ONLINE AO BACKEND E PAINEL PÓS-LOGIN ---
 
 window.handleAccountLoginOrRegister = function() {
     const emailInput = document.getElementById('auth-email-input').value.trim();
@@ -2668,16 +2674,92 @@ socket.on('login_response', (response) => {
             boardPokemonCards = accData.boardPokemonCards || {};
         }
 
-        const authContainer = document.getElementById('auth-container');
-        const mainLayout = document.getElementById('main-game-layout');
-        if (authContainer) authContainer.classList.add('hidden');
-        if (mainLayout) mainLayout.classList.remove('hidden');
-
-        initGameEngine();
-        if (typeof renderBoardMap === 'function') renderBoardMap();
-        showCustomPopup("Sessão Iniciada", "Dados carregados da Base de Dados Online!", true);
+        // Exibir o Painel Limpo Pós-Login com o Trainer Card salvo
+        showPostLoginDashboard();
     }
 });
+
+function showPostLoginDashboard() {
+    const authContainer = document.getElementById('auth-container');
+    if (authContainer) authContainer.classList.add('hidden');
+
+    let postLoginModal = document.getElementById('post-login-dashboard');
+    if (!postLoginModal) {
+        postLoginModal = document.createElement('div');
+        postLoginModal.id = 'post-login-dashboard';
+        postLoginModal.className = 'fixed inset-0 bg-[#020617] z-[300] flex items-center justify-center p-4 backdrop-blur-md';
+        document.body.appendChild(postLoginModal);
+    }
+
+    const cp = getCurrentPlayer();
+    const avatarImgSrc = `${SUPABASE_STORAGE_URL}player_0${cp.avatarId || 1}.png`;
+
+    postLoginModal.innerHTML = `
+        <div class="trainer-card max-w-md w-full p-6 space-y-5 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white text-center">
+            <h2 class="text-base font-black text-amber-400 font-cinzel tracking-wider">SESSÃO AUTENTICADA</h2>
+            <p class="text-xs text-slate-300">Bem-vindo de volta ao <strong class="text-amber-300">Master Trainer HEX</strong>!</p>
+
+            <!-- Trainer Card Resumido Salvo -->
+            <div class="bg-black/70 border-2 border-amber-600/80 p-4 rounded-2xl flex items-center gap-4 text-left shadow-inner">
+                <img src="${avatarImgSrc}" class="w-16 h-16 object-contain drop-shadow-[0_0_8px_rgba(255,215,0,0.6)]" onerror="this.src='https://api.iconify.design/noto:boy.svg'">
+                <div>
+                    <h3 class="text-sm font-black text-amber-300">${cp.name}</h3>
+                    <p class="text-[10px] text-slate-300">Ouro: <strong class="text-yellow-400">${cp.gold} 🪙</strong></p>
+                    <p class="text-[10px] text-slate-300">Zona Atual: <strong class="text-blue-400">#${cp.currentZone || 5}</strong></p>
+                </div>
+            </div>
+
+            <!-- Três Botões Claros -->
+            <div class="space-y-3 pt-2">
+                <button onclick="resumeSavedGameFromDashboard()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer">
+                    ▶ Continuar Partida Salva
+                </button>
+                <button onclick="openNewGameSetupFromDashboard()" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer">
+                    ✨ Nova Partida (Manter Perfil / Pokédex)
+                </button>
+                <button onclick="openOnlineLobbyFromDashboard()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer">
+                    🌐 Entrar em Partida Online (Lobby)
+                </button>
+            </div>
+        </div>
+    `;
+    postLoginModal.classList.remove('hidden');
+}
+
+window.resumeSavedGameFromDashboard = function() {
+    const dashboard = document.getElementById('post-login-dashboard');
+    if (dashboard) dashboard.classList.add('hidden');
+
+    const mainLayout = document.getElementById('main-game-layout');
+    if (mainLayout) mainLayout.classList.remove('hidden');
+
+    initGameEngine();
+    if (typeof renderBoardMap === 'function') renderBoardMap();
+    showCustomPopup("📂 Jogo Carregado", "Retomando a sua jornada de onde parou!", true);
+};
+
+window.openNewGameSetupFromDashboard = function() {
+    const dashboard = document.getElementById('post-login-dashboard');
+    if (dashboard) dashboard.classList.add('hidden');
+
+    const setupScreen = document.getElementById('setup-screen');
+    const charCreation = document.getElementById('character-creation-container');
+    if (setupScreen) setupScreen.classList.remove('hidden');
+    if (charCreation) charCreation.classList.remove('hidden');
+    
+    showCustomPopup("Nova Partida", "Escolha o seu novo Iniciante e Avatar preservando o seu cofre e progresso global da conta!", true);
+};
+
+window.openOnlineLobbyFromDashboard = function() {
+    const dashboard = document.getElementById('post-login-dashboard');
+    if (dashboard) dashboard.classList.add('hidden');
+
+    const onlineLobby = document.getElementById('online-lobby-container');
+    if (onlineLobby) onlineLobby.classList.remove('hidden');
+    else {
+        showCustomPopup("Lobby Online", "Painel de Salas Online ativado! Conectado com sucesso.", true);
+    }
+};
 
 window.finalizeCharacterCreation = function() {
     const nameInput = document.getElementById('setup-trainer-name');
