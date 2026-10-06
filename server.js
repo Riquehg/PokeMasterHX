@@ -82,16 +82,13 @@ io.on('connection', (socket) => {
             } else if (account.password === password) {
                 console.log(`✅ [LOG DEBUG] Login bem-sucedido para: ${email}`);
                 
-                // Atualizar o último login na base de dados
-                await supabase
-                    .from('accounts')
-                    .update({ last_login: new Date().toISOString() })
-                    .eq('email', email);
+                // Valida se o personagem já foi criado anteriormente
+                const hasCharacter = !!account.character_name;
 
                 // Login bem-sucedido
                 socket.emit('login_response', { 
                     success: true, 
-                    isNew: !account.character_name, 
+                    isNew: !hasCharacter, 
                     accountData: {
                         email: account.email,
                         name: account.character_name || email.split('@')[0],
@@ -113,16 +110,26 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Guardar / Atualizar Estado de Jogo com logs de salvamento
-    socket.on('save_game_state', async ({ email, gameState, boardPokemonCards }) => {
+    // Guardar / Atualizar Estado de Jogo e Nome do Personagem
+    socket.on('save_game_state', async ({ email, gameState, boardPokemonCards, trainerName }) => {
         try {
             console.log(`💾 [LOG DEBUG] A guardar progresso para o utilizador: ${email}`);
+            
+            let updatePayload = {
+                game_state: gameState,
+                board_pokemon_cards: boardPokemonCards
+            };
+
+            // Se o nome do treinador foi enviado ou existe no gameState, atualiza o character_name na base de dados
+            if (trainerName) {
+                updatePayload.character_name = trainerName;
+            } else if (gameState && gameState.trainerName) {
+                updatePayload.character_name = gameState.trainerName;
+            }
+
             let { error: updateError } = await supabase
                 .from('accounts')
-                .update({
-                    game_state: gameState,
-                    board_pokemon_cards: boardPokemonCards
-                })
+                .update(updatePayload)
                 .eq('email', email);
 
             if (updateError) {
@@ -150,7 +157,7 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            // Mapear dados para enviar de forma amigável ao painel (incluindo ouro extraído do game_state se existir)
+            // Mapear dados para enviar de forma amigável ao painel
             const formattedUsers = (users || []).map(u => {
                 let goldVal = 350;
                 if (u.game_state && typeof u.game_state === 'object') {
@@ -159,7 +166,6 @@ io.on('connection', (socket) => {
                 return {
                     email: u.email,
                     trainerName: u.character_name || u.email.split('@')[0],
-                    lastLogin: u.last_login || null,
                     gold: goldVal
                 };
             });
@@ -176,7 +182,6 @@ io.on('connection', (socket) => {
             console.log(`🛡️ [ADMIN AÇÃO] A executar '${action}' para o email: ${email}`);
 
             if (action === 'give_gold') {
-                // Buscar estado atual para modificar o ouro
                 let { data: acc } = await supabase.from('accounts').select('game_state').eq('email', email).single();
                 if (acc) {
                     let gameState = acc.game_state || {};
