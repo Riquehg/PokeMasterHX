@@ -53,6 +53,33 @@ function openBattleArena(config) {
             isGymLeader: false,
             team: config.opponent.activeTeam.filter(m => (m.currentHp !== undefined ? m.currentHp : m.maxHp) > 0)
         };
+
+     // Em openBattleArena(config):
+    if (currentBattleSession.mode === 'gym') {
+        const gym = config.data;
+        currentBattleSession.challenger = cp;
+        currentBattleSession.defender = {
+            name: `Líder ${gym.leader} (${gym.city})`,
+            isGymLeader: true,
+            badgeKey: gym.badgeKey,
+            rewardGold: gym.rewardGold,
+            team: gym.pokemons || [gym.pokemon]
+        };
+    } else if (currentBattleSession.mode === 'wild') {
+        currentBattleSession.challenger = cp;
+        currentBattleSession.defender = {
+            name: `Pokémon Selvagem`,
+            isGymLeader: false,
+            isWild: true,
+            team: [config.opponent]
+        };
+    } else {
+        currentBattleSession.challenger = cp;
+        currentBattleSession.defender = {
+            name: config.opponent.name,
+            isGymLeader: false,
+            team: config.opponent.activeTeam.filter(m => (m.currentHp !== undefined ? m.currentHp : m.maxHp) > 0)
+        };
     }
 
     // Abrir modal de seleção de equipa com base no formato (1x1, 3x3, etc.)
