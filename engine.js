@@ -4,6 +4,7 @@ if (typeof SUPABASE_STORAGE_URL === 'undefined') {
     var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
 }
 var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
+
 // 1. Inicializar a conexão Socket.io com o servidor backend na nuvem (Render)
 const socket = io('https://pokemasterhx.onrender.com');
 
@@ -12,8 +13,9 @@ let currentAuthenticatedAccount = null;
 
 // Ouvir sincronizações de outros jogadores em tempo real
 socket.on('sync_game_state', (remoteData) => {
-    gameState = remoteData.gameState;
-    boardPokemonCards = remoteData.boardPokemonCards;
+    if (!remoteData) return;
+    gameState = remoteData.gameState || gameState;
+    boardPokemonCards = remoteData.boardPokemonCards || boardPokemonCards;
     if (typeof initGameEngine === 'function') initGameEngine();
     if (typeof renderBoardMap === 'function') renderBoardMap();
 });
@@ -50,7 +52,7 @@ let currentEncounterState = {
     selectedTeamMemberIndex: 0,
     itemBonus: 0,
     battlePowerBonus: 0,
-    hasAttemptedCapture: false // 🔴 Impede múltiplas tentativas de captura no mesmo encontro/turno
+    hasAttemptedCapture: false
 };
 
 // Variável temporária para armazenar a aura da Poké Ball selecionada no turno atual
@@ -58,7 +60,7 @@ let selectedBallAura = null;
 
 // Atalho rápido para obter o jogador atual da vez com segurança absoluta
 function getCurrentPlayer() {
-    if (!gameState.players || gameState.players.length === 0) {
+    if (!gameState.players || !Array.isArray(gameState.players) || gameState.players.length === 0) {
         return {
             name: "Ash Ketchum",
             avatarId: 1,
@@ -72,7 +74,8 @@ function getCurrentPlayer() {
             equipmentSlots: [null, null]
         };
     }
-    return gameState.players[gameState.currentPlayerIndex || 0];
+    const idx = gameState.currentPlayerIndex || 0;
+    return gameState.players[idx] || gameState.players[0];
 }
 
 // --- SISTEMA DE SAVE, LOAD E EXPORT/IMPORT ---
@@ -101,10 +104,10 @@ function loadGameProgress() {
         }
 
         const saveData = JSON.parse(savedRaw);
-        gameState = saveData.gameState;
+        gameState = saveData.gameState || gameState;
         boardPokemonCards = saveData.boardPokemonCards || {};
 
-        if (!gameState.players || gameState.players.length === 0) {
+        if (!gameState.players || !Array.isArray(gameState.players) || gameState.players.length === 0) {
             gameState.players = [{
                 name: "Ash Ketchum",
                 avatarId: 1,
@@ -662,6 +665,7 @@ function addMonsterToPlayer(monster) {
 
     selectedBallAura = null;
 
+    if (!Array.isArray(cp.pcBox)) cp.pcBox = [];
     cp.pcBox.push(newMon);
     appendAdventureLog(`${cp.name} capturou ${newMon.isShiny ? '✨ Shiny ' : ''}${newMon.name} (Nv. ${newMon.level}) e foi enviado diretamente para a PC Box!`);
 
@@ -675,7 +679,7 @@ function renderEquipmentSlots() {
         const slotEl = document.getElementById(`equipment-slot-${i}`);
         if (!slotEl) continue;
 
-        const item = cp.equipmentSlots[i];
+        const item = cp.equipmentSlots ? cp.equipmentSlots[i] : null;
         if (item) {
             slotEl.innerHTML = `<span title="${item.name}">${item.icon || '🎒'}</span>`;
             slotEl.className = "h-8 bg-amber-950 border border-amber-500 rounded flex items-center justify-center cursor-pointer text-[12px] shadow";
@@ -795,6 +799,7 @@ window.openPokemonDetailModal = function(monsterIdOrUniqueId, fromArea = 'team')
 
 function useInventoryItemMainScreen(itemId) {
     const cp = getCurrentPlayer();
+    if (!cp.inventory) cp.inventory = [];
     let item = cp.inventory.find(i => i.id === itemId);
     if (!item || item.count <= 0) {
         showCustomPopup("Sem Itens", "❌ Não tens unidades deste item na mochila!", false);
@@ -953,8 +958,8 @@ window.openCityModal = function(cityName) {
 
 window.openPokemonCenterModal = function() {
     const cp = getCurrentPlayer();
-    cp.activeTeam.forEach(mon => { mon.currentHp = mon.maxHp || mon.hp || 20; });
-    cp.pcBox.forEach(mon => { mon.currentHp = mon.maxHp || mon.hp || 20; });
+    if (cp.activeTeam) cp.activeTeam.forEach(mon => { mon.currentHp = mon.maxHp || mon.hp || 20; });
+    if (cp.pcBox) cp.pcBox.forEach(mon => { mon.currentHp = mon.maxHp || mon.hp || 20; });
 
     renderTeamCardSlots();
     renderBottomPanel();
@@ -1041,6 +1046,7 @@ window.buyItemFromMart = function(itemId, cost) {
     }
 
     cp.gold -= cost;
+    if (!Array.isArray(cp.inventory)) cp.inventory = [];
     let existingItem = cp.inventory.find(i => i.id === itemId);
     if (existingItem) {
         existingItem.count++;
@@ -1160,28 +1166,30 @@ function openTeamSelectionModalForGym() {
 
     function renderSelectionGrid() {
         let teamGridHtml = '';
-        cp.activeTeam.forEach((mon, idx) => {
-            const isFainted = (mon.currentHp !== undefined ? mon.currentHp : mon.maxHp) <= 0;
-            const isSelected = selectedIndices.includes(idx);
-            const tierCardBg = getTierColorClass(mon.tier || 1);
-            const auraGymSelClass = mon.auraEffect || '';
-            const monImgSrc = mon.isShiny && mon.shinyImage ? mon.shinyImage : (mon.image || '');
+        if (cp.activeTeam) {
+            cp.activeTeam.forEach((mon, idx) => {
+                const isFainted = (mon.currentHp !== undefined ? mon.currentHp : mon.maxHp) <= 0;
+                const isSelected = selectedIndices.includes(idx);
+                const tierCardBg = getTierColorClass(mon.tier || 1);
+                const auraGymSelClass = mon.auraEffect || '';
+                const monImgSrc = mon.isShiny && mon.shinyImage ? mon.shinyImage : (mon.image || '');
 
-            teamGridHtml += `
-                <div onclick="${isFainted ? '' : `toggleGymTeamSelection(${idx})`}" class="${tierCardBg} ${auraGymSelClass} p-3 rounded-2xl border-2 ${isSelected ? 'border-amber-400 bg-amber-950/80 scale-105' : 'border-amber-900/60'} ${isFainted ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-amber-500'} flex flex-col justify-between h-36 transition-all text-white">
-                    <div class="flex justify-between items-center text-[10px] font-bold text-amber-300">
-                        <span>${mon.name}</span>
-                        <span>Nv.${mon.level || 1}</span>
+                teamGridHtml += `
+                    <div onclick="${isFainted ? '' : `toggleGymTeamSelection(${idx})`}" class="${tierCardBg} ${auraGymSelClass} p-3 rounded-2xl border-2 ${isSelected ? 'border-amber-400 bg-amber-950/80 scale-105' : 'border-amber-900/60'} ${isFainted ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-amber-500'} flex flex-col justify-between h-36 transition-all text-white">
+                        <div class="flex justify-between items-center text-[10px] font-bold text-amber-300">
+                            <span>${mon.name}</span>
+                            <span>Nv.${mon.level || 1}</span>
+                        </div>
+                        <div class="my-auto flex justify-center bg-black/40 rounded p-1">
+                            <img src="${monImgSrc}" class="w-14 h-14 object-contain">
+                        </div>
+                        <div class="text-[9px] text-center font-bold ${isFainted ? 'text-red-400' : 'text-emerald-400'}">
+                            ${isFainted ? 'DESMAIADO' : `HP: ${mon.currentHp !== undefined ? mon.currentHp : mon.maxHp}/${mon.maxHp}`}
+                        </div>
                     </div>
-                    <div class="my-auto flex justify-center bg-black/40 rounded p-1">
-                        <img src="${monImgSrc}" class="w-14 h-14 object-contain">
-                    </div>
-                    <div class="text-[9px] text-center font-bold ${isFainted ? 'text-red-400' : 'text-emerald-400'}">
-                        ${isFainted ? 'DESMAIADO' : `HP: ${mon.currentHp !== undefined ? mon.currentHp : mon.maxHp}/${mon.maxHp}`}
-                    </div>
-                </div>
-            `;
-        });
+                `;
+            });
+        }
 
         const canConfirm = selectedIndices.length === formatLimit;
 
@@ -1301,7 +1309,7 @@ function executeLockedGymBattleSequence() {
 // --- INTERAÇÃO ENTRE JOGADORES NA MESMA CASA ---
 
 function checkPlayerCellCollision(zoneId, movedPlayerIndex) {
-    if (!gameState.players || gameState.players.length <= 1) return;
+    if (!gameState.players || !Array.isArray(gameState.players) || gameState.players.length <= 1) return;
     const currentMover = gameState.players[movedPlayerIndex];
     
     const cooccupants = gameState.players.filter((p, idx) => idx !== movedPlayerIndex && p.currentZone === zoneId);
@@ -1367,7 +1375,7 @@ function openEncounterModalWithPokemon(pokemon) {
     const modal = document.getElementById('encounter-modal');
     if (!modal) return;
 
-    if (cp.activeTeam.length === 0) {
+    if (!cp.activeTeam || cp.activeTeam.length === 0) {
         showCustomPopup("Aviso", "🚫 Precisas de pelo menos um Pokémon na Equipa Ativa!");
         return;
     }
@@ -1394,7 +1402,7 @@ function openEncounterModalWithPokemon(pokemon) {
 function updateEncounterUIInfo() {
     const cp = getCurrentPlayer();
     const pokemon = currentEncounterState.wildPokemon;
-    const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex] || cp.activeTeam[0];
+    const activeMon = (cp.activeTeam && cp.activeTeam[currentEncounterState.selectedTeamMemberIndex]) || (cp.activeTeam ? cp.activeTeam[0] : null);
     if (!pokemon || !activeMon) return;
 
     const activeHp = activeMon.currentHp !== undefined ? activeMon.currentHp : (activeMon.maxHp || 20);
@@ -1484,7 +1492,7 @@ function updateEncounterUIInfo() {
 
 function cyclePlayerEncounterPokemon() {
     const cp = getCurrentPlayer();
-    if (cp.activeTeam.length <= 1) return;
+    if (!cp.activeTeam || cp.activeTeam.length <= 1) return;
     let startIndex = currentEncounterState.selectedTeamMemberIndex;
     let nextIndex = (startIndex + 1) % cp.activeTeam.length;
     
@@ -1505,15 +1513,17 @@ function renderEncounterItemsList() {
     if (!container) return;
     container.innerHTML = '';
 
-    cp.inventory.forEach((item, index) => {
-        if (!item || item.count <= 0) return;
-        const btn = document.createElement('button');
-        btn.className = "bg-blue-900/60 hover:bg-blue-800 text-blue-200 px-2.5 py-1 rounded-lg border border-blue-600 text-[10px] flex items-center gap-1.5 shadow cursor-pointer";
-        const itemImg = item.image ? `<img src="${item.image}" class="w-4 h-4 object-contain">` : `<span>${item.icon}</span>`;
-        btn.innerHTML = `${itemImg} <span>${item.name} (${item.count})</span>`;
-        btn.onclick = () => useItemInEncounter(item, index);
-        container.appendChild(btn);
-    });
+    if (cp.inventory) {
+        cp.inventory.forEach((item, index) => {
+            if (!item || item.count <= 0) return;
+            const btn = document.createElement('button');
+            btn.className = "bg-blue-900/60 hover:bg-blue-800 text-blue-200 px-2.5 py-1 rounded-lg border border-blue-600 text-[10px] flex items-center gap-1.5 shadow cursor-pointer";
+            const itemImg = item.image ? `<img src="${item.image}" class="w-4 h-4 object-contain">` : `<span>${item.icon}</span>`;
+            btn.innerHTML = `${itemImg} <span>${item.name} (${item.count})</span>`;
+            btn.onclick = () => useItemInEncounter(item, index);
+            container.appendChild(btn);
+        });
+    }
 }
 
 function useItemInEncounter(item, itemIndex) {
@@ -1814,6 +1824,9 @@ function handleDrop(e, targetArea, targetIndex) {
     try {
         const data = JSON.parse(dataRaw);
         if (!data.sourceArea) return;
+        if (!cp.activeTeam) cp.activeTeam = [];
+        if (!cp.pcBox) cp.pcBox = [];
+
         const sourceList = data.sourceArea === 'team' ? cp.activeTeam : cp.pcBox;
         const targetList = targetArea === 'team' ? cp.activeTeam : cp.pcBox;
         const movedMonster = sourceList[data.index];
@@ -1852,7 +1865,7 @@ function renderTeamCardSlots() {
         const slotContainer = document.getElementById(`trainer-card-slot-${i}`);
         if (!slotContainer) continue;
 
-        const monster = cp.activeTeam[i];
+        const monster = cp.activeTeam ? cp.activeTeam[i] : null;
         if (monster) {
             const activeImg = monster.isShiny && monster.shinyImage ? monster.shinyImage : monster.image;
             const visualContent = activeImg 
@@ -1908,34 +1921,36 @@ function renderBottomPanel() {
     container.innerHTML = '';
 
     if (gameState.currentBottomView === 'inventory') {
-        cp.inventory.forEach((item) => {
-            if (!item || item.count <= 0) return;
-            
-            const slot = document.createElement('div');
-            slot.className = 'flex flex-col justify-between p-2 border border-amber-700 bg-black/80 rounded-xl h-24 shadow cursor-pointer hover:border-amber-400 transition-all text-white relative';
-            slot.onclick = () => useInventoryItemMainScreen(item.id);
-            
-            const itemVisual = item.image 
-                ? `<img src="${item.image}" alt="${item.name}" class="w-10 h-10 object-contain drop-shadow" onerror="this.onerror=null; this.src='https://api.iconify.design/noto:package.svg'">`
-                : `<span class="text-2xl">${item.icon || '🎒'}</span>`;
+        if (cp.inventory) {
+            cp.inventory.forEach((item) => {
+                if (!item || item.count <= 0) return;
+                
+                const slot = document.createElement('div');
+                slot.className = 'flex flex-col justify-between p-2 border border-amber-700 bg-black/80 rounded-xl h-24 shadow cursor-pointer hover:border-amber-400 transition-all text-white relative';
+                slot.onclick = () => useInventoryItemMainScreen(item.id);
+                
+                const itemVisual = item.image 
+                    ? `<img src="${item.image}" alt="${item.name}" class="w-10 h-10 object-contain drop-shadow" onerror="this.onerror=null; this.src='https://api.iconify.design/noto:package.svg'">`
+                    : `<span class="text-2xl">${item.icon || '🎒'}</span>`;
 
-            slot.innerHTML = `
-                <div class="flex justify-between items-center text-[10px] font-bold">
-                    <span class="text-amber-300 truncate">${item.name}</span>
-                    <span class="bg-amber-600 text-black font-black text-[9px] px-1.5 py-0.2 rounded-full">Qtd: ${item.count}</span>
-                </div>
-                <div class="flex justify-center items-center my-auto">
-                    ${itemVisual}
-                </div>
-                <div class="text-[8px] text-slate-400 text-center truncate">
-                    ${item.desc || ''}
-                </div>
-            `;
-            container.appendChild(slot);
-        });
+                slot.innerHTML = `
+                    <div class="flex justify-between items-center text-[10px] font-bold">
+                        <span class="text-amber-300 truncate">${item.name}</span>
+                        <span class="bg-amber-600 text-black font-black text-[9px] px-1.5 py-0.2 rounded-full">Qtd: ${item.count}</span>
+                    </div>
+                    <div class="flex justify-center items-center my-auto">
+                        ${itemVisual}
+                    </div>
+                    <div class="text-[8px] text-slate-400 text-center truncate">
+                        ${item.desc || ''}
+                    </div>
+                `;
+                container.appendChild(slot);
+            });
+        }
     } else {
         for (let i = 0; i < 12; i++) {
-            const monster = cp.pcBox[i];
+            const monster = cp.pcBox ? cp.pcBox[i] : null;
             const slot = document.createElement('div');
             
             if (monster) {
@@ -1972,7 +1987,7 @@ function renderBottomPanel() {
 function passTurnToNextPlayer() {
     gymAttemptedThisTurn = {};
 
-    if (!gameState.players || gameState.players.length <= 1) {
+    if (!gameState.players || !Array.isArray(gameState.players) || gameState.players.length <= 1) {
         if (typeof movementState !== 'undefined') {
             movementState.hasRolledThisTurn = false;
             movementState.isMoving = false;
@@ -2020,7 +2035,7 @@ function checkAndRenderPassTurnButton() {
 
     if (btnContainer) {
         const cp = getCurrentPlayer();
-        const isSolo = (!gameState.players || gameState.players.length <= 1);
+        const isSolo = (!gameState.players || !Array.isArray(gameState.players) || gameState.players.length <= 1);
         const buttonText = isSolo ? `🎲 Rolar / Novo Turno` : `🔄 Passar Vez (${cp.name})`;
 
         btnContainer.innerHTML = `
@@ -2036,26 +2051,42 @@ function checkAndRenderPassTurnButton() {
     }
 }
 
+// CORREÇÃO PRINCIPAL DO ERRO DA CONSOLA (.forEach em undefined)
 function renderChatMessages() {
     const chatBox = document.getElementById('chat-messages-box');
-    if (!chatBox) return;
-    chatBox.innerHTML = '';
-    gameState.chatMessages.forEach(msg => {
-        const p = document.createElement('p');
-        p.className = "text-[9px] text-amber-300 my-0.5";
-        p.innerHTML = `<span class="font-bold text-amber-400">[${msg.sender}]:</span> ${msg.text}`;
-        chatBox.appendChild(p);
+    const lobbyChatBox = document.getElementById('lobby-chat-messages');
+    
+    const validMessages = (gameState && Array.isArray(gameState.chatMessages)) 
+        ? gameState.chatMessages 
+        : [{ sender: "Sistema", text: "Bem-vindo ao Pokémon Master Trainer HEX Edition!" }];
+
+    let htmlContent = '';
+    validMessages.forEach(msg => {
+        htmlContent += `<p class="text-[9px] text-amber-300 my-0.5"><span class="font-bold text-amber-400">[${msg.sender || 'Sistema'}]:</span> ${msg.text || ''}</p>`;
     });
-    chatBox.scrollTop = chatBox.scrollHeight;
+
+    if (chatBox) {
+        chatBox.innerHTML = htmlContent;
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+    
+    if (lobbyChatBox) {
+        lobbyChatBox.innerHTML = htmlContent;
+        lobbyChatBox.scrollTop = lobbyChatBox.scrollHeight;
+    }
 }
 
 function updatePlayerUI() {
     const cp = getCurrentPlayer();
-    document.getElementById('turn-counter').innerText = gameState.turn;
-    document.getElementById('gold-counter').innerText = cp.gold;
+    const turnEl = document.getElementById('turn-counter');
+    if (turnEl) turnEl.innerText = gameState.turn;
+
+    const goldEl = document.getElementById('gold-counter');
+    if (goldEl) goldEl.innerText = cp.gold;
     
     const badgeCount = Array.isArray(cp.badges) ? cp.badges.length : (typeof cp.badges === 'number' ? cp.badges : 0);
-    document.getElementById('badges-counter').innerText = `${badgeCount} / 6`;
+    const badgesEl = document.getElementById('badges-counter');
+    if (badgesEl) badgesEl.innerText = `${badgeCount} / 6`;
     
     const avatarImg = document.getElementById('trainer-avatar-img');
     if (avatarImg) {
@@ -2069,7 +2100,7 @@ function updatePlayerUI() {
     
     const loc = document.getElementById('current-location');
     if (loc) {
-        loc.innerText = gameState.players.length > 1 ? `Vez de: ${cp.name} | Local: Zona #${cp.currentZone || 5}` : `Local: Zona #${cp.currentZone || 5}`;
+        loc.innerText = (gameState.players && gameState.players.length > 1) ? `Vez de: ${cp.name} | Local: Zona #${cp.currentZone || 5}` : `Local: Zona #${cp.currentZone || 5}`;
     }
     checkAndRenderPassTurnButton();
 }
@@ -2352,8 +2383,8 @@ window.openPokedexDetailCard = function(monsterId) {
 function saveMonsterToVault(uniqueId) {
     const cp = getCurrentPlayer();
     
-    let monster = cp.activeTeam.find(m => m.uniqueId === uniqueId);
-    if (!monster) {
+    let monster = cp.activeTeam ? cp.activeTeam.find(m => m.uniqueId === uniqueId) : null;
+    if (!monster && cp.pcBox) {
         monster = cp.pcBox.find(m => m.uniqueId === uniqueId);
     }
     
@@ -2430,6 +2461,7 @@ function withdrawMonsterFromVault(vaultIndex) {
     if (!monToWithdraw) return;
 
     const cp = getCurrentPlayer();
+    if (!Array.isArray(cp.pcBox)) cp.pcBox = [];
     cp.pcBox.push(monToWithdraw);
 
     vault.splice(vaultIndex, 1);
@@ -2548,19 +2580,25 @@ function openTradeModal(playerAName, playerBName) {
         let monA = null;
         let monB = null;
 
-        if (tradeState.selectedMonIndexA !== null && pA.activeTeam[tradeState.selectedMonIndexA]) {
+        if (tradeState.selectedMonIndexA !== null && pA.activeTeam && pA.activeTeam[tradeState.selectedMonIndexA]) {
             monA = pA.activeTeam.splice(tradeState.selectedMonIndexA, 1)[0];
         }
 
-        if (tradeState.selectedMonIndexB !== null && pB.activeTeam[tradeState.selectedMonIndexB]) {
+        if (tradeState.selectedMonIndexB !== null && pB.activeTeam && pB.activeTeam[tradeState.selectedMonIndexB]) {
             monB = pB.activeTeam.splice(tradeState.selectedMonIndexB, 1)[0];
         }
 
         if (monA) {
+            if (!Array.isArray(pB.activeTeam)) pB.activeTeam = [];
+            if (!Array.isArray(pB.pcBox)) pB.pcBox = [];
+
             if (pB.activeTeam.length < 6) pB.activeTeam.push(monA);
             else pB.pcBox.push(monA);
         }
         if (monB) {
+            if (!Array.isArray(pA.activeTeam)) pA.activeTeam = [];
+            if (!Array.isArray(pA.pcBox)) pA.pcBox = [];
+
             if (pA.activeTeam.length < 6) pA.activeTeam.push(monB);
             else pA.pcBox.push(monB);
         }
@@ -2596,21 +2634,20 @@ window.handleAccountLoginOrRegister = function() {
     }
 
     currentAuthenticatedAccount = emailInput;
-
-    // Envia o pedido de autenticação via Socket.io para o servidor Node.js/Backend
     socket.emit('login_request', { email: emailInput, password: passInput });
 };
 
-// Resposta recebida do servidor backend
 socket.on('login_response', (response) => {
-    if (!response.success) {
-        showCustomPopup("Erro de Autenticação", response.message, false);
+    if (!response || !response.success) {
+        showCustomPopup("Erro de Autenticação", response ? response.message : "Erro desconhecido", false);
         return;
     }
 
     if (response.isNew) {
-        document.getElementById('auth-container').classList.add('hidden');
-        document.getElementById('character-creation-container').classList.remove('hidden');
+        const authContainer = document.getElementById('auth-container');
+        const charCreation = document.getElementById('character-creation-container');
+        if (authContainer) authContainer.classList.add('hidden');
+        if (charCreation) charCreation.classList.remove('hidden');
         showCustomPopup("Criar Personagem", "Conta autenticada com sucesso! Crie o seu personagem único.", true);
     } else {
         const accData = response.accountData;
@@ -2619,8 +2656,10 @@ socket.on('login_response', (response) => {
             boardPokemonCards = accData.boardPokemonCards || {};
         }
 
-        document.getElementById('auth-container').classList.add('hidden');
-        document.getElementById('main-game-layout').classList.remove('hidden');
+        const authContainer = document.getElementById('auth-container');
+        const mainLayout = document.getElementById('main-game-layout');
+        if (authContainer) authContainer.classList.add('hidden');
+        if (mainLayout) mainLayout.classList.remove('hidden');
 
         initGameEngine();
         if (typeof renderBoardMap === 'function') renderBoardMap();
@@ -2638,7 +2677,6 @@ window.finalizeCharacterCreation = function() {
         startMainGame();
     }
 
-    // Sincroniza a criação de personagem inicial com o backend
     socket.emit('save_game_state', {
         email: currentAuthenticatedAccount,
         gameState: gameState,
