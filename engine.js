@@ -1433,7 +1433,9 @@ window.buyItemFromMart = function(itemId, cost, requestedQuantity = 1) {
     if (Number(cp.gold) < totalCost) {
         showCustomPopup(
             "Sem Ouro",
-            `❌ Ouro insuficiente para comprar ${quantity} unidade(s).\n\nNecessário: ${totalCost} 🪙\nDisponível: ${Number(cp.gold) || 0} 🪙`,
+            `❌ Ouro insuficiente para comprar ${quantity} unidade(s).
+Necessário: ${totalCost} 🪙
+Disponível: ${Number(cp.gold) || 0} 🪙`,
             false
         );
         return;
@@ -2178,9 +2180,9 @@ function resolveCaptureAttempt() {
     const selectedBall = cp.inventory.find(
         item =>
             item &&
-            item.id === currentEncounterState.selectedCaptureBallId
+            item.id === currentEncounterState.selectedCaptureBallId &&
+            item.type === 'sphere'
     );
-
     if (!selectedBall || Number(selectedBall.count) < 0) {
         showCustomPopup(
             "Poké Ball inválida",
@@ -3843,14 +3845,15 @@ function withdrawMonsterFromVault(vaultIndex) {
         }
 
         if (typeof showPostLoginDashboard === 'function') {
-            showPostLoginDashboard();
+        showPostLoginDashboard();
+    } else {
+        const authContainer = document.getElementById('auth-container');
+        const characterCreation = document.getElementById('character-creation-container');
+        if (authContainer) authContainer.classList.add('hidden');
+        if (characterCreation) characterCreation.classList.add('hidden');
+        if (typeof launchGameSession === 'function') {
+            launchGameSession();
         }
-    }
-
-    const accountSocket = getSocket();
-
-    if (accountSocket && typeof accountSocket.on === 'function') {
-        accountSocket.on('login_response', handleLoginResponse);
     }
 
     // --- PAINEL PÓS-LOGIN ---
