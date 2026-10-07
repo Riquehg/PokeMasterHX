@@ -3,33 +3,21 @@
 if (typeof SUPABASE_STORAGE_URL === 'undefined') {
     var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
 }
+var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
 
+// 1. Inicializar a conexão Socket.io com o servidor backend na nuvem (Render)
 const socket = io('https://pokemasterhx.onrender.com');
 
+// Variável global de autenticação declarada apenas uma vez no início
 let currentAuthenticatedAccount = null;
 
+// Ouvir sincronizações de outros jogadores em tempo real
 socket.on('sync_game_state', (remoteData) => {
-    if (!remoteData || typeof remoteData !== 'object') return;
-
-    if (remoteData.gameState && typeof remoteData.gameState === 'object') {
-        gameState = remoteData.gameState;
-        ensureValidGameState();
-    }
-
-    if (
-        remoteData.boardPokemonCards &&
-        typeof remoteData.boardPokemonCards === 'object'
-    ) {
-        boardPokemonCards = remoteData.boardPokemonCards;
-    }
-
-    if (typeof initGameEngine === 'function') {
-        initGameEngine();
-    }
-
-    if (typeof renderBoardMap === 'function') {
-        renderBoardMap();
-    }
+    if (!remoteData) return;
+    gameState = remoteData.gameState || gameState;
+    boardPokemonCards = remoteData.boardPokemonCards || boardPokemonCards;
+    if (typeof initGameEngine === 'function') initGameEngine();
+    if (typeof renderBoardMap === 'function') renderBoardMap();
 });
 
 let gameState = {
@@ -39,17 +27,15 @@ let gameState = {
     turn: 1,
     currentEncounter: null,
     chatMessages: [
-        {
-            sender: "Sistema",
-            text: "Bem-vindo ao Pokémon Master Trainer HEX Edition!"
-        }
+        { sender: "Sistema", text: "Bem-vindo ao Pokémon Master Trainer HEX Edition!" }
     ],
     currentBottomView: 'inventory',
     pcBoxCurrentPage: 0
 };
 
+// --- VARIÁVEIS DE CONFIGURAÇÃO DA TELA INICIAL ---
 let setupConfig = {
-    mode: 'solo',
+    mode: 'solo', // 'solo' ou 'local_multi'
     playersCount: 1,
     avatarId: 1,
     starterId: 'bulbasaur',
@@ -62,7 +48,6 @@ let setupWizardState = {
 };
 
 let boardPokemonCards = {};
-
 let currentEncounterState = {
     wildPokemon: null,
     selectedTeamMemberIndex: 0,
@@ -71,735 +56,270 @@ let currentEncounterState = {
     hasAttemptedCapture: false
 };
 
+// Variável temporária para armazenar a aura da Poké Ball selecionada no turno atual
 let selectedBallAura = null;
 
-function createDefaultPlayer(name = "Ash Ketchum") {
-    return {
-        name,
-        avatarId: 1,
-        currentZone: 5,
-        level: 1,
-        gold: 350,
-        badges: [],
-        activeTeam: [],
-        pcBox: [],
-        inventory: [],
-        equipmentSlots: [null, null]
-    };
-}
-
+// Fallback preventivo de estado válido para evitar travamentos ao limpar o navegador
 function ensureValidGameState() {
-    if (!gameState || typeof gameState !== 'object') {
-        gameState = {};
+    if (!gameState || !Array.isArray(gameState.players) || gameState.players.length === 0) {
+        gameState = {
+            setupDone: false,
+            players: [{
+                name: "Ash Ketchum",
+                avatarId: 1,
+                currentZone: 5,
+                level: 1,
+                gold: 350,
+                badges: [],
+                activeTeam: [],
+                pcBox: [],
+                inventory: [],
+                equipmentSlots: [null, null]
+            }],
+            currentPlayerIndex: 0,
+            turn: 1,
+            currentBottomView: 'inventory',
+            pcBoxCurrentPage: 0
+        };
     }
-
-    if (!Array.isArray(gameState.players)) {
-        gameState.players = [];
-    }
-
-    if (gameState.players.length === 0) {
-        gameState.players.push(createDefaultPlayer());
-    }
-
-    gameState.players = gameState.players.map((player) => {
-        const safePlayer = player && typeof player === 'object'
-            ? player
-            : createDefaultPlayer();
-
-        if (!safePlayer.name) safePlayer.name = "Treinador";
-        if (!Number.isFinite(Number(safePlayer.avatarId))) safePlayer.avatarId = 1;
-        if (!Number.isFinite(Number(safePlayer.currentZone))) safePlayer.currentZone = 5;
-        if (!Number.isFinite(Number(safePlayer.level))) safePlayer.level = 1;
-        if (!Number.isFinite(Number(safePlayer.gold))) safePlayer.gold = 350;
-
-        if (!Array.isArray(safePlayer.badges)) safePlayer.badges = [];
-        if (!Array.isArray(safePlayer.activeTeam)) safePlayer.activeTeam = [];
-        if (!Array.isArray(safePlayer.pcBox)) safePlayer.pcBox = [];
-        if (!Array.isArray(safePlayer.inventory)) safePlayer.inventory = [];
-        if (!Array.isArray(safePlayer.equipmentSlots)) {
-            safePlayer.equipmentSlots = [null, null];
-        }
-
-        while (safePlayer.equipmentSlots.length < 2) {
-            safePlayer.equipmentSlots.push(null);
-        }
-
-        if (safePlayer.equipmentSlots.length > 2) {
-            safePlayer.equipmentSlots = safePlayer.equipmentSlots.slice(0, 2);
-        }
-
-        safePlayer.activeTeam = safePlayer.activeTeam
-            .filter(monster => monster && typeof monster === 'object')
-            .map(normalizeMonsterData);
-
-        safePlayer.pcBox = safePlayer.pcBox
-            .filter(monster => monster && typeof monster === 'object')
-            .map(normalizeMonsterData);
-
-        safePlayer.inventory = safePlayer.inventory
-            .filter(item => item && typeof item === 'object')
-            .map(normalizeInventoryItem);
-
-        return safePlayer;
-    });
-
-    if (!Number.isFinite(Number(gameState.currentPlayerIndex))) {
-        gameState.currentPlayerIndex = 0;
-    }
-
-    gameState.currentPlayerIndex = Math.max(
-        0,
-        Math.min(
-            Math.floor(Number(gameState.currentPlayerIndex)),
-            gameState.players.length - 1
-        )
-    );
-
-    if (!Number.isFinite(Number(gameState.turn)) || Number(gameState.turn) < 1) {
-        gameState.turn = 1;
-    }
-
-    gameState.turn = Math.floor(Number(gameState.turn));
-
-    if (!gameState.currentBottomView) {
-        gameState.currentBottomView = 'inventory';
-    }
-
-    if (!Number.isFinite(Number(gameState.pcBoxCurrentPage))) {
-        gameState.pcBoxCurrentPage = 0;
-    }
-
-    if (!Array.isArray(gameState.chatMessages)) {
-        gameState.chatMessages = [
-            {
-                sender: "Sistema",
-                text: "Bem-vindo ao Pokémon Master Trainer HEX Edition!"
-            }
-        ];
-    }
-
-    if (typeof gameState.setupDone !== 'boolean') {
-        gameState.setupDone = true;
-    }
-
-    return gameState;
 }
 
-function normalizeMonsterData(monster) {
-    const normalized = { ...monster };
-
-    if (!normalized.name && normalized.id) {
-        normalized.name = String(normalized.id)
-            .replace(/[_-]/g, ' ')
-            .replace(/\b\w/g, letter => letter.toUpperCase());
-    }
-
-    if (!normalized.name) normalized.name = 'Anima';
-    if (!normalized.id) normalized.id = normalized.name.toLowerCase().replace(/\s+/g, '_');
-
-    normalized.level = Number.isFinite(Number(normalized.level))
-        ? Math.max(1, Number(normalized.level))
-        : 1;
-
-    normalized.xp = Number.isFinite(Number(normalized.xp))
-        ? Math.max(0, Number(normalized.xp))
-        : 0;
-
-    normalized.str = Number.isFinite(Number(normalized.str))
-        ? Math.max(0, Number(normalized.str))
-        : 4;
-
-    const baseHp = Number(
-        normalized.maxHp ||
-        normalized.hp ||
-        20
-    );
-
-    normalized.maxHp = Number.isFinite(baseHp) && baseHp > 0
-        ? baseHp
-        : 20;
-
-    normalized.currentHp = normalized.currentHp === undefined
-        ? normalized.maxHp
-        : Math.max(
-            0,
-            Math.min(
-                Number(normalized.currentHp) || 0,
-                normalized.maxHp
-            )
-        );
-
-    if (!normalized.uniqueId) {
-        normalized.uniqueId = `mon_${Date.now()}_${Math.random()
-            .toString(36)
-            .slice(2, 8)}`;
-    }
-
-    normalized.isShiny = Boolean(normalized.isShiny);
-
-    return normalized;
-}
-
-function normalizeInventoryItem(item) {
-    const normalized = { ...item };
-
-    if (!normalized.id) {
-        normalized.id = `item_${Date.now()}_${Math.random()
-            .toString(36)
-            .slice(2, 8)}`;
-    }
-
-    normalized.name = normalized.name || normalized.id;
-    normalized.count = Number.isFinite(Number(normalized.count))
-        ? Math.max(0, Math.floor(Number(normalized.count)))
-        : 1;
-
-    if (!normalized.type) normalized.type = 'common';
-    if (!Number.isFinite(Number(normalized.value))) normalized.value = 0;
-
-    return normalized;
-}
-
+// Atalho rápido para obter o jogador atual da vez com segurança absoluta
 function getCurrentPlayer() {
     ensureValidGameState();
-
-    const index = Math.max(
-        0,
-        Math.min(
-            Math.floor(Number(gameState.currentPlayerIndex) || 0),
-            gameState.players.length - 1
-        )
-    );
-
-    gameState.currentPlayerIndex = index;
-
-    return gameState.players[index] || gameState.players[0];
+    const idx = gameState.currentPlayerIndex || 0;
+    return gameState.players[idx] || gameState.players[0];
 }
 
-function createSaveSnapshot() {
-    ensureValidGameState();
-
-    return {
-        gameState: JSON.parse(JSON.stringify(gameState)),
-        boardPokemonCards: JSON.parse(JSON.stringify(boardPokemonCards || {})),
-        timestamp: new Date().toISOString()
-    };
-}
+// --- SISTEMA DE SAVE, LOAD E EXPORT/IMPORT ---
 
 function saveGameProgress() {
     try {
         const cp = getCurrentPlayer();
-        const saveData = createSaveSnapshot();
-
-        localStorage.setItem(
-            'pokemon_master_trainer_save',
-            JSON.stringify(saveData)
-        );
+        const saveData = {
+            gameState: gameState,
+            boardPokemonCards: boardPokemonCards,
+            timestamp: new Date().toISOString()
+        };
+        localStorage.setItem('pokemon_master_trainer_save', JSON.stringify(saveData));
 
         if (currentAuthenticatedAccount) {
             socket.emit('save_game_state', {
                 email: currentAuthenticatedAccount,
                 trainerName: cp ? cp.name : "Treinador",
-                gameState: saveData.gameState,
-                boardPokemonCards: saveData.boardPokemonCards
+                gameState: gameState,
+                boardPokemonCards: boardPokemonCards
             });
         }
 
-        showCustomPopup(
-            "💾 Jogo Salvo",
-            "O progresso da aventura foi guardado com sucesso na nuvem do Supabase!",
-            true
-        );
-
-        appendAdventureLog(
-            "Progresso do jogo salvo com sucesso na nuvem."
-        );
+        showCustomPopup("💾 Jogo Salvo", "O progresso da aventura foi guardado com sucesso na nuvem do Supabase!", true);
+        appendAdventureLog("Progresso do jogo salvo com sucesso na nuvem.");
     } catch (error) {
-        console.error('Erro ao salvar o jogo:', error);
-
-        showCustomPopup(
-            "Erro ao Salvar",
-            "❌ Não foi possível guardar o jogo.",
-            false
-        );
+        showCustomPopup("Erro ao Salvar", "❌ Não foi possível guardar o jogo.", false);
     }
-}
-
-function applyLoadedSave(saveData) {
-    if (!saveData || typeof saveData !== 'object') {
-        throw new Error('Save inválido.');
-    }
-
-    if (!saveData.gameState || typeof saveData.gameState !== 'object') {
-        throw new Error('Estado de jogo ausente.');
-    }
-
-    gameState = saveData.gameState;
-
-    boardPokemonCards =
-        saveData.boardPokemonCards &&
-        typeof saveData.boardPokemonCards === 'object'
-            ? saveData.boardPokemonCards
-            : {};
-
-    ensureValidGameState();
-}
-
-function showMainGameLayout() {
-    const setupScreen = document.getElementById('setup-screen');
-    const mainGameLayout = document.getElementById('main-game-layout');
-    const postLoginDashboard = document.getElementById('post-login-dashboard');
-
-    if (setupScreen) setupScreen.classList.add('hidden');
-    if (postLoginDashboard) postLoginDashboard.classList.add('hidden');
-    if (mainGameLayout) mainGameLayout.classList.remove('hidden');
 }
 
 function loadGameProgress() {
     try {
-        const savedRaw = localStorage.getItem(
-            'pokemon_master_trainer_save'
-        );
-
+        const savedRaw = localStorage.getItem('pokemon_master_trainer_save');
         if (!savedRaw) {
-            showCustomPopup(
-                "Sem Save",
-                "⚠ Não foi encontrado nenhum jogo guardado neste navegador.",
-                false
-            );
-
+            showCustomPopup("Sem Save", "⚠ Não foi encontrado nenhum jogo guardado neste navegador.", false);
             return false;
         }
 
         const saveData = JSON.parse(savedRaw);
-        applyLoadedSave(saveData);
-        showMainGameLayout();
+        gameState = saveData.gameState || gameState;
+        boardPokemonCards = saveData.boardPokemonCards || {};
+
+        ensureValidGameState();
+
+        const setupScreen = document.getElementById('setup-screen');
+        const mainGameLayout = document.getElementById('main-game-layout');
+        const postLoginDashboard = document.getElementById('post-login-dashboard');
+
+        if (setupScreen) setupScreen.classList.add('hidden');
+        if (postLoginDashboard) postLoginDashboard.classList.add('hidden');
+        if (mainGameLayout) mainGameLayout.classList.remove('hidden');
 
         initGameEngine();
-
-        if (typeof renderBoardMap === 'function') {
-            renderBoardMap();
-        }
-
-        showCustomPopup(
-            "📂 Jogo Carregado",
-            "Bem-vindo de volta à jornada!",
-            true
-        );
-
-        appendAdventureLog(
-            "Jogo anterior carregado com sucesso."
-        );
-
+        if (typeof renderBoardMap === 'function') renderBoardMap();
+        showCustomPopup("📂 Jogo Carregado", "Bem-vindo de volta à jornada!", true);
+        appendAdventureLog("Jogo anterior carregado com sucesso.");
         return true;
     } catch (error) {
-        console.error('Erro ao carregar o jogo:', error);
-
-        showCustomPopup(
-            "Erro ao Carregar",
-            "❌ O ficheiro de save está corrompido ou incompatível.",
-            false
-        );
-
+        showCustomPopup("Erro ao Carregar", "❌ O ficheiro de save está corrompido ou incompatível.", false);
         return false;
     }
 }
 
 function deleteGameSave() {
-    if (!confirm(
-        "⚠️ Tem a certeza absoluta de que deseja apagar o seu progresso guardado?"
-    )) {
-        return;
+    if (confirm("⚠️ Tem a certeza absoluta de que deseja apagar o seu progresso guardado?")) {
+        localStorage.removeItem('pokemon_master_trainer_save');
+        showCustomPopup("🗑 Save Apagado", "O progresso guardado foi eliminado com sucesso.", true);
+        appendAdventureLog("Progresso do jogo foi apagado.");
     }
-
-    localStorage.removeItem('pokemon_master_trainer_save');
-
-    showCustomPopup(
-        "🗑 Save Apagado",
-        "O progresso do jogo foi eliminado deste navegador.",
-        true
-    );
-
-    appendAdventureLog(
-        "Progresso local do jogo foi apagado."
-    );
 }
 
 function exportSaveToFile() {
-    const player = getCurrentPlayer();
-    const saveData = createSaveSnapshot();
-
-    saveData.exportDate = new Date().toISOString();
-
-    const trainerName = String(
-        player?.name || 'treinador'
-    )
-        .replace(/[^\wÀ-ÿ -]/g, '')
-        .trim()
-        .replace(/\s+/g, '_') || 'treinador';
-
-    const dataStr =
-        "data:application/json;charset=utf-8," +
-        encodeURIComponent(JSON.stringify(saveData, null, 2));
-
+    const p = getCurrentPlayer();
+    const saveData = {
+        gameState: gameState,
+        boardPokemonCards: boardPokemonCards,
+        exportDate: new Date().toLocaleString()
+    };
+    
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(saveData, null, 2));
     const downloadAnchor = document.createElement('a');
-
-    downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute(
-        'download',
-        `pokemon_trainer_save_${trainerName}.json`
-    );
-
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `pokemon_trainer_save_${p.name.replace(/\s+/g, '_')}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
-
-    showCustomPopup(
-        "💾 Backup Exportado",
-        "O ficheiro de save foi descarregado com sucesso!",
-        true
-    );
+    
+    showCustomPopup("💾 Backup Exportado", "O ficheiro de save (.json) foi descarregado com sucesso!", true);
 }
 
 function importSaveFromFile(event) {
-    const file = event?.target?.files?.[0];
-
+    const file = event.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
-
-    reader.onload = function(loadEvent) {
+    reader.onload = function(e) {
         try {
-            const saveData = JSON.parse(loadEvent.target.result);
+            const saveData = JSON.parse(e.target.result);
+            if (!saveData.gameState) throw new Error("Formato inválido");
 
-            applyLoadedSave(saveData);
+            gameState = saveData.gameState;
+            boardPokemonCards = saveData.boardPokemonCards || {};
+            ensureValidGameState();
 
-            localStorage.setItem(
-                'pokemon_master_trainer_save',
-                JSON.stringify(createSaveSnapshot())
-            );
+            localStorage.setItem('pokemon_master_trainer_save', JSON.stringify(saveData));
 
-            showMainGameLayout();
+            const setupScreen = document.getElementById('setup-screen');
+            const mainGameLayout = document.getElementById('main-game-layout');
+            const postLoginDashboard = document.getElementById('post-login-dashboard');
+
+            if (setupScreen) setupScreen.classList.add('hidden');
+            if (postLoginDashboard) postLoginDashboard.classList.add('hidden');
+            if (mainGameLayout) mainGameLayout.classList.remove('hidden');
+
             initGameEngine();
-
-            if (typeof renderBoardMap === 'function') {
-                renderBoardMap();
-            }
-
-            showCustomPopup(
-                "📂 Backup Carregado",
-                "O jogo foi importado com sucesso!",
-                true
-            );
-
-            appendAdventureLog(
-                "Save importado via ficheiro externo."
-            );
-        } catch (error) {
-            console.error('Erro ao importar save:', error);
-
-            showCustomPopup(
-                "Erro de Importação",
-                "❌ O ficheiro selecionado não é um save válido.",
-                false
-            );
-        } finally {
-            if (event?.target) {
-                event.target.value = '';
-            }
+            if (typeof renderBoardMap === 'function') renderBoardMap();
+            showCustomPopup("📂 Backup Carregado", "O jogo foi importado com sucesso!", true);
+            appendAdventureLog("Save importado via ficheiro externo.");
+        } catch (err) {
+            showCustomPopup("Erro de Importação", "❌ O ficheiro selecionado não é um save válido.", false);
         }
     };
-
-    reader.onerror = function() {
-        showCustomPopup(
-            "Erro de Importação",
-            "❌ Não foi possível ler o arquivo selecionado.",
-            false
-        );
-    };
-
     reader.readAsText(file);
 }
 
 window.logoutToSetupScreen = function() {
-    if (!confirm(
-        "⚠ Deseja realmente sair da sessão atual? Certifique-se de que salvou o seu progresso!"
-    )) {
-        return;
+    if (confirm("⚠ Deseja realmente sair da sessão atual? Certifique-se de que salvou o seu progresso!")) {
+        const mainLayout = document.getElementById('main-game-layout');
+        if (mainLayout) mainLayout.classList.add('hidden');
+
+        const setupScreen = document.getElementById('setup-screen');
+        if (setupScreen) setupScreen.classList.remove('hidden');
+
+        const authContainer = document.getElementById('auth-container');
+        const onlineLobby = document.getElementById('online-lobby-container');
+        const postLoginDashboard = document.getElementById('post-login-dashboard');
+        
+        if (authContainer) authContainer.classList.remove('hidden');
+        if (onlineLobby) onlineLobby.classList.add('hidden');
+        if (postLoginDashboard) postLoginDashboard.classList.add('hidden');
     }
-
-    const mainLayout = document.getElementById('main-game-layout');
-    const setupScreen = document.getElementById('setup-screen');
-    const authContainer = document.getElementById('auth-container');
-    const onlineLobby = document.getElementById('online-lobby-container');
-    const postLoginDashboard = document.getElementById('post-login-dashboard');
-    const trainerMainMenu = document.getElementById('trainer-main-menu');
-    const characterCreation = document.getElementById(
-        'character-creation-container'
-    );
-
-    if (mainLayout) mainLayout.classList.add('hidden');
-    if (setupScreen) setupScreen.classList.remove('hidden');
-    if (authContainer) authContainer.classList.remove('hidden');
-    if (onlineLobby) onlineLobby.classList.add('hidden');
-    if (postLoginDashboard) postLoginDashboard.classList.add('hidden');
-    if (trainerMainMenu) trainerMainMenu.classList.add('hidden');
-    if (characterCreation) characterCreation.classList.add('hidden');
-
-    currentAuthenticatedAccount = null;
-
-    if (typeof movementState !== 'undefined') {
-        movementState.isMoving = false;
-        movementState.hasRolledThisTurn = false;
-        movementState.diceRolledValue = 0;
-        movementState.validDestinations = [];
-    }
-
-    currentEncounterState = {
-        wildPokemon: null,
-        selectedTeamMemberIndex: 0,
-        itemBonus: 0,
-        battlePowerBonus: 0,
-        hasAttemptedCapture: false
-    };
-
-    selectedBallAura = null;
 };
 
 // --- TABELA DE VANTAGENS DE TIPO (HEX Edition TCG) ---
-
 const TYPE_ADVANTAGES = {
-    "Fogo": {
-        strongAgainst: ["Grama", "Inseto", "Gelo", "Aço"],
-        weakAgainst: ["Água", "Fogo", "Pedra", "Dragão"]
-    },
-    "Água": {
-        strongAgainst: ["Fogo", "Terra", "Pedra"],
-        weakAgainst: ["Água", "Grama", "Dragão"]
-    },
-    "Grama": {
-        strongAgainst: ["Água", "Terra", "Pedra"],
-        weakAgainst: [
-            "Fogo",
-            "Grama",
-            "Veneno",
-            "Voador",
-            "Inseto",
-            "Dragão",
-            "Aço"
-        ]
-    },
-    "Elétrico": {
-        strongAgainst: ["Água", "Voador"],
-        weakAgainst: ["Elétrico", "Grama", "Dragão"]
-    },
-    "Psíquico": {
-        strongAgainst: ["Lutador", "Veneno"],
-        weakAgainst: ["Psíquico", "Aço"]
-    },
-    "Lutador": {
-        strongAgainst: [
-            "Normal",
-            "Gelo",
-            "Pedra",
-            "Sombrio",
-            "Aço"
-        ],
-        weakAgainst: [
-            "Veneno",
-            "Voador",
-            "Psíquico",
-            "Inseto"
-        ]
-    }
+    "Fogo": { strongAgainst: ["Grama", "Inseto", "Gelo", "Aço"], weakAgainst: ["Água", "Fogo", "Pedra", "Dragão"] },
+    "Água": { strongAgainst: ["Fogo", "Terra", "Pedra"], weakAgainst: ["Água", "Grama", "Dragão"] },
+    "Grama": { strongAgainst: ["Água", "Terra", "Pedra"], weakAgainst: ["Fogo", "Grama", "Veneno", "Voador", "Inseto", "Dragão", "Aço"] },
+    "Elétrico": { strongAgainst: ["Água", "Voador"], weakAgainst: ["Elétrico", "Grama", "Dragão"] },
+    "Psíquico": { strongAgainst: ["Lutador", "Veneno"], weakAgainst: ["Psíquico", "Aço"] },
+    "Lutador": { strongAgainst: ["Normal", "Gelo", "Pedra", "Sombrio", "Aço"], weakAgainst: ["Veneno", "Voador", "Psíquico", "Inseto"] }
 };
 
 function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
-    if (!attackerType || !defenderType) {
-        return 1.0;
+    if (!attackerType || !defenderType) return 1.0;
+    const cleanAtk = attackerType.split('/')[0].trim();
+    const cleanDef = defenderType.split('/')[0].trim();
+
+    const adv = TYPE_ADVANTAGES[cleanAtk];
+    if (adv) {
+        if (adv.strongAgainst && adv.strongAgainst.includes(cleanDef)) return 1.3; 
+        if (adv.weakAgainst && adv.weakAgainst.includes(cleanDef)) return 0.8;      
     }
-
-    const cleanAtk = String(attackerType)
-        .split('/')[0]
-        .trim();
-
-    const cleanDef = String(defenderType)
-        .split('/')[0]
-        .trim();
-
-    const advantage = TYPE_ADVANTAGES[cleanAtk];
-
-    if (!advantage) {
-        return 1.0;
-    }
-
-    if (
-        Array.isArray(advantage.strongAgainst) &&
-        advantage.strongAgainst.includes(cleanDef)
-    ) {
-        return 1.3;
-    }
-
-    if (
-        Array.isArray(advantage.weakAgainst) &&
-        advantage.weakAgainst.includes(cleanDef)
-    ) {
-        return 0.8;
-    }
-
     return 1.0;
 }
 
 function getTierColorClass(tierOrColor) {
-    const value = String(tierOrColor).toLowerCase();
-
-    if (value === '1' || value === 'rosa') {
-        return 'bg-gradient-to-b from-pink-950 via-pink-900 to-black border-pink-500';
-    }
-
-    if (value === '2' || value === 'verde') {
-        return 'bg-gradient-to-b from-emerald-950 via-emerald-900 to-black border-emerald-500';
-    }
-
-    if (value === '3' || value === 'azul') {
-        return 'bg-gradient-to-b from-blue-950 via-blue-900 to-black border-blue-500';
-    }
-
-    if (value === '4' || value === 'vermelho') {
-        return 'bg-gradient-to-b from-red-950 via-red-900 to-black border-red-500';
-    }
-
-    if (value === '5' || value === 'amarelo') {
-        return 'bg-gradient-to-b from-amber-950 via-amber-900 to-black border-amber-400';
-    }
-
+    const val = String(tierOrColor).toLowerCase();
+    if (val === '1' || val === 'rosa') return 'bg-gradient-to-b from-pink-950 via-pink-900 to-black border-pink-500';
+    if (val === '2' || val === 'verde') return 'bg-gradient-to-b from-emerald-950 via-emerald-900 to-black border-emerald-500';
+    if (val === '3' || val === 'azul') return 'bg-gradient-to-b from-blue-950 via-blue-900 to-black border-blue-500';
+    if (val === '4' || val === 'vermelho') return 'bg-gradient-to-b from-red-950 via-red-900 to-black border-red-500';
+    if (val === '5' || val === 'amarelo') return 'bg-gradient-to-b from-amber-950 via-amber-900 to-black border-amber-400';
     return 'bg-gradient-to-b from-amber-950 via-amber-900 to-black border-amber-600';
 }
 
 function updateTrainerCardBadges(cp) {
-    if (!cp || typeof cp !== 'object') return;
-
-    const badgesArray = Array.isArray(cp.badges)
-        ? cp.badges
-        : [];
-
-    const allBadges = [
-        'boulder',
-        'cascade',
-        'thunder',
-        'rainbow',
-        'soul',
-        'volcano'
-    ];
-
+    const badgesArray = cp.badges || [];
+    const allBadges = ['boulder', 'cascade', 'thunder', 'rainbow', 'soul', 'volcano'];
+    
     allBadges.forEach(badgeKey => {
-        const imageElement = document.getElementById(
-            `badge-${badgeKey}`
-        );
-
-        if (!imageElement) return;
-
-        if (badgesArray.includes(badgeKey)) {
-            imageElement.classList.remove(
-                'grayscale',
-                'opacity-40'
-            );
-
-            imageElement.classList.add(
-                'drop-shadow-[0_0_8px_rgba(255,215,0,0.8)]',
-                'scale-110'
-            );
-        } else {
-            imageElement.classList.add(
-                'grayscale',
-                'opacity-40'
-            );
-
-            imageElement.classList.remove(
-                'drop-shadow-[0_0_8px_rgba(255,215,0,0.8)]',
-                'scale-110'
-            );
+        const imgEl = document.getElementById(`badge-${badgeKey}`);
+        if (imgEl) {
+            if (badgesArray.includes(badgeKey)) {
+                imgEl.classList.remove('grayscale', 'opacity-40');
+                imgEl.classList.add('drop-shadow-[0_0_8px_rgba(255,215,0,0.8)]', 'scale-110');
+            } else {
+                imgEl.classList.add('grayscale', 'opacity-40');
+                imgEl.classList.remove('drop-shadow-[0_0_8px_rgba(255,215,0,0.8)]', 'scale-110');
+            }
         }
     });
 }
 
 window.openSpecificTrainerCardModal = function(playerIndex) {
-    ensureValidGameState();
-
-    const safeIndex = Math.max(
-        0,
-        Math.min(
-            Math.floor(Number(playerIndex) || 0),
-            gameState.players.length - 1
-        )
-    );
-
-    const cp = gameState.players[safeIndex] || gameState.players[0];
+    const cp = gameState.players[playerIndex] || gameState.players[0];
     const loggedPlayer = getCurrentPlayer();
+    
+    const areOnSameTile = (loggedPlayer.currentZone === cp.currentZone) && (loggedPlayer.name !== cp.name);
 
-    if (!cp) return;
-
-    const areOnSameTile =
-        loggedPlayer &&
-        loggedPlayer.currentZone === cp.currentZone &&
-        loggedPlayer.name !== cp.name;
-
-    let cardModal = document.getElementById(
-        'trainer-card-modal-full'
-    );
-
+    let cardModal = document.getElementById('trainer-card-modal-full');
     if (!cardModal) {
         cardModal = document.createElement('div');
         cardModal.id = 'trainer-card-modal-full';
-        cardModal.className =
-            'fixed inset-0 bg-black/85 z-[350] flex items-center justify-center p-4 backdrop-blur-sm';
-
+        cardModal.className = 'fixed inset-0 bg-black/85 z-[350] flex items-center justify-center p-4 backdrop-blur-sm';
         document.body.appendChild(cardModal);
     }
 
-    const activeTeam = Array.isArray(cp.activeTeam)
-        ? cp.activeTeam
-        : [];
-
     let teamSlotsHtml = '';
-
     for (let i = 0; i < 6; i++) {
-        const monster = activeTeam[i];
-
-        if (monster) {
-            const normalizedMonster = normalizeMonsterData(monster);
-            const curHp = normalizedMonster.currentHp;
-            const maxHp = normalizedMonster.maxHp;
-
-            const shinyBadgeModal = normalizedMonster.isShiny
-                ? '<span class="bg-amber-400 text-black font-black text-[7px] px-1 rounded-full animate-pulse">✨ SHINY</span>'
-                : '';
-
-            const tierColorBg = getTierColorClass(
-                normalizedMonster.tier || 1
-            );
-
-            const auraClassModal =
-                normalizedMonster.auraEffect || '';
-
-            const monImgSrc =
-                normalizedMonster.isShiny &&
-                normalizedMonster.shinyImage
-                    ? normalizedMonster.shinyImage
-                    : normalizedMonster.image || '';
-
+        let mon = cp.activeTeam[i];
+        if (mon) {
+            let curHp = mon.currentHp !== undefined ? mon.currentHp : (mon.maxHp || 20);
+            let maxHp = mon.maxHp || mon.hp || 20;
+            const shinyBadgeModal = mon.isShiny ? '<span class="bg-amber-400 text-black font-black text-[7px] px-1 rounded-full animate-pulse">✨ SHINY</span>' : '';
+            const tierColorBg = getTierColorClass(mon.tier || 1);
+            const auraClassModal = mon.auraEffect || '';
+            const monImgSrc = mon.isShiny && mon.shinyImage ? mon.shinyImage : (mon.image || '');
+            
             teamSlotsHtml += `
-                <div class="${tierColorBg} border-2 ${normalizedMonster.isShiny ? 'border-amber-400 shiny-card-glow' : ''} ${auraClassModal} rounded-xl p-2 flex flex-col justify-between h-28 text-white shadow relative">
+                <div class="${tierColorBg} border-2 ${mon.isShiny ? 'border-amber-400 shiny-card-glow' : ''} ${auraClassModal} rounded-xl p-2 flex flex-col justify-between h-28 text-white shadow relative">
                     <div class="flex justify-between items-center text-[9px] font-bold">
-                        <span class="truncate">${normalizedMonster.name}</span>
+                        <span class="truncate">${mon.name}</span>
                         ${shinyBadgeModal}
-                        <span>Nv.${normalizedMonster.level}</span>
+                        <span>Nv.${mon.level || 1}</span>
                     </div>
                     <div class="my-auto flex justify-center bg-black/40 rounded-lg p-1">
                         <img src="${monImgSrc}" class="w-10 h-10 object-contain drop-shadow" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                     </div>
                     <div class="text-[8px] text-center font-black bg-black/60 text-amber-300 rounded p-0.5">
-                        HP: ${curHp}/${maxHp} | STR: ${normalizedMonster.str}
+                        HP: ${curHp}/${maxHp} | STR: ${mon.str || 4}
                     </div>
                 </div>
             `;
@@ -812,14 +332,8 @@ window.openSpecificTrainerCardModal = function(playerIndex) {
         }
     }
 
-    const badgeCount = Array.isArray(cp.badges)
-        ? cp.badges.length
-        : 0;
-
-    const badgesArray = Array.isArray(cp.badges)
-        ? cp.badges
-        : [];
-
+    const badgeCount = Array.isArray(cp.badges) ? cp.badges.length : (typeof cp.badges === 'number' ? cp.badges : 0);
+    const badgesArray = cp.badges || [];
     const allBadgesDef = [
         { key: 'boulder', title: 'Insígnia da Rocha' },
         { key: 'cascade', title: 'Insígnia da Cascata' },
@@ -830,46 +344,25 @@ window.openSpecificTrainerCardModal = function(playerIndex) {
     ];
 
     let badgesHtml = '';
-
-    allBadgesDef.forEach(badge => {
-        const hasBadge = badgesArray.includes(badge.key);
-
-        const classes = hasBadge
-            ? 'drop-shadow-[0_0_8px_rgba(255,215,0,0.8)] scale-110'
-            : 'grayscale opacity-40';
-
-        badgesHtml += `
-            <img
-                id="badge-${badge.key}"
-                src="${SUPABASE_STORAGE_URL}badges/${badge.key}.png"
-                class="w-7 h-7 object-contain transition-transform ${classes}"
-                alt="${badge.key}"
-                title="${badge.title}"
-            >
-        `;
+    allBadgesDef.forEach(b => {
+        const hasIt = badgesArray.includes(b.key);
+        const cls = hasIt ? 'drop-shadow-[0_0_8px_rgba(255,215,0,0.8)] scale-110' : 'grayscale opacity-40';
+        badgesHtml += `<img id="badge-${b.key}" src="${SUPABASE_STORAGE_URL}badges/${b.key}.png" class="w-7 h-7 object-contain transition-transform ${cls}" alt="${b.key}" title="${b.title}">`;
     });
 
     let interactionButtonsHtml = '';
-
     if (areOnSameTile) {
-        const playerIndexInState = gameState.players.findIndex(
-            player => player === cp
-        );
-
         interactionButtonsHtml = `
             <div class="bg-purple-950/40 border-2 border-purple-600/60 p-3 rounded-xl flex flex-wrap gap-2 items-center justify-between mt-3">
                 <span class="text-[10px] text-purple-300 font-bold">📍 Estão na mesma casa! Ações disponíveis:</span>
                 <div class="flex gap-2 w-full">
-                    <button onclick="document.getElementById('trainer-card-modal-full').remove(); triggerPvPBattleArena(${JSON.stringify(cp.name)});" class="flex-1 bg-red-700 hover:bg-red-600 text-white font-black py-2 rounded-lg text-[10px] uppercase shadow">
+                    <button onclick="document.getElementById('trainer-card-modal-full').remove(); triggerPvPBattleArena('${cp.name}');" class="flex-1 bg-red-700 hover:bg-red-600 text-white font-black py-2 rounded-lg text-[10px] uppercase shadow">
                         ⚔ Desafiar PvP
                     </button>
-                    <button onclick="document.getElementById('trainer-card-modal-full').remove(); openTradeModal(${JSON.stringify(loggedPlayer.name)}, ${JSON.stringify(cp.name)});" class="flex-1 bg-blue-700 hover:bg-blue-600 text-white font-black py-2 rounded-lg text-[10px] uppercase shadow">
+                    <button onclick="document.getElementById('trainer-card-modal-full').remove(); openTradeModal('${loggedPlayer.name}', '${cp.name}');" class="flex-1 bg-blue-700 hover:bg-blue-600 text-white font-black py-2 rounded-lg text-[10px] uppercase shadow">
                         🔄 Propor Troca
                     </button>
                 </div>
-                <button onclick="document.getElementById('trainer-card-modal-full').remove(); openSpecificTrainerCardModal(${playerIndexInState});" class="w-full bg-amber-700 hover:bg-amber-600 text-black font-black py-2 rounded-lg text-[10px] uppercase shadow">
-                    📋 Ver Trainer Card novamente
-                </button>
             </div>
         `;
     }
@@ -877,12 +370,8 @@ window.openSpecificTrainerCardModal = function(playerIndex) {
     cardModal.innerHTML = `
         <div class="max-w-4xl w-full p-6 bg-gradient-to-b from-[#0f172a] to-[#020617] border-4 border-blue-600 rounded-2xl shadow-2xl space-y-4 text-white relative">
             <div class="flex justify-between items-center border-b border-blue-900/60 pb-2">
-                <span class="text-xs font-black text-blue-400 font-cinzel tracking-wider">
-                    TRAINER'S CARD (${cp.name}) - Zona #${cp.currentZone}
-                </span>
-                <button onclick="document.getElementById('trainer-card-modal-full').remove()" class="text-blue-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-blue-950/60 rounded border border-blue-800">
-                    ✕
-                </button>
+                <span class="text-xs font-black text-blue-400 font-cinzel tracking-wider">TRAINER'S CARD (${cp.name}) - Zona #${cp.currentZone}</span>
+                <button onclick="document.getElementById('trainer-card-modal-full').remove()" class="text-blue-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-blue-950/60 rounded border border-blue-800">✕</button>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
@@ -900,56 +389,38 @@ window.openSpecificTrainerCardModal = function(playerIndex) {
             ${interactionButtonsHtml}
 
             <div class="border-t border-blue-900/60 pt-3 flex justify-between items-center">
-                <span class="text-xs font-bold text-slate-300">
-                    LEAGUE BADGES:
-                    (<span id="badges-count-text">${badgeCount}</span> / 6)
-                </span>
+                <span class="text-xs font-bold text-slate-300">LEAGUE BADGES: (<span id="badges-count-text">${badgeCount}</span> / 6)</span>
                 <div class="flex items-center gap-2">
                     ${badgesHtml}
                 </div>
             </div>
         </div>
     `;
-
     cardModal.classList.remove('hidden');
     updateTrainerCardBadges(cp);
 };
 
 window.openTrainerCardModal = function() {
-    window.openSpecificTrainerCardModal(
-        gameState.currentPlayerIndex || 0
-    );
+    window.openSpecificTrainerCardModal(gameState.currentPlayerIndex || 0);
 };
+
+// --- FUNÇÕES DA TELA INICIAL (WIZARD DE CONFIGURAÇÃO) ---
 
 window.setGameMode = function(mode) {
     setupConfig.mode = mode;
-
     const btnSolo = document.getElementById('btn-mode-solo');
     const btnMulti = document.getElementById('btn-mode-multi');
-    const multiWizard = document.getElementById(
-        'multiplayer-wizard-container'
-    );
-    const soloNameBox = document.getElementById(
-        'solo-trainer-name-box'
-    );
-    const soloAvatarBox = document.getElementById(
-        'solo-avatar-box'
-    );
-    const soloStarterBox = document.getElementById(
-        'solo-starter-box'
-    );
-
+    const multiWizard = document.getElementById('multiplayer-wizard-container');
+    const soloNameBox = document.getElementById('solo-trainer-name-box');
+    const soloAvatarBox = document.getElementById('solo-avatar-box');
+    const soloStarterBox = document.getElementById('solo-starter-box');
+    
     if (!btnSolo || !btnMulti) return;
 
     if (mode === 'solo') {
         setupConfig.playersCount = 1;
-
-        btnSolo.className =
-            "py-2.5 px-4 rounded-xl border-2 border-amber-600 bg-amber-950/60 text-amber-300 font-bold text-xs transition-all hover:bg-amber-900 flex items-center justify-center gap-2";
-
-        btnMulti.className =
-            "py-2.5 px-4 rounded-xl border-2 border-slate-700 bg-slate-900/60 text-slate-400 font-bold text-xs transition-all hover:bg-slate-800 flex items-center justify-center gap-2";
-
+        btnSolo.className = "py-2.5 px-4 rounded-xl border-2 border-amber-600 bg-amber-950/60 text-amber-300 font-bold text-xs transition-all hover:bg-amber-900 flex items-center justify-center gap-2";
+        btnMulti.className = "py-2.5 px-4 rounded-xl border-2 border-slate-700 bg-slate-900/60 text-slate-400 font-bold text-xs transition-all hover:bg-slate-800 flex items-center justify-center gap-2";
         if (multiWizard) multiWizard.classList.add('hidden');
         if (soloNameBox) soloNameBox.classList.remove('hidden');
         if (soloAvatarBox) soloAvatarBox.classList.remove('hidden');
@@ -959,897 +430,384 @@ window.setGameMode = function(mode) {
         setupWizardState.currentConfiguringIndex = 0;
         setupWizardState.collectedPlayers = [];
 
-        btnMulti.className =
-            "py-2.5 px-4 rounded-xl border-2 border-amber-600 bg-amber-950/60 text-amber-300 font-bold text-xs transition-all flex items-center justify-center gap-2";
-
-        btnSolo.className =
-            "py-2.5 px-4 rounded-xl border-2 border-slate-700 bg-slate-900/60 text-slate-400 font-bold text-xs transition-all flex items-center justify-center gap-2";
-
+        btnMulti.className = "py-2.5 px-4 rounded-xl border-2 border-amber-600 bg-amber-950/60 text-amber-300 font-bold text-xs transition-all flex items-center justify-center gap-2";
+        btnSolo.className = "py-2.5 px-4 rounded-xl border-2 border-slate-700 bg-slate-900/60 text-slate-400 font-bold text-xs transition-all flex items-center justify-center gap-2";
+        
         if (multiWizard) multiWizard.classList.remove('hidden');
-
         updateWizardUI();
     }
 };
 
 window.setPlayersCount = function(count) {
-    const parsedCount = Math.floor(Number(count));
-
-    if (![2, 3, 4].includes(parsedCount)) {
-        return;
-    }
-
-    setupConfig.playersCount = parsedCount;
-
-    [2, 3, 4].forEach(number => {
-        const button = document.getElementById(
-            `btn-count-${number}`
-        );
-
-        if (!button) return;
-
-        button.className = number === parsedCount
-            ? "bg-amber-600 text-black px-2.5 py-1 rounded font-bold text-xs"
-            : "bg-slate-800 text-slate-300 px-2.5 py-1 rounded font-bold text-xs hover:bg-slate-700";
+    setupConfig.playersCount = count;
+    [2, 3, 4].forEach(n => {
+        const btn = document.getElementById(`btn-count-${n}`);
+        if (btn) {
+            btn.className = n === count ? "bg-amber-600 text-black px-2.5 py-1 rounded font-bold text-xs" : "bg-slate-800 text-slate-300 px-2.5 py-1 rounded font-bold text-xs hover:bg-slate-700";
+        }
     });
-
     setupWizardState.currentConfiguringIndex = 0;
     setupWizardState.collectedPlayers = [];
-
     updateWizardUI();
 };
 
 function updateWizardUI() {
-    const titleElement = document.getElementById(
-        'multi-wizard-title'
-    );
-
-    if (titleElement) {
-        titleElement.innerText =
-            `Configuração do Jogador ${setupWizardState.currentConfiguringIndex + 1} de ${setupConfig.playersCount}`;
+    const titleEl = document.getElementById('multi-wizard-title');
+    if (titleEl) {
+        titleEl.innerText = `Configuração do Jogador ${setupWizardState.currentConfiguringIndex + 1} de ${setupConfig.playersCount}`;
     }
-
-    const nameInput = document.getElementById(
-        'setup-trainer-name'
-    );
-
+    const nameInput = document.getElementById('setup-trainer-name');
     if (nameInput) {
-        nameInput.value =
-            `Treinador ${setupWizardState.currentConfiguringIndex + 1}`;
+        nameInput.value = `Treinador ${setupWizardState.currentConfiguringIndex + 1}`;
     }
 }
 
 window.selectAvatar = function(id) {
-    const avatarId = Math.max(
-        1,
-        Math.min(8, Math.floor(Number(id) || 1))
-    );
-
-    setupConfig.avatarId = avatarId;
-
-    document.querySelectorAll('.avatar-option').forEach(element => {
-        element.classList.remove(
-            'border-amber-500',
-            'bg-amber-950/40'
-        );
-
-        element.classList.add(
-            'border-amber-900/60',
-            'bg-black/50'
-        );
+    setupConfig.avatarId = id;
+    document.querySelectorAll('.avatar-option').forEach(el => {
+        el.classList.remove('border-amber-500', 'bg-amber-950/40');
+        el.classList.add('border-amber-900/60', 'bg-black/50');
     });
-
-    const selected = document.querySelector(
-        `[data-avatar="${avatarId}"]`
-    );
-
+    const selected = document.querySelector(`[data-avatar="${id}"]`);
     if (selected) {
-        selected.classList.remove(
-            'border-amber-900/60',
-            'bg-black/50'
-        );
-
-        selected.classList.add(
-            'border-amber-500',
-            'bg-amber-950/40'
-        );
+        selected.classList.remove('border-amber-900/60', 'bg-black/50');
+        selected.classList.add('border-amber-500', 'bg-amber-950/40');
     }
 };
 
 window.selectStarter = function(starterId) {
-    if (!starterId) return;
-
-    setupConfig.starterId = String(starterId);
-
-    const possibleStarters = [
-        'bulbasaur',
-        'charmander',
-        'squirtle',
-        'pikachu',
-        'chikorita',
-        'cyndaquil',
-        'totodile',
-        'eevee'
-    ];
-
+    setupConfig.starterId = starterId;
+    const possibleStarters = ['bulbasaur', 'charmander', 'squirtle', 'pikachu', 'chikorita', 'cyndaquil', 'totodile', 'eevee'];
+    
     possibleStarters.forEach(id => {
-        const element = document.getElementById(
-            `starter-${id}`
-        );
-
-        if (!element) return;
-
-        element.classList.remove(
-            'border-amber-500',
-            'bg-amber-950/40'
-        );
-
-        element.classList.add(
-            'border-amber-900/60',
-            'bg-black/40'
-        );
+        const el = document.getElementById(`starter-${id}`);
+        if (el) {
+            el.classList.remove('border-amber-500', 'bg-amber-950/40');
+            el.classList.add('border-amber-900/60', 'bg-black/40');
+        }
     });
-
-    const target = document.getElementById(
-        `starter-${setupConfig.starterId}`
-    );
-
+    const target = document.getElementById(`starter-${starterId}`);
     if (target) {
-        target.classList.remove(
-            'border-amber-900/60',
-            'bg-black/40'
-        );
-
-        target.classList.add(
-            'border-amber-500',
-            'bg-amber-950/40'
-        );
+        target.classList.remove('border-amber-900/60', 'bg-black/40');
+        target.classList.add('border-amber-500', 'bg-amber-950/40');
     }
 };
 
-function createStarterMonster(starterId) {
-    const starter =
-        typeof MONSTER_CATALOG !== 'undefined'
-            ? MONSTER_CATALOG.find(monster => monster.id === starterId)
-            : null;
-
-    const baseMonster = starter || {
-        id: starterId,
-        name: String(starterId || 'bulbasaur')
-            .charAt(0)
-            .toUpperCase() +
-            String(starterId || 'bulbasaur').slice(1),
-        type: "Normal",
-        level: 1,
-        str: 4,
-        hp: 20,
-        tier: 1
-    };
-
-    const maxHp = Number(baseMonster.hp || 20);
-
-    return normalizeMonsterData({
-        ...baseMonster,
-        level: 1,
-        xp: 0,
-        tier: 1,
-        currentHp: maxHp,
-        maxHp,
-        uniqueId: `mon_${Date.now()}_${Math.random()
-            .toString(36)
-            .slice(2, 8)}`,
-        isShiny: false
-    });
-}
-
-function createStartingInventory() {
-    return [
-        {
-            id: 'poke_ball',
-            name: 'Poké Ball',
-            type: 'sphere',
-            value: 0,
-            icon: '🔴',
-            image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`,
-            count: 5,
-            cost: 50,
-            desc: 'Esfera clássica.'
-        },
-        {
-            id: 'ball_great',
-            name: 'Great Ball',
-            type: 'sphere',
-            value: 1,
-            icon: '🔵',
-            image: `${SUPABASE_STORAGE_URL}items/great_ball.png`,
-            count: 3,
-            cost: 100,
-            desc: 'Adiciona +1 na captura.'
-        },
-        {
-            id: 'ball_ultra',
-            name: 'Ultra Ball',
-            type: 'sphere',
-            value: 2,
-            icon: '🟡',
-            image: `${SUPABASE_STORAGE_URL}items/ultra_ball.png`,
-            count: 2,
-            cost: 200,
-            desc: 'Adiciona +2 na captura.'
-        },
-        {
-            id: 'item_rarecandy',
-            name: 'Rare Candy',
-            type: 'rarecandy',
-            value: 100,
-            icon: '🍬',
-            image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`,
-            count: 2,
-            cost: 300,
-            desc: 'Dá 100 XP imediato.'
-        },
-        {
-            id: 'evolution_stone',
-            name: 'Evolution Stone',
-            type: 'evolution',
-            value: 1,
-            icon: '💎',
-            image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`,
-            count: 1,
-            cost: 500,
-            desc: 'Evolve um Anima compatível.'
-        },
-        {
-            id: 'item_vitamin',
-            name: 'Vitamin',
-            type: 'battle',
-            value: 2,
-            icon: '🧪',
-            image: `${SUPABASE_STORAGE_URL}items/vitamin.png`,
-            count: 2,
-            cost: 150,
-            desc: 'Aumenta o STR do Pokémon em +2.'
-        },
-        {
-            id: 'item_potion',
-            name: 'Potion',
-            type: 'heal',
-            value: 20,
-            icon: '💊',
-            image: `${SUPABASE_STORAGE_URL}items/potion.png`,
-            count: 3,
-            cost: 50,
-            desc: 'Restaura 20 HP de um Anima.'
-        },
-        {
-            id: 'item_revive',
-            name: 'Revive',
-            type: 'revive',
-            value: 50,
-            icon: '🌟',
-            image: `${SUPABASE_STORAGE_URL}items/revive.png`,
-            count: 1,
-            cost: 250,
-            desc: 'Revive um Anima desmaiado.'
-        }
-    ].map(normalizeInventoryItem);
-}
-
-function createNewPlayerData(name, avatarId, starterId) {
-    return {
-        name: name || 'Treinador',
-        avatarId: avatarId || 1,
-        currentZone: 5,
-        level: 1,
-        gold: 350,
-        badges: [],
-        activeTeam: [
-            createStarterMonster(starterId)
-        ],
-        pcBox: [],
-        inventory: createStartingInventory(),
-        equipmentSlots: [null, null]
-    };
-}
-
 window.startMainGame = function() {
-    const nameInput = document.getElementById(
-        'setup-trainer-name'
-    );
-
-    const trainerName =
-        nameInput && nameInput.value.trim()
-            ? nameInput.value.trim()
-            : "Ash Ketchum";
+    const nameInput = document.getElementById('setup-trainer-name');
+    const trainerName = nameInput && nameInput.value.trim() ? nameInput.value.trim() : "Ash Ketchum";
 
     if (setupConfig.mode === 'solo') {
-        gameState.players = [
-            createNewPlayerData(
-                trainerName,
-                setupConfig.avatarId,
-                setupConfig.starterId
-            )
-        ];
+        gameState.players = [];
+        const starterMonster = (typeof MONSTER_CATALOG !== 'undefined' ? MONSTER_CATALOG.find(m => m.id === setupConfig.starterId) : null) || {
+            id: setupConfig.starterId,
+            name: setupConfig.starterId.charAt(0).toUpperCase() + setupConfig.starterId.slice(1),
+            type: "Normal", level: 1, str: 4, hp: 20
+        };
 
-        gameState.currentPlayerIndex = 0;
-        gameState.turn = 1;
-        gameState.setupDone = true;
+        gameState.players.push({
+            name: trainerName,
+            avatarId: setupConfig.avatarId || 1,
+            currentZone: 5,
+            level: 1,
+            gold: 350,
+            badges: [],
+            activeTeam: [{
+                ...starterMonster, level: 1, xp: 0, tier: 1,
+                currentHp: starterMonster.hp || 20, maxHp: starterMonster.hp || 20,
+                uniqueId: 'mon_' + Date.now(),
+                isShiny: false
+            }],
+            pcBox: [],
+            inventory: [
+                { id: 'poke_ball', name: 'Poké Ball', type: 'sphere', value: 0, icon: '🔴', image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`, count: 5, cost: 50, desc: 'Esfera clássica.' },
+                { id: 'ball_great', name: 'Great Ball', type: 'sphere', value: 1, icon: '🔵', image: `${SUPABASE_STORAGE_URL}items/great_ball.png`, count: 3, cost: 100, desc: 'Adiciona +1 na captura.' },
+                { id: 'ball_ultra', name: 'Ultra Ball', type: 'sphere', value: 2, icon: '🟡', image: `${SUPABASE_STORAGE_URL}items/ultra_ball.png`, count: 2, cost: 200, desc: 'Adiciona +2 na captura.' },
+                { id: 'item_rarecandy', name: 'Rare Candy', type: 'rarecandy', value: 100, icon: '🍬', image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`, count: 2, cost: 300, desc: 'Dá 100 XP imediato (Sobe de Nível).' },
+                { id: 'evolution_stone', name: 'Evolution Stone', type: 'evolution', value: 1, icon: '💎', image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`, count: 1, cost: 500, desc: 'Evolve um Anima compatível.' },
+                { id: 'item_vitamin', name: 'Vitamin', type: 'battle', value: 2, icon: '🧪', image: `${SUPABASE_STORAGE_URL}items/vitamin.png`, count: 2, cost: 150, desc: 'Aumenta o STR do Pokémon em +2 na batalha.' },
+                { id: 'item_potion', name: 'Potion', type: 'heal', value: 20, icon: '💊', image: `${SUPABASE_STORAGE_URL}items/potion.png`, count: 3, cost: 50, desc: 'Restaura 20 HP de um Anima.' },
+                { id: 'item_revive', name: 'Revive', type: 'revive', value: 50, icon: '🌟', image: `${SUPABASE_STORAGE_URL}items/revive.png`, count: 1, cost: 250, desc: 'Revive um Anima desmaiado (HP 0).' }
+            ],
+            equipmentSlots: [null, null]
+        });
 
         launchGameSession();
-        return;
+    } else {
+        setupWizardState.collectedPlayers.push({
+            name: trainerName,
+            avatarId: setupConfig.avatarId || 1,
+            starterId: setupConfig.starterId || 'bulbasaur'
+        });
+
+        setupWizardState.currentConfiguringIndex++;
+
+        if (setupWizardState.currentConfiguringIndex < setupConfig.playersCount) {
+            updateWizardUI();
+            showCustomPopup("Próximo Treinador", `Configuração do Jogador ${setupWizardState.currentConfiguringIndex} guardada!\n\nPasse o dispositivo para o Jogador ${setupWizardState.currentConfiguringIndex + 1}.`, true);
+        } else {
+            gameState.players = [];
+            setupWizardState.collectedPlayers.forEach(pData => {
+                const starterMonster = (typeof MONSTER_CATALOG !== 'undefined' ? MONSTER_CATALOG.find(m => m.id === pData.starterId) : null) || {
+                    id: pData.starterId,
+                    name: pData.starterId.charAt(0).toUpperCase() + pData.starterId.slice(1),
+                    type: "Normal", level: 1, str: 4, hp: 20
+                };
+
+                gameState.players.push({
+                    name: pData.name,
+                    avatarId: pData.avatarId,
+                    currentZone: 5,
+                    level: 1,
+                    gold: 350,
+                    badges: [],
+                    activeTeam: [{
+                        ...starterMonster, level: 1, xp: 0, tier: 1,
+                        currentHp: starterMonster.hp || 20, maxHp: starterMonster.hp || 20,
+                        uniqueId: 'mon_' + Date.now() + Math.random(),
+                        isShiny: false
+                    }],
+                    pcBox: [],
+                    inventory: [
+                        { id: 'poke_ball', name: 'Poké Ball', type: 'sphere', value: 0, icon: '🔴', image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`, count: 5, cost: 50, desc: 'Esfera clássica.' },
+                        { id: 'ball_great', name: 'Great Ball', type: 'sphere', value: 1, icon: '🔵', image: `${SUPABASE_STORAGE_URL}items/great_ball.png`, count: 3, cost: 100, desc: 'Adiciona +1 na captura.' },
+                        { id: 'ball_ultra', name: 'Ultra Ball', type: 'sphere', value: 2, icon: '🟡', image: `${SUPABASE_STORAGE_URL}items/ultra_ball.png`, count: 2, cost: 200, desc: 'Adiciona +2 na captura.' },
+                        { id: 'item_rarecandy', name: 'Rare Candy', type: 'rarecandy', value: 100, icon: '🍬', image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`, count: 2, cost: 300, desc: 'Dá 100 XP imediato (Sobe de Nível).' },
+                        { id: 'evolution_stone', name: 'Evolution Stone', type: 'evolution', value: 1, icon: '💎', image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`, count: 1, cost: 500, desc: 'Evolve um Anima compatível.' },
+                        { id: 'item_vitamin', name: 'Vitamin', type: 'battle', value: 2, icon: '🧪', image: `${SUPABASE_STORAGE_URL}items/vitamin.png`, count: 2, cost: 150, desc: 'Aumenta o STR do Pokémon em +2 na batalha.' },
+                        { id: 'item_potion', name: 'Potion', type: 'heal', value: 20, icon: '💊', image: `${SUPABASE_STORAGE_URL}items/potion.png`, count: 3, cost: 50, desc: 'Restaura 20 HP de um Anima.' },
+                        { id: 'item_revive', name: 'Revive', type: 'revive', value: 50, icon: '🌟', image: `${SUPABASE_STORAGE_URL}items/revive.png`, count: 1, cost: 250, desc: 'Revive um Anima desmaiado (HP 0).' }
+                    ],
+                    equipmentSlots: [null, null]
+                });
+            });
+
+            launchGameSession();
+        }
     }
-
-    setupWizardState.collectedPlayers.push({
-        name: trainerName,
-        avatarId: setupConfig.avatarId || 1,
-        starterId: setupConfig.starterId || 'bulbasaur'
-    });
-
-    setupWizardState.currentConfiguringIndex++;
-
-    if (
-        setupWizardState.currentConfiguringIndex <
-        setupConfig.playersCount
-    ) {
-        updateWizardUI();
-
-        showCustomPopup(
-            "Próximo Treinador",
-            `Configuração do Jogador ${setupWizardState.currentConfiguringIndex} guardada!\n\nPasse o dispositivo para o Jogador ${setupWizardState.currentConfiguringIndex + 1}.`,
-            true
-        );
-
-        return;
-    }
-
-    gameState.players = setupWizardState.collectedPlayers.map(
-        playerData => createNewPlayerData(
-            playerData.name,
-            playerData.avatarId,
-            playerData.starterId
-        )
-    );
-
-    gameState.currentPlayerIndex = 0;
-    gameState.turn = 1;
-    gameState.setupDone = true;
-
-    launchGameSession();
 };
 
 function launchGameSession() {
     ensureValidGameState();
-
     gameState.currentPlayerIndex = 0;
     gameState.turn = 1;
-    gameState.setupDone = true;
 
-    const setupScreen = document.getElementById(
-        'setup-screen'
-    );
-
-    const mainGameLayout = document.getElementById(
-        'main-game-layout'
-    );
-
-    const postLoginDashboard = document.getElementById(
-        'post-login-dashboard'
-    );
-
+    const setupScreen = document.getElementById('setup-screen');
+    const mainGameLayout = document.getElementById('main-game-layout');
+    const postLoginDashboard = document.getElementById('post-login-dashboard');
+    
     if (setupScreen) setupScreen.classList.add('hidden');
     if (postLoginDashboard) postLoginDashboard.classList.add('hidden');
     if (mainGameLayout) mainGameLayout.classList.remove('hidden');
 
-    if (typeof movementState !== 'undefined') {
-        movementState.isMoving = false;
-        movementState.hasRolledThisTurn = false;
-        movementState.diceRolledValue = 0;
-        movementState.validDestinations = [];
-    }
-
-    if (typeof checkAndRenderPassTurnButton === 'function') {
-        checkAndRenderPassTurnButton();
-    }
-
+    checkAndRenderPassTurnButton();
     initGameEngine();
-
-    appendAdventureLog(
-        `Partida iniciada com ${gameState.players.length} jogador(es)! Turno de ${getCurrentPlayer().name}.`
-    );
+    appendAdventureLog(`Partida iniciada com ${gameState.players.length} jogador(es)! Turno de ${getCurrentPlayer().name}.`);
 }
+
 // --- MOTOR DO JOGO PRINCIPAL ---
 
 function initGameEngine() {
     ensureValidGameState();
-
-    if (typeof initializeBoardPokemonCards === 'function') {
-        initializeBoardPokemonCards();
-    }
-
-    if (typeof renderBoardMap === 'function') {
-        renderBoardMap();
-    }
-
-    if (typeof renderTeamCardSlots === 'function') {
-        renderTeamCardSlots();
-    }
-
-    if (typeof renderEquipmentSlots === 'function') {
-        renderEquipmentSlots();
-    }
-
-    if (typeof renderBottomPanel === 'function') {
-        renderBottomPanel();
-    }
-
-    if (typeof renderChatMessages === 'function') {
-        renderChatMessages();
-    }
-
-    if (typeof updatePlayerUI === 'function') {
-        updatePlayerUI();
-    }
+    initializeBoardPokemonCards(); 
+    if (typeof renderBoardMap === 'function') renderBoardMap(); 
+    renderTeamCardSlots();
+    renderEquipmentSlots();
+    renderBottomPanel();
+    renderChatMessages();
+    updatePlayerUI();
 }
 
 // --- 1. GERAÇÃO DE MONSTROS NO TABULEIRO ---
-
 function initializeBoardPokemonCards() {
-    if (
-        typeof BOARD_WAYPOINTS === 'undefined' ||
-        !Array.isArray(BOARD_WAYPOINTS) ||
-        typeof MONSTER_CATALOG === 'undefined' ||
-        !Array.isArray(MONSTER_CATALOG)
-    ) {
-        return;
-    }
+    if (typeof BOARD_WAYPOINTS === 'undefined' || typeof MONSTER_CATALOG === 'undefined') return;
 
-    if (!boardPokemonCards || typeof boardPokemonCards !== 'object') {
-        boardPokemonCards = {};
-    }
+    BOARD_WAYPOINTS.forEach(wp => {
+        if (wp.type === 'pokemon') {
+            if (boardPokemonCards[wp.id]) return;
 
-    BOARD_WAYPOINTS.forEach(waypoint => {
-        if (!waypoint || waypoint.type !== 'pokemon') return;
-        if (boardPokemonCards[waypoint.id]) return;
+            let targetTier = 1;
+            let targetRarity = wp.color ? wp.color.toLowerCase() : 'rosa';
 
-        const targetRarity = String(
-            waypoint.color || 'rosa'
-        ).toLowerCase();
+            if (targetRarity === 'rosa') targetTier = 1;
+            else if (targetRarity === 'verde') targetTier = 2;
+            else if (targetRarity === 'azul') targetTier = 3;
+            else if (targetRarity === 'vermelho') targetTier = 4;
+            else if (targetRarity === 'amarelo') targetTier = 5;
 
-        let targetTier = 1;
+            const availableMonsters = MONSTER_CATALOG.filter(m => m.tier === targetTier);
+            const randomMonster = availableMonsters.length > 0 
+                ? availableMonsters[Math.floor(Math.random() * availableMonsters.length)]
+                : MONSTER_CATALOG[0];
+            
+            let minAllowedLevel = 1;
+            let maxAllowedLevel = 5;
 
-        if (targetRarity === 'verde') {
-            targetTier = 2;
-        } else if (targetRarity === 'azul') {
-            targetTier = 3;
-        } else if (targetRarity === 'vermelho') {
-            targetTier = 4;
-        } else if (targetRarity === 'amarelo') {
-            targetTier = 5;
+            if (targetTier === 1) { minAllowedLevel = 1; maxAllowedLevel = 6; }
+            else if (targetTier === 2) { minAllowedLevel = 6; maxAllowedLevel = 14; }
+            else if (targetTier === 3) { minAllowedLevel = 14; maxAllowedLevel = 24; }
+            else if (targetTier === 4) { minAllowedLevel = 24; maxAllowedLevel = 35; }
+            else if (targetTier === 5) { minAllowedLevel = 35; maxAllowedLevel = 50; }
+
+            if (randomMonster.evolutionLevel && maxAllowedLevel >= randomMonster.evolutionLevel) {
+                maxAllowedLevel = randomMonster.evolutionLevel - 1;
+            }
+            if (minAllowedLevel > maxAllowedLevel) minAllowedLevel = Math.max(1, maxAllowedLevel - 3);
+
+            const wildLevel = Math.floor(Math.random() * (maxAllowedLevel - minAllowedLevel + 1)) + minAllowedLevel;
+
+            const isShiny = Math.random() < 0.08;
+            const shinyHpBonus = isShiny ? 6 : 0;
+            const shinyStrBonus = isShiny ? 2 : 0;
+
+            const baseHp = randomMonster.hp || 20;
+            const baseStr = randomMonster.str || 3;
+            const scaledHp = baseHp + ((wildLevel - 1) * 2) + shinyHpBonus;
+            const scaledStr = baseStr + Math.floor((wildLevel - 1) / 3) + shinyStrBonus;
+
+            boardPokemonCards[wp.id] = { 
+                ...randomMonster, 
+                tier: targetTier,
+                level: wildLevel,
+                hp: scaledHp,
+                str: scaledStr,
+                waypointId: wp.id,
+                currentHp: scaledHp,
+                maxHp: scaledHp,
+                revealed: false, 
+                weakened: false,
+                isShiny: isShiny,
+                image: randomMonster.image || '',
+                shinyImage: randomMonster.shinyImage || null,
+                auraEffect: isShiny ? 'shiny-gold-aura' : null
+            };
         }
-
-        const availableMonsters = MONSTER_CATALOG.filter(
-            monster => monster && Number(monster.tier) === targetTier
-        );
-
-        const randomMonster = availableMonsters.length > 0
-            ? availableMonsters[
-                Math.floor(Math.random() * availableMonsters.length)
-            ]
-            : MONSTER_CATALOG.find(Boolean);
-
-        if (!randomMonster) return;
-
-        let minAllowedLevel = 1;
-        let maxAllowedLevel = 5;
-
-        if (targetTier === 1) {
-            minAllowedLevel = 1;
-            maxAllowedLevel = 6;
-        } else if (targetTier === 2) {
-            minAllowedLevel = 6;
-            maxAllowedLevel = 14;
-        } else if (targetTier === 3) {
-            minAllowedLevel = 14;
-            maxAllowedLevel = 24;
-        } else if (targetTier === 4) {
-            minAllowedLevel = 24;
-            maxAllowedLevel = 35;
-        } else if (targetTier === 5) {
-            minAllowedLevel = 35;
-            maxAllowedLevel = 50;
-        }
-
-        const evolutionLevel = Number(randomMonster.evolutionLevel);
-
-        if (
-            Number.isFinite(evolutionLevel) &&
-            evolutionLevel > minAllowedLevel &&
-            maxAllowedLevel >= evolutionLevel
-        ) {
-            maxAllowedLevel = evolutionLevel - 1;
-        }
-
-        if (minAllowedLevel > maxAllowedLevel) {
-            minAllowedLevel = Math.max(1, maxAllowedLevel - 3);
-        }
-
-        const levelRange = Math.max(
-            1,
-            maxAllowedLevel - minAllowedLevel + 1
-        );
-
-        const wildLevel =
-            Math.floor(Math.random() * levelRange) + minAllowedLevel;
-
-        const isShiny = Math.random() < 0.08;
-        const shinyHpBonus = isShiny ? 6 : 0;
-        const shinyStrBonus = isShiny ? 2 : 0;
-
-        const baseHp = Number(randomMonster.hp) || 20;
-        const baseStr = Number(randomMonster.str) || 3;
-
-        const scaledHp =
-            baseHp +
-            Math.max(0, (wildLevel - 1) * 2) +
-            shinyHpBonus;
-
-        const scaledStr =
-            baseStr +
-            Math.floor(Math.max(0, wildLevel - 1) / 3) +
-            shinyStrBonus;
-
-        boardPokemonCards[waypoint.id] = {
-            ...randomMonster,
-            tier: targetTier,
-            level: wildLevel,
-            hp: scaledHp,
-            str: scaledStr,
-            waypointId: waypoint.id,
-            currentHp: scaledHp,
-            maxHp: scaledHp,
-            revealed: false,
-            weakened: false,
-            isShiny,
-            image: randomMonster.image || '',
-            shinyImage: randomMonster.shinyImage || null,
-            auraEffect: isShiny ? 'shiny-gold-aura' : null
-        };
     });
 }
 
 // --- 2. CAPTURADOS VÃO DIRETO PARA A BOX ---
-
 function addMonsterToPlayer(monster) {
     const cp = getCurrentPlayer();
-
-    if (!cp || !monster || typeof monster !== 'object') {
-        return null;
-    }
-
-    const maxHp = Number(
-        monster.maxHp ||
-        monster.hp ||
-        20
-    ) > 0
-        ? Number(monster.maxHp || monster.hp || 20)
-        : 20;
-
-    const newMonster = typeof normalizeMonsterData === 'function'
-        ? normalizeMonsterData({
-            ...monster,
-            level: monster.level || 1,
-            xp: 0,
-            currentHp: maxHp,
-            maxHp,
-            uniqueId: `mon_${Date.now()}_${Math.random()
-                .toString(36)
-                .slice(2, 8)}`,
-            isShiny: Boolean(monster.isShiny),
-            shinyImage: monster.shinyImage || null,
-            auraEffect:
-                selectedBallAura ||
-                monster.auraEffect ||
-                (monster.isShiny ? 'shiny-gold-aura' : null)
-        })
-        : {
-            ...monster,
-            level: monster.level || 1,
-            xp: 0,
-            currentHp: maxHp,
-            maxHp,
-            uniqueId: `mon_${Date.now()}_${Math.random()
-                .toString(36)
-                .slice(2, 8)}`,
-            isShiny: Boolean(monster.isShiny),
-            shinyImage: monster.shinyImage || null,
-            auraEffect:
-                selectedBallAura ||
-                monster.auraEffect ||
-                (monster.isShiny ? 'shiny-gold-aura' : null)
-        };
+    const maxHVal = monster.maxHp || monster.hp || 20;
+    const newMon = { 
+        ...monster, 
+        level: monster.level || 1, 
+        xp: 0, 
+        currentHp: maxHVal, 
+        maxHp: maxHVal, 
+        uniqueId: 'mon_' + Date.now() + Math.random(),
+        isShiny: !!monster.isShiny,
+        shinyImage: monster.shinyImage || null,
+        auraEffect: selectedBallAura || monster.auraEffect || (monster.isShiny ? 'shiny-gold-aura' : null)
+    };
 
     selectedBallAura = null;
 
-    if (!Array.isArray(cp.pcBox)) {
-        cp.pcBox = [];
-    }
+    if (!Array.isArray(cp.pcBox)) cp.pcBox = [];
+    cp.pcBox.push(newMon);
+    appendAdventureLog(`${cp.name} capturou ${newMon.isShiny ? '✨ Shiny ' : ''}${newMon.name} (Nv. ${newMon.level}) e foi enviado diretamente para a PC Box!`);
 
-    cp.pcBox.push(newMonster);
-
-    if (typeof appendAdventureLog === 'function') {
-        appendAdventureLog(
-            `${cp.name} capturou ${
-                newMonster.isShiny ? '✨ Shiny ' : ''
-            }${newMonster.name} (Nv. ${newMonster.level}) e foi enviado diretamente para a PC Box!`
-        );
-    }
-
-    if (typeof renderTeamCardSlots === 'function') {
-        renderTeamCardSlots();
-    }
-
-    if (typeof renderBottomPanel === 'function') {
-        renderBottomPanel();
-    }
-
-    return newMonster;
+    renderTeamCardSlots();
+    renderBottomPanel();
 }
 
 function renderEquipmentSlots() {
     const cp = getCurrentPlayer();
+    for (let i = 0; i < 2; i++) {
+        const slotEl = document.getElementById(`equipment-slot-${i}`);
+        if (!slotEl) continue;
 
-    if (!cp) return;
-
-    if (!Array.isArray(cp.equipmentSlots)) {
-        cp.equipmentSlots = [null, null];
-    }
-
-    for (let index = 0; index < 2; index++) {
-        const slotElement = document.getElementById(
-            `equipment-slot-${index}`
-        );
-
-        if (!slotElement) continue;
-
-        const item = cp.equipmentSlots[index];
-
+        const item = cp.equipmentSlots ? cp.equipmentSlots[i] : null;
         if (item) {
-            slotElement.innerHTML =
-                `<span title="${item.name || 'Equipamento'}">${item.icon || '🎒'}</span>`;
-
-            slotElement.className =
-                "h-8 bg-amber-950 border border-amber-500 rounded flex items-center justify-center cursor-pointer text-[12px] shadow";
+            slotEl.innerHTML = `<span title="${item.name}">${item.icon || '🎒'}</span>`;
+            slotEl.className = "h-8 bg-amber-950 border border-amber-500 rounded flex items-center justify-center cursor-pointer text-[12px] shadow";
         } else {
-            slotElement.innerHTML =
-                `<span class="text-[9px] text-amber-500/40">Slot ${index + 1}</span>`;
-
-            slotElement.className =
-                "h-8 bg-black/60 border border-amber-600/40 rounded flex items-center justify-center cursor-pointer text-[10px]";
+            slotEl.innerHTML = `<span class="text-[9px] text-amber-500/40">Slot ${i+1}</span>`;
+            slotEl.className = "h-8 bg-black/60 border border-amber-600/40 rounded flex items-center justify-center cursor-pointer text-[10px]";
         }
     }
 }
 
-// --- ATUALIZAÇÃO DA UI DA BATALHA SELVAGEM ---
-
+// --- ATUALIZAÇÃO DA UI DA BATALHA SELVAGEM (Com cartões e pré-soma corretos) ---
 function updateEncounterUIInfo() {
     const cp = getCurrentPlayer();
-    const wild = currentEncounterState?.wildPokemon;
+    const wild = currentEncounterState.wildPokemon;
+    const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex] || cp.activeTeam[0];
+    if (!wild || !activeMon) return;
 
-    if (!cp || !wild || !Array.isArray(cp.activeTeam)) {
-        return;
-    }
+    const activeHp = activeMon.currentHp !== undefined ? activeMon.currentHp : (activeMon.maxHp || 20);
+    const activeMaxHp = activeMon.maxHp || activeMon.hp || 20;
 
-    const selectedIndex = Number(
-        currentEncounterState.selectedTeamMemberIndex
-    ) || 0;
-
-    const activeMon =
-        cp.activeTeam[selectedIndex] ||
-        cp.activeTeam.find(mon => {
-            const hp = mon.currentHp !== undefined
-                ? Number(mon.currentHp)
-                : Number(mon.maxHp || mon.hp || 0);
-
-            return hp > 0;
-        }) ||
-        cp.activeTeam[0];
-
-    if (!activeMon) return;
-
-    const activeHp = Math.max(
-        0,
-        Number(
-            activeMon.currentHp !== undefined
-                ? activeMon.currentHp
-                : activeMon.maxHp || activeMon.hp || 20
-        ) || 0
-    );
-
-    const activeMaxHp = Math.max(
-        1,
-        Number(activeMon.maxHp || activeMon.hp || 20) || 20
-    );
-
-    const typeMult = calculateTypeAdvantageMultiplier(
-        activeMon.type,
-        wild.type
-    );
-
-    const battleBonus = Number(
-        currentEncounterState.battlePowerBonus
-    ) || 0;
-
-    const itemBonus = Number(
-        currentEncounterState.itemBonus
-    ) || 0;
-
-    const baseStr = (Number(activeMon.str) || 4) + battleBonus;
-    const estimatedPlayerPower = Math.round(baseStr * typeMult);
-
-    const isLegendary =
-        Number(wild.tier) === 5 ||
-        String(wild.color || '').toLowerCase() === 'amarelo';
-
-    const weakenedBonus =
-        wild.weakened && !isLegendary ? 1 : 0;
-
-    const totalCaptureBonusSoFar =
-        itemBonus + weakenedBonus;
+    const typeMult = calculateTypeAdvantageMultiplier(activeMon.type, wild.type);
+    const baseStr = (activeMon.str || 4) + currentEncounterState.battlePowerBonus;
+    const estimatedPlayerPower = Math.round(baseStr * typeMult); 
+    
+    const isLegendary = (wild.tier === 5) || (wild.color && wild.color.toLowerCase() === 'amarelo');
+    const weakenedBonus = (wild.weakened && !isLegendary) ? 1 : 0;
+    const totalCaptureBonusSoFar = currentEncounterState.itemBonus + weakenedBonus;
 
     let displayTarget = 4;
-    const tier = Number(wild.tier) || 1;
+    const tier = wild.tier || 1;
+    if (tier === 2) displayTarget = 5;
+    else if (tier === 3 || tier === 4) displayTarget = 6;
+    else if (isLegendary) displayTarget = 7;
+    if (wild.isShiny) displayTarget += 1;
 
-    if (tier === 2) {
-        displayTarget = 5;
-    } else if (tier === 3 || tier === 4) {
-        displayTarget = 6;
-    } else if (isLegendary) {
-        displayTarget = 7;
-    }
+    const playerCardBg = getTierColorClass(activeMon.tier || 1);
+    const enemyCardBg = getTierColorClass(wild.tier || 1);
+    const auraEncPlayerClass = activeMon.auraEffect || '';
 
-    if (wild.isShiny) {
-        displayTarget += 1;
-    }
-
-    const playerCardBg = getTierColorClass(
-        activeMon.tier || 1
-    );
-
-    const enemyCardBg = getTierColorClass(
-        wild.tier || 1
-    );
-
-    const auraEncPlayerClass =
-        activeMon.auraEffect || '';
-
-    const playerVisual = document.getElementById(
-        'player-card-visual'
-    );
-
+    const playerVisual = document.getElementById('player-card-visual');
     if (playerVisual) {
-        playerVisual.className =
-            `relative flex flex-col justify-between p-4 rounded-3xl border-4 ${playerCardBg} ${auraEncPlayerClass} shadow-2xl w-72 h-96 text-white`;
-
+        playerVisual.className = `relative flex flex-col justify-between p-4 rounded-3xl border-4 ${playerCardBg} ${auraEncPlayerClass} shadow-2xl w-72 h-96 text-white`;
         playerVisual.innerHTML = `
             <div class="flex justify-between items-center font-black text-xs border-b-2 border-amber-400 pb-2">
-                <span class="text-amber-300 font-bold uppercase">
-                    NV. ${activeMon.level || 1}
-                </span>
-                <span class="text-amber-900 bg-amber-200 px-2 py-0.5 rounded font-bold uppercase text-[10px] border border-amber-400">
-                    ${activeMon.type || 'Normal'}
-                </span>
+                <span class="text-amber-300 font-bold uppercase">NV. ${activeMon.level || 1}</span>
+                <span class="text-amber-900 bg-amber-200 px-2 py-0.5 rounded font-bold uppercase text-[10px] border border-amber-400">${activeMon.type || 'Normal'}</span>
             </div>
-
+            
             <div class="flex flex-col items-center justify-center my-auto space-y-3">
-                <h3 class="text-base font-black text-white text-center truncate w-full">
-                    ${activeMon.name}
-                </h3>
-
+                <h3 class="text-base font-black text-white text-center truncate w-full">${activeMon.name}</h3>
                 <div class="flex items-center justify-center bg-black/60 w-36 h-36 rounded-2xl border-2 border-amber-400 shadow-inner p-3 relative">
-                    <img
-                        src="${activeMon.isShiny && activeMon.shinyImage
-                            ? activeMon.shinyImage
-                            : activeMon.image || ''}"
-                        alt="${activeMon.name}"
-                        class="max-h-32 max-w-full object-contain drop-shadow-md"
-                        onerror="this.src='https://api.iconify.design/noto:video-game.svg'"
-                    >
+                    <img src="${activeMon.isShiny && activeMon.shinyImage ? activeMon.shinyImage : (activeMon.image || '')}" alt="${activeMon.name}" class="max-h-32 max-w-full object-contain drop-shadow-md" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                 </div>
             </div>
 
             <div class="w-full bg-black/90 text-amber-300 rounded-2xl p-3 text-center space-y-1.5 shadow-md">
-                <p class="text-xs font-bold tracking-wide">
-                    HP: ${activeHp} / ${activeMaxHp}
-                    &nbsp;|&nbsp;
-                    STR: ${activeMon.str || 4}
-                </p>
-
-                <p class="text-[11px] font-black text-emerald-400 bg-emerald-950/90 rounded-xl px-2.5 py-1 border border-emerald-600">
-                    ⚡ Pré-Soma: ~${estimatedPlayerPower} + [🎲 1-6]
-                </p>
+                <p class="text-xs font-bold tracking-wide">HP: ${activeHp} / ${activeMaxHp} &nbsp;|&nbsp; STR: ${activeMon.str || 4}</p>
+                <p class="text-[11px] font-black text-emerald-400 bg-emerald-950/90 rounded-xl px-2.5 py-1 border border-emerald-600">⚡ Pré-Soma: ~${estimatedPlayerPower} + [🎲 1-6]</p>
             </div>
-
-            <button
-                onclick="cyclePlayerEncounterPokemon()"
-                class="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-amber-600 hover:bg-amber-500 text-black font-black text-[10px] px-3 py-1 rounded-full shadow border border-amber-300 uppercase tracking-wider cursor-pointer"
-            >
+            
+            <button onclick="cyclePlayerEncounterPokemon()" class="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-amber-600 hover:bg-amber-500 text-black font-black text-[10px] px-3 py-1 rounded-full shadow border border-amber-300 uppercase tracking-wider cursor-pointer">
                 🔄 Trocar Anima
             </button>
         `;
     }
 
-    const encVisual = document.getElementById(
-        'enc-card-visual'
-    );
-
+    const encVisual = document.getElementById('enc-card-visual');
     if (encVisual) {
-        encVisual.className =
-            `relative flex flex-col justify-between p-4 rounded-3xl border-4 ${enemyCardBg} shadow-2xl w-72 h-96 text-white ${wild.isShiny ? 'shiny-card-glow' : ''}`;
-
-        const weakenedBadge = wild.weakened
-            ? '<span class="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-md font-bold shadow">🩹 Enfraquecido (+1 Cap.)</span>'
-            : '';
-
-        const shinyWildBadge = wild.isShiny
-            ? '<span class="bg-amber-400 text-black text-[10px] px-2 py-0.5 rounded-md font-black shadow animate-pulse">✨ SHINY SELVAGEM</span>'
-            : '';
-
-        const wildCurrentHp = Math.max(
-            0,
-            Number(
-                wild.currentHp !== undefined
-                    ? wild.currentHp
-                    : wild.maxHp || wild.hp || 15
-            ) || 0
-        );
-
-        const wildMaxHp = Math.max(
-            1,
-            Number(wild.maxHp || wild.hp || 15) || 15
-        );
-
+        encVisual.className = `relative flex flex-col justify-between p-4 rounded-3xl border-4 ${enemyCardBg} shadow-2xl w-72 h-96 text-white ${wild.isShiny ? 'shiny-card-glow' : ''}`;
+        const weakenedBadge = wild.weakened ? `<span class="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-md font-bold shadow">🩹 Enfraquecido (+1 Cap.)</span>` : '';
+        const shinyWildBadge = wild.isShiny ? `<span class="bg-amber-400 text-black text-[10px] px-2 py-0.5 rounded-md font-black shadow animate-pulse">✨ SHINY SELVAGEM</span>` : '';
+        
         encVisual.innerHTML = `
             <div class="flex justify-between items-center font-black text-xs border-b-2 border-red-900 pb-2">
-                <span class="text-red-400 font-bold uppercase">
-                    NV. ${wild.level || 1}
-                </span>
+                <span class="text-red-400 font-bold uppercase">NV. ${wild.level || 1}</span>
                 ${shinyWildBadge}
-                <span class="text-red-300 bg-red-950 px-2 py-0.5 rounded font-bold uppercase text-[10px] border border-red-800">
-                    ${wild.type || 'Normal'}
-                </span>
+                <span class="text-red-300 bg-red-950 px-2 py-0.5 rounded font-bold uppercase text-[10px] border border-red-800">${wild.type}</span>
             </div>
 
             <div class="flex flex-col items-center justify-center my-auto space-y-3">
-                <h3 class="text-base font-black text-white text-center truncate w-full">
-                    ${wild.name || 'Pokémon Selvagem'}
-                </h3>
-
+                <h3 class="text-base font-black text-white text-center truncate w-full">${wild.name}</h3>
                 <div class="flex items-center justify-center bg-black/60 w-36 h-36 rounded-2xl border-2 ${wild.isShiny ? 'border-amber-400 shiny-card-glow' : 'border-red-800'} shadow-inner p-3 relative">
-                    <img
-                        src="${wild.isShiny && wild.shinyImage
-                            ? wild.shinyImage
-                            : wild.image || ''}"
-                        alt="${wild.name || 'Pokémon Selvagem'}"
-                        class="max-h-32 max-w-full object-contain drop-shadow-md"
-                        onerror="this.src='https://api.iconify.design/noto:video-game.svg'"
-                    >
-                    ${wild.weakened
-                        ? '<span class="absolute top-2 right-2 bg-red-500 text-xs px-2 py-0.5 rounded-md shadow">🩹</span>'
-                        : ''}
+                    <img src="${wild.isShiny && wild.shinyImage ? wild.shinyImage : (wild.image || '')}" alt="${wild.name}" class="max-h-32 max-w-full object-contain drop-shadow-md" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                    ${wild.weakened ? '<span class="absolute top-2 right-2 bg-red-500 text-xs px-2 py-0.5 rounded-md shadow">🩹</span>' : ''}
                 </div>
             </div>
 
             <div class="w-full bg-black/90 text-red-300 rounded-2xl p-3 text-center space-y-1.5 shadow-md">
-                <p class="text-xs font-bold tracking-wide">
-                    HP: ${wildCurrentHp} / ${wildMaxHp}
-                    &nbsp;|&nbsp;
-                    STR: ${wild.str || 3}
-                </p>
-
-                <p class="text-[11px] font-black text-amber-300 bg-amber-950/90 rounded-xl px-2.5 py-1 border border-amber-600">
-                    🎯 Alvo p/ Capturar: ${displayTarget}+
-                    (Bónus: +${totalCaptureBonusSoFar})
-                </p>
-
+                <p class="text-xs font-bold tracking-wide">HP: ${wild.currentHp || wild.hp || 15} &nbsp;|&nbsp; STR: ${wild.str || 3}</p>
+                <p class="text-[11px] font-black text-amber-300 bg-amber-950/90 rounded-xl px-2.5 py-1 border border-amber-600">🎯 Alvo p/ Capturar: ${displayTarget}+ (Bónus: +${totalCaptureBonusSoFar})</p>
                 ${weakenedBadge}
             </div>
 
@@ -1860,672 +818,258 @@ function updateEncounterUIInfo() {
     }
 }
 
-// --- BATALHA CONTRA POKÉMON SELVAGEM ---
-
+// 1. Correção rigorosa na verificação de HP zero na Batalha Selvagem
 window.resolveBattleAttempt = function() {
     const cp = getCurrentPlayer();
-    const wild = currentEncounterState?.wildPokemon;
+    const wild = currentEncounterState.wildPokemon;
+    const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex];
+    if (!wild || !activeMon) return;
 
-    if (
-        !cp ||
-        !wild ||
-        !Array.isArray(cp.activeTeam)
-    ) {
-        return;
-    }
-
-    const selectedIndex = Number(
-        currentEncounterState.selectedTeamMemberIndex
-    ) || 0;
-
-    const activeMon = cp.activeTeam[selectedIndex];
-
-    if (!activeMon) return;
-
-    const activeHp = Number(
-        activeMon.currentHp !== undefined
-            ? activeMon.currentHp
-            : activeMon.maxHp || activeMon.hp || 0
-    ) || 0;
-
-    if (activeHp <= 0) {
-        showCustomPopup(
-            "Pokémon Desmaiado",
-            "⚠ O teu Anima atual está com 0 de HP e não pode lutar! Troca de Anima ou usa um Revive.",
-            false
-        );
+    if ((activeMon.currentHp !== undefined ? activeMon.currentHp : activeMon.maxHp) <= 0) {
+        showCustomPopup("Pokémon Desmaiado", "⚠ O teu Anima atual está com 0 de HP e não pode lutar! Troca de Anima ou usa um Revive.", false);
         return;
     }
 
     rollDiceWithAnimation((playerDice, wildDice) => {
-        const typeMult = calculateTypeAdvantageMultiplier(
-            activeMon.type,
-            wild.type
-        );
-
-        const battleBonus = Number(
-            currentEncounterState.battlePowerBonus
-        ) || 0;
-
-        const playerPower = Math.round(
-            ((Number(activeMon.str) || 4) +
-                battleBonus +
-                Number(playerDice || 0)) *
-            typeMult
-        );
-
-        const wildPower =
-            (Number(wild.str) || 3) +
-            Number(wildDice || 0);
+        const typeMult = calculateTypeAdvantageMultiplier(activeMon.type, wild.type);
+        const playerPower = Math.round(((activeMon.str || 4) + currentEncounterState.battlePowerBonus + playerDice) * typeMult);
+        const wildPower = (wild.str || 3) + wildDice;
 
         if (playerPower >= wildPower) {
-            const damageToWild = Math.max(
-                10,
-                playerPower - wildPower + 10
-            );
-
-            const currentWildHp = Number(
-                wild.currentHp !== undefined
-                    ? wild.currentHp
-                    : wild.maxHp || wild.hp || 20
-            ) || 0;
-
-            wild.currentHp = Math.max(
-                0,
-                currentWildHp - damageToWild
-            );
+            const damageToWild = Math.max(10, playerPower - wildPower + 10);
+            wild.currentHp = Math.max(0, (wild.currentHp !== undefined ? wild.currentHp : wild.maxHp) - damageToWild);
 
             if (wild.currentHp <= 0) {
+                showCustomPopup("🏆 POKÉMON SELVAGEM DERROTADO!", `O teu ${activeMon.name} venceu e desmaiou o ${wild.name} selvagem!\n\nPodes agora tentar capturá-lo.`, true);
                 wild.weakened = true;
-
-                if (
-                    wild.waypointId &&
-                    boardPokemonCards &&
-                    boardPokemonCards[wild.waypointId]
-                ) {
+                if (wild.waypointId && boardPokemonCards[wild.waypointId]) {
                     boardPokemonCards[wild.waypointId].weakened = true;
                     boardPokemonCards[wild.waypointId].currentHp = 0;
                 }
-
-                showCustomPopup(
-                    "🏆 POKÉMON SELVAGEM DERROTADO!",
-                    `O teu ${activeMon.name} venceu e desmaiou o ${wild.name} selvagem!\n\nPodes agora tentar capturá-lo.`,
-                    true
-                );
-
                 addExperienceToMonster(activeMon, 50);
                 triggerCaptureFlow(wild);
             } else {
-                showCustomPopup(
-                    "⚔️ ATAQUE BEM-SUCEDIDO!",
-                    `O teu ${activeMon.name} causou ${damageToWild} de dano ao ${wild.name}!\n\nHP Restante do Selvagem: ${wild.currentHp}/${wild.maxHp || wild.hp}`,
-                    true
-                );
+                showCustomPopup("⚔️ ATAQUE BEM-SUCEDIDO!", `O teu ${activeMon.name} causou ${damageToWild} de dano ao ${wild.name}!\n\nHP Restante do Selvagem: ${wild.currentHp}/${wild.maxHp || wild.hp}`, true);
             }
-
             updateEncounterUIInfo();
-            return;
-        }
-
-        const damageToPlayer = 15;
-
-        activeMon.currentHp = Math.max(
-            0,
-            activeHp - damageToPlayer
-        );
-
-        if (activeMon.currentHp <= 0) {
-            showCustomPopup(
-                "💀 O TEU POKÉMON DESMAIOU",
-                `O ${wild.name} selvagem desferiu um golpe crítico!\n\n💔 O teu ${activeMon.name} desmaiou (HP 0). A batalha contra este selvagem está encerrada para este Anima. Deves fugir ou trocar!`,
-                false
-            );
-
-            closeEncounterModalUI();
         } else {
-            showCustomPopup(
-                "💥 CONTRA-ATAQUE SOFRIDO",
-                `O ${wild.name} selvagem foi mais forte nesta ronda!\n\n💔 ${activeMon.name} sofreu ${damageToPlayer} de dano.`,
-                false
-            );
+            const damageToPlayer = 15;
+            activeMon.currentHp = Math.max(0, (activeMon.currentHp || activeMon.maxHp) - damageToPlayer);
+            
+            if (activeMon.currentHp <= 0) {
+                showCustomPopup("💀 O TEU POKÉMON DESMAIOU", `O ${wild.name} selvagem desferiu um golpe crítico!\n\n💔 O teu ${activeMon.name} desmaiou (HP 0). A batalha contra este selvagem está encerrada para este Anima. Deves fugir ou trocar!`, false);
+                closeEncounterModalUI();
+            } else {
+                showCustomPopup("💥 CONTRA-ATAQUE SOFRIDO", `O ${wild.name} selvagem foi mais forte nesta ronda!\n\n💔 ${activeMon.name} sofreu ${damageToPlayer} de dano.`, false);
+            }
+            renderTeamCardSlots();
+            updateEncounterUIInfo();
         }
-
-        renderTeamCardSlots();
-        updateEncounterUIInfo();
     });
 };
 
-// --- COFRE GLOBAL E DADOS DA CONTA ---
-
-function safeReadLocalStorageArray(key) {
-    try {
-        const parsed = JSON.parse(
-            localStorage.getItem(key) || '[]'
-        );
-
-        return Array.isArray(parsed) ? parsed : [];
-    } catch (error) {
-        console.warn(`Não foi possível ler o armazenamento: ${key}`, error);
-        return [];
-    }
-}
-
+// 2. Isolamento correto do Cofre Global e Dados da Conta do Treinador
 function saveGlobalTrainerAccountData(trainerName, avatarId) {
     const globalAccountData = {
-        trainerName: trainerName || 'Treinador',
-        avatarId: Number(avatarId) || 1,
-        vault: safeReadLocalStorageArray(
-            'pokemon_master_trainer_vault'
-        ),
-        pokedex: safeReadLocalStorageArray(
-            'pokemon_master_trainer_pokedex'
-        ),
+        trainerName: trainerName,
+        avatarId: avatarId,
+        vault: JSON.parse(localStorage.getItem('pokemon_master_trainer_vault') || '[]'),
+        pokedex: JSON.parse(localStorage.getItem('pokemon_master_trainer_pokedex') || '[]'),
         updatedAt: new Date().toISOString()
     };
-
-    try {
-        localStorage.setItem(
-            'pokemon_master_trainer_account_profile',
-            JSON.stringify(globalAccountData)
-        );
-    } catch (error) {
-        console.error(
-            'Não foi possível salvar o perfil global:',
-            error
-        );
-    }
-
-    return globalAccountData;
+    localStorage.setItem('pokemon_master_trainer_account_profile', JSON.stringify(globalAccountData));
 }
 
 function loadGlobalTrainerAccountData() {
     try {
-        const raw = localStorage.getItem(
-            'pokemon_master_trainer_account_profile'
-        );
-
-        if (!raw) return null;
-
-        const parsed = JSON.parse(raw);
-
-        if (!parsed || typeof parsed !== 'object') {
-            return null;
-        }
-
-        parsed.vault = Array.isArray(parsed.vault)
-            ? parsed.vault
-            : [];
-
-        parsed.pokedex = Array.isArray(parsed.pokedex)
-            ? parsed.pokedex
-            : [];
-
-        return parsed;
-    } catch (error) {
-        console.warn(
-            'Não foi possível carregar o perfil global:',
-            error
-        );
-
-        return null;
-    }
+        const raw = localStorage.getItem('pokemon_master_trainer_account_profile');
+        if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return null;
 }
 
-// --- VALIDAÇÃO OBRIGATÓRIA DE POKÉ BALLS NA CAPTURA ---
-
+// --- VALIDAÇÃO OBRIGATÓRIA DE POKÉ BALLS NA CAPTURA (Fase 1) ---
 function triggerCaptureFlow(wildPokemon) {
     const cp = getCurrentPlayer();
+    if (!cp.inventory) cp.inventory = [];
 
-    if (
-        !cp ||
-        !wildPokemon ||
-        typeof wildPokemon !== 'object'
-    ) {
-        return;
-    }
-
-    if (!Array.isArray(cp.inventory)) {
-        cp.inventory = [];
-    }
-
-    const availableSpheres = cp.inventory.filter(item =>
-        item &&
-        item.type === 'sphere' &&
-        Number(item.count) > 0
-    );
+    const availableSpheres = cp.inventory.filter(i => i.type === 'sphere' && i.count > 0);
 
     if (availableSpheres.length === 0) {
         showCustomPopup(
-            "Sem Poké Balls!",
-            "❌ Não tens nenhuma Poké Ball, Great Ball ou Ultra Ball na tua mochila!\n\nVisita o Poké Mart numa cidade para adquirir esferas antes de tentares capturar este Anima.",
+            "Sem Poké Balls!", 
+            "❌ Não tens nenhuma Poké Ball, Great Ball ou Ultra Ball na tua mochila!\n\nVisita o Poké Mart numa cidade para adquirir esferas antes de tentares capturar este Anima.", 
             false
         );
-
         return;
     }
 
-    let captureModal = document.getElementById(
-        'capture-flow-modal'
-    );
-
+    let captureModal = document.getElementById('capture-flow-modal');
     if (!captureModal) {
         captureModal = document.createElement('div');
         captureModal.id = 'capture-flow-modal';
-        captureModal.className =
-            'fixed inset-0 bg-black/90 z-[600] flex items-center justify-center p-4 backdrop-blur-md';
-
+        captureModal.className = 'fixed inset-0 bg-black/90 z-[600] flex items-center justify-center p-4 backdrop-blur-md';
         document.body.appendChild(captureModal);
     }
 
     let sphereButtonsHtml = '';
-
     availableSpheres.forEach(sphere => {
-        let buttonColor =
-            'bg-red-600 hover:bg-red-500';
-
-        if (sphere.id === 'ball_great') {
-            buttonColor =
-                'bg-blue-600 hover:bg-blue-500';
-        }
-
-        if (sphere.id === 'ball_ultra') {
-            buttonColor =
-                'bg-amber-600 hover:bg-amber-500';
-        }
+        let btnColor = 'bg-red-600 hover:bg-red-500';
+        if (sphere.id === 'ball_great') btnColor = 'bg-blue-600 hover:bg-blue-500';
+        if (sphere.id === 'ball_ultra') btnColor = 'bg-amber-600 hover:bg-amber-500';
 
         sphereButtonsHtml += `
-            <button
-                onclick="document.getElementById('capture-flow-modal').remove(); attemptCatchWithSpecificBall(${JSON.stringify(sphere.id)}, ${JSON.stringify(wildPokemon.waypointId || '')});"
-                class="${buttonColor} text-white font-bold px-4 py-2 rounded-xl text-xs cursor-pointer flex items-center gap-1.5 shadow"
-            >
-                <span>${sphere.icon || '🔴'}</span>
-                ${sphere.name || sphere.id}
-                (${Number(sphere.count) || 0})
+            <button onclick="document.getElementById('capture-flow-modal').remove(); attemptCatchWithSpecificBall('${sphere.id}', '${wildPokemon.waypointId}')" class="${btnColor} text-white font-bold px-4 py-2 rounded-xl text-xs cursor-pointer flex items-center gap-1.5 shadow">
+                <span>${sphere.icon || '🔴'}</span> ${sphere.name} (${sphere.count})
             </button>
         `;
     });
 
     captureModal.innerHTML = `
         <div class="trainer-card max-w-md w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] text-white text-center">
-            <h3 class="text-sm font-black text-amber-400 uppercase">
-                🎯 TENTATIVA DE CAPTURA
-            </h3>
-
-            <p class="text-xs text-slate-300">
-                O ${wildPokemon.name || 'Pokémon selvagem'} está debilitado! Escolha uma esfera da sua mochila:
-            </p>
-
+            <h3 class="text-sm font-black text-amber-400 uppercase">🎯 TENTATIVA DE CAPTURA</h3>
+            <p class="text-xs text-slate-300">O ${wildPokemon.name} está debilitado! Escolha uma esfera da sua mochila:</p>
             <div class="flex flex-wrap justify-center gap-3 my-4">
                 ${sphereButtonsHtml}
             </div>
-
-            <button
-                onclick="document.getElementById('capture-flow-modal').remove()"
-                class="text-xs text-slate-400 hover:text-white underline cursor-pointer"
-            >
-                Fugir / Ignorar
-            </button>
+            <button onclick="document.getElementById('capture-flow-modal').remove()" class="text-xs text-slate-400 hover:text-white underline cursor-pointer">Fugir / Ignorar</button>
         </div>
     `;
-
     captureModal.classList.remove('hidden');
 }
 
 window.attemptCatchWithSpecificBall = function(ballItemId, waypointId) {
     const cp = getCurrentPlayer();
+    if (!cp.inventory) return;
 
-    if (!cp || !Array.isArray(cp.inventory)) {
+    let sphereItem = cp.inventory.find(i => i.id === ballItemId);
+    if (!sphereItem || sphereItem.count <= 0) {
+        showCustomPopup("Esfera Esgotada", "❌ Não tens unidades suficientes desta esfera!", false);
         return;
     }
 
-    const sphereItem = cp.inventory.find(
-        item =>
-            item &&
-            item.id === ballItemId &&
-            Number(item.count) > 0
-    );
+    sphereItem.count--;
 
-    if (!sphereItem) {
-        showCustomPopup(
-            "Esfera Esgotada",
-            "❌ Não tens unidades suficientes desta esfera!",
-            false
-        );
-
-        return;
+    let bonus = sphereItem.value || 0;
+    if (sphereItem.aura) {
+        selectedBallAura = sphereItem.aura;
     }
 
-    sphereItem.count = Math.max(
-        0,
-        Number(sphereItem.count) - 1
-    );
-
-    const bonus = Number(sphereItem.value) || 0;
-
-    selectedBallAura = sphereItem.aura || null;
     currentEncounterState.itemBonus = bonus;
-
     resolveCaptureAttempt();
-
-    if (typeof renderBottomPanel === 'function') {
-        renderBottomPanel();
-    }
+    renderBottomPanel();
 };
 
 window.attemptCatchWithBall = function(ballType, waypointId) {
-    const cp = getCurrentPlayer();
-
-    if (!cp || !Array.isArray(cp.inventory)) {
-        return;
-    }
-
-    const normalizedBallType = String(
-        ballType || ''
-    ).toLowerCase();
-
-    const ballIdMap = {
-        pokeball: 'poke_ball',
-        'poke_ball': 'poke_ball',
-        greatball: 'ball_great',
-        'ball_great': 'ball_great',
-        ultraball: 'ball_ultra',
-        'ball_ultra': 'ball_ultra'
-    };
-
-    const ballItemId =
-        ballIdMap[normalizedBallType];
-
-    if (ballItemId) {
-        window.attemptCatchWithSpecificBall(
-            ballItemId,
-            waypointId
-        );
-
-        return;
-    }
-
     let bonus = 0;
-
-    if (normalizedBallType === 'great') {
-        bonus = 1;
-    } else if (normalizedBallType === 'ultra') {
-        bonus = 2;
-    }
-
+    if (ballType === 'greatball') bonus = 1;
+    if (ballType === 'ultraball') bonus = 2;
     currentEncounterState.itemBonus = bonus;
     resolveCaptureAttempt();
 };
+
 // --- MODAL DETALHADO DO POKÉMON ---
 
 window.openPokemonDetailModal = function(monsterIdOrUniqueId, fromArea = 'team') {
     const cp = getCurrentPlayer();
-    if (!cp) return;
-
-    if (!Array.isArray(cp.activeTeam)) cp.activeTeam = [];
-    if (!Array.isArray(cp.pcBox)) cp.pcBox = [];
-
     let monster = null;
-
     if (fromArea === 'team') {
-        monster = cp.activeTeam.find(mon =>
-            mon &&
-            (mon.uniqueId === monsterIdOrUniqueId ||
-                mon.id === monsterIdOrUniqueId)
-        );
+        monster = cp.activeTeam.find(m => m.uniqueId === monsterIdOrUniqueId || m.id === monsterIdOrUniqueId);
     } else if (fromArea === 'pcbox') {
-        monster = cp.pcBox.find(mon =>
-            mon &&
-            (mon.uniqueId === monsterIdOrUniqueId ||
-                mon.id === monsterIdOrUniqueId)
-        );
+        monster = cp.pcBox.find(m => m.uniqueId === monsterIdOrUniqueId || m.id === monsterIdOrUniqueId);
     } else if (fromArea === 'board') {
-        monster = boardPokemonCards &&
-            boardPokemonCards[monsterIdOrUniqueId]
-            ? boardPokemonCards[monsterIdOrUniqueId]
-            : null;
+        monster = boardPokemonCards[monsterIdOrUniqueId];
     }
-
     if (!monster) return;
 
-    const level = Number(monster.level) || 1;
-    const strength = Number(monster.str) || 4;
-    const baseHp = Number(monster.hp) || 20;
-    const maxHp = Math.max(
-        1,
-        Number(monster.maxHp) || baseHp
-    );
-    const currentHp = Math.max(
-        0,
-        Math.min(
-            maxHp,
-            Number(
-                monster.currentHp !== undefined
-                    ? monster.currentHp
-                    : maxHp
-            ) || 0
-        )
-    );
-
-    const xpCurrent = Math.max(
-        0,
-        Number(monster.xp) || 0
-    );
-
-    const isFainted = currentHp <= 0;
-    const isShiny = Boolean(monster.isShiny);
-    const monsterName = monster.name || 'Pokémon';
-    const monsterType = monster.type || 'Normal';
-
-    const typeKey = monsterType
-        .split('/')[0]
-        .trim();
-
-    const typeInfo =
-        typeof TYPE_ADVANTAGES !== 'undefined' &&
-        TYPE_ADVANTAGES[typeKey]
-            ? TYPE_ADVANTAGES[typeKey]
-            : {
-                strongAgainst: [],
-                weakAgainst: []
-            };
-
-    const strongList =
-        Array.isArray(typeInfo.strongAgainst) &&
-        typeInfo.strongAgainst.length > 0
-            ? typeInfo.strongAgainst.join(', ')
-            : 'Nenhuma específica';
-
-    const weakList =
-        Array.isArray(typeInfo.weakAgainst) &&
-        typeInfo.weakAgainst.length > 0
-            ? typeInfo.weakAgainst.join(', ')
-            : 'Nenhuma específica';
-
-    const evolutionText = monster.evolvesTo
-        ? `Evolui para ${monster.evolvesTo} no Nv. ${Number(monster.evolutionLevel) || 16}`
-        : 'Forma final ou sem evolução cadastrada';
-
-    const tierCardBg =
-        typeof getTierColorClass === 'function'
-            ? getTierColorClass(monster.tier || 1)
-            : 'bg-gradient-to-b from-amber-950 via-amber-900 to-black border-amber-600';
-
-    const auraDetailClass = monster.auraEffect || '';
-
-    const monsterImage =
-        isShiny && monster.shinyImage
-            ? monster.shinyImage
-            : monster.image || '';
-
-    const shinyBanner = isShiny
-        ? `
-            <div class="bg-amber-400 text-black font-black text-[9px] text-center rounded py-1 animate-pulse">
-                ✨ POKÉMON SHINY RARO ✨
-            </div>
-        `
-        : '';
-
-    const faintedBanner = isFainted
-        ? `
-            <div class="bg-red-950/80 border border-red-500 text-red-200 text-center py-1 rounded text-xs font-black animate-pulse">
-                ⚠ ANIMA DESMAIADO, HP 0
-            </div>
-        `
-        : '';
-
-    const showVaultButton =
-        monster.uniqueId &&
-        (fromArea === 'team' || fromArea === 'pcbox')
-            ? `
-                <button
-                    onclick="saveMonsterToVault(${JSON.stringify(monster.uniqueId)}); const modal = document.getElementById('pokemon-detail-modal'); if (modal) modal.remove();"
-                    class="w-full bg-blue-700 hover:bg-blue-600 text-white font-black py-2 rounded-xl text-xs uppercase shadow transition-all cursor-pointer"
-                >
-                    📦 Guardar no Cofre Global
-                </button>
-            `
-            : '';
-
-    let detailModal =
-        document.getElementById('pokemon-detail-modal');
-
+    let detailModal = document.getElementById('pokemon-detail-modal');
     if (!detailModal) {
         detailModal = document.createElement('div');
         detailModal.id = 'pokemon-detail-modal';
-        detailModal.className =
-            'fixed inset-0 bg-black/85 z-[350] flex items-center justify-center p-4 backdrop-blur-sm';
+        detailModal.className = 'fixed inset-0 bg-black/85 z-[350] flex items-center justify-center p-4 backdrop-blur-sm';
         document.body.appendChild(detailModal);
     }
 
+    const typeKey = monster.type ? monster.type.split('/')[0].trim() : 'Normal';
+    const xpCurrent = monster.xp || 0;
+    const curHp = monster.currentHp !== undefined ? monster.currentHp : (monster.hp || 20);
+    const maxHp = monster.maxHp || monster.hp || 20;
+    const isFainted = curHp <= 0;
+    
+    let evolutionText = 'Forma Final';
+    if (monster.evolvesTo) {
+        evolutionText = `Evolui no Nv. ${monster.evolutionLevel || 16}`;
+    }
+
+    const typeInfo = TYPE_ADVANTAGES[typeKey] || { strongAgainst: [], weakAgainst: [] };
+    const strongList = typeInfo.strongAgainst.length > 0 ? typeInfo.strongAgainst.join(', ') : 'Nenhuma específica';
+    const weakList = typeInfo.weakAgainst.length > 0 ? typeInfo.weakAgainst.join(', ') : 'Nenhuma específica';
+    const shinyBanner = monster.isShiny ? '<div class="bg-amber-400 text-black font-black text-[9px] text-center rounded py-0.5 animate-pulse">✨ POKÉMON SHINY RARO ✨</div>' : '';
+    const tierCardBg = getTierColorClass(monster.tier || 1);
+    const auraDetailClass = monster.auraEffect || '';
+    const monImgUrl = monster.isShiny && monster.shinyImage ? monster.shinyImage : (monster.image || '');
+
+    const showVaultButton = (monster.uniqueId && (fromArea === 'team' || fromArea === 'pcbox')) ? `
+        <button onclick="saveMonsterToVault('${monster.uniqueId}'); document.getElementById('pokemon-detail-modal').remove();" class="w-full bg-blue-700 hover:bg-blue-600 text-white font-black py-2 rounded-xl text-xs uppercase shadow transition-all cursor-pointer">
+            📦 Guardar no Cofre Global
+        </button>
+    ` : '';
+
     detailModal.innerHTML = `
-        <div class="trainer-card max-w-md w-full p-5 space-y-3 border-4 ${
-            isFainted
-                ? 'border-red-600'
-                : isShiny
-                    ? 'border-amber-400 shiny-card-glow'
-                    : 'border-amber-500'
-        } ${auraDetailClass} rounded-2xl ${tierCardBg} shadow-2xl text-white">
-
+        <div class="trainer-card max-w-md w-full p-5 space-y-3 border-4 ${isFainted ? 'border-red-600' : (monster.isShiny ? 'border-amber-400 shiny-card-glow' : 'border-amber-500')} ${auraDetailClass} rounded-2xl ${tierCardBg} shadow-2xl text-white">
             <div class="flex justify-between items-center border-b border-amber-900/60 pb-1.5">
-                <span class="text-xs font-black text-amber-400 font-cinzel tracking-wider">
-                    FICHA TÉCNICA DO ANIMA
-                </span>
-
-                <button
-                    onclick="const modal = document.getElementById('pokemon-detail-modal'); if (modal) modal.remove();"
-                    class="text-amber-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-amber-800"
-                >
-                    ✕
-                </button>
+                <span class="text-xs font-black text-amber-400 font-cinzel tracking-wider">FICHA TÉCNICA DO ANIMA</span>
+                <button onclick="document.getElementById('pokemon-detail-modal').remove()" class="text-amber-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-amber-800">✕</button>
             </div>
 
             ${shinyBanner}
-            ${faintedBanner}
+            ${isFainted ? '<div class="bg-red-950/80 border border-red-500 text-red-200 text-center py-1 rounded text-xs font-black animate-pulse">⚠ ANIMA DESMAIADO (HP 0)</div>' : ''}
 
             <div class="grid grid-cols-2 gap-3 items-center">
                 <div class="bg-black/60 border-2 border-amber-700/60 p-3 rounded-xl flex flex-col items-center justify-center h-32">
-                    <img
-                        src="${monsterImage}"
-                        alt="${monsterName}"
-                        class="w-20 h-20 object-contain drop-shadow-[0_0_10px_rgba(255,215,0,0.6)] ${
-                            isFainted ? 'grayscale opacity-50' : ''
-                        }"
-                        onerror="this.onerror=null; this.src='https://api.iconify.design/noto:video-game.svg';"
-                    >
+                    <img src="${monImgUrl}" alt="${monster.name}" class="w-20 h-20 object-contain drop-shadow-[0_0_10px_rgba(255,215,0,0.6)] ${isFainted ? 'grayscale opacity-50' : ''}" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                 </div>
-
                 <div class="space-y-1.5 text-xs">
                     <div>
-                        <h3 class="text-base font-black text-white">
-                            ${monsterName}
-                        </h3>
-
-                        <p class="text-[10px] text-amber-400 font-bold uppercase">
-                            Tipo: ${monsterType}
-                        </p>
+                        <h3 class="text-base font-black text-white">${monster.name}</h3>
+                        <p class="text-[10px] text-amber-400 font-bold uppercase">Tipo: ${monster.type || 'Normal'}</p>
                     </div>
-
                     <div class="bg-black/40 p-2 rounded-lg border border-amber-900/40 space-y-0.5 text-[10px]">
-                        <div class="flex justify-between">
-                            <span>Nível:</span>
-                            <span class="font-bold text-amber-300">
-                                Nv. ${level}
-                            </span>
-                        </div>
-
-                        <div class="flex justify-between">
-                            <span>Força, STR:</span>
-                            <span class="font-bold text-amber-300">
-                                ${strength}
-                            </span>
-                        </div>
-
-                        <div class="flex justify-between">
-                            <span>Vida, HP:</span>
-                            <span class="font-bold ${
-                                isFainted
-                                    ? 'text-red-400'
-                                    : 'text-emerald-400'
-                            }">
-                                ${currentHp} / ${maxHp}
-                            </span>
-                        </div>
-
-                        <div class="flex justify-between">
-                            <span>Tier:</span>
-                            <span class="font-bold text-purple-300">
-                                ${monster.tier || 1}
-                            </span>
-                        </div>
+                        <div class="flex justify-between"><span>Nível:</span> <span class="font-bold text-amber-300">Nv. ${monster.level || 1}</span></div>
+                        <div class="flex justify-between"><span>Força (STR):</span> <span class="font-bold text-amber-300">${monster.str || 4}</span></div>
+                        <div class="flex justify-between"><span>Vida (HP):</span> <span class="font-bold ${isFainted ? 'text-red-400' : 'text-emerald-400'}">${curHp} / ${maxHp}</span></div>
                     </div>
                 </div>
             </div>
 
             <div class="bg-black/60 p-2.5 rounded-xl border border-amber-900/60 space-y-1.5 text-[10px]">
-                <p class="text-amber-300 font-bold border-b border-amber-900/40 pb-0.5">
-                    ⚡ Ecossistema de Tipos, TCG
-                </p>
-
+                <p class="text-amber-300 font-bold border-b border-amber-900/40 pb-0.5">⚡ Ecossistema de Tipos (TCG):</p>
                 <div class="text-emerald-400">
-                    <span class="font-bold">Vantagem, +30% Dano:</span>
-                    ${strongList}
+                    <span class="font-bold">Vantagem (+30% Dano):</span> ${strongList}
                 </div>
-
                 <div class="text-red-400">
-                    <span class="font-bold">Desvantagem, -20% Dano:</span>
-                    ${weakList}
+                    <span class="font-bold">Desvantagem (-20% Dano):</span> ${weakList}
                 </div>
             </div>
 
             <div class="space-y-1 bg-black/50 p-2.5 rounded-xl border border-amber-900/50">
                 <div class="flex justify-between text-[10px] font-bold text-slate-300">
-                    <span>Experiência, XP:</span>
+                    <span>Experiência (XP):</span>
                     <span>${xpCurrent} / 100</span>
                 </div>
-
                 <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden border border-amber-900">
-                    <div
-                        class="bg-gradient-to-r from-amber-500 to-yellow-400 h-full transition-all duration-300"
-                        style="width: ${Math.min(100, xpCurrent)}%;"
-                    ></div>
+                    <div class="bg-gradient-to-r from-amber-500 to-yellow-400 h-full transition-all duration-300" style="width: ${Math.min(xpCurrent, 100)}%;"></div>
                 </div>
-
-                <p class="text-[9px] text-slate-400 text-right pt-0.5">
-                    ✨ ${evolutionText}
-                </p>
+                <p class="text-[9px] text-slate-400 text-right pt-0.5">✨ ${evolutionText}</p>
             </div>
 
             ${showVaultButton}
 
-            <button
-                onclick="const modal = document.getElementById('pokemon-detail-modal'); if (modal) modal.remove();"
-                class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2 rounded-xl text-xs uppercase shadow transition-all cursor-pointer"
-            >
+            <button onclick="document.getElementById('pokemon-detail-modal').remove()" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2 rounded-xl text-xs uppercase shadow transition-all cursor-pointer">
                 Fechar Ficha
             </button>
         </div>
     `;
-
     detailModal.classList.remove('hidden');
 };
 
@@ -2533,351 +1077,111 @@ window.openPokemonDetailModal = function(monsterIdOrUniqueId, fromArea = 'team')
 
 function useInventoryItemMainScreen(itemId) {
     const cp = getCurrentPlayer();
-    if (!cp) return;
-
-    if (!Array.isArray(cp.inventory)) {
-        cp.inventory = [];
-    }
-
-    if (!Array.isArray(cp.activeTeam)) {
-        cp.activeTeam = [];
-    }
-
-    const item = cp.inventory.find(
-        inventoryItem =>
-            inventoryItem &&
-            inventoryItem.id === itemId &&
-            Number(inventoryItem.count) > 0
-    );
-
-    if (!item) {
-        showCustomPopup(
-            "Sem Itens",
-            "❌ Não tens unidades deste item na mochila!",
-            false
-        );
+    if (!cp.inventory) cp.inventory = [];
+    let item = cp.inventory.find(i => i.id === itemId);
+    if (!item || item.count <= 0) {
+        showCustomPopup("Sem Itens", "❌ Não tens unidades deste item na mochila!", false);
         return;
     }
-
-    const decreaseItemCount = () => {
-        item.count = Math.max(
-            0,
-            Number(item.count) - 1
-        );
-    };
-
-    const getMonsterHp = monster =>
-        Math.max(
-            0,
-            Number(
-                monster.currentHp !== undefined
-                    ? monster.currentHp
-                    : monster.maxHp || monster.hp || 20
-            ) || 0
-        );
-
-    const getMonsterMaxHp = monster =>
-        Math.max(
-            1,
-            Number(monster.maxHp || monster.hp || 20) || 20
-        );
 
     if (item.type === 'heal') {
-        const target = cp.activeTeam.find(monster => {
-            if (!monster) return false;
-
-            return getMonsterHp(monster) <
-                getMonsterMaxHp(monster);
-        });
-
+        let target = cp.activeTeam.find(m => m.currentHp < m.maxHp);
         if (!target) {
-            showCustomPopup(
-                "Aviso",
-                "✨ Todos os Pokémon da equipa ativa já estão com HP máximo!",
-                false
-            );
+            showCustomPopup("Aviso", "✨ Todos los Pokémon na equipa ativa estão com HP máximo!", false);
             return;
         }
-
-        const maxHp = getMonsterMaxHp(target);
-        const healValue = Math.max(
-            1,
-            Number(item.value) || 20
-        );
-
-        target.currentHp = Math.min(
-            maxHp,
-            getMonsterHp(target) + healValue
-        );
-
-        decreaseItemCount();
-
-        showCustomPopup(
-            "Item Usado",
-            `💊 ${item.name || 'Potion'} usada em ${target.name}!\nHP recuperado para ${target.currentHp}/${maxHp}.`,
-            true
-        );
-
+        item.count--;
+        target.currentHp = Math.min(target.maxHp, target.currentHp + item.value);
+        showCustomPopup("Item Usado", `💊 ${item.name} usada em ${target.name}!\nHP recuperado para ${target.currentHp}/${target.maxHp}.`, true);
         renderTeamCardSlots();
         renderBottomPanel();
-        updatePlayerUI();
-        return;
-    }
-
-    if (item.type === 'revive') {
-        const target = cp.activeTeam.find(
-            monster => monster && getMonsterHp(monster) <= 0
-        );
-
+    } else if (item.type === 'revive') {
+        let target = cp.activeTeam.find(m => m.currentHp <= 0);
         if (!target) {
-            showCustomPopup(
-                "Aviso",
-                "✨ Não há nenhum Pokémon desmaiado na equipa ativa!",
-                false
-            );
+            showCustomPopup("Aviso", "✨ Não há nenhum Pokémon desmaiado na equipa ativa!", false);
             return;
         }
-
-        const maxHp = getMonsterMaxHp(target);
-        target.currentHp = Math.max(
-            1,
-            Math.floor(maxHp / 2)
-        );
-
-        decreaseItemCount();
-
-        showCustomPopup(
-            "Item Usado",
-            `🌟 ${item.name || 'Revive'} usado! ${target.name} foi revivido com ${target.currentHp} HP!`,
-            true
-        );
-
+        item.count--;
+        target.currentHp = Math.floor(target.maxHp / 2);
+        showCustomPopup("Item Usado", `🌟 ${item.name} usado! ${target.name} foi revivido com ${target.currentHp} HP!`, true);
         renderTeamCardSlots();
         renderBottomPanel();
-        updatePlayerUI();
-        return;
-    }
-
-    if (item.type === 'rarecandy') {
-        const target = cp.activeTeam.find(Boolean);
-
-        if (!target) {
-            showCustomPopup(
-                "Aviso",
-                "⚠️ Não há nenhum Pokémon na equipa ativa.",
-                false
-            );
-            return;
-        }
-
-        decreaseItemCount();
-
-        showCustomPopup(
-            "Doce Raro Usado",
-            `🍬 ${item.name || 'Rare Candy'} dado a ${target.name}!\nO Anima recebeu 100 XP.`,
-            true
-        );
-
+    } else if (item.type === 'rarecandy') {
+        let target = cp.activeTeam[0];
+        if (!target) return;
+        item.count--;
+        showCustomPopup("Doce Raro Usado", `🍬 ${item.name} dado a ${target.name}!\nO Anima ganhou 100 XP e subiu de nível!`, true);
         addExperienceToMonster(target, 100);
         renderBottomPanel();
-        return;
-    }
-
-    if (item.type === 'evolution') {
-        const target = cp.activeTeam.find(
-            monster => monster && monster.evolvesTo
-        );
-
+    } else if (item.type === 'evolution') {
+        let target = cp.activeTeam.find(m => m.evolvesTo);
         if (!target) {
-            showCustomPopup(
-                "Aviso",
-                "⚠️ Nenhum Pokémon da equipa ativa possui evolução disponível.",
-                false
-            );
+            showCustomPopup("Aviso", "⚠️ Nenhum Pokémon na tua equipa ativa reage a esta pedra de evolução!", false);
             return;
         }
+        item.count--;
+        const nextEvolution = MONSTER_CATALOG.find(m => m.id === target.evolvesTo);
+        if (nextEvolution) {
+            const oldName = target.name;
+            target.name = nextEvolution.name;
+            target.image = nextEvolution.image;
+            if (nextEvolution.shinyImage) target.shinyImage = nextEvolution.shinyImage;
+            target.str = (target.str || 4) + 3;
+            target.maxHp = (target.maxHp || 20) + 10;
+            target.currentHp = target.maxHp;
+            target.evolvesTo = nextEvolution.evolvesTo || null;
 
-        if (
-            typeof MONSTER_CATALOG === 'undefined' ||
-            !Array.isArray(MONSTER_CATALOG)
-        ) {
-            showCustomPopup(
-                "Erro",
-                "❌ O catálogo de Pokémon não está disponível.",
-                false
-            );
-            return;
+            showEvolutionModalUI(oldName, target);
+            appendAdventureLog(`✨ ${cp.name} usou uma Evolution Stone: ${oldName} evoluiu para ${target.name}!`);
         }
-
-        const nextEvolution = MONSTER_CATALOG.find(
-            monster => monster && monster.id === target.evolvesTo
-        );
-
-        if (!nextEvolution) {
-            showCustomPopup(
-                "Evolução Indisponível",
-                "❌ A próxima forma evolutiva não foi encontrada no catálogo.",
-                false
-            );
-            return;
-        }
-
-        const oldName = target.name || 'Pokémon';
-        const previousMaxHp = getMonsterMaxHp(target);
-
-        target.id = nextEvolution.id || target.id;
-        target.name = nextEvolution.name || target.name;
-        target.type = nextEvolution.type || target.type;
-        target.tier = nextEvolution.tier || target.tier;
-        target.rarity = nextEvolution.rarity || target.rarity;
-        target.stage = nextEvolution.stage || target.stage;
-        target.image = nextEvolution.image || target.image;
-        target.shinyImage =
-            nextEvolution.shinyImage ||
-            target.shinyImage ||
-            null;
-        target.evolvesTo =
-            nextEvolution.evolvesTo || null;
-        target.evolutionLevel =
-            nextEvolution.evolutionLevel || null;
-
-        target.str = Math.max(
-            Number(target.str) || 4,
-            Number(nextEvolution.str) || 4
-        );
-
-        target.maxHp = Math.max(
-            previousMaxHp + 10,
-            Number(nextEvolution.hp) || previousMaxHp + 10
-        );
-
-        target.currentHp = target.maxHp;
-
-        decreaseItemCount();
-
-        showEvolutionModalUI(oldName, target);
-
-        appendAdventureLog(
-            `✨ ${cp.name} usou uma Evolution Stone: ${oldName} evoluiu para ${target.name}!`
-        );
-
         renderTeamCardSlots();
         renderBottomPanel();
-        updatePlayerUI();
-        return;
+    } else {
+        showCustomPopup("Informação", `ℹ O item ${item.name} só pode ser aplicado diretamente durante uma Batalha ou Encontro.`, true);
     }
-
-    showCustomPopup(
-        "Informação",
-        `ℹ O item ${item.name || item.id} só pode ser aplicado durante uma batalha, encontro ou em uma área específica.`,
-        true
-    );
 }
 
-// --- CIDADES, CENTRO POKÉMON E POKÉ MART ---
-
+// --- SPRITES DOS GINÁSIOS CORRIGIDOS (leaders/) E FLUXO DE ARENA INTEGRADO ---
 window.openCityModal = function(cityName) {
-    let cityModal =
-        document.getElementById('city-hub-modal');
-
+    let cityModal = document.getElementById('city-hub-modal');
     if (!cityModal) {
         cityModal = document.createElement('div');
         cityModal.id = 'city-hub-modal';
-        cityModal.className =
-            'fixed inset-0 bg-black/85 z-[350] flex items-center justify-center p-4 backdrop-blur-sm';
+        cityModal.className = 'fixed inset-0 bg-black/85 z-[350] flex items-center justify-center p-4 backdrop-blur-sm';
         document.body.appendChild(cityModal);
     }
 
     const cp = getCurrentPlayer();
-    if (!cp) return;
-
-    const safeCityName = String(
-        cityName || 'Cidade'
-    );
-
+    
     let gymInfo = null;
+    if (typeof GYM_LEADERS_CATALOG !== 'undefined') {
+        const normalizeStr = (str) => str.toLowerCase().replace(/city/g, '').replace(/island/g, '').replace(/\s+/g, '').trim();
+        const cleanSearchName = normalizeStr(cityName);
 
-    if (
-        typeof GYM_LEADERS_CATALOG !== 'undefined' &&
-        Array.isArray(GYM_LEADERS_CATALOG)
-    ) {
-        const normalizeCityName = value =>
-            String(value || '')
-                .toLowerCase()
-                .replace(/city/g, '')
-                .replace(/island/g, '')
-                .replace(/\s+/g, '')
-                .trim();
-
-        const normalizedSearch =
-            normalizeCityName(safeCityName);
-
-        gymInfo = GYM_LEADERS_CATALOG.find(gym => {
-            if (!gym) return false;
-
-            return normalizeCityName(gym.city) ===
-                normalizedSearch;
-        }) || null;
+        gymInfo = GYM_LEADERS_CATALOG.find(g => {
+            const cleanCatalogName = normalizeStr(g.city);
+            return cleanCatalogName === cleanSearchName || g.city.toLowerCase() === cityName.toLowerCase();
+        });
     }
 
-    const badges =
-        Array.isArray(cp.badges)
-            ? cp.badges
-            : [];
+    const hasBadge = gymInfo && cp.badges && cp.badges.includes(gymInfo.badgeKey);
 
-    const hasBadge =
-        Boolean(
-            gymInfo &&
-            badges.includes(gymInfo.badgeKey)
-        );
-
-    let gymSectionHtml = `
-        <p class="text-xs text-slate-400 text-center">
-            Esta localidade não possui um ginásio oficial registado.
-        </p>
-    `;
+    let gymSectionHtml = `<p class="text-xs text-slate-400 text-center">Esta localidade não possui um ginásio oficial registado.</p>`;
 
     if (gymInfo) {
-        let leaderFileName =
-            gymInfo.leader || 'leader';
+        let leaderFileName = gymInfo.leader;
+        if (leaderFileName === "Misty") leaderFileName = "misty";
+        const leaderSpriteUrl = `${SUPABASE_STORAGE_URL}leaders/${encodeURIComponent(leaderFileName)}.png`;
 
-        if (leaderFileName === 'Misty') {
-            leaderFileName = 'misty';
-        }
-
-        const leaderSpriteUrl =
-            `${SUPABASE_STORAGE_URL}leaders/${encodeURIComponent(leaderFileName)}.png`;
-
-        const leaderTeam =
-            Array.isArray(gymInfo.pokemons) &&
-            gymInfo.pokemons.length > 0
-                ? gymInfo.pokemons
-                : gymInfo.pokemon
-                    ? [gymInfo.pokemon]
-                    : [];
-
+        const leaderTeam = gymInfo.pokemons || [gymInfo.pokemon];
         let teamPokesHtml = '';
-
-        leaderTeam.forEach(pokemon => {
-            if (!pokemon) return;
-
+        leaderTeam.forEach(pk => {
             teamPokesHtml += `
                 <div class="flex items-center gap-2 bg-black/40 p-1.5 rounded-xl border border-red-900/50">
-                    <img
-                        src="${pokemon.image || ''}"
-                        class="w-10 h-10 object-contain drop-shadow"
-                        onerror="this.onerror=null; this.src='https://api.iconify.design/noto:video-game.svg';"
-                    >
-
+                    <img src="${pk.image}" class="w-10 h-10 object-contain drop-shadow" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                     <div class="text-[10px]">
-                        <p class="font-bold text-white">
-                            ${pokemon.name || 'Pokémon'}
-                        </p>
-
-                        <p class="text-amber-400">
-                            Nv. ${pokemon.level || 1} |
-                            ${pokemon.type || 'Normal'}
-                        </p>
+                        <p class="font-bold text-white">${pk.name}</p>
+                        <p class="text-amber-400">Nv. ${pk.level} | ${pk.type}</p>
                     </div>
                 </div>
             `;
@@ -2887,65 +1191,25 @@ window.openCityModal = function(cityName) {
             <div class="bg-red-950/40 border-2 border-red-600/60 p-3 rounded-2xl space-y-2">
                 <div class="flex justify-between items-center border-b border-red-900 pb-1">
                     <div class="flex items-center gap-2">
-                        <img
-                            src="${leaderSpriteUrl}"
-                            class="w-10 h-10 object-contain rounded-full bg-black border border-amber-400 shadow"
-                            onerror="this.onerror=null; this.src='https://api.iconify.design/noto:man-raising-hand.svg';"
-                        >
-
+                        <img src="${leaderSpriteUrl}" class="w-10 h-10 object-contain rounded-full bg-black border border-amber-400 shadow" onerror="this.src='https://api.iconify.design/noto:man-raising-hand.svg'">
                         <div>
-                            <span class="text-xs font-black text-red-300">
-                                Líder: ${gymInfo.leader || 'Desconhecido'}
-                            </span>
-
-                            <p class="text-[9px] text-slate-300">
-                                Formato: ${gymInfo.format || 1}x${gymInfo.format || 1}
-                            </p>
+                            <span class="text-xs font-black text-red-300">Líder: ${gymInfo.leader}</span>
+                            <p class="text-[9px] text-slate-300">Formato: ${gymInfo.format}x${gymInfo.format}</p>
                         </div>
                     </div>
-
                     <div>
-                        ${
-                            hasBadge
-                                ? `
-                                    <span class="bg-emerald-600 text-white font-bold text-[9px] px-2 py-0.5 rounded-full shadow">
-                                        ✔ Insígnia Conquistada
-                                    </span>
-                                `
-                                : `
-                                    <span class="bg-amber-500 text-black font-black text-[9px] px-2 py-0.5 rounded-full animate-pulse shadow">
-                                        ⭐ Ginásio Pendente
-                                    </span>
-                                `
-                        }
+                        ${hasBadge ? '<span class="bg-emerald-600 text-white font-bold text-[9px] px-2 py-0.5 rounded-full shadow">✔ Insígnia Conquistada</span>' : '<span class="bg-amber-500 text-black font-black text-[9px] px-2 py-0.5 rounded-full animate-pulse shadow">⭐ Ginásio Pendente</span>'}
                     </div>
                 </div>
-
                 <div class="grid grid-cols-2 gap-2">
-                    ${teamPokesHtml || '<p class="text-[10px] text-slate-400 col-span-2 text-center">Equipa não informada.</p>'}
+                    ${teamPokesHtml}
                 </div>
-
                 <div class="flex justify-between items-center text-[10px] text-slate-300 pt-1 border-t border-red-900/40">
-                    <span>
-                        Prémio:
-                        <strong class="text-amber-400">
-                            ${Number(gymInfo.rewardGold) || 0} 🪙
-                        </strong>
-                    </span>
-
-                    <span>
-                        Insígnia:
-                        <strong class="text-amber-300 uppercase">
-                            ${gymInfo.badgeKey || 'N/D'}
-                        </strong>
-                    </span>
+                    <span>Prémio: <strong class="text-amber-400">${gymInfo.rewardGold} 🪙</strong></span>
+                    <span>Insígnia: <strong class="text-amber-300 uppercase">${gymInfo.badgeKey}</strong></span>
                 </div>
-
-                <button
-                    onclick="document.getElementById('city-hub-modal').remove(); initiateGymSequence(${JSON.stringify(gymInfo.city || safeCityName)});"
-                    class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2 rounded-xl text-xs uppercase shadow transition-all cursor-pointer"
-                >
-                    ⚔️ Desafiar Ginásio
+                <button onclick="document.getElementById('city-hub-modal').remove(); initiateGymSequence('${gymInfo.city}');" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2 rounded-xl text-xs uppercase shadow transition-all cursor-pointer">
+                    ⚔️ Desafiar Ginásio de ${gymInfo.city}
                 </button>
             </div>
         `;
@@ -2954,95 +1218,45 @@ window.openCityModal = function(cityName) {
     cityModal.innerHTML = `
         <div class="trainer-card max-w-md w-full p-6 space-y-4 border-4 border-amber-500 rounded-2xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
             <div class="flex justify-between items-center border-b border-amber-900/60 pb-2">
-                <span class="text-xs font-black text-amber-400 font-cinzel tracking-wider">
-                    🏙 CIDADE DE ${safeCityName.toUpperCase()}
-                </span>
-
-                <button
-                    onclick="document.getElementById('city-hub-modal').remove()"
-                    class="text-amber-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-amber-950/60 rounded border border-amber-800"
-                >
-                    ✕
-                </button>
+                <span class="text-xs font-black text-amber-400 font-cinzel tracking-wider">🏙 CIDADE DE ${cityName.toUpperCase()}</span>
+                <button onclick="document.getElementById('city-hub-modal').remove()" class="text-amber-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-amber-950/60 rounded border border-amber-800">✕</button>
             </div>
-
+            
             <div class="grid grid-cols-2 gap-2">
-                <button
-                    onclick="document.getElementById('city-hub-modal').remove(); openPokemonCenterModal();"
-                    class="bg-emerald-700 hover:bg-emerald-600 text-white font-black py-2 px-3 rounded-xl text-[10px] uppercase shadow flex items-center justify-center gap-1.5 cursor-pointer"
-                >
+                <button onclick="document.getElementById('city-hub-modal').remove(); openPokemonCenterModal();" class="bg-emerald-700 hover:bg-emerald-600 text-white font-black py-2 px-3 rounded-xl text-[10px] uppercase shadow flex items-center justify-center gap-1.5 cursor-pointer">
                     🏥 Centro Pokémon
                 </button>
-
-                <button
-                    onclick="document.getElementById('city-hub-modal').remove(); openPokemartModal();"
-                    class="bg-blue-700 hover:bg-blue-600 text-white font-black py-2 px-3 rounded-xl text-[10px] uppercase shadow flex items-center justify-center gap-1.5 cursor-pointer"
-                >
+                <button onclick="document.getElementById('city-hub-modal').remove(); openPokemartModal();" class="bg-blue-700 hover:bg-blue-600 text-white font-black py-2 px-3 rounded-xl text-[10px] uppercase shadow flex items-center justify-center gap-1.5 cursor-pointer">
                     🏪 Poké Mart
                 </button>
             </div>
 
             ${gymSectionHtml}
 
-            <button
-                onclick="document.getElementById('city-hub-modal').remove()"
-                class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs cursor-pointer"
-            >
-                Continuar Viagem
-            </button>
+            <button onclick="document.getElementById('city-hub-modal').remove()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs cursor-pointer">Continuar Viagem</button>
         </div>
     `;
-
     cityModal.classList.remove('hidden');
 };
 
 window.openPokemonCenterModal = function() {
     const cp = getCurrentPlayer();
-    if (!cp) return;
-
-    const healTeam = team => {
-        if (!Array.isArray(team)) return;
-
-        team.forEach(monster => {
-            if (!monster) return;
-
-            const maxHp = Math.max(
-                1,
-                Number(monster.maxHp || monster.hp || 20) || 20
-            );
-
-            monster.maxHp = maxHp;
-            monster.currentHp = maxHp;
-        });
-    };
-
-    healTeam(cp.activeTeam);
-    healTeam(cp.pcBox);
+    if (cp.activeTeam) cp.activeTeam.forEach(mon => { mon.currentHp = mon.maxHp || mon.hp || 20; });
+    if (cp.pcBox) cp.pcBox.forEach(mon => { mon.currentHp = mon.maxHp || mon.hp || 20; });
 
     renderTeamCardSlots();
     renderBottomPanel();
     updatePlayerUI();
-
-    showCustomPopup(
-        "🏥 Centro Pokémon",
-        `A enfermeira Joy cuidou da equipa de ${cp.name}!\n\n✨ Todos os Pokémon foram totalmente curados!`,
-        true
-    );
-
-    appendAdventureLog(
-        `${cp.name} visitou o Centro Pokémon: equipa totalmente curada.`
-    );
+    showCustomPopup("🏥 Centro Pokémon", `A enfermeira Joy cuidou da equipa de ${cp.name}!\n\n✨ Todos los Pokémon foram totalmente curados!`, true);
+    appendAdventureLog(`${cp.name} visitou o Centro Pokémon: Equipa totalmente curada.`);
 };
 
 window.openPokemartModal = function() {
-    let martModal =
-        document.getElementById('pokemart-modal');
-
+    let martModal = document.getElementById('pokemart-modal');
     if (!martModal) {
         martModal = document.createElement('div');
         martModal.id = 'pokemart-modal';
-        martModal.className =
-            'fixed inset-0 bg-black/85 z-[350] flex items-center justify-center p-4 backdrop-blur-sm';
+        martModal.className = 'fixed inset-0 bg-black/85 z-[350] flex items-center justify-center p-4 backdrop-blur-sm';
         document.body.appendChild(martModal);
     }
 
@@ -3050,149 +1264,42 @@ window.openPokemartModal = function() {
     martModal.classList.remove('hidden');
 };
 
-function renderMartContent(modalElement) {
+function renderMartContent(modalEl) {
     const cp = getCurrentPlayer();
-    if (!cp) return;
-
-    if (!Array.isArray(cp.inventory)) {
-        cp.inventory = [];
-    }
-
-    const itemsForSale = [
-        {
-            id: 'poke_ball',
-            name: 'Poké Ball',
-            type: 'sphere',
-            value: 0,
-            cost: 50,
-            icon: '🔴',
-            image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`,
-            desc: 'Esfera clássica.'
-        },
-        {
-            id: 'ball_great',
-            name: 'Great Ball',
-            type: 'sphere',
-            value: 1,
-            cost: 100,
-            icon: '🔵',
-            image: `${SUPABASE_STORAGE_URL}items/great_ball.png`,
-            desc: '+1 na captura.'
-        },
-        {
-            id: 'ball_ultra',
-            name: 'Ultra Ball',
-            type: 'sphere',
-            value: 2,
-            cost: 200,
-            icon: '🟡',
-            image: `${SUPABASE_STORAGE_URL}items/ultra_ball.png`,
-            desc: '+2 na captura.'
-        },
-        {
-            id: 'item_rarecandy',
-            name: 'Rare Candy',
-            type: 'rarecandy',
-            value: 100,
-            cost: 300,
-            icon: '🍬',
-            image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`,
-            desc: 'Dá 100 XP.'
-        },
-        {
-            id: 'evolution_stone',
-            name: 'Evolution Stone',
-            type: 'evolution',
-            value: 1,
-            cost: 500,
-            icon: '💎',
-            image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`,
-            desc: 'Evolui um Anima compatível.'
-        },
-        {
-            id: 'item_potion',
-            name: 'Potion',
-            type: 'heal',
-            value: 20,
-            cost: 50,
-            icon: '💊',
-            image: `${SUPABASE_STORAGE_URL}items/potion.png`,
-            desc: 'Restaura 20 HP.'
-        },
-        {
-            id: 'item_revive',
-            name: 'Revive',
-            type: 'revive',
-            value: 50,
-            cost: 250,
-            icon: '🌟',
-            image: `${SUPABASE_STORAGE_URL}items/revive.png`,
-            desc: 'Revive um Anima desmaiado.'
-        },
-        {
-            id: 'item_vitamin',
-            name: 'Vitamin',
-            type: 'battle',
-            value: 2,
-            cost: 150,
-            icon: '🧪',
-            image: `${SUPABASE_STORAGE_URL}items/vitamin.png`,
-            desc: '+2 STR na batalha.'
-        }
+    let itemsForSale = [
+        { id: 'poke_ball', name: 'Poké Ball', type: 'sphere', value: 0, cost: 50, icon: '🔴', image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`, desc: 'Esfera clássica.' },
+        { id: 'ball_great', name: 'Great Ball', type: 'sphere', value: 1, cost: 100, icon: '🔵', image: `${SUPABASE_STORAGE_URL}items/great_ball.png`, desc: '+1 na captura.' },
+        { id: 'ball_ultra', name: 'Ultra Ball', type: 'sphere', value: 2, cost: 200, icon: '🟡', image: `${SUPABASE_STORAGE_URL}items/ultra_ball.png`, desc: '+2 na captura.' },
+        { id: 'item_rarecandy', name: 'Rare Candy', type: 'rarecandy', value: 100, cost: 300, icon: '🍬', image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`, desc: 'Dá 100 XP (Sobe de Nível).' },
+        { id: 'evolution_stone', name: 'Evolution Stone', type: 'evolution', value: 1, cost: 500, icon: '💎', image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`, desc: 'Evolve um Anima compatível.' },
+        { id: 'item_potion', name: 'Potion', type: 'heal', value: 20, cost: 50, icon: '💊', image: `${SUPABASE_STORAGE_URL}items/potion.png`, desc: 'Restaura 20 HP.' },
+        { id: 'item_revive', name: 'Revive', type: 'revive', value: 50, cost: 250, icon: '🌟', image: `${SUPABASE_STORAGE_URL}items/revive.png`, desc: 'Revive um Anima desmaiado.' },
+        { id: 'item_vitamin', name: 'Vitamin', type: 'battle', value: 2, cost: 150, icon: '🧪', image: `${SUPABASE_STORAGE_URL}items/vitamin.png`, desc: '+2 STR na batalha.' }
     ];
 
-    let shopHtml = `
+    let shopHTML = `
         <div class="trainer-card max-w-md w-full p-6 space-y-4 border-4 border-blue-500 rounded-2xl bg-gradient-to-b from-[#0f172a] to-[#020617] shadow-2xl text-white">
-
             <div class="flex justify-between items-center border-b border-blue-900/60 pb-2">
-                <span class="text-xs font-black text-blue-400 font-cinzel tracking-wider">
-                    🏪 POKÉ MART
-                </span>
-
-                <span class="bg-amber-500 text-black font-black text-[10px] px-2 py-0.5 rounded">
-                    Ouro: ${Number(cp.gold) || 0} 🪙
-                </span>
+                <span class="text-xs font-black text-blue-400 font-cinzel tracking-wider">🏪 POKÉ MART (${cp.name})</span>
+                <span class="bg-amber-500 text-black font-black text-[10px] px-2 py-0.5 rounded">Ouro: ${cp.gold} 🪙</span>
             </div>
-
             <div class="space-y-2 max-h-60 overflow-y-auto pr-1">
     `;
 
     itemsForSale.forEach(item => {
-        const itemImage = item.image
-            ? `
-                <img
-                    src="${item.image}"
-                    class="w-8 h-8 object-contain"
-                    onerror="this.onerror=null; this.src='https://api.iconify.design/noto:package.svg';"
-                >
-            `
-            : `<span class="text-xl">${item.icon}</span>`;
-
-        shopHtml += `
+        const itemImg = item.image ? `<img src="${item.image}" class="w-8 h-8 object-contain">` : `<span class="text-xl">${item.icon}</span>`;
+        shopHTML += `
             <div class="flex items-center justify-between bg-black/50 p-2.5 rounded-xl border border-blue-900/50">
                 <div class="flex items-center gap-2">
-                    ${itemImage}
-
+                    ${itemImg}
                     <div>
-                        <p class="text-xs font-bold text-white">
-                            ${item.name}
-                        </p>
-
-                        <p class="text-[9px] text-slate-400">
-                            ${item.desc}
-                        </p>
+                        <p class="text-xs font-bold text-white">${item.name}</p>
+                        <p class="text-[9px] text-slate-400">${item.desc}</p>
                     </div>
                 </div>
-
                 <div class="flex items-center gap-2">
-                    <span class="text-xs font-black text-amber-400">
-                        ${item.cost} 🪙
-                    </span>
-
-                    <button
-                        onclick="buyItemFromMart(${JSON.stringify(item.id)}, ${Number(item.cost) || 0})"
-                        class="bg-blue-600 hover:bg-blue-500 text-white font-black px-3 py-1 rounded-lg text-[10px] shadow cursor-pointer"
-                    >
+                    <span class="text-xs font-black text-amber-400">${item.cost} 🪙</span>
+                    <button onclick="buyItemFromMart('${item.id}', ${item.cost})" class="bg-blue-600 hover:bg-blue-500 text-white font-black px-3 py-1 rounded-lg text-[10px] shadow cursor-pointer">
                         Comprar
                     </button>
                 </div>
@@ -3200,454 +1307,83 @@ function renderMartContent(modalElement) {
         `;
     });
 
-    shopHtml += `
+    shopHTML += `
             </div>
-
-            <button
-                onclick="document.getElementById('pokemart-modal').remove()"
-                class="w-full bg-slate-700 hover:bg-slate-600 text-white font-black py-2 rounded-xl text-xs uppercase shadow cursor-pointer"
-            >
+            <button onclick="document.getElementById('pokemart-modal').remove()" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-black py-2 rounded-xl text-xs uppercase shadow cursor-pointer">
                 Sair da Loja
             </button>
         </div>
     `;
 
-    modalElement.innerHTML = shopHtml;
+    modalEl.innerHTML = shopHTML;
 }
 
 window.buyItemFromMart = function(itemId, cost) {
     const cp = getCurrentPlayer();
-    if (!cp) return;
-
-    const itemCost = Math.max(
-        0,
-        Number(cost) || 0
-    );
-
-    if ((Number(cp.gold) || 0) < itemCost) {
-        showCustomPopup(
-            "Sem Ouro",
-            "❌ Não tens ouro suficiente para comprar este item!",
-            false
-        );
+    if (cp.gold < cost) {
+        showCustomPopup("Sem Ouro", "❌ Não tens ouro suficiente para comprar este item!", false);
         return;
     }
 
-    const itemCatalog = {
-        poke_ball: {
-            id: 'poke_ball',
-            name: 'Poké Ball',
-            type: 'sphere',
-            value: 0,
-            icon: '🔴',
-            image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`,
-            desc: 'Esfera clássica.'
-        },
-
-        ball_great: {
-            id: 'ball_great',
-            name: 'Great Ball',
-            type: 'sphere',
-            value: 1,
-            icon: '🔵',
-            image: `${SUPABASE_STORAGE_URL}items/great_ball.png`,
-            desc: '+1 na captura.'
-        },
-
-        ball_ultra: {
-            id: 'ball_ultra',
-            name: 'Ultra Ball',
-            type: 'sphere',
-            value: 2,
-            icon: '🟡',
-            image: `${SUPABASE_STORAGE_URL}items/ultra_ball.png`,
-            desc: '+2 na captura.'
-        },
-
-        item_rarecandy: {
-            id: 'item_rarecandy',
-            name: 'Rare Candy',
-            type: 'rarecandy',
-            value: 100,
-            icon: '🍬',
-            image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`,
-            desc: 'Dá 100 XP.'
-        },
-
-        evolution_stone: {
-            id: 'evolution_stone',
-            name: 'Evolution Stone',
-            type: 'evolution',
-            value: 1,
-            icon: '💎',
-            image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`,
-            desc: 'Evolui um Anima compatível.'
-        },
-
-        item_potion: {
-            id: 'item_potion',
-            name: 'Potion',
-            type: 'heal',
-            value: 20,
-            icon: '💊',
-            image: `${SUPABASE_STORAGE_URL}items/potion.png`,
-            desc: 'Restaura 20 HP.'
-        },
-
-        item_revive: {
-            id: 'item_revive',
-            name: 'Revive',
-            type: 'revive',
-            value: 50,
-            icon: '🌟',
-            image: `${SUPABASE_STORAGE_URL}items/revive.png`,
-            desc: 'Revive um Anima desmaiado.'
-        },
-
-        item_vitamin: {
-            id: 'item_vitamin',
-            name: 'Vitamin',
-            type: 'battle',
-            value: 2,
-            icon: '🧪',
-            image: `${SUPABASE_STORAGE_URL}items/vitamin.png`,
-            desc: '+2 STR na batalha.'
-        }
-    };
-
-    const itemDefinition = itemCatalog[itemId];
-
-    if (!itemDefinition) {
-        showCustomPopup(
-            "Erro",
-            "❌ Este item não está disponível no catálogo da loja.",
-            false
-        );
-        return;
-    }
-
-    if (!Array.isArray(cp.inventory)) {
-        cp.inventory = [];
-    }
-
-    cp.gold = Math.max(
-        0,
-        (Number(cp.gold) || 0) - itemCost
-    );
-
-    const existingItem = cp.inventory.find(
-        item => item && item.id === itemId
-    );
-
+    cp.gold -= cost;
+    if (!Array.isArray(cp.inventory)) cp.inventory = [];
+    let existingItem = cp.inventory.find(i => i.id === itemId);
     if (existingItem) {
-        existingItem.count =
-            Math.max(0, Number(existingItem.count) || 0) + 1;
+        existingItem.count++;
     } else {
-        cp.inventory.push({
-            ...itemDefinition,
-            count: 1
-        });
+        let baseItemsCatalog = {
+            poke_ball: { id: 'poke_ball', name: 'Poké Ball', type: 'sphere', value: 0, icon: '🔴', image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`, count: 1, desc: 'Esfera clássica.' },
+            ball_great: { id: 'ball_great', name: 'Great Ball', type: 'sphere', value: 1, icon: '🔵', image: `${SUPABASE_STORAGE_URL}items/great_ball.png`, count: 1, desc: '+1 na captura.' },
+            ball_ultra: { id: 'ball_ultra', name: 'Ultra Ball', type: 'sphere', value: 2, icon: '🟡', image: `${SUPABASE_STORAGE_URL}items/ultra_ball.png`, count: 1, desc: '+2 na captura.' },
+            item_rarecandy: { id: 'item_rarecandy', name: 'Rare Candy', type: 'rarecandy', value: 100, icon: '🍬', image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`, count: 1, desc: 'Dá 100 XP (Sobe de Nível).' },
+            evolution_stone: { id: 'evolution_stone', name: 'Evolution Stone', type: 'evolution', value: 1, icon: '💎', image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`, count: 1, desc: 'Evolve um Anima compatível.' },
+            item_potion: { id: 'item_potion', name: 'Potion', type: 'heal', value: 20, icon: '💊', image: `${SUPABASE_STORAGE_URL}items/potion.png`, count: 1, desc: 'Restaura 20 HP.' },
+            item_revive: { id: 'item_revive', name: 'Revive', type: 'revive', value: 50, icon: '🌟', image: `${SUPABASE_STORAGE_URL}items/revive.png`, count: 1, desc: 'Revive um Anima desmaiado.' },
+            item_vitamin: { id: 'item_vitamin', name: 'Vitamin', type: 'battle', value: 2, icon: '🧪', image: `${SUPABASE_STORAGE_URL}items/vitamin.png`, count: 1, desc: 'Aumenta o STR do Pokémon.' }
+        };
+        if (baseItemsCatalog[itemId]) {
+            cp.inventory.push(baseItemsCatalog[itemId]);
+        }
     }
 
     updatePlayerUI();
     renderBottomPanel();
-
-    showCustomPopup(
-        "Compra Realizada",
-        `🎉 ${itemDefinition.name} comprado com sucesso!`,
-        true
-    );
-
-    const martModal =
-        document.getElementById('pokemart-modal');
-
-    if (martModal) {
-        renderMartContent(martModal);
-    }
+    showCustomPopup("Compra Realizada", "🎉 Item comprado com sucesso!", true);
+    
+    let martModal = document.getElementById('pokemart-modal');
+    if (martModal) renderMartContent(martModal);
 };
-// --- MODAL DETALHADO DO POKÉMON ---
-
-window.openPokemonDetailModal = function(monsterIdOrUniqueId, fromArea = 'team') {
-    const cp = getCurrentPlayer();
-    if (!cp) return;
-
-    if (!Array.isArray(cp.activeTeam)) cp.activeTeam = [];
-    if (!Array.isArray(cp.pcBox)) cp.pcBox = [];
-
-    let monster = null;
-    const findMonster = list => list.find(mon => mon && (mon.uniqueId === monsterIdOrUniqueId || mon.id === monsterIdOrUniqueId));
-
-    if (fromArea === 'team') monster = findMonster(cp.activeTeam);
-    else if (fromArea === 'pcbox') monster = findMonster(cp.pcBox);
-    else if (fromArea === 'board' && typeof boardPokemonCards !== 'undefined') monster = boardPokemonCards[monsterIdOrUniqueId];
-
-    if (!monster) return;
-
-    const level = Number(monster.level) || 1;
-    const strength = Number(monster.str) || 4;
-    const baseHp = Number(monster.hp) || 20;
-    const maxHp = Math.max(1, Number(monster.maxHp) || baseHp);
-    const currentHp = Math.max(0, Math.min(maxHp, Number(monster.currentHp !== undefined ? monster.currentHp : maxHp) || 0));
-    const xpCurrent = Math.max(0, Number(monster.xp) || 0);
-    const isFainted = currentHp <= 0;
-    const isShiny = Boolean(monster.isShiny);
-    const monsterName = monster.name || 'Pokémon';
-    const monsterType = monster.type || 'Normal';
-    const typeKey = monsterType.split('/')[0].trim();
-
-    const typeInfo = typeof TYPE_ADVANTAGES !== 'undefined' && TYPE_ADVANTAGES[typeKey]
-        ? TYPE_ADVANTAGES[typeKey]
-        : { strongAgainst: [], weakAgainst: [] };
-
-    const strongList = Array.isArray(typeInfo.strongAgainst) && typeInfo.strongAgainst.length
-        ? typeInfo.strongAgainst.join(', ')
-        : 'Nenhuma específica';
-
-    const weakList = Array.isArray(typeInfo.weakAgainst) && typeInfo.weakAgainst.length
-        ? typeInfo.weakAgainst.join(', ')
-        : 'Nenhuma específica';
-
-    const evolutionText = monster.evolvesTo
-        ? `Evolui para ${monster.evolvesTo} no Nv. ${Number(monster.evolutionLevel) || 16}`
-        : 'Forma final ou sem evolução cadastrada';
-
-    const tierCardBg = typeof getTierColorClass === 'function'
-        ? getTierColorClass(monster.tier || 1)
-        : 'bg-gradient-to-b from-amber-950 via-amber-900 to-black border-amber-600';
-
-    const monsterImage = isShiny && monster.shinyImage ? monster.shinyImage : (monster.image || '');
-    const auraDetailClass = monster.auraEffect || '';
-
-    const shinyBanner = isShiny
-        ? '<div class="bg-amber-400 text-black font-black text-[9px] text-center rounded py-1 animate-pulse">✨ POKÉMON SHINY RARO ✨</div>'
-        : '';
-
-    const faintedBanner = isFainted
-        ? '<div class="bg-red-950/80 border border-red-500 text-red-200 text-center py-1 rounded text-xs font-black animate-pulse">⚠ ANIMA DESMAIADO, HP 0</div>'
-        : '';
-
-    const showVaultButton = monster.uniqueId && (fromArea === 'team' || fromArea === 'pcbox')
-        ? `<button onclick="saveMonsterToVault(${JSON.stringify(monster.uniqueId)}); const modal=document.getElementById('pokemon-detail-modal'); if(modal) modal.remove();" class="w-full bg-blue-700 hover:bg-blue-600 text-white font-black py-2 rounded-xl text-xs uppercase shadow transition-all cursor-pointer">📦 Guardar no Cofre Global</button>`
-        : '';
-
-    let detailModal = document.getElementById('pokemon-detail-modal');
-
-    if (!detailModal) {
-        detailModal = document.createElement('div');
-        detailModal.id = 'pokemon-detail-modal';
-        detailModal.className = 'fixed inset-0 bg-black/85 z-[350] flex items-center justify-center p-4 backdrop-blur-sm';
-        document.body.appendChild(detailModal);
-    }
-
-    detailModal.innerHTML = `
-        <div class="trainer-card max-w-md w-full p-5 space-y-3 border-4 ${isFainted ? 'border-red-600' : isShiny ? 'border-amber-400 shiny-card-glow' : 'border-amber-500'} ${auraDetailClass} rounded-2xl ${tierCardBg} shadow-2xl text-white">
-            <div class="flex justify-between items-center border-b border-amber-900/60 pb-1.5">
-                <span class="text-xs font-black text-amber-400 font-cinzel tracking-wider">FICHA TÉCNICA DO ANIMA</span>
-                <button onclick="const modal=document.getElementById('pokemon-detail-modal'); if(modal) modal.remove();" class="text-amber-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-amber-800">✕</button>
-            </div>
-
-            ${shinyBanner}
-            ${faintedBanner}
-
-            <div class="grid grid-cols-2 gap-3 items-center">
-                <div class="bg-black/60 border-2 border-amber-700/60 p-3 rounded-xl flex flex-col items-center justify-center h-32">
-                    <img src="${monsterImage}" alt="${monsterName}" class="w-20 h-20 object-contain drop-shadow-[0_0_10px_rgba(255,215,0,0.6)] ${isFainted ? 'grayscale opacity-50' : ''}" onerror="this.onerror=null;this.src='https://api.iconify.design/noto:video-game.svg';">
-                </div>
-                <div class="space-y-1.5 text-xs">
-                    <div>
-                        <h3 class="text-base font-black text-white">${monsterName}</h3>
-                        <p class="text-[10px] text-amber-400 font-bold uppercase">Tipo: ${monsterType}</p>
-                    </div>
-                    <div class="bg-black/40 p-2 rounded-lg border border-amber-900/40 space-y-0.5 text-[10px]">
-                        <div class="flex justify-between"><span>Nível:</span><span class="font-bold text-amber-300">Nv. ${level}</span></div>
-                        <div class="flex justify-between"><span>Força, STR:</span><span class="font-bold text-amber-300">${strength}</span></div>
-                        <div class="flex justify-between"><span>Vida, HP:</span><span class="font-bold ${isFainted ? 'text-red-400' : 'text-emerald-400'}">${currentHp} / ${maxHp}</span></div>
-                        <div class="flex justify-between"><span>Tier:</span><span class="font-bold text-purple-300">${monster.tier || 1}</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-black/60 p-2.5 rounded-xl border border-amber-900/60 space-y-1.5 text-[10px]">
-                <p class="text-amber-300 font-bold border-b border-amber-900/40 pb-0.5">⚡ Ecossistema de Tipos, TCG</p>
-                <div class="text-emerald-400"><span class="font-bold">Vantagem, +30% Dano:</span> ${strongList}</div>
-                <div class="text-red-400"><span class="font-bold">Desvantagem, -20% Dano:</span> ${weakList}</div>
-            </div>
-
-            <div class="space-y-1 bg-black/50 p-2.5 rounded-xl border border-amber-900/50">
-                <div class="flex justify-between text-[10px] font-bold text-slate-300"><span>Experiência, XP:</span><span>${xpCurrent} / 100</span></div>
-                <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden border border-amber-900">
-                    <div class="bg-gradient-to-r from-amber-500 to-yellow-400 h-full transition-all duration-300" style="width:${Math.min(100, xpCurrent)}%;"></div>
-                </div>
-                <p class="text-[9px] text-slate-400 text-right pt-0.5">✨ ${evolutionText}</p>
-            </div>
-
-            ${showVaultButton}
-
-            <button onclick="const modal=document.getElementById('pokemon-detail-modal'); if(modal) modal.remove();" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2 rounded-xl text-xs uppercase shadow transition-all cursor-pointer">Fechar Ficha</button>
-        </div>
-    `;
-
-    detailModal.classList.remove('hidden');
-};
-
-// --- USO DE ITENS NA MOCHILA ---
-
-function useInventoryItemMainScreen(itemId) {
-    const cp = getCurrentPlayer();
-    if (!cp) return;
-
-    if (!Array.isArray(cp.inventory)) cp.inventory = [];
-    if (!Array.isArray(cp.activeTeam)) cp.activeTeam = [];
-
-    const item = cp.inventory.find(entry => entry && entry.id === itemId && Number(entry.count) > 0);
-
-    if (!item) {
-        showCustomPopup("Sem Itens", "❌ Não tens unidades deste item na mochila!", false);
-        return;
-    }
-
-    const getHp = monster => Math.max(0, Number(monster.currentHp !== undefined ? monster.currentHp : monster.maxHp || monster.hp || 20) || 0);
-    const getMaxHp = monster => Math.max(1, Number(monster.maxHp || monster.hp || 20) || 20);
-    const consume = () => { item.count = Math.max(0, (Number(item.count) || 0) - 1); };
-
-    if (item.type === 'heal') {
-        const target = cp.activeTeam.find(monster => monster && getHp(monster) < getMaxHp(monster));
-
-        if (!target) {
-            showCustomPopup("Aviso", "✨ Todos os Pokémon da equipa ativa já estão com HP máximo!", false);
-            return;
-        }
-
-        const maxHp = getMaxHp(target);
-        const healValue = Math.max(1, Number(item.value) || 20);
-        target.currentHp = Math.min(maxHp, getHp(target) + healValue);
-        consume();
-
-        showCustomPopup("Item Usado", `💊 ${item.name || 'Potion'} usada em ${target.name}!\nHP recuperado para ${target.currentHp}/${maxHp}.`, true);
-        renderTeamCardSlots();
-        renderBottomPanel();
-        updatePlayerUI();
-        return;
-    }
-
-    if (item.type === 'revive') {
-        const target = cp.activeTeam.find(monster => monster && getHp(monster) <= 0);
-
-        if (!target) {
-            showCustomPopup("Aviso", "✨ Não há nenhum Pokémon desmaiado na equipa ativa!", false);
-            return;
-        }
-
-        const maxHp = getMaxHp(target);
-        target.currentHp = Math.max(1, Math.floor(maxHp / 2));
-        consume();
-
-        showCustomPopup("Item Usado", `🌟 ${item.name || 'Revive'} usado! ${target.name} foi revivido com ${target.currentHp} HP!`, true);
-        renderTeamCardSlots();
-        renderBottomPanel();
-        updatePlayerUI();
-        return;
-    }
-
-    if (item.type === 'rarecandy') {
-        const target = cp.activeTeam.find(Boolean);
-
-        if (!target) {
-            showCustomPopup("Aviso", "⚠️ Não há nenhum Pokémon na equipa ativa.", false);
-            return;
-        }
-
-        consume();
-        addExperienceToMonster(target, 100);
-        showCustomPopup("Doce Raro Usado", `🍬 ${item.name || 'Rare Candy'} dado a ${target.name}!\nO Anima recebeu 100 XP.`, true);
-        renderBottomPanel();
-        return;
-    }
-
-    if (item.type === 'evolution') {
-        const target = cp.activeTeam.find(monster => monster && monster.evolvesTo);
-
-        if (!target) {
-            showCustomPopup("Aviso", "⚠️ Nenhum Pokémon da equipa ativa possui evolução disponível.", false);
-            return;
-        }
-
-        if (typeof MONSTER_CATALOG === 'undefined' || !Array.isArray(MONSTER_CATALOG)) {
-            showCustomPopup("Erro", "❌ O catálogo de Pokémon não está disponível.", false);
-            return;
-        }
-
-        const nextEvolution = MONSTER_CATALOG.find(monster => monster && monster.id === target.evolvesTo);
-
-        if (!nextEvolution) {
-            showCustomPopup("Evolução Indisponível", "❌ A próxima forma evolutiva não foi encontrada no catálogo.", false);
-            return;
-        }
-
-        const oldName = target.name || 'Pokémon';
-        const previousMaxHp = getMaxHp(target);
-
-        target.id = nextEvolution.id || target.id;
-        target.name = nextEvolution.name || target.name;
-        target.type = nextEvolution.type || target.type;
-        target.tier = nextEvolution.tier || target.tier;
-        target.rarity = nextEvolution.rarity || target.rarity;
-        target.stage = nextEvolution.stage || target.stage;
-        target.image = nextEvolution.image || target.image;
-        target.shinyImage = nextEvolution.shinyImage || target.shinyImage || null;
-        target.evolvesTo = nextEvolution.evolvesTo || null;
-        target.evolutionLevel = nextEvolution.evolutionLevel || null;
-        target.str = Math.max(Number(target.str) || 4, Number(nextEvolution.str) || 4);
-        target.maxHp = Math.max(previousMaxHp + 10, Number(nextEvolution.hp) || previousMaxHp + 10);
-        target.currentHp = target.maxHp;
-
-        consume();
-        showEvolutionModalUI(oldName, target);
-        appendAdventureLog(`✨ ${cp.name} usou uma Evolution Stone: ${oldName} evoluiu para ${target.name}!`);
-        renderTeamCardSlots();
-        renderBottomPanel();
-        updatePlayerUI();
-        return;
-    }
-
-    showCustomPopup("Informação", `ℹ O item ${item.name || item.id} só pode ser aplicado durante uma batalha, encontro ou em uma área específica.`, true);
-}
 
 // --- FLUXO DE GINÁSIO INTEGRADO COM A ARENA TCG ---
 
 let currentGymBattleSession = null;
-let gymAttemptedThisTurn = {};
+let gymAttemptedThisTurn = {}; 
 
 function initiateGymSequence(cityName) {
     const cp = getCurrentPlayer();
-    if (!cp) return;
-
-    const requestedCity = String(cityName || '').toLowerCase();
-    const gymInfo = typeof GYM_LEADERS_CATALOG !== 'undefined' && Array.isArray(GYM_LEADERS_CATALOG)
-        ? GYM_LEADERS_CATALOG.find(gym => gym && String(gym.city || '').toLowerCase() === requestedCity)
-        : null;
-
+    const gymInfo = (typeof GYM_LEADERS_CATALOG !== 'undefined') ? GYM_LEADERS_CATALOG.find(g => g.city.toLowerCase() === cityName.toLowerCase()) : null;
+    
     if (!gymInfo) {
         showCustomPopup("Aviso", "Este local não possui um ginásio oficial registado.", false);
         return;
     }
 
-    const attemptKey = `${gameState.currentPlayerIndex || 0}_${gymInfo.city}`;
+    const attemptKey = `${gameState.currentPlayerIndex}_${gymInfo.city}`;
     if (gymAttemptedThisTurn[attemptKey]) {
-        showCustomPopup("Tentativa Esgotada", "⚠ Já fizeste a tua tentativa neste ginásio durante este turno. Podes tentar novamente no próximo turno.", false);
+        showCustomPopup("Tentativa Esgotada", "⚠ Já fizeste a tua tentativa de desafio neste ginásio durante este turno! Podes tentar novamente apenas no próximo turno.", false);
         return;
     }
 
     currentGymBattleSession = {
         gym: gymInfo,
-        format: Number(gymInfo.format) || 1,
+        format: gymInfo.format || 1,
         challengerTeam: []
     };
 
     if (typeof openBattleArena === 'function') {
         openBattleArena({
             type: 'gym',
-            format: currentGymBattleSession.format,
+            format: gymInfo.format,
             data: gymInfo
         });
     } else {
@@ -3656,10 +1392,7 @@ function initiateGymSequence(cityName) {
 }
 
 function showGymVsScreen(gymInfo) {
-    if (!gymInfo) return;
-
     let vsModal = document.getElementById('gym-vs-modal');
-
     if (!vsModal) {
         vsModal = document.createElement('div');
         vsModal.id = 'gym-vs-modal';
@@ -3667,49 +1400,52 @@ function showGymVsScreen(gymInfo) {
         document.body.appendChild(vsModal);
     }
 
-    const leaderFileName = gymInfo.leader === 'Misty' ? 'misty' : (gymInfo.leader || 'leader');
+    let leaderFileName = gymInfo.leader;
+    if (leaderFileName === "Misty") leaderFileName = "misty";
     const leaderSpriteUrl = `${SUPABASE_STORAGE_URL}leaders/${encodeURIComponent(leaderFileName)}.png`;
-    const leaderTeam = Array.isArray(gymInfo.pokemons) && gymInfo.pokemons.length ? gymInfo.pokemons : gymInfo.pokemon ? [gymInfo.pokemon] : [];
 
-    const leaderPokemonsHtml = leaderTeam.map(pk => `
-        <img src="${pk.image || ''}" class="w-12 h-12 object-contain bg-black/60 rounded-xl p-1.5 border border-red-600 shadow" title="${pk.name || 'Pokémon'} Nv.${pk.level || 1}" onerror="this.onerror=null;this.src='https://api.iconify.design/noto:video-game.svg';">
-    `).join('');
+    let leaderPokemonsHtml = '';
+    const leaderTeam = gymInfo.pokemons || [gymInfo.pokemon];
+    leaderTeam.forEach(pk => {
+        leaderPokemonsHtml += `<img src="${pk.image}" class="w-12 h-12 object-contain bg-black/60 rounded-xl p-1.5 border border-red-600 shadow" title="${pk.name} Nv.${pk.level}">`;
+    });
 
     vsModal.innerHTML = `
-        <div class="text-center space-y-2 mb-8">
+        <div class="text-center space-y-2 mb-8 animate-fadeIn">
             <span class="text-xs font-black text-amber-400 uppercase tracking-widest font-cinzel">Ginásio Oficial de ${gymInfo.city}</span>
-            <h2 class="text-2xl font-black text-white font-cinzel tracking-wider">LÍDER ${(gymInfo.leader || 'DESCONHECIDO').toUpperCase()}</h2>
-            <p class="text-xs text-amber-300 font-bold">Formato de Batalha: ${gymInfo.format || 1}x${gymInfo.format || 1}</p>
+            <h2 class="text-2xl font-black text-white font-cinzel tracking-wider">LÍDER ${gymInfo.leader.toUpperCase()}</h2>
+            <p class="text-xs text-amber-300 font-bold">Formato de Batalha: ${gymInfo.format}x${gymInfo.format}</p>
         </div>
 
         <div class="flex items-center justify-center gap-8 my-4 w-full max-w-2xl">
             <div class="flex flex-col items-center border-4 border-amber-500 rounded-3xl p-5 bg-gradient-to-b from-amber-950 to-black shadow-2xl w-48">
-                <img src="${leaderSpriteUrl}" class="w-24 h-24 object-contain mb-2 drop-shadow-[0_0_10px_rgba(255,215,0,0.6)]" onerror="this.onerror=null;this.src='https://api.iconify.design/noto:man-raising-hand.svg';">
+                <img src="${leaderSpriteUrl}" class="w-24 h-24 object-contain mb-2 drop-shadow-[0_0_10px_rgba(255,215,0,0.6)]" onerror="this.src='https://api.iconify.design/noto:man-raising-hand.svg'">
                 <span class="text-xs font-black text-amber-300 uppercase">Líder</span>
             </div>
+            
             <div class="text-3xl font-black text-red-500 animate-pulse font-cinzel">VS</div>
+            
             <div class="flex flex-col items-center border-4 border-red-600 rounded-3xl p-5 bg-gradient-to-b from-red-950 to-black shadow-2xl w-48 space-y-2">
-                <div class="flex flex-wrap justify-center gap-1.5 min-h-[48px]">${leaderPokemonsHtml}</div>
+                <div class="flex flex-wrap justify-center gap-1.5 min-h-[48px]">
+                    ${leaderPokemonsHtml}
+                </div>
                 <span class="text-xs font-black text-red-300 uppercase">Cartel Inimigo</span>
             </div>
         </div>
 
-        <button onclick="document.getElementById('gym-vs-modal').remove();openTeamSelectionModalForGym();" class="mt-8 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-black font-black px-8 py-3 rounded-2xl text-xs uppercase tracking-wider shadow-2xl transition-all cursor-pointer">
+        <button onclick="document.getElementById('gym-vs-modal').remove(); openTeamSelectionModalForGym();" class="mt-8 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-black font-black px-8 py-3 rounded-2xl text-xs uppercase tracking-wider shadow-2xl transition-all transform hover:scale-105 cursor-pointer">
             Preparar Equipa e Aceitar Desafio <i class="fa-solid fa-arrow-right ml-1"></i>
         </button>
     `;
-
     vsModal.classList.remove('hidden');
 }
 
 function openTeamSelectionModalForGym() {
     const cp = getCurrentPlayer();
-    if (!cp) return;
-
-    const formatLimit = Math.max(1, Number(currentGymBattleSession && currentGymBattleSession.format) || 1);
+    const formatLimit = currentGymBattleSession ? currentGymBattleSession.format : 1;
     let selectedIndices = [];
-    let selModal = document.getElementById('team-selection-modal');
 
+    let selModal = document.getElementById('team-selection-modal');
     if (!selModal) {
         selModal = document.createElement('div');
         selModal.id = 'team-selection-modal';
@@ -3718,24 +1454,31 @@ function openTeamSelectionModalForGym() {
     }
 
     function renderSelectionGrid() {
-        const team = Array.isArray(cp.activeTeam) ? cp.activeTeam : [];
+        let teamGridHtml = '';
+        if (cp.activeTeam) {
+            cp.activeTeam.forEach((mon, idx) => {
+                const isFainted = (mon.currentHp !== undefined ? mon.currentHp : mon.maxHp) <= 0;
+                const isSelected = selectedIndices.includes(idx);
+                const tierCardBg = getTierColorClass(mon.tier || 1);
+                const auraGymSelClass = mon.auraEffect || '';
+                const monImgSrc = mon.isShiny && mon.shinyImage ? mon.shinyImage : (mon.image || '');
 
-        const teamGridHtml = team.map((mon, idx) => {
-            const currentHp = Number(mon.currentHp !== undefined ? mon.currentHp : mon.maxHp || mon.hp || 20) || 0;
-            const maxHp = Number(mon.maxHp || mon.hp || 20) || 20;
-            const isFainted = currentHp <= 0;
-            const isSelected = selectedIndices.includes(idx);
-            const tierCardBg = typeof getTierColorClass === 'function' ? getTierColorClass(mon.tier || 1) : '';
-            const image = mon.isShiny && mon.shinyImage ? mon.shinyImage : (mon.image || '');
-
-            return `
-                <div onclick="${isFainted ? '' : `toggleGymTeamSelection(${idx})`}" class="${tierCardBg} ${mon.auraEffect || ''} p-3 rounded-2xl border-2 ${isSelected ? 'border-amber-400 bg-amber-950/80 scale-105' : 'border-amber-900/60'} ${isFainted ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-amber-500'} flex flex-col justify-between h-36 transition-all text-white">
-                    <div class="flex justify-between items-center text-[10px] font-bold text-amber-300"><span>${mon.name || 'Pokémon'}</span><span>Nv.${mon.level || 1}</span></div>
-                    <div class="my-auto flex justify-center bg-black/40 rounded p-1"><img src="${image}" class="w-14 h-14 object-contain" onerror="this.onerror=null;this.src='https://api.iconify.design/noto:video-game.svg';"></div>
-                    <div class="text-[9px] text-center font-bold ${isFainted ? 'text-red-400' : 'text-emerald-400'}">${isFainted ? 'DESMAIADO' : `HP: ${currentHp}/${maxHp}`}</div>
-                </div>
-            `;
-        }).join('');
+                teamGridHtml += `
+                    <div onclick="${isFainted ? '' : `toggleGymTeamSelection(${idx})`}" class="${tierCardBg} ${auraGymSelClass} p-3 rounded-2xl border-2 ${isSelected ? 'border-amber-400 bg-amber-950/80 scale-105' : 'border-amber-900/60'} ${isFainted ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-amber-500'} flex flex-col justify-between h-36 transition-all text-white">
+                        <div class="flex justify-between items-center text-[10px] font-bold text-amber-300">
+                            <span>${mon.name}</span>
+                            <span>Nv.${mon.level || 1}</span>
+                        </div>
+                        <div class="my-auto flex justify-center bg-black/40 rounded p-1">
+                            <img src="${monImgSrc}" class="w-14 h-14 object-contain">
+                        </div>
+                        <div class="text-[9px] text-center font-bold ${isFainted ? 'text-red-400' : 'text-emerald-400'}">
+                            ${isFainted ? 'DESMAIADO' : `HP: ${mon.currentHp !== undefined ? mon.currentHp : mon.maxHp}/${mon.maxHp}`}
+                        </div>
+                    </div>
+                `;
+            });
+        }
 
         const canConfirm = selectedIndices.length === formatLimit;
 
@@ -3745,22 +1488,32 @@ function openTeamSelectionModalForGym() {
                     <span class="text-xs font-black text-amber-400 font-cinzel">🛡 SELEÇÃO DE EQUIPA (${selectedIndices.length}/${formatLimit})</span>
                     <button onclick="document.getElementById('team-selection-modal').remove();" class="text-amber-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-amber-800">✕ Cancelar</button>
                 </div>
-                <div class="grid grid-cols-3 gap-3 max-h-72 overflow-y-auto p-1">${teamGridHtml || '<p class="col-span-3 text-center text-xs text-slate-400">A equipa está vazia.</p>'}</div>
+                <div class="grid grid-cols-3 gap-3 max-h-72 overflow-y-auto p-1">
+                    ${teamGridHtml}
+                </div>
                 <div class="flex gap-2">
-                    <button onclick="document.getElementById('team-selection-modal').remove();" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl text-xs uppercase">Voltar / Desistir</button>
-                    <button onclick="confirmGymTeamSelection([${selectedIndices.join(',')}])" ${canConfirm ? '' : 'disabled'} class="flex-1 ${canConfirm ? 'bg-amber-500 hover:bg-amber-400 text-black cursor-pointer' : 'bg-slate-800 text-slate-500 cursor-not-allowed'} font-black py-3 rounded-xl text-xs uppercase">Confirmar e Iniciar</button>
+                    <button onclick="document.getElementById('team-selection-modal').remove();" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer">
+                        Voltar / Desistir
+                    </button>
+                    <button onclick="confirmGymTeamSelection([${selectedIndices.join(',')}])" ${canConfirm ? '' : 'disabled'} class="flex-2 ${canConfirm ? 'bg-amber-500 hover:bg-amber-400 text-black cursor-pointer shadow-lg' : 'bg-slate-800 text-slate-500 cursor-not-allowed'} font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-all">
+                        Confirmar e Iniciar
+                    </button>
                 </div>
             </div>
         `;
     }
 
     window.toggleGymTeamSelection = function(idx) {
-        const position = selectedIndices.indexOf(idx);
-
-        if (position >= 0) selectedIndices.splice(position, 1);
-        else if (selectedIndices.length < formatLimit) selectedIndices.push(idx);
-        else showCustomPopup("Limite Atingido", `Este ginásio permite apenas ${formatLimit} Pokémon.`, false);
-
+        const exists = selectedIndices.indexOf(idx);
+        if (exists > -1) {
+            selectedIndices.splice(exists, 1);
+        } else {
+            if (selectedIndices.length < formatLimit) {
+                selectedIndices.push(idx);
+            } else {
+                showCustomPopup("Limite Atingido", ` Este ginásio permite apenas uma equipa de ${formatLimit} Pokémon!`, false);
+            }
+        }
         renderSelectionGrid();
     };
 
@@ -3769,74 +1522,63 @@ function openTeamSelectionModalForGym() {
 }
 
 window.confirmGymTeamSelection = function(chosenIndexes) {
-    const modal = document.getElementById('team-selection-modal');
-    if (modal) modal.remove();
+    const selModal = document.getElementById('team-selection-modal');
+    if (selModal) selModal.remove();
 
-    if (!currentGymBattleSession || !Array.isArray(chosenIndexes) || !chosenIndexes.length) return;
-
-    currentGymBattleSession.challengerTeam = chosenIndexes.map(Number).filter(Number.isInteger);
-    executeLockedGymBattleSequence();
+    if (currentGymBattleSession) {
+        currentGymBattleSession.challengerTeam = chosenIndexes;
+        executeLockedGymBattleSequence();
+    }
 };
 
 function executeLockedGymBattleSequence() {
     const cp = getCurrentPlayer();
-    if (!cp || !currentGymBattleSession || !currentGymBattleSession.gym) return;
-
     const gym = currentGymBattleSession.gym;
-    const attemptKey = `${gameState.currentPlayerIndex || 0}_${gym.city}`;
+    
+    const attemptKey = `${gameState.currentPlayerIndex}_${gym.city}`;
     gymAttemptedThisTurn[attemptKey] = true;
 
-    const activeMon = cp.activeTeam[currentGymBattleSession.challengerTeam[0]];
-    const leaderTeam = Array.isArray(gym.pokemons) && gym.pokemons.length ? gym.pokemons : gym.pokemon ? [gym.pokemon] : [];
-    const leaderPoke = leaderTeam[0];
+    let activeMonIndex = currentGymBattleSession.challengerTeam[0];
+    let activeMon = cp.activeTeam[activeMonIndex];
+    const leaderTeam = gym.pokemons || [gym.pokemon];
+    let leaderPoke = leaderTeam[0];
 
-    if (!activeMon || !leaderPoke) {
-        showCustomPopup("Erro", "❌ Não foi possível montar o combate do ginásio.", false);
-        return;
-    }
-
-    const activeHp = Number(activeMon.currentHp !== undefined ? activeMon.currentHp : activeMon.maxHp || activeMon.hp || 20) || 0;
-
-    if (activeHp <= 0) {
-        showCustomPopup("Derrota", "⚠️ O Pokémon escolhido está desmaiado.", false);
+    if (!activeMon || (activeMon.currentHp !== undefined ? activeMon.currentHp : activeMon.maxHp) <= 0) {
+        showCustomPopup("Derrota", "⚠️ O teu Pokémon escolhido está desmaiado!", false);
         return;
     }
 
     rollDiceWithAnimation((playerDice, leaderDice) => {
-        const typeMult = typeof calculateTypeAdvantageMultiplier === 'function'
-            ? calculateTypeAdvantageMultiplier(activeMon.type, leaderPoke.type)
-            : 1;
-
-        const playerPower = Math.round((Number(activeMon.str) || 4) * typeMult) + Number(playerDice || 0);
-        const leaderPower = (Number(leaderPoke.str) || 5) + Number(leaderDice || 0);
+        const typeMult = calculateTypeAdvantageMultiplier(activeMon.type, leaderPoke.type);
+        const playerPower = (activeMon.str || 4) + playerDice + (typeMult > 1 ? 2 : 0);
+        const leaderPower = leaderPoke.str + leaderDice;
 
         if (playerPower >= leaderPower) {
             if (!Array.isArray(cp.badges)) cp.badges = [];
-            if (gym.badgeKey && !cp.badges.includes(gym.badgeKey)) cp.badges.push(gym.badgeKey);
-
-            cp.gold = (Number(cp.gold) || 0) + (Number(gym.rewardGold) || 0);
-            addExperienceToMonster(activeMon, 70);
-            updatePlayerUI();
-            renderTeamCardSlots();
-            appendAdventureLog(`${cp.name} conquistou a insígnia de ${gym.city} contra o Líder ${gym.leader}!`);
+            if (!cp.badges.includes(gym.badgeKey)) {
+                cp.badges.push(gym.badgeKey);
+            }
+            cp.gold += gym.rewardGold;
 
             showCustomPopup(
-                `🏆 VITÓRIA NO GINÁSIO DE ${String(gym.city).toUpperCase()}!`,
-                `Derrotaste o Líder ${gym.leader}!\n\n✨ Ganhaste a Insígnia oficial!\n💰 Ouro: +${Number(gym.rewardGold) || 0}\n🎖️ Total de Insígnias: ${cp.badges.length} / 6`,
+                `🏆 VITÓRIA NO GINÁSIO DE ${gym.city.toUpperCase()}!`,
+                `Derrotaste o Líder ${gym.leader}!\n\n✨ Ganhaste a Insígnia oficial!\n💰 Ouro: +${gym.rewardGold}\n🎖️ Total de Insígnias: ${cp.badges.length} / 6`,
                 true
             );
+
+            addExperienceToMonster(activeMon, 70);
+            updatePlayerUI();
+            appendAdventureLog(`${cp.name} conquistou a insígnia de ${gym.city} contra o Líder ${gym.leader}!`);
         } else {
-            const damage = 20;
-            const maxHp = Number(activeMon.maxHp || activeMon.hp || 20) || 20;
-            const currentHp = Number(activeMon.currentHp !== undefined ? activeMon.currentHp : maxHp) || 0;
-            activeMon.currentHp = Math.max(0, currentHp - damage);
-            renderTeamCardSlots();
+            let damage = 20;
+            activeMon.currentHp = Math.max(0, (activeMon.currentHp || activeMon.maxHp) - damage);
 
             showCustomPopup(
-                `💥 DERROTA CONTRA ${String(gym.leader || 'LÍDER').toUpperCase()}`,
-                `O ${leaderPoke.name || 'Pokémon do líder'} foi superior nesta ronda.\n\n💔 ${activeMon.name} sofreu ${damage} de dano!\n\n⚠ A tentativa do ginásio foi esgotada neste turno.`,
+                `💥 DERROTA CONTRA ${gym.leader.toUpperCase()}`,
+                `O ${leaderPoke.name} do líder foi superior nesta ronda tática.\n\n💔 ${activeMon.name} sofreu ${damage} de dano!\n\n⚠ Tentativa de ginásio esgotada para este turno.`,
                 false
             );
+            renderTeamCardSlots();
         }
     });
 }
@@ -3844,23 +1586,17 @@ function executeLockedGymBattleSequence() {
 // --- INTERAÇÃO ENTRE JOGADORES NA MESMA CASA ---
 
 function checkPlayerCellCollision(zoneId, movedPlayerIndex) {
-    if (!gameState || !Array.isArray(gameState.players) || gameState.players.length <= 1) return;
-
+    if (!gameState.players || !Array.isArray(gameState.players) || gameState.players.length <= 1) return;
     const currentMover = gameState.players[movedPlayerIndex];
-    if (!currentMover) return;
-
-    const cooccupant = gameState.players.find((player, index) =>
-        index !== movedPlayerIndex && player && player.currentZone === zoneId
-    );
-
-    if (cooccupant) openMultiplayerInteractionModal(currentMover, cooccupant);
+    
+    const cooccupants = gameState.players.filter((p, idx) => idx !== movedPlayerIndex && p.currentZone === zoneId);
+    if (cooccupants.length > 0) {
+        openMultiplayerInteractionModal(currentMover, cooccupants[0]);
+    }
 }
 
 function openMultiplayerInteractionModal(playerA, playerB) {
-    if (!playerA || !playerB) return;
-
     let interModal = document.getElementById('mp-interaction-modal');
-
     if (!interModal) {
         interModal = document.createElement('div');
         interModal.id = 'mp-interaction-modal';
@@ -3868,99 +1604,89 @@ function openMultiplayerInteractionModal(playerA, playerB) {
         document.body.appendChild(interModal);
     }
 
-    const playerBIndex = Array.isArray(gameState.players)
-        ? gameState.players.indexOf(playerB)
-        : -1;
-
     interModal.innerHTML = `
         <div class="trainer-card max-w-md w-full p-6 space-y-4 border-4 border-purple-500 rounded-2xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
             <div class="flex justify-between items-center border-b border-purple-900 pb-2">
                 <span class="text-xs font-black text-purple-400 font-cinzel">🤝 ENCONTRO DE TREINADORES</span>
                 <button onclick="document.getElementById('mp-interaction-modal').remove()" class="text-purple-400 font-bold text-sm px-2 bg-purple-950 rounded cursor-pointer">✕</button>
             </div>
-
-            <p class="text-xs text-slate-300 text-center">
-                <span class="text-amber-300 font-bold">${playerA.name || 'Treinador'}</span> e
-                <span class="text-amber-300 font-bold">${playerB.name || 'Treinador'}</span> pararam na mesma casa!
-            </p>
-
+            <p class="text-xs text-slate-300 text-center"><span class="text-amber-300 font-bold">${playerA.name}</span> e <span class="text-amber-300 font-bold">${playerB.name}</span> pararam na mesma casa!</p>
             <div class="space-y-2.5">
-                <button onclick="document.getElementById('mp-interaction-modal').remove();triggerPvPBattleArena(${JSON.stringify(playerB.name || '')});" class="w-full bg-red-700 hover:bg-red-600 text-white font-black py-2.5 rounded-xl text-xs uppercase shadow">⚔️ Desafiar para Batalha PvP</button>
-                <button onclick="document.getElementById('mp-interaction-modal').remove();openTradeModal(${JSON.stringify(playerA.name || '')},${JSON.stringify(playerB.name || '')});" class="w-full bg-blue-700 hover:bg-blue-600 text-white font-black py-2.5 rounded-xl text-xs uppercase shadow">🔄 Propor Troca</button>
-                <button onclick="document.getElementById('mp-interaction-modal').remove();openSpecificTrainerCardModal(${playerBIndex});" class="w-full bg-amber-700 hover:bg-amber-600 text-black font-black py-2.5 rounded-xl text-xs uppercase shadow">📋 Ver Trainer Card</button>
-            </div>
+                <button onclick="document.getElementById('mp-interaction-modal').remove(); triggerPvPBattleArena('${playerB.name}');" class="w-full bg-red-700 hover:bg-red-600 text-white font-black py-2.5 rounded-xl text-xs uppercase shadow cursor-pointer">
+                    ⚔️ Desafiar para Batalha PvP na Arena
+                </button>
+                
+                <button onclick="document.getElementById('mp-interaction-modal').remove(); openTradeModal('${playerA.name}', '${playerB.name}');" class="w-full bg-blue-700 hover:bg-blue-600 text-white font-black py-2.5 rounded-xl text-xs uppercase shadow cursor-pointer">
+                    🔄 Propor Troca de Anima / Itens
+                </button>
 
-            <button onclick="document.getElementById('mp-interaction-modal').remove()" class="w-full bg-slate-800 text-slate-300 font-bold py-2 rounded-xl text-xs">Continuar Viagem</button>
+                <button onclick="document.getElementById('mp-interaction-modal').remove(); openSpecificTrainerCardModal(${gameState.players.findIndex(p => p.name === playerB.name)});" class="w-full bg-amber-700 hover:bg-amber-600 text-black font-black py-2.5 rounded-xl text-xs uppercase shadow cursor-pointer">
+                    📋 Ver Trainer Card de ${playerB.name}
+                </button>
+            </div>
+            <button onclick="document.getElementById('mp-interaction-modal').remove()" class="w-full bg-slate-800 text-slate-300 font-bold py-2 rounded-xl text-xs cursor-pointer">Continuar Viagem</button>
         </div>
     `;
-
     interModal.classList.remove('hidden');
 }
 
 function triggerPvPBattleArena(opponentName) {
-    const opponent = Array.isArray(gameState.players)
-        ? gameState.players.find(player => player && player.name === opponentName)
-        : null;
-
-    if (!opponent) {
-        showCustomPopup("Erro", "❌ Jogador adversário não encontrado.", false);
-        return;
-    }
+    const opponent = gameState.players.find(p => p.name === opponentName);
+    if (!opponent) return;
 
     if (typeof openBattleArena === 'function') {
-        openBattleArena({ type: 'pvp', format: 1, opponent });
+        openBattleArena({
+            type: 'pvp',
+            format: 1,
+            opponent: opponent
+        });
     } else {
         showCustomPopup("Erro", "Módulo da Arena de Batalha indisponível.", false);
     }
 }
 
-// --- SISTEMA DE ENCONTRO / BATALHA TCG ---
+// --- SISTEMA DE ENCONTRO / BATALHA TCG (SELVAGENS) ---
 
 function openEncounterModalWithPokemon(pokemon) {
     const cp = getCurrentPlayer();
     const modal = document.getElementById('encounter-modal');
+    if (!modal) return;
 
-    if (!cp || !modal || !pokemon) return;
-    if (!Array.isArray(cp.activeTeam)) cp.activeTeam = [];
-
-    if (!cp.activeTeam.length) {
+    if (!cp.activeTeam || cp.activeTeam.length === 0) {
         showCustomPopup("Aviso", "🚫 Precisas de pelo menos um Pokémon na Equipa Ativa!", false);
         return;
     }
 
-    const validIndex = cp.activeTeam.findIndex(mon => {
-        if (!mon) return false;
-        return Number(mon.currentHp !== undefined ? mon.currentHp : mon.maxHp || mon.hp || 20) > 0;
-    });
-
-    if (validIndex < 0) {
-        showCustomPopup("Equipa Desmaiada!", "⚠ Todos os Pokémon da equipa ativa estão desmaiados.", false);
+    let validIndex = cp.activeTeam.findIndex(m => (m.currentHp !== undefined ? m.currentHp : m.maxHp) > 0);
+    if (validIndex === -1) {
+        showCustomPopup("Equipa Desmaiada!", "⚠ Todos os Pokémon da tua Equipa Ativa estão desmaiados (HP 0)!", false);
         return;
     }
 
-    currentEncounterState.wildPokemon = pokemon;
-    currentEncounterState.itemBonus = 0;
-    currentEncounterState.battlePowerBonus = 0;
-    currentEncounterState.selectedTeamMemberIndex = validIndex;
-    currentEncounterState.hasAttemptedCapture = false;
+    if (typeof currentEncounterState !== 'undefined') {
+        currentEncounterState.wildPokemon = pokemon;
+        currentEncounterState.itemBonus = 0;
+        currentEncounterState.battlePowerBonus = 0;
+        currentEncounterState.selectedTeamMemberIndex = validIndex;
+        currentEncounterState.hasAttemptedCapture = false;
+    }
 
-    updateEncounterUIInfo();
-    renderEncounterItemsList();
+    if (typeof updateEncounterUIInfo === 'function') updateEncounterUIInfo();
+    if (typeof renderEncounterItemsList === 'function') renderEncounterItemsList();
+
     modal.classList.remove('hidden');
     modal.classList.add('flex');
 }
 
 function cyclePlayerEncounterPokemon() {
     const cp = getCurrentPlayer();
-    if (!cp || !Array.isArray(cp.activeTeam) || cp.activeTeam.length <= 1) return;
-
-    const startIndex = Number(currentEncounterState.selectedTeamMemberIndex) || 0;
+    if (!cp.activeTeam || cp.activeTeam.length <= 1) return;
+    let startIndex = currentEncounterState.selectedTeamMemberIndex;
     let nextIndex = (startIndex + 1) % cp.activeTeam.length;
-
+    
     while (nextIndex !== startIndex) {
-        const monster = cp.activeTeam[nextIndex];
-        const hp = monster ? Number(monster.currentHp !== undefined ? monster.currentHp : monster.maxHp || monster.hp || 20) : 0;
-
+        let mon = cp.activeTeam[nextIndex];
+        let hp = mon.currentHp !== undefined ? mon.currentHp : mon.maxHp;
         if (hp > 0) break;
         nextIndex = (nextIndex + 1) % cp.activeTeam.length;
     }
@@ -3972,83 +1698,65 @@ function cyclePlayerEncounterPokemon() {
 function renderEncounterItemsList() {
     const cp = getCurrentPlayer();
     const container = document.getElementById('encounter-items-container');
-
     if (!container) return;
     container.innerHTML = '';
 
-    if (!cp || !Array.isArray(cp.inventory)) return;
-
-    cp.inventory.forEach((item, index) => {
-        if (!item || Number(item.count) <= 0) return;
-
-        const button = document.createElement('button');
-        button.className = 'bg-blue-900/60 hover:bg-blue-800 text-blue-200 px-2.5 py-1 rounded-lg border border-blue-600 text-[10px] flex items-center gap-1.5 shadow cursor-pointer';
-
-        const itemImage = item.image
-            ? `<img src="${item.image}" class="w-4 h-4 object-contain" onerror="this.onerror=null;this.src='https://api.iconify.design/noto:package.svg';">`
-            : `<span>${item.icon || '🎒'}</span>`;
-
-        button.innerHTML = `${itemImage}<span>${item.name || item.id} (${item.count})</span>`;
-        button.onclick = () => useItemInEncounter(item, index);
-        container.appendChild(button);
-    });
+    if (cp.inventory) {
+        cp.inventory.forEach((item, index) => {
+            if (!item || item.count <= 0) return;
+            const btn = document.createElement('button');
+            btn.className = "bg-blue-900/60 hover:bg-blue-800 text-blue-200 px-2.5 py-1 rounded-lg border border-blue-600 text-[10px] flex items-center gap-1.5 shadow cursor-pointer";
+            const itemImg = item.image ? `<img src="${item.image}" class="w-4 h-4 object-contain">` : `<span>${item.icon}</span>`;
+            btn.innerHTML = `${itemImg} <span>${item.name} (${item.count})</span>`;
+            btn.onclick = () => useItemInEncounter(item, index);
+            container.appendChild(btn);
+        });
+    }
 }
 
 function useItemInEncounter(item, itemIndex) {
     const cp = getCurrentPlayer();
-    if (!cp || !item || !Array.isArray(cp.activeTeam)) return;
-
     const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex];
-    if (!activeMon || Number(item.count) <= 0) return;
-
-    const maxHp = Number(activeMon.maxHp || activeMon.hp || 20) || 20;
-    const currentHp = Number(activeMon.currentHp !== undefined ? activeMon.currentHp : maxHp) || 0;
+    if (!activeMon) return;
 
     if (item.type === 'sphere') {
         item.count--;
-        currentEncounterState.itemBonus = Number(item.value) || 0;
+        currentEncounterState.itemBonus = item.value || 0;
+        
+        if (item.aura) {
+            selectedBallAura = item.aura;
+        }
 
-        if (item.aura) selectedBallAura = item.aura;
-
-        showCustomPopup("Poké Ball Lançada", `🔴 Lançaste uma ${item.name || 'Poké Ball'}!\nBónus aplicado: +${Number(item.value) || 0}`, true);
+        showCustomPopup("Poké Ball Lançada", `🔴 Lançaste uma ${item.name}!\nBónus aplicado: +${item.value || 0}`);
+        
         renderEncounterItemsList();
         updateEncounterUIInfo();
         resolveCaptureAttempt();
-        return;
-    }
 
-    if (item.type === 'battle') {
+    } else if (item.type === 'battle') {
         item.count--;
-        currentEncounterState.battlePowerBonus += Number(item.value) || 2;
-        showCustomPopup("Item Usado", `⚔️ ${item.name || 'Item'} aplicada! Bónus de combate aumentado.`, true);
+        currentEncounterState.battlePowerBonus += (item.value || 2);
+        showCustomPopup("Item Usado", `⚔️ ${item.name} aplicada! STR +${item.value} para este combate.`);
         renderEncounterItemsList();
         updateEncounterUIInfo();
-        return;
-    }
-
-    if (item.type === 'heal') {
-        if (currentHp >= maxHp) {
+    } else if (item.type === 'heal') {
+        if (activeMon.currentHp >= activeMon.maxHp) {
             showCustomPopup("Aviso", `${activeMon.name} já está com HP máximo!`, false);
             return;
         }
-
         item.count--;
-        activeMon.currentHp = Math.min(maxHp, currentHp + (Number(item.value) || 20));
-        showCustomPopup("Item Usado", `💊 Potion usada em ${activeMon.name}!`, true);
+        activeMon.currentHp = Math.min(activeMon.maxHp, activeMon.currentHp + item.value);
+        showCustomPopup("Item Usado", `💊 Potion usada em ${activeMon.name}!`);
         renderEncounterItemsList();
         updateEncounterUIInfo();
         renderTeamCardSlots();
-        return;
-    }
-
-    if (item.type === 'revive') {
-        if (currentHp > 0) {
+    } else if (item.type === 'revive') {
+        if (activeMon.currentHp > 0) {
             showCustomPopup("Aviso", `${activeMon.name} não está desmaiado!`, false);
             return;
         }
-
         item.count--;
-        activeMon.currentHp = Math.max(1, Math.floor(maxHp / 2));
+        activeMon.currentHp = Math.floor(activeMon.maxHp / 2);
         showCustomPopup("Item Usado", `🌟 Revive usado em ${activeMon.name}!`, true);
         renderEncounterItemsList();
         updateEncounterUIInfo();
@@ -4057,12 +1765,8 @@ function useItemInEncounter(item, itemIndex) {
 }
 
 // --- ROLAGEM DE DADO ---
-
 function rollDiceWithAnimation(callback) {
-    if (typeof callback !== 'function') return;
-
     let diceOverlay = document.getElementById('central-dice-overlay');
-
     if (!diceOverlay) {
         diceOverlay = document.createElement('div');
         diceOverlay.id = 'central-dice-overlay';
@@ -4071,39 +1775,38 @@ function rollDiceWithAnimation(callback) {
     }
 
     const diceFaces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+    
     let counter = 0;
-
     const interval = setInterval(() => {
         const randomFace = diceFaces[Math.floor(Math.random() * diceFaces.length)];
-
+        
         diceOverlay.innerHTML = `
             <div class="trainer-card max-w-xs w-full p-8 text-center space-y-4 border-4 border-amber-400 rounded-3xl bg-gradient-to-b from-amber-950 to-black shadow-2xl animate-pulse">
                 <h3 class="text-lg font-black text-amber-300 font-cinzel tracking-widest">ROLANDO O DADO...</h3>
-                <div class="text-7xl my-4 text-amber-400">${randomFace}</div>
-                <p class="text-xs text-slate-300 font-bold">A sortear valor aleatório, 1 a 6</p>
+                <div class="text-7xl my-4 text-amber-400 drop-shadow-[0_0_20px_rgba(255,215,0,0.8)]">${randomFace}</div>
+                <p class="text-xs text-slate-300 font-bold">A sortear valor aleatório (1 - 6)</p>
             </div>
         `;
-
         diceOverlay.classList.remove('hidden');
         counter++;
-
+        
         if (counter > 12) {
             clearInterval(interval);
-
-            const playerRoll = Math.floor(Math.random() * 6) + 1;
-            const enemyRoll = Math.floor(Math.random() * 6) + 1;
+            const finalPlayerRoll = Math.floor(Math.random() * 6) + 1;
+            const finalWildRoll = Math.floor(Math.random() * 6) + 1;
+            const finalFace = diceFaces[finalPlayerRoll - 1];
 
             diceOverlay.innerHTML = `
                 <div class="trainer-card max-w-xs w-full p-8 text-center space-y-4 border-4 border-amber-400 rounded-3xl bg-gradient-to-b from-amber-950 to-black shadow-2xl animate-bounce">
                     <h3 class="text-lg font-black text-emerald-400 font-cinzel tracking-widest">DADO SORTEADO!</h3>
-                    <div class="text-7xl my-4 text-amber-300">${diceFaces[playerRoll - 1]}</div>
-                    <p class="text-sm font-black text-white bg-black/60 p-2 rounded-xl">Resultado: <span class="text-amber-400 text-lg">+${playerRoll}</span></p>
+                    <div class="text-7xl my-4 text-amber-300 drop-shadow-[0_0_25px_rgba(255,215,0,1)]">${finalFace}</div>
+                    <p class="text-sm font-black text-white bg-black/60 p-2 rounded-xl">Resultado obtido: <span class="text-amber-400 text-lg">+${finalPlayerRoll}</span></p>
                 </div>
             `;
 
             setTimeout(() => {
-                if (diceOverlay && diceOverlay.parentNode) diceOverlay.remove();
-                callback(playerRoll, enemyRoll);
+                diceOverlay.remove();
+                callback(finalPlayerRoll, finalWildRoll);
             }, 1200);
         }
     }, 80);
@@ -4111,7 +1814,6 @@ function rollDiceWithAnimation(callback) {
 
 function showCustomPopup(title, message, isSuccess = true) {
     let popupEl = document.getElementById('game-custom-popup');
-
     if (!popupEl) {
         popupEl = document.createElement('div');
         popupEl.id = 'game-custom-popup';
@@ -4125,287 +1827,264 @@ function showCustomPopup(title, message, isSuccess = true) {
     popupEl.innerHTML = `
         <div class="trainer-card max-w-sm w-full p-6 text-center space-y-4 border-4 ${borderColor} rounded-2xl bg-gradient-to-b from-[#1c1410] to-black shadow-2xl text-white">
             <h2 class="text-base font-black ${headerColor} font-cinzel tracking-wider">${title}</h2>
-            <div class="text-xs text-slate-200 whitespace-pre-line leading-relaxed bg-black/40 p-3 rounded-xl border border-amber-900/50">${message}</div>
-            <button onclick="document.getElementById('game-custom-popup').remove()" class="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-400 text-black font-black py-2.5 rounded-xl text-xs uppercase shadow transition-all cursor-pointer">Continuar</button>
+            <div class="text-xs text-slate-200 whitespace-pre-line leading-relaxed bg-black/40 p-3 rounded-xl border border-amber-900/50">
+                ${message}
+            </div>
+            <button onclick="document.getElementById('game-custom-popup').remove()" class="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-400 text-black font-black py-2.5 rounded-xl text-xs uppercase shadow transition-all cursor-pointer">
+                Continuar
+            </button>
         </div>
     `;
-
     popupEl.classList.remove('hidden');
 }
 
 function resolveCaptureAttempt() {
     const cp = getCurrentPlayer();
     const wild = currentEncounterState.wildPokemon;
-
-    if (!cp || !wild || !Array.isArray(cp.activeTeam)) return;
-
     const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex];
+    if (!wild) return;
 
     let requiredTarget = 4;
-    const tier = Number(wild.tier) || 1;
-    const isLegendary = tier === 5 || String(wild.color || '').toLowerCase() === 'amarelo';
+    const tier = wild.tier || 1;
+    const isLegendary = (tier === 5) || (wild.color && wild.color.toLowerCase() === 'amarelo');
 
-    if (tier === 2) requiredTarget = 5;
-    else if (tier === 3 || tier === 4) requiredTarget = 6;
-    else if (isLegendary) requiredTarget = 7;
-    if (wild.isShiny) requiredTarget++;
+    if (tier === 2) {
+        requiredTarget = 5;
+    } else if (tier === 3 || tier === 4) {
+        requiredTarget = 6;
+    } else if (isLegendary) {
+        requiredTarget = 7;
+    }
 
-    const weakenedBonus = wild.weakened && !isLegendary ? 1 : 0;
+    if (wild.isShiny) {
+        requiredTarget += 1;
+    }
 
-    rollDiceWithAnimation(roll => {
-        const itemBonus = Number(currentEncounterState.itemBonus) || 0;
-        const totalValue = roll + itemBonus + weakenedBonus;
-        const success = totalValue >= requiredTarget;
+    const weakenedBonus = (wild.weakened && !isLegendary) ? 1 : 0;
+
+    rollDiceWithAnimation((roll, _) => {
+        const totalCaptureValue = roll + currentEncounterState.itemBonus + weakenedBonus;
+        let success = totalCaptureValue >= requiredTarget;
 
         if (success) {
-            showCustomPopup(
-                "🔴🔵 CAPTURA BEM-SUCEDIDA!",
-                `Capturaste o ${wild.isShiny ? '✨ Shiny ' : ''}${wild.name} (Nv. ${wild.level || 1})!\n\nDado: ${roll} + Bónus: ${itemBonus + weakenedBonus} = ${totalValue} vs Alvo ${requiredTarget}+`,
-                true
-            );
-
+            showCustomPopup("🔴🔵 CAPTURA BEM-SUCEDIDA!", `A Poké Ball abanou... Click!\nCapturaste o ${wild.isShiny ? '✨ Shiny ' : ''}${wild.name} (Nv. ${wild.level}) e foi enviado para a PC Box!\n(Dado: ${roll} + Bónus: ${currentEncounterState.itemBonus + weakenedBonus} = ${totalCaptureValue} vs Alvo ${requiredTarget}+)`, true);
             addMonsterToPlayer(wild);
 
             if (wild.waypointId) {
                 cp.currentZone = wild.waypointId;
-                if (typeof boardPokemonCards !== 'undefined') delete boardPokemonCards[wild.waypointId];
+                if (boardPokemonCards[wild.waypointId]) {
+                    delete boardPokemonCards[wild.waypointId];
+                }
             }
-
             if (typeof renderBoardMap === 'function') renderBoardMap();
-            if (activeMon && Number(activeMon.currentHp) > 0) addExperienceToMonster(activeMon, 30);
+
+            if (activeMon && activeMon.currentHp > 0) addExperienceToMonster(activeMon, 30);
             closeEncounterModalUI();
-            return;
-        }
-
-        if (!isLegendary) {
-            wild.weakened = true;
-            if (wild.waypointId && typeof boardPokemonCards !== 'undefined' && boardPokemonCards[wild.waypointId]) {
-                boardPokemonCards[wild.waypointId].weakened = true;
+        } else {
+            if (!isLegendary) {
+                wild.weakened = true;
+                if (wild.waypointId && boardPokemonCards[wild.waypointId]) {
+                    boardPokemonCards[wild.waypointId].weakened = true;
+                }
             }
+
+            if (wild.waypointId) {
+                cp.currentZone = wild.waypointId;
+            }
+            if (typeof renderBoardMap === 'function') renderBoardMap();
+
+            const weakenedNotice = (!isLegendary) ? "\n🩹 O Pokémon ficou enfraquecido no tabuleiro (+1 bónus permanente na próxima tentativa)!" : "";
+            showCustomPopup("❌ A CAPTURA FALHOU!", `O ${wild.name} libertou-se!\n(Dado: ${roll} + Bónus: ${currentEncounterState.itemBonus + weakenedBonus} = ${totalCaptureValue} | Necessário: ${requiredTarget}+).${weakenedNotice}`, false);
+            
+            updateEncounterUIInfo();
         }
-
-        if (wild.waypointId) cp.currentZone = wild.waypointId;
-        if (typeof renderBoardMap === 'function') renderBoardMap();
-
-        showCustomPopup(
-            "❌ A CAPTURA FALHOU!",
-            `O ${wild.name} libertou-se!\n\nDado: ${roll} + Bónus: ${itemBonus + weakenedBonus} = ${totalValue} | Necessário: ${requiredTarget}+${!isLegendary ? '\n\n🩹 O Pokémon ficou enfraquecido e recebeu +1 na próxima tentativa.' : ''}`,
-            false
-        );
-
-        updateEncounterUIInfo();
     });
 }
 
 function fleeEncounter() {
     const cp = getCurrentPlayer();
     const wild = currentEncounterState.wildPokemon;
-
-    if (cp && wild && wild.waypointId) cp.currentZone = wild.waypointId;
-
-    showCustomPopup("Fuga", "🏃‍♂️ Afastaste-te do Pokémon com segurança!", true);
+    if (wild && wild.waypointId) {
+        cp.currentZone = wild.waypointId;
+    }
+    showCustomPopup("Fuga", "🏃‍♂ Afastaste-te do Pokémon com segurança!", true);
     closeEncounterModalUI();
     if (typeof renderBoardMap === 'function') renderBoardMap();
 }
 
 function closeEncounterModalUI() {
     const modal = document.getElementById('encounter-modal');
-    if (!modal) return;
-
-    modal.classList.remove('flex');
-    modal.classList.add('hidden');
+    if (modal) {
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+    }
 }
 
 function checkMonsterEvolution(monster) {
-    if (!monster || !monster.evolvesTo || typeof MONSTER_CATALOG === 'undefined') return;
-    if ((Number(monster.level) || 1) < (Number(monster.evolutionLevel) || 16)) return;
-
-    const nextEvolution = MONSTER_CATALOG.find(mon => mon && mon.id === monster.evolvesTo);
-    if (!nextEvolution) return;
-
-    const oldName = monster.name || 'Pokémon';
-
-    monster.id = nextEvolution.id || monster.id;
-    monster.name = nextEvolution.name || monster.name;
-    monster.type = nextEvolution.type || monster.type;
-    monster.tier = nextEvolution.tier || monster.tier;
-    monster.rarity = nextEvolution.rarity || monster.rarity;
-    monster.stage = nextEvolution.stage || monster.stage;
-    monster.image = nextEvolution.image || monster.image;
-    monster.shinyImage = nextEvolution.shinyImage || monster.shinyImage || null;
-    monster.evolvesTo = nextEvolution.evolvesTo || null;
-    monster.evolutionLevel = nextEvolution.evolutionLevel || null;
-    monster.str = Math.max(Number(monster.str) || 4, Number(nextEvolution.str) || 4);
-
-    const oldMaxHp = Number(monster.maxHp || monster.hp || 20) || 20;
-    monster.maxHp = Math.max(oldMaxHp + 10, Number(nextEvolution.hp) || oldMaxHp + 10);
-    monster.currentHp = monster.maxHp;
-
-    appendAdventureLog(`✨ O ${oldName} evoluiu para ${monster.name}!`);
-    showEvolutionModalUI(oldName, monster);
+    if (!monster.evolvesTo) return;
+    if (monster.level >= (monster.evolutionLevel || 16)) {
+        const nextEvolution = MONSTER_CATALOG.find(m => m.id === monster.evolvesTo);
+        if (nextEvolution) {
+            const oldName = monster.name;
+            monster.name = nextEvolution.name;
+            monster.image = nextEvolution.image;
+            if (nextEvolution.shinyImage) monster.shinyImage = nextEvolution.shinyImage;
+            monster.str = (monster.str || 4) + 3;
+            monster.maxHp = (monster.maxHp || 20) + 10;
+            monster.currentHp = monster.maxHp;
+            
+            appendAdventureLog(`✨ O ${oldName} evoluiu para ${monster.name}!`);
+            showEvolutionModalUI(oldName, monster);
+        }
+    }
 }
 
 function showEvolutionModalUI(oldName, evolvedMonster) {
-    if (!evolvedMonster) return;
-
     let evoModal = document.getElementById('evolution-popup-modal');
-
     if (!evoModal) {
         evoModal = document.createElement('div');
         evoModal.id = 'evolution-popup-modal';
-        evoModal.className = 'fixed inset-0 bg-black/90 z-[300] flex items-center justify-center p-4';
+        evoModal.className = 'fixed inset-0 bg-black/90 z-[300] flex items-center justify-center p-4 backdrop-blur-sm';
         document.body.appendChild(evoModal);
     }
 
-    const image = evolvedMonster.isShiny && evolvedMonster.shinyImage
-        ? evolvedMonster.shinyImage
-        : evolvedMonster.image || '';
+    const evoImgUrl = evolvedMonster.isShiny && evolvedMonster.shinyImage ? evolvedMonster.shinyImage : evolvedMonster.image;
 
     evoModal.innerHTML = `
-        <div class="trainer-card max-w-sm w-full p-6 text-center space-y-4 border-4 border-amber-400 rounded-2xl bg-gradient-to-b from-amber-950 to-black shadow-2xl">
+        <div class="trainer-card max-w-sm w-full p-6 text-center space-y-4 border-4 border-amber-400 rounded-2xl bg-gradient-to-b from-amber-950 to-black shadow-2xl animate-bounce">
             <h2 class="text-lg font-black text-amber-300 font-cinzel">✨ EVOLUÇÃO! ✨</h2>
             <p class="text-xs text-slate-300">O teu <span class="font-bold text-white">${oldName}</span> está a evoluir...</p>
-            <div class="my-3 flex justify-center"><img src="${image}" alt="${evolvedMonster.name}" class="w-24 h-24 object-contain" onerror="this.onerror=null;this.src='https://api.iconify.design/noto:star.svg';"></div>
-            <h3 class="text-xl font-black text-amber-400 uppercase">${evolvedMonster.name}!</h3>
-            <p class="text-[10px] text-emerald-400 font-bold">STR ${evolvedMonster.str} | HP ${evolvedMonster.maxHp}</p>
-            <button onclick="document.getElementById('evolution-popup-modal').remove()" class="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 rounded-xl text-xs uppercase">Continuar Aventura</button>
+            <div class="my-3 flex justify-center">
+                <img src="${evoImgUrl}" alt="${evolvedMonster.name}" class="w-24 h-24 object-contain drop-shadow-[0_0_15px_rgba(255,215,0,0.8)]" onerror="this.src='https://api.iconify.design/noto:star.svg'">
+            </div>
+            <h3 class="text-xl font-black text-amber-400 uppercase tracking-wider">${evolvedMonster.name}!</h3>
+            <p class="text-[10px] text-emerald-400 font-bold">Atributos melhorados: STR ${evolvedMonster.str} | HP ${evolvedMonster.maxHp}</p>
+            <button onclick="document.getElementById('evolution-popup-modal').remove()" class="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 rounded-xl text-xs uppercase shadow transition-all cursor-pointer">
+                Continuar Aventura
+            </button>
         </div>
     `;
-
     evoModal.classList.remove('hidden');
 }
 
 function addExperienceToMonster(monster, amount) {
-    if (!monster) return;
-
-    monster.xp = Math.max(0, Number(monster.xp) || 0) + (Number(amount) || 0);
-
-    while (monster.xp >= 100) {
+    monster.xp = (monster.xp || 0) + amount;
+    if (monster.xp >= 100) {
         monster.xp -= 100;
-        monster.level = (Number(monster.level) || 1) + 1;
-        monster.maxHp = (Number(monster.maxHp || monster.hp || 20) || 20) + 2;
-        monster.currentHp = Math.min(monster.maxHp, (Number(monster.currentHp) || monster.maxHp) + 2);
-        monster.str = (Number(monster.str) || 4) + 1;
+        monster.level = (monster.level || 1) + 1;
+        
+        monster.maxHp = (monster.maxHp || 20) + 2;
+        monster.currentHp = Math.min(monster.maxHp, (monster.currentHp || monster.maxHp) + 2);
+        monster.str = (monster.str || 4) + 1;
 
-        appendAdventureLog(`📈 ${monster.name} subiu para o Nível ${monster.level}!`);
+        appendAdventureLog(`📈 ${monster.name} subiu para o Nível ${monster.level}! (HP +2, STR +1)`);
         checkMonsterEvolution(monster);
     }
-
     renderTeamCardSlots();
 }
 
-function handleDragStart(event, sourceArea, index) {
-    if (!event || !event.dataTransfer) return;
-    event.dataTransfer.setData('text/plain', JSON.stringify({ sourceArea, index }));
+function handleDragStart(e, sourceArea, index) {
+    e.dataTransfer.setData('text/plain', JSON.stringify({ sourceArea, index }));
 }
 
-function handleDragOver(event) {
-    if (event) event.preventDefault();
+function handleDragOver(e) {
+    e.preventDefault();
 }
 
-function handleDrop(event, targetArea, targetIndex) {
-    if (!event) return;
-    event.preventDefault();
-
+function handleDrop(e, targetArea, targetIndex) {
+    e.preventDefault();
     const cp = getCurrentPlayer();
-    if (!cp || !event.dataTransfer) return;
-
-    const rawData = event.dataTransfer.getData('text/plain');
-    if (!rawData) return;
+    const dataRaw = e.dataTransfer.getData('text/plain');
+    if (!dataRaw) return;
 
     try {
-        const data = JSON.parse(rawData);
-        if (!data || !data.sourceArea) return;
-
-        if (!Array.isArray(cp.activeTeam)) cp.activeTeam = [];
-        if (!Array.isArray(cp.pcBox)) cp.pcBox = [];
+        const data = JSON.parse(dataRaw);
+        if (!data.sourceArea) return;
+        if (!cp.activeTeam) cp.activeTeam = [];
+        if (!cp.pcBox) cp.pcBox = [];
 
         const sourceList = data.sourceArea === 'team' ? cp.activeTeam : cp.pcBox;
         const targetList = targetArea === 'team' ? cp.activeTeam : cp.pcBox;
-        const sourceIndex = Number(data.index);
-        const movedMonster = sourceList[sourceIndex];
-
+        const movedMonster = sourceList[data.index];
         if (!movedMonster) return;
 
         if (targetArea === 'team') {
-            if (targetList.length >= 6 && data.sourceArea !== 'team') {
-                showCustomPopup("Equipa Cheia", "⚠️ A Equipa Ativa já possui seis Pokémon.", false);
-                return;
-            }
-
-            const tier = Number(movedMonster.tier) || 1;
+            const tier = movedMonster.tier || 1;
             const badgeCount = Array.isArray(cp.badges) ? cp.badges.length : 0;
 
             if (tier === 3 && badgeCount < 1) {
-                showCustomPopup("Portão de Insígnia", "⚠️ Precisas de pelo menos uma insígnia para usar um Pokémon Tier 3.", false);
+                showCustomPopup("Portão de Insígnia", "⚠ Precisas de pelo menos 1 insígnia para colocar um Pokémon Tier 3 (Azul) na Equipa Ativa!", false);
                 return;
             }
-
             if (tier === 4 && badgeCount < 3) {
-                showCustomPopup("Portão de Insígnia", "⚠️ Precisas de pelo menos três insígnias para usar um Pokémon Tier 4.", false);
+                showCustomPopup("Portão de Insígnia", "⚠ Precisas de pelo menos 3 insígnias para colocar um Pokémon Tier 4 (Vermelho) na Equipa Ativa!", false);
                 return;
             }
-
             if (tier === 5 && badgeCount < 4) {
-                showCustomPopup("Portão de Insígnia", "⚠️ Precisas de pelo menos quatro insígnias para usar um Pokémon Tier 5.", false);
+                showCustomPopup("Portão de Insígnia", "⚠ Precisas de pelo menos 4 insígnias para colocar um Pokémon Tier 5 (Amarelo/Lendário) na Equipa Ativa!", false);
                 return;
             }
         }
 
-        sourceList.splice(sourceIndex, 1);
-
+        sourceList.splice(data.index, 1);
         if (targetArea === 'team') targetList.push(movedMonster);
-        else targetList.splice(Math.max(0, Number(targetIndex) || 0), 0, movedMonster);
+        else targetList.splice(targetIndex, 0, movedMonster);
 
         renderTeamCardSlots();
         renderBottomPanel();
-    } catch (error) {
-        console.error('Erro ao mover Pokémon:', error);
-    }
+    } catch (err) {}
 }
 
 function renderTeamCardSlots() {
     const cp = getCurrentPlayer();
-    if (!cp) return;
-
-    if (!Array.isArray(cp.activeTeam)) cp.activeTeam = [];
-
     for (let i = 0; i < 6; i++) {
         const slotContainer = document.getElementById(`trainer-card-slot-${i}`);
         if (!slotContainer) continue;
 
-        const monster = cp.activeTeam[i];
+        const monster = cp.activeTeam ? cp.activeTeam[i] : null;
+        if (monster) {
+            const activeImg = monster.isShiny && monster.shinyImage ? monster.shinyImage : monster.image;
+            const visualContent = activeImg 
+                ? `<img src="${activeImg}" alt="${monster.name}" class="w-full h-14 object-contain ${monster.currentHp <= 0 ? 'grayscale opacity-50' : ''}">`
+                : `<span class="text-2xl">👾</span>`;
 
-        if (!monster) {
-            slotContainer.innerHTML = `<div ondragover="handleDragOver(event)" ondrop="handleDrop(event,'team',${i})" class="border border-dashed border-amber-500/40 rounded bg-black/20 flex items-center justify-center text-[9px] text-amber-500/50 h-full">Vazio</div>`;
-            continue;
-        }
+            const curHp = monster.currentHp !== undefined ? monster.currentHp : (monster.maxHp || 20);
+            const maxHp = monster.maxHp || monster.hp || 20;
+            const isFainted = curHp <= 0;
+            const shinyMarker = monster.isShiny ? '<span class="absolute top-0.5 right-0.5 text-[7px] font-black bg-amber-400 text-black px-1 rounded animate-pulse">✨SHINY</span>' : '';
+            const auraClass = monster.auraEffect || '';
+            const tierCardBg = getTierColorClass(monster.tier || 1);
 
-        const currentHp = Number(monster.currentHp !== undefined ? monster.currentHp : monster.maxHp || monster.hp || 20) || 0;
-        const maxHp = Number(monster.maxHp || monster.hp || 20) || 20;
-        const isFainted = currentHp <= 0;
-        const image = monster.isShiny && monster.shinyImage ? monster.shinyImage : monster.image || '';
-        const tierCardBg = typeof getTierColorClass === 'function' ? getTierColorClass(monster.tier || 1) : '';
-        const shinyMarker = monster.isShiny ? '<span class="absolute top-0.5 right-0.5 text-[7px] font-black bg-amber-400 text-black px-1 rounded animate-pulse">✨SHINY</span>' : '';
-
-        slotContainer.innerHTML = `
-            <div draggable="true" ondragstart="handleDragStart(event,'team',${i})" ondragover="handleDragOver(event)" ondrop="handleDrop(event,'team',${i})" onclick="event.stopPropagation();openPokemonDetailModal(${JSON.stringify(monster.uniqueId || monster.id)},'team')" class="${tierCardBg} ${isFainted ? 'from-red-950 to-red-900 border-red-600 text-red-200' : 'border-amber-600'} ${monster.isShiny ? 'shiny-card-glow' : ''} ${monster.auraEffect || ''} border rounded p-1 flex flex-col justify-between h-full shadow cursor-pointer relative text-white">
-                ${shinyMarker}
-                <div class="flex justify-between items-center text-[8px] font-bold"><span class="truncate">${monster.name || 'Pokémon'}</span><span>Nv.${monster.level || 1}</span></div>
-                <div class="my-auto bg-black/40 rounded border border-amber-400/50 flex items-center justify-center p-0.5 h-12 relative">
-                    <img src="${image}" alt="${monster.name || 'Pokémon'}" class="w-full h-14 object-contain ${isFainted ? 'grayscale opacity-50' : ''}" onerror="this.onerror=null;this.src='https://api.iconify.design/noto:video-game.svg';">
-                    ${isFainted ? '<span class="absolute text-[8px] font-black bg-red-600 text-white px-1 rounded">DESMAIADO</span>' : ''}
+            slotContainer.innerHTML = `
+                <div draggable="true" ondragstart="handleDragStart(event, 'team', ${i})" ondragover="handleDragOver(event)" ondrop="handleDrop(event, 'team', ${i})" onclick="event.stopPropagation(); openPokemonDetailModal('${monster.uniqueId}', 'team')" class="${tierCardBg} ${isFainted ? 'from-red-950 to-red-900 border-red-600 text-red-200' : ''} ${monster.isShiny ? 'border-amber-400 shiny-card-glow' : 'border-amber-600'} ${auraClass} border rounded p-1 flex flex-col justify-between h-full shadow cursor-pointer hover:brightness-105 transition-all relative text-white">
+                    ${shinyMarker}
+                    <div class="flex justify-between items-center text-[8px] font-bold">
+                        <span class="truncate">${monster.name}</span>
+                        <span>Nv.${monster.level || 1}</span>
+                    </div>
+                    <div class="my-auto bg-black/40 rounded border border-amber-400/50 flex items-center justify-center p-0.5 h-12 relative">
+                        ${visualContent}
+                        ${isFainted ? '<span class="absolute text-[8px] font-black bg-red-600 text-white px-1 rounded">DESMAIADO</span>' : ''}
+                    </div>
+                    <div class="text-[7px] text-center font-bold text-amber-300">
+                        HP: ${curHp}/${maxHp} | STR: ${monster.str || 4}
+                    </div>
                 </div>
-                <div class="text-[7px] text-center font-bold text-amber-300">HP: ${currentHp}/${maxHp} | STR: ${monster.str || 4}</div>
-            </div>
-        `;
+            `;
+        } else {
+            slotContainer.innerHTML = `
+                <div ondragover="handleDragOver(event)" ondrop="handleDrop(event, 'team', ${i})" class="border border-dashed border-amber-500/40 rounded bg-black/20 flex items-center justify-center text-[9px] text-amber-500/50 h-full">
+                    Vazio
+                </div>
+            `;
+        }
     }
 }
 
 window.switchBottomView = function(viewType) {
-    gameState.currentBottomView = viewType === 'pcbox' ? 'pcbox' : 'inventory';
+    gameState.currentBottomView = viewType;
     renderBottomPanel();
-};
+}
 
 // --- PC BOX COM PAGINAÇÃO DINÂMICA (12 por página) ---
 function renderBottomPanel() {
