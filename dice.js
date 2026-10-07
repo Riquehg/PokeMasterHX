@@ -1,9 +1,12 @@
-// --- SISTEMA DE DADOS E MOVIMENTO TRADICIONAL DE TABULEIRO (DICE.JS) ---
+// --- SISTEMA DE DADOS E MOVIMENTO DO TABULEIRO ---
+// dice.js
 
 if (typeof SUPABASE_STORAGE_URL === 'undefined') {
-    var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
+    var SUPABASE_STORAGE_URL =
+        'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/';
 }
 
+// Estado temporário do movimento atual
 let movementState = {
     isMoving: false,
     diceRolledValue: 0,
@@ -11,253 +14,635 @@ let movementState = {
     validDestinations: []
 };
 
-// Atalho seguro para obter a posição atual do jogador da vez
-function getCurrentPlayerWaypointId() {
-    const cp = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : null;
-    if (cp) {
-        if (cp.currentZone === undefined) cp.currentZone = 5; // Pallet por defeito
-        return cp.currentZone;
+// ------------------------------------------------------------
+// FUNÇÕES AUXILIARES
+// ------------------------------------------------------------
+
+function getSafeBoardWaypoints() {
+    return typeof BOARD_WAYPOINTS !== 'undefined' &&
+        Array.isArray(BOARD_WAYPOINTS)
+        ? BOARD_WAYPOINTS
+        : [];
+}
+
+function getWaypointById(waypointId) {
+    const numericId = Number(waypointId);
+
+    if (!Number.isFinite(numericId)) {
+        return null;
     }
-    return 5;
+
+    return getSafeBoardWaypoints().find(
+        waypoint => Number(waypoint.id) === numericId
+    ) || null;
+}
+
+function getMovementPlayer() {
+    if (typeof getCurrentPlayer === 'function') {
+        return getCurrentPlayer();
+    }
+
+    if (
+        typeof gameState === 'undefined' ||
+        !gameState ||
+        !Array.isArray(gameState.players) ||
+        gameState.players.length === 0
+    ) {
+        return null;
+    }
+
+    const currentIndex = Number(gameState.currentPlayerIndex) || 0;
+
+    return gameState.players[currentIndex] ||
+        gameState.players[0] ||
+        null;
+}
+
+function normalizeWaypointType(value) {
+    const aliases = {
+        rock: ['rock', 'pedra'],
+        pedra: ['rock', 'pedra'],
+        flying: ['flying', 'voador'],
+        voador: ['flying', 'voador'],
+        fire: ['fire', 'fogo'],
+        fogo: ['fire', 'fogo'],
+        grass: ['grass', 'grama'],
+        grama: ['grass', 'grama'],
+        water: ['water', 'água', 'agua'],
+        agua: ['water', 'água', 'agua'],
+        electric: ['electric', 'elétrico', 'eletrico'],
+        elétrico: ['electric', 'elétrico', 'eletrico'],
+        eletrico: ['electric', 'elétrico', 'eletrico']
+    };
+
+    const normalized = String(value || '')
+        .toLowerCase()
+        .trim();
+
+    return aliases[normalized] || [normalized];
+}
+
+function playerHasRequiredType(player, requiredType) {
+    if (!player || !requiredType) {
+        return true;
+    }
+
+    const requiredAliases = normalizeWaypointType(requiredType);
+
+    const activeTeam = Array.isArray(player.activeTeam)
+        ? player.activeTeam
+        : [];
+
+    return activeTeam.some(monster => {
+        if (!monster || !monster.type) {
+            return false;
+        }
+
+        const monsterTypes = String(monster.type)
+            .toLowerCase()
+            .split('/')
+            .map(type => type.trim());
+
+        return monsterTypes.some(monsterType =>
+            requiredAliases.includes(monsterType)
+        );
+    });
+}
+
+function playerCanAccessWaypoint(player, waypoint) {
+    if (!player || !waypoint) {
+        return false;
+    }
+
+    if (
+        waypoint.requiredType &&
+        !playerHasRequiredType(
+            player,
+            waypoint.requiredType
+        )
+    ) {
+        return false;
+    }
+
+    const waypointName = String(waypoint.name || '')
+        .toLowerCase();
+
+    const isFinalArea =
+        waypointName.includes('indigo plateau') ||
+        waypointName.includes('liga pokémon') ||
+        waypointName.includes('liga pokemon') ||
+        waypointName.includes('arena final');
+
+    if (isFinalArea) {
+        const badgeCount = Array.isArray(player.badges)
+            ? player.badges.length
+            : 0;
+
+        if (badgeCount < 6) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// ------------------------------------------------------------
+// POSIÇÃO DO JOGADOR
+// ------------------------------------------------------------
+
+function getCurrentPlayerWaypointId() {
+    const player = getMovementPlayer();
+    const defaultWaypoint = getWaypointById(5);
+
+    if (!player) {
+        return defaultWaypoint
+            ? Number(defaultWaypoint.id)
+            : 5;
+    }
+
+    const currentZone = Number(player.currentZone);
+
+    if (
+        Number.isFinite(currentZone) &&
+        getWaypointById(currentZone)
+    ) {
+        return currentZone;
+    }
+
+    player.currentZone = defaultWaypoint
+        ? Number(defaultWaypoint.id)
+        : 5;
+
+    return player.currentZone;
 }
 
 function setCurrentPlayerWaypointId(newWaypointId) {
-    const cp = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : null;
-    if (cp) {
-        cp.currentZone = newWaypointId;
+    const waypoint = getWaypointById(newWaypointId);
+
+    if (!waypoint) {
+        return false;
     }
+
+    const player = getMovementPlayer();
+
+    if (!player) {
+        return false;
+    }
+
+    player.currentZone = Number(waypoint.id);
+
+    return true;
 }
 
-// Ponto de entrada unificado para rolar o dado (Ligado ao Botão do HUD e map.js)
+// ------------------------------------------------------------
+// ROLAGEM DO DADO
+// ------------------------------------------------------------
+
 function rollDiceForMovement() {
     if (movementState.isMoving) {
         if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Aviso", "⚠ Termina o movimento atual antes de rolar o dado novamente!", false);
+            showCustomPopup(
+                'Movimento em andamento',
+                '⚠️ Escolha primeiro uma das casas destacadas no mapa.',
+                false
+            );
         }
+
         return;
     }
 
     if (movementState.hasRolledThisTurn) {
         if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Movimento Esgotado", "⚠️️ Já rodaste o dado e realizaste o teu movimento neste turno!\n\nPassa a vez ou termina as tuas ações.", false);
+            showCustomPopup(
+                'Movimento esgotado',
+                '⚠️ Você já rolou o dado neste turno. Escolha uma casa ou passe a vez.',
+                false
+            );
         }
+
         return;
     }
 
     const diceIcon = document.getElementById('dice-icon');
-    if (diceIcon) diceIcon.classList.add('fa-spin');
 
-    // Executa a animação visual padrão de dado
-    if (typeof rollDiceWithAnimation === 'function') {
-        rollDiceWithAnimation((diceResult) => {
-            if (diceIcon) diceIcon.classList.remove('fa-spin');
-            movementState.hasRolledThisTurn = true;
-            startDirectMovementSession(diceResult);
-        });
-    } else {
-        setTimeout(() => {
-            if (diceIcon) diceIcon.classList.remove('fa-spin');
-            const rollResult = Math.floor(Math.random() * 6) + 1;
-            movementState.hasRolledThisTurn = true;
-            startDirectMovementSession(rollResult);
-        }, 800);
+    if (diceIcon) {
+        diceIcon.classList.add('fa-spin');
     }
+
+    const finishRoll = result => {
+        if (diceIcon) {
+            diceIcon.classList.remove('fa-spin');
+        }
+
+        const normalizedResult = Math.max(
+            1,
+            Math.min(6, Number(result) || 1)
+        );
+
+        movementState.hasRolledThisTurn = true;
+
+        startDirectMovementSession(normalizedResult);
+    };
+
+    if (typeof rollDiceWithAnimation === 'function') {
+        rollDiceWithAnimation(finishRoll);
+        return;
+    }
+
+    const fallbackResult =
+        Math.floor(Math.random() * 6) + 1;
+
+    finishRoll(fallbackResult);
 }
 
-// Mantido por compatibilidade caso algum módulo chame 'rollDice' diretamente
+// Compatibilidade com chamadas antigas
 function rollDice() {
     rollDiceForMovement();
 }
 
-// Inicia a sessão de movimento direto ao destino final
-function startDirectMovementSession(steps) {
-    movementState.isMoving = true;
-    movementState.diceRolledValue = steps;
+// ------------------------------------------------------------
+// INÍCIO DA SESSÃO DE MOVIMENTO
+// ------------------------------------------------------------
 
-    const currentId = getCurrentPlayerWaypointId();
-    
-    // Utiliza a função BFS do map.js para encontrar todas as casas exatamente a 'steps' de distância
-    if (typeof getValidDestinations === 'function') {
-        movementState.validDestinations = getValidDestinations(currentId, steps);
-    } else {
-        movementState.validDestinations = [];
+function startDirectMovementSession(steps) {
+    const normalizedSteps = Math.max(
+        1,
+        Math.min(6, Number(steps) || 1)
+    );
+
+    const player = getMovementPlayer();
+    const currentWaypointId =
+        getCurrentPlayerWaypointId();
+
+    movementState.isMoving = true;
+    movementState.diceRolledValue = normalizedSteps;
+    movementState.validDestinations = [];
+
+    if (
+        typeof getValidDestinations === 'function'
+    ) {
+        const destinations = getValidDestinations(
+            currentWaypointId,
+            normalizedSteps
+        );
+
+        if (Array.isArray(destinations)) {
+            movementState.validDestinations =
+                destinations
+                    .map(Number)
+                    .filter(destinationId =>
+                        Boolean(getWaypointById(destinationId))
+                    );
+        }
     }
 
-    const activePlayer = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : (gameState.players ? gameState.players[0] : null);
+    movementState.validDestinations =
+        movementState.validDestinations.filter(destinationId => {
+            const waypoint = getWaypointById(destinationId);
 
-    // Aplica as travas de tipo de Pokémon e Insígnias nos destinos finais
-    movementState.validDestinations = movementState.validDestinations.filter(targetId => {
-        const targetWp = BOARD_WAYPOINTS.find(wp => wp.id === targetId);
-        if (!targetWp) return false;
+            return playerCanAccessWaypoint(
+                player,
+                waypoint
+            );
+        });
 
-        // Trava de Passagem por Tipo de Pokémon na Equipa
-        if (targetWp.requiredType && targetWp.requiredType.trim() !== "") {
-            const required = targetWp.requiredType.toLowerCase();
-            const hasRequiredType = activePlayer && activePlayer.activeTeam.some(mon => {
-                if (!mon.type) return false;
-                return mon.type.toLowerCase().includes(required);
-            });
-            if (!hasRequiredType) return false;
-        }
-
-        // Trava de acesso à Indigo Plateau / Arena Final (Exige 6 insígnias)
-        const isIndigoPlateauOrEnd = targetWp.name.toLowerCase().includes("indigo plateau") || 
-                                   targetWp.name.toLowerCase().includes("liga pokémon") || 
-                                   targetWp.name.toLowerCase().includes("arena final");
-
-        if (isIndigoPlateauOrEnd && activePlayer) {
-            const playerBadges = Array.isArray(activePlayer.badges) ? activePlayer.badges.length : 0;
-            if (playerBadges < 6) return false;
-        }
-
-        return true;
-    });
+    movementState.validDestinations = [
+        ...new Set(movementState.validDestinations)
+    ];
 
     if (movementState.validDestinations.length === 0) {
         if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Sem Saída", `Rolaste ${steps}, mas não existem caminhos válidos com este valor a partir daqui! O turno avança.`, false);
+            showCustomPopup(
+                'Sem caminho válido',
+                `Você rolou ${normalizedSteps}, mas não existe um destino válido com essa distância a partir da casa atual. O movimento foi encerrado.`,
+                false
+            );
         }
+
         finishMovementSessionWithoutMoving();
         return;
     }
 
-    updateMovementHUD(`Rolaste ${steps}! Clica na casa de destino final destacada.`);
-    if (typeof renderBoardMapWithHighlights === 'function') {
-        renderBoardMapWithHighlights(movementState.validDestinations);
+    updateMovementHUD(
+        `Você rolou ${normalizedSteps}. Escolha uma casa destacada.`
+    );
+
+    if (
+        typeof renderBoardMapWithHighlights === 'function'
+    ) {
+        renderBoardMapWithHighlights(
+            movementState.validDestinations
+        );
+    } else if (
+        typeof renderBoardMap === 'function'
+    ) {
+        renderBoardMap(
+            movementState.validDestinations
+        );
     }
 }
 
-// Executado quando o jogador clica numa casa de destino final no mapa
+// ------------------------------------------------------------
+// CLIQUE EM UMA CASA DESTACADA
+// ------------------------------------------------------------
+
 function handleWaypointClick(targetWaypointId) {
     if (!movementState.isMoving) {
-        return; 
-    }
-
-    const targetNum = Number(targetWaypointId);
-    const validNormalized = (movementState.validDestinations || []).map(Number);
-
-    if (!validNormalized.includes(targetNum)) {
-        if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Destino Inválido", "🚫 Escolha uma das casas finais destacadas no mapa!", false);
-        }
         return;
     }
 
-    // Move o jogador diretamente para o destino final escolhido
-    setCurrentPlayerWaypointId(targetNum);
-    
-    const activePlayer = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : null;
-    if (activePlayer) {
-        activePlayer.currentZone = targetNum;
+    const targetId = Number(targetWaypointId);
+    const targetWaypoint = getWaypointById(targetId);
+
+    if (!targetWaypoint) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup(
+                'Destino inválido',
+                '🚫 A casa selecionada não existe no mapa.',
+                false
+            );
+        }
+
+        return;
+    }
+
+    const validDestinations =
+        movementState.validDestinations.map(Number);
+
+    if (!validDestinations.includes(targetId)) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup(
+                'Destino inválido',
+                '🚫 Escolha uma das casas finais destacadas no mapa.',
+                false
+            );
+        }
+
+        return;
+    }
+
+    const player = getMovementPlayer();
+
+    if (!playerCanAccessWaypoint(player, targetWaypoint)) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup(
+                'Acesso bloqueado',
+                '⚠️ Você ainda não atende aos requisitos para acessar essa casa.',
+                false
+            );
+        }
+
+        return;
+    }
+
+    if (!setCurrentPlayerWaypointId(targetId)) {
+        finishMovementSessionWithoutMoving();
+        return;
     }
 
     if (typeof moveTokenToWaypoint === 'function') {
-        moveTokenToWaypoint(targetNum);
+        moveTokenToWaypoint(targetId);
     }
-    updatePlayerLocationUI(targetNum);
 
+    updatePlayerLocationUI(targetId);
     finishMovementSession();
 }
+
+// ------------------------------------------------------------
+// FINALIZAÇÃO DO MOVIMENTO
+// ------------------------------------------------------------
 
 function finishMovementSession() {
     movementState.isMoving = false;
     movementState.validDestinations = [];
-    
-    if (typeof renderBoardMap === 'function') renderBoardMap();
-    const finalId = getCurrentPlayerWaypointId();
-    
-    if (typeof moveTokenToWaypoint === 'function') {
-        moveTokenToWaypoint(finalId);
+
+    const finalWaypointId =
+        getCurrentPlayerWaypointId();
+
+    if (typeof renderBoardMap === 'function') {
+        renderBoardMap();
     }
 
-    const cp = getCurrentPlayer();
-    updateMovementHUD(`Local: Zona #${finalId} (${cp.name})`);
-    
-    // Dispara o evento da casa final exatamente uma vez
+    if (typeof moveTokenToWaypoint === 'function') {
+        moveTokenToWaypoint(finalWaypointId);
+    }
+
+    const player = getMovementPlayer();
+
+    updateMovementHUD(
+        player
+            ? `Local: Zona #${finalWaypointId} (${player.name || 'Treinador'})`
+            : `Local: Zona #${finalWaypointId}`
+    );
+
     if (typeof triggerWaypointEvent === 'function') {
-        triggerWaypointEvent(finalId);
+        triggerWaypointEvent(finalWaypointId);
     }
 }
 
 function finishMovementSessionWithoutMoving() {
     movementState.isMoving = false;
+    movementState.diceRolledValue = 0;
     movementState.validDestinations = [];
-    if (typeof renderBoardMap === 'function') renderBoardMap();
+
+    if (typeof renderBoardMap === 'function') {
+        renderBoardMap();
+    }
 }
 
+// ------------------------------------------------------------
+// HUD E REGISTRO DE LOCALIZAÇÃO
+// ------------------------------------------------------------
+
 function updateMovementHUD(text) {
-    const locationText = document.getElementById('current-location');
-    if (locationText) {
-        locationText.innerText = text;
+    const locationElement =
+        document.getElementById('current-location');
+
+    if (locationElement) {
+        locationElement.innerText = String(text || '');
     }
 }
 
 function updatePlayerLocationUI(waypointId) {
-    const waypoint = BOARD_WAYPOINTS.find(wp => wp.id === waypointId);
-    if (waypoint) {
-        const cp = getCurrentPlayer();
-        if (typeof appendAdventureLog === 'function') {
-            appendAdventureLog(`${cp ? cp.name : 'Treinador'} deslocou-se para ${waypoint.name}.`);
-        }
+    const waypoint = getWaypointById(waypointId);
+
+    if (!waypoint) {
+        return;
+    }
+
+    const player = getMovementPlayer();
+
+    if (typeof appendAdventureLog === 'function') {
+        appendAdventureLog(
+            `${player?.name || 'Treinador'} deslocou-se para ${waypoint.name || `Zona #${waypoint.id}`}.`
+        );
     }
 }
 
-function triggerWaypointEvent(waypointId) {
-    const waypoint = BOARD_WAYPOINTS.find(wp => wp.id === waypointId);
-    if (!waypoint) return;
+// ------------------------------------------------------------
+// EVENTOS DA CASA DE DESTINO
+// ------------------------------------------------------------
 
-    const cp = getCurrentPlayer();
-    cp.currentZone = waypointId;
+function triggerWaypointEvent(waypointId) {
+    const waypoint = getWaypointById(waypointId);
+    const player = getMovementPlayer();
+
+    if (!waypoint || !player) {
+        return;
+    }
+
+    player.currentZone = Number(waypoint.id);
+
+    // Verifica encontro com outro jogador no mesmo local
+    if (
+        typeof checkPlayerCellCollision === 'function' &&
+        typeof gameState !== 'undefined' &&
+        gameState &&
+        Array.isArray(gameState.players)
+    ) {
+        const currentPlayerIndex =
+            Number(gameState.currentPlayerIndex) || 0;
+
+        checkPlayerCellCollision(
+            waypoint.id,
+            currentPlayerIndex
+        );
+    }
 
     if (waypoint.type === 'pokemon') {
-        const wildPokemon = (typeof boardPokemonCards !== 'undefined') ? boardPokemonCards[waypointId] : null;
-        if (wildPokemon) {
+        const wildPokemon =
+            typeof boardPokemonCards !== 'undefined' &&
+            boardPokemonCards
+                ? boardPokemonCards[waypoint.id]
+                : null;
+
+        if (
+            wildPokemon &&
+            typeof openEncounterModalWithPokemon === 'function'
+        ) {
             wildPokemon.revealed = true;
-            if (typeof openEncounterModalWithPokemon === 'function') {
-                openEncounterModalWithPokemon(wildPokemon);
-            }
+            openEncounterModalWithPokemon(wildPokemon);
         }
-    } else if (waypoint.type === 'city') {
+
+        return;
+    }
+
+    if (waypoint.type === 'city') {
         if (typeof openCityModal === 'function') {
             openCityModal(waypoint.name);
         }
-    } else if (waypoint.type === 'event') {
-        triggerRandomBoardEvent(waypoint.name);
+
+        return;
+    }
+
+    if (waypoint.type === 'event') {
+        if (typeof triggerRandomBoardEvent === 'function') {
+            triggerRandomBoardEvent(waypoint.name);
+        }
     }
 }
 
+// ------------------------------------------------------------
+// EVENTOS ALEATÓRIOS
+// ------------------------------------------------------------
+
+function ensurePotionInInventory(player) {
+    if (!player) {
+        return;
+    }
+
+    if (!Array.isArray(player.inventory)) {
+        player.inventory = [];
+    }
+
+    const potion = player.inventory.find(
+        item => item && item.id === 'item_potion'
+    );
+
+    if (potion) {
+        potion.count = Math.max(
+            0,
+            Number(potion.count) || 0
+        ) + 1;
+
+        return;
+    }
+
+    player.inventory.push({
+        id: 'item_potion',
+        name: 'Potion',
+        type: 'heal',
+        value: 20,
+        icon: '💊',
+        image: `${SUPABASE_STORAGE_URL}items/potion.png`,
+        count: 1,
+        cost: 50,
+        desc: 'Restaura 20 HP de um Anima.'
+    });
+}
+
 function triggerRandomBoardEvent(waypointName) {
-    const randomRoll = Math.floor(Math.random() * 4) + 1;
-    let title = "Carta de Evento";
-    let message = "";
+    const player = getMovementPlayer();
+
+    if (!player) {
+        return;
+    }
+
+    const roll =
+        Math.floor(Math.random() * 4) + 1;
+
+    let title = 'Carta de Evento';
+    let message = '';
     let isPositive = true;
 
-    const activePlayer = getCurrentPlayer();
+    const safeWaypointName =
+        waypointName || 'esta rota';
 
-    if (randomRoll === 1) {
-        let goldGain = 100;
-        activePlayer.gold += goldGain;
-        title = "💰 Tesouro Encontrado!";
-        message = `Encontraste uma bolsa perdida com ${goldGain} moedas de ouro em ${waypointName}!`;
-    } else if (randomRoll === 2) {
-        title = "🌿 Sorte na Natureza!";
-        message = `O ar puro de ${waypointName} revigorou a tua equipa!`;
-    } else if (randomRoll === 3) {
-        title = "🎒 Achado na Rota!";
-        if (activePlayer && activePlayer.inventory) {
-            let potion = activePlayer.inventory.find(i => i.id === 'item_potion');
-            if (potion) potion.count++;
-        }
-        message = `Encontraste uma Potion em ${waypointName}! Adicionada à Mochila.`;
+    if (roll === 1) {
+        const goldGain = 100;
+
+        player.gold =
+            Math.max(0, Number(player.gold) || 0) +
+            goldGain;
+
+        title = '💰 Tesouro encontrado!';
+        message =
+            `Você encontrou uma bolsa perdida com ${goldGain} moedas de ouro em ${safeWaypointName}.`;
+    } else if (roll === 2) {
+        title = '🌿 Sorte na natureza!';
+        message =
+            `O ar puro de ${safeWaypointName} revigorou a sua equipe.`;
+    } else if (roll === 3) {
+        ensurePotionInInventory(player);
+
+        title = '🎒 Achado na rota!';
+        message =
+            `Você encontrou uma Potion em ${safeWaypointName}. O item foi adicionado à mochila.`;
     } else {
-        title = "🌀 Imprevisto na Rota!";
-        message = `Terreno difícil em ${waypointName}. Perdes tempo mas segues viagem.`;
+        title = '🌀 Imprevisto na rota!';
+        message =
+            `O terreno de ${safeWaypointName} era difícil. Você perdeu tempo, mas continuou a viagem.`;
         isPositive = false;
     }
 
-    if (typeof updatePlayerUI === 'function') updatePlayerUI();
-    if (typeof renderBottomPanel === 'function') renderBottomPanel();
+    if (typeof updatePlayerUI === 'function') {
+        updatePlayerUI();
+    }
+
+    if (typeof renderBottomPanel === 'function') {
+        renderBottomPanel();
+    }
+
+    // Usa a rotina central de salvamento do engine.js
+    if (typeof saveGameProgress === 'function') {
+        saveGameProgress();
+    }
+
     if (typeof showCustomPopup === 'function') {
-        showCustomPopup(title, message, isPositive);
+        showCustomPopup(
+            title,
+            message,
+            isPositive
+        );
     }
 }
