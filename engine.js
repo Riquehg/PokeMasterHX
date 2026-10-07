@@ -893,7 +893,6 @@ function triggerCaptureFlow(wildPokemon) {
     const cp = getCurrentPlayer();
     if (!cp.inventory) cp.inventory = [];
 
-    // Filtra itens do tipo esfera que possuem quantidade maior que zero
     const availableSpheres = cp.inventory.filter(i => i.type === 'sphere' && i.count > 0);
 
     if (availableSpheres.length === 0) {
@@ -949,7 +948,6 @@ window.attemptCatchWithSpecificBall = function(ballItemId, waypointId) {
         return;
     }
 
-    // Consome obrigatoriamente 1 unidade da esfera selecionada
     sphereItem.count--;
 
     let bonus = sphereItem.value || 0;
@@ -1089,7 +1087,7 @@ function useInventoryItemMainScreen(itemId) {
     if (item.type === 'heal') {
         let target = cp.activeTeam.find(m => m.currentHp < m.maxHp);
         if (!target) {
-            showCustomPopup("Aviso", "✨ Todos os Pokémon na equipa ativa estão com HP máximo!", false);
+            showCustomPopup("Aviso", "✨ Todos los Pokémon na equipa ativa estão com HP máximo!", false);
             return;
         }
         item.count--;
