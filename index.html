@@ -201,7 +201,7 @@
 
                 <div class="space-y-1">
                     <label class="text-[10px] text-slate-300 font-bold">Salas Disponíveis na Nuvem:</label>
-                    <div id="rooms-list-box" class="bg-black/60 border border-blue-900/60 rounded-xl h-28 overflow-y-auto p-2 space-y-1">
+                    <div id="online-rooms-list-container" class="bg-black/60 border border-blue-900/60 rounded-xl h-28 overflow-y-auto p-2 space-y-1" aria-live="polite">
                         <p class="text-[10px] text-slate-500 text-center py-6">Nenhuma sala encontrada. Crie uma sala para começar!</p>
                     </div>
                 </div>
@@ -223,6 +223,8 @@
             </div>
         </div>
     </div>
+
+    <div id="post-login-dashboard" class="hidden fixed inset-0 bg-[#020617] z-[300] flex items-center justify-center p-4 backdrop-blur-md" aria-live="polite"></div>
 
     <!-- === INTERFACE PRINCIPAL DO JOGO === -->
     <div id="main-game-layout" class="flex flex-col justify-between flex-1 hidden">
@@ -416,5 +418,85 @@
     <script src="dice.js"></script>
     <script src="engine.js"></script>
     <script src="battle-arena.js"></script>
+    <script>
+        if (!window.__hexChatBridgeInstalled) {
+            window.__hexChatBridgeInstalled = true;
+
+            window.sendChatMessage = function() {
+                const input = document.getElementById('chat-input-field');
+                const message = input ? input.value.trim() : '';
+
+                if (!message) return;
+
+                let sender = 'Treinador';
+
+                if (typeof currentAuthenticatedAccount !== 'undefined' && currentAuthenticatedAccount) {
+                    sender = currentAuthenticatedAccount;
+                } else if (typeof getCurrentPlayer === 'function') {
+                    const player = getCurrentPlayer();
+                    if (player && player.name) sender = player.name;
+                }
+
+                if (typeof socket !== 'undefined' && socket) {
+                    socket.emit('lobby_chat_message', {
+                        message,
+                        sender
+                    });
+                }
+
+                input.value = '';
+            };
+
+            if (typeof socket !== 'undefined' && socket && typeof socket.on === 'function') {
+                socket.on('chat_broadcast', function(payload) {
+                    if (!payload) return;
+
+                    const sender = payload.sender || 'Treinador';
+                    const text = payload.text || payload.message || '';
+
+                    if (!text) return;
+
+                    if (typeof gameState !== 'undefined') {
+                        if (!Array.isArray(gameState.chatMessages)) {
+                            gameState.chatMessages = [];
+                        }
+
+                        gameState.chatMessages.push({
+                            sender,
+                            text
+                        });
+                    }
+
+                    if (typeof renderChatMessages === 'function') {
+                        renderChatMessages();
+                    }
+                });
+
+                socket.on('room_joined', function(response) {
+                    const button = document.getElementById('start-online-game-btn');
+
+                    if (!response || !response.success) {
+                        if (typeof showCustomPopup === 'function') {
+                            showCustomPopup(
+                                'Erro na Sala',
+                                response && response.message
+                                    ? response.message
+                                    : 'Não foi possível entrar na sala online.',
+                                false
+                            );
+                        }
+                        return;
+                    }
+
+                    window.selectedOnlineRoomId = response.roomId || null;
+
+                    if (button) {
+                        button.innerText = '✅ Sala selecionada, entrar na partida';
+                        button.dataset.roomId = response.roomId || '';
+                    }
+                });
+            }
+        }
+    </script>
 </body>
 </html>
