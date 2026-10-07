@@ -6,6 +6,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    isolation: isolate;
+    background:
+        radial-gradient(circle at center, rgba(245, 158, 11, 0.08), transparent 55%),
+        #050403;
 }
 
 #map-zoom-wrapper {
@@ -26,7 +30,9 @@
     background-size: 100% 100%;
     background-repeat: no-repeat;
     background-position: center;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.9);
+    box-shadow:
+        0 20px 25px -5px rgba(0, 0, 0, 0.9),
+        0 0 0 1px rgba(245, 158, 11, 0.18);
     border-radius: 0.75rem;
     overflow: hidden;
     transform-origin: center center;
@@ -45,133 +51,829 @@
 }
 
 @keyframes bounceSlow {
-    0%, 100% { transform: translate(-50%, -85%) translateY(0); }
-    50% { transform: translate(-50%, -85%) translateY(-6px); }
+    0%, 100% {
+        transform: translate(-50%, -85%) translateY(0);
+    }
+
+    50% {
+        transform: translate(-50%, -85%) translateY(-6px);
+    }
 }
 
-/* Animação de Flip da Carta TCG */
+/* --- ANIMAÇÃO DE FLIP DA CARTA TCG --- */
+
 .perspective-1000 {
     perspective: 1000px;
 }
 
 .card-inner {
-    transition: transform 0.6s;
+    position: relative;
+    transition: transform 0.7s cubic-bezier(0.22, 0.61, 0.36, 1);
     transform-style: preserve-3d;
+    will-change: transform;
 }
 
 .card-flipped {
     transform: rotateY(180deg);
 }
 
-.card-front, .card-back {
+.card-front,
+.card-back {
     backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform-style: preserve-3d;
 }
 
 .card-back {
     transform: rotateY(180deg);
-}/* --- ESTILOS DO MAPA E LAYOUT LATERAL --- */
-
-.map-viewport {
-    position: relative;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
 }
 
-#map-zoom-wrapper {
+/* --- BASE VISUAL DAS CARTAS TCG --- */
+
+.trainer-card,
+[id*="card-visual"],
+[id*="trainer-card-slot-"] > div,
+#bottom-dynamic-container > div {
     position: relative;
-    transform-origin: center center;
-    transition: transform 0.15s ease-out;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    isolation: isolate;
 }
 
-.map-container {
-    position: relative;
-    width: 100%;
-    max-width: 1000px;
-    height: auto;
-    aspect-ratio: 2618 / 1226;
-    background-size: 100% 100%;
-    background-repeat: no-repeat;
-    background-position: center;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.9);
-    border-radius: 0.75rem;
-    overflow: hidden;
-    transform-origin: center center;
-    transition: transform 0.2s ease-out;
-}
-
-.player-token {
+.trainer-card::before,
+[id*="card-visual"]::before,
+[id*="trainer-card-slot-"] > div::before,
+#bottom-dynamic-container > div::before {
+    content: "";
     position: absolute;
-    width: 50px;
-    height: 50px;
-    transform: translate(-50%, -85%);
-    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    z-index: 50;
-    filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.95));
-    animation: bounceSlow 2s infinite ease-in-out;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: -1;
+    opacity: 0;
+    background:
+        linear-gradient(
+            115deg,
+            transparent 15%,
+            rgba(255, 255, 255, 0.13) 35%,
+            transparent 52%
+        );
+    background-size: 220% 100%;
+    transition: opacity 0.25s ease;
 }
 
-@keyframes bounceSlow {
-    0%, 100% { transform: translate(-50%, -85%) translateY(0); }
-    50% { transform: translate(-50%, -85%) translateY(-6px); }
+.trainer-card:hover::before,
+[id*="card-visual"]:hover::before,
+[id*="trainer-card-slot-"] > div:hover::before,
+#bottom-dynamic-container > div:hover::before {
+    opacity: 1;
+    animation: cardSheen 1.1s ease forwards;
 }
 
-/* Animação de Flip da Carta TCG */
-.perspective-1000 {
-    perspective: 1000px;
+@keyframes cardSheen {
+    from {
+        background-position: 180% 0;
+    }
+
+    to {
+        background-position: -40% 0;
+    }
 }
 
-.card-inner {
-    transition: transform 0.6s;
-    transform-style: preserve-3d;
+[id*="trainer-card-slot-"] > div,
+#bottom-dynamic-container > div {
+    overflow: hidden;
+    transition:
+        transform 0.2s ease,
+        filter 0.2s ease,
+        box-shadow 0.2s ease;
 }
 
-.card-flipped {
-    transform: rotateY(180deg);
+[id*="trainer-card-slot-"] > div:hover,
+#bottom-dynamic-container > div:hover {
+    transform: translateY(-3px);
+    filter: brightness(1.12) saturate(1.12);
+    box-shadow:
+        0 8px 18px rgba(0, 0, 0, 0.55),
+        0 0 12px rgba(245, 158, 11, 0.18);
 }
 
-.card-front, .card-back {
-    backface-visibility: hidden;
+[id*="card-visual"] {
+    overflow: hidden;
+    box-shadow:
+        0 18px 35px rgba(0, 0, 0, 0.65),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
-.card-back {
-    transform: rotateY(180deg);
+[id*="card-visual"]::after,
+[id*="trainer-card-slot-"] > div::after {
+    content: "";
+    position: absolute;
+    inset: 5px;
+    border-radius: inherit;
+    pointer-events: none;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    opacity: 0.7;
 }
 
-/* --- EFEITOS VISUAIS DE SHINIES E AURAS (HEX Edition) --- */
+/* --- EFEITO HOLOGRÁFICO DAS CARTAS --- */
+
+.holo-card,
+.holographic-card {
+    background-image:
+        linear-gradient(
+            120deg,
+            rgba(255, 0, 102, 0.14),
+            rgba(0, 229, 255, 0.14),
+            rgba(255, 230, 0, 0.14),
+            rgba(168, 85, 247, 0.14)
+        ),
+        linear-gradient(145deg, #17110c, #050403 65%);
+    background-size: 260% 260%, 100% 100%;
+    animation: holoShift 7s ease infinite;
+}
+
+.holo-card::before,
+.holographic-card::before {
+    opacity: 0.55;
+    mix-blend-mode: screen;
+    background:
+        repeating-linear-gradient(
+            125deg,
+            transparent 0 12px,
+            rgba(255, 255, 255, 0.08) 13px,
+            transparent 15px 28px
+        );
+    animation: holoLines 5s linear infinite;
+}
+
+@keyframes holoShift {
+    0%, 100% {
+        background-position: 0% 50%, 0 0;
+    }
+
+    50% {
+        background-position: 100% 50%, 0 0;
+    }
+}
+
+@keyframes holoLines {
+    from {
+        transform: translateX(-8%);
+    }
+
+    to {
+        transform: translateX(8%);
+    }
+}
+
+/* --- EFEITOS VISUAIS DE SHINY E AURAS --- */
 
 .shiny-card-glow {
     border: 3px solid #fbbf24 !important;
-    box-shadow: 0 0 15px rgba(251, 191, 36, 0.9), inset 0 0 10px rgba(251, 191, 36, 0.6);
+    box-shadow:
+        0 0 12px rgba(251, 191, 36, 0.9),
+        0 0 28px rgba(250, 204, 21, 0.55),
+        inset 0 0 10px rgba(251, 191, 36, 0.6);
     animation: shinyPulse 2s infinite alternate;
-    background: linear-gradient(135deg, #1c1410 0%, #3d2508 50%, #1c1410 100%) !important;
+    background:
+        linear-gradient(
+            125deg,
+            rgba(255, 255, 255, 0.14),
+            transparent 26% 70%,
+            rgba(251, 191, 36, 0.18)
+        ),
+        linear-gradient(135deg, #1c1410 0%, #3d2508 50%, #1c1410 100%) !important;
+}
+
+.shiny-card-glow::before {
+    opacity: 0.75 !important;
+    background:
+        radial-gradient(
+            circle at 20% 15%,
+            rgba(255, 255, 255, 0.85) 0 1px,
+            transparent 2px
+        ),
+        radial-gradient(
+            circle at 80% 35%,
+            rgba(255, 231, 130, 0.75) 0 1px,
+            transparent 2px
+        ),
+        radial-gradient(
+            circle at 40% 80%,
+            rgba(255, 255, 255, 0.7) 0 1px,
+            transparent 2px
+        );
+    background-size: 75px 75px, 100px 100px, 125px 125px;
+    animation: shinySparkles 3s linear infinite;
 }
 
 @keyframes shinyPulse {
     0% {
-        box-shadow: 0 0 10px rgba(251, 191, 36, 0.6), inset 0 0 5px rgba(251, 191, 36, 0.3);
+        box-shadow:
+            0 0 10px rgba(251, 191, 36, 0.6),
+            0 0 18px rgba(250, 204, 21, 0.25),
+            inset 0 0 5px rgba(251, 191, 36, 0.3);
     }
+
     100% {
-        box-shadow: 0 0 25px rgba(252, 211, 77, 1), inset 0 0 14px rgba(252, 211, 77, 0.8);
+        box-shadow:
+            0 0 25px rgba(252, 211, 77, 1),
+            0 0 45px rgba(245, 158, 11, 0.45),
+            inset 0 0 14px rgba(252, 211, 77, 0.8);
     }
 }
 
-/* Auras Especiais para Pokéballs e Itens */
-.aura-mystic {
-    box-shadow: 0 0 20px rgba(168, 85, 247, 0.8);
-    border-color: #c084fc !important;
+@keyframes shinySparkles {
+    from {
+        transform: translateY(0);
+        opacity: 0.5;
+    }
+
+    50% {
+        opacity: 0.95;
+    }
+
+    to {
+        transform: translateY(-12px);
+        opacity: 0.5;
+    }
 }
+
+/* --- AURA MÍSTICA --- */
+
+.aura-mystic {
+    border-color: #c084fc !important;
+    background:
+        radial-gradient(
+            circle at 50% 110%,
+            rgba(168, 85, 247, 0.42),
+            transparent 55%
+        ),
+        linear-gradient(145deg, #241139, #08050d 72%) !important;
+    box-shadow:
+        0 0 12px rgba(168, 85, 247, 0.85),
+        0 0 32px rgba(126, 34, 206, 0.45),
+        inset 0 0 15px rgba(192, 132, 252, 0.22);
+    animation: mysticAura 2.8s ease-in-out infinite alternate;
+}
+
+.aura-mystic::before {
+    opacity: 0.8 !important;
+    background:
+        radial-gradient(circle at 20% 80%, rgba(216, 180, 254, 0.8) 0 1px, transparent 2px),
+        radial-gradient(circle at 70% 40%, rgba(192, 132, 252, 0.75) 0 1px, transparent 2px),
+        radial-gradient(circle at 85% 85%, rgba(233, 213, 255, 0.75) 0 1px, transparent 2px);
+    background-size: 55px 55px, 80px 80px, 100px 100px;
+    animation: mysticParticles 4s linear infinite;
+}
+
+@keyframes mysticAura {
+    from {
+        box-shadow:
+            0 0 12px rgba(168, 85, 247, 0.7),
+            0 0 22px rgba(126, 34, 206, 0.3),
+            inset 0 0 10px rgba(192, 132, 252, 0.2);
+    }
+
+    to {
+        box-shadow:
+            0 0 22px rgba(216, 180, 254, 0.95),
+            0 0 42px rgba(168, 85, 247, 0.6),
+            inset 0 0 18px rgba(233, 213, 255, 0.4);
+    }
+}
+
+@keyframes mysticParticles {
+    from {
+        transform: translateY(10px);
+    }
+
+    to {
+        transform: translateY(-12px);
+    }
+}
+
+/* --- AURA DE FOGO --- */
 
 .aura-flame {
-    box-shadow: 0 0 20px rgba(239, 68, 68, 0.8);
-    border-color: #f87171 !important;
+    border-color: #fb7185 !important;
+    background:
+        radial-gradient(
+            ellipse at 50% 115%,
+            rgba(239, 68, 68, 0.75),
+            transparent 58%
+        ),
+        linear-gradient(145deg, #3a0b0b, #090303 72%) !important;
+    box-shadow:
+        0 0 14px rgba(239, 68, 68, 0.85),
+        0 0 35px rgba(220, 38, 38, 0.5),
+        inset 0 -12px 22px rgba(239, 68, 68, 0.2);
+    animation: flameAura 1.4s ease-in-out infinite alternate;
 }
 
+.aura-flame::before {
+    opacity: 0.8 !important;
+    background:
+        radial-gradient(
+            ellipse at 50% 120%,
+            rgba(251, 191, 36, 0.9),
+            transparent 42%
+        ),
+        linear-gradient(
+            102deg,
+            transparent 30%,
+            rgba(248, 113, 113, 0.22) 45%,
+            transparent 60%
+        );
+    background-size: 100% 100%, 180% 100%;
+    animation: flameMovement 1.7s ease-in-out infinite alternate;
+}
+
+@keyframes flameAura {
+    from {
+        box-shadow:
+            0 0 10px rgba(239, 68, 68, 0.7),
+            0 0 22px rgba(220, 38, 38, 0.3),
+            inset 0 -8px 15px rgba(239, 68, 68, 0.18);
+    }
+
+    to {
+        box-shadow:
+            0 0 22px rgba(251, 113, 133, 1),
+            0 0 45px rgba(239, 68, 68, 0.6),
+            inset 0 -15px 28px rgba(251, 146, 60, 0.28);
+    }
+}
+
+@keyframes flameMovement {
+    from {
+        background-position: center, 100% 0;
+        transform: scaleY(0.98);
+    }
+
+    to {
+        background-position: center, 0% 0;
+        transform: scaleY(1.04);
+    }
+}
+
+/* --- AURA DE ÁGUA --- */
+
 .aura-aqua {
-    box-shadow: 0 0 20px rgba(59, 130, 246, 0.8);
     border-color: #60a5fa !important;
+    background:
+        radial-gradient(
+            ellipse at 50% 115%,
+            rgba(14, 165, 233, 0.58),
+            transparent 58%
+        ),
+        linear-gradient(145deg, #082f49, #020912 72%) !important;
+    box-shadow:
+        0 0 14px rgba(59, 130, 246, 0.85),
+        0 0 35px rgba(14, 165, 233, 0.48),
+        inset 0 0 16px rgba(96, 165, 250, 0.22);
+    animation: aquaAura 2.6s ease-in-out infinite alternate;
+}
+
+.aura-aqua::before {
+    opacity: 0.85 !important;
+    background:
+        radial-gradient(
+            circle at 22% 78%,
+            rgba(186, 230, 253, 0.8) 0 2px,
+            transparent 3px
+        ),
+        radial-gradient(
+            circle at 72% 38%,
+            rgba(125, 211, 252, 0.65) 0 2px,
+            transparent 3px
+        ),
+        linear-gradient(
+            160deg,
+            transparent 30%,
+            rgba(125, 211, 252, 0.14) 50%,
+            transparent 70%
+        );
+    background-size: 75px 75px, 100px 100px, 180% 100%;
+    animation: aquaFlow 4s linear infinite;
+}
+
+@keyframes aquaAura {
+    from {
+        box-shadow:
+            0 0 10px rgba(59, 130, 246, 0.7),
+            0 0 22px rgba(14, 165, 233, 0.28),
+            inset 0 0 10px rgba(96, 165, 250, 0.16);
+    }
+
+    to {
+        box-shadow:
+            0 0 24px rgba(96, 165, 250, 1),
+            0 0 44px rgba(14, 165, 233, 0.58),
+            inset 0 0 20px rgba(186, 230, 253, 0.3);
+    }
+}
+
+@keyframes aquaFlow {
+    from {
+        background-position: 0 0, 0 0, 100% 0;
+    }
+
+    to {
+        background-position: 0 -24px, 0 -34px, 0% 0;
+    }
+}
+
+/* --- AURAS ADICIONAIS PARA POKÉ BALLS ESPECIAIS --- */
+
+.aura-electric {
+    border-color: #fde047 !important;
+    background:
+        linear-gradient(
+            135deg,
+            rgba(250, 204, 21, 0.2),
+            transparent 35%,
+            rgba(234, 179, 8, 0.18)
+        ),
+        linear-gradient(145deg, #292005, #070603 72%) !important;
+    box-shadow:
+        0 0 15px rgba(250, 204, 21, 0.9),
+        0 0 35px rgba(234, 179, 8, 0.45),
+        inset 0 0 14px rgba(253, 224, 71, 0.25);
+    animation: electricAura 1.2s steps(2, end) infinite;
+}
+
+.aura-electric::before {
+    opacity: 0.8 !important;
+    background:
+        linear-gradient(
+            115deg,
+            transparent 42%,
+            rgba(254, 240, 138, 0.9) 44%,
+            transparent 47%
+        ),
+        linear-gradient(
+            70deg,
+            transparent 55%,
+            rgba(253, 224, 71, 0.7) 57%,
+            transparent 60%
+        );
+    background-size: 150% 150%;
+    animation: electricFlash 1.1s linear infinite;
+}
+
+@keyframes electricAura {
+    0%, 100% {
+        filter: brightness(1);
+    }
+
+    50% {
+        filter: brightness(1.22);
+    }
+}
+
+@keyframes electricFlash {
+    0%, 65%, 100% {
+        opacity: 0.25;
+        transform: translateX(-8%);
+    }
+
+    70% {
+        opacity: 0.95;
+        transform: translateX(8%);
+    }
+}
+
+.aura-shadow {
+    border-color: #a78bfa !important;
+    background:
+        radial-gradient(
+            circle at 50% 100%,
+            rgba(76, 29, 149, 0.7),
+            transparent 58%
+        ),
+        linear-gradient(145deg, #1e1b4b, #03020a 75%) !important;
+    box-shadow:
+        0 0 16px rgba(124, 58, 237, 0.9),
+        0 0 40px rgba(76, 29, 149, 0.55),
+        inset 0 0 18px rgba(167, 139, 250, 0.25);
+    animation: shadowAura 3.2s ease-in-out infinite alternate;
+}
+
+.aura-shadow::before {
+    opacity: 0.8 !important;
+    background:
+        radial-gradient(
+            ellipse at 50% 110%,
+            rgba(15, 23, 42, 0.92),
+            transparent 62%
+        ),
+        linear-gradient(
+            90deg,
+            transparent,
+            rgba(167, 139, 250, 0.2),
+            transparent
+        );
+    animation: shadowMist 4s ease-in-out infinite alternate;
+}
+
+@keyframes shadowAura {
+    from {
+        box-shadow:
+            0 0 12px rgba(124, 58, 237, 0.7),
+            0 0 25px rgba(76, 29, 149, 0.3),
+            inset 0 0 10px rgba(167, 139, 250, 0.16);
+    }
+
+    to {
+        box-shadow:
+            0 0 24px rgba(167, 139, 250, 1),
+            0 0 52px rgba(76, 29, 149, 0.7),
+            inset 0 0 24px rgba(196, 181, 253, 0.32);
+    }
+}
+
+@keyframes shadowMist {
+    from {
+        transform: translateX(-5%) scale(1);
+        opacity: 0.45;
+    }
+
+    to {
+        transform: translateX(5%) scale(1.08);
+        opacity: 0.85;
+    }
+}
+
+.aura-rainbow {
+    border: 3px solid transparent !important;
+    background:
+        linear-gradient(#09070a, #09070a) padding-box,
+        linear-gradient(
+            115deg,
+            #ef4444,
+            #f59e0b,
+            #eab308,
+            #22c55e,
+            #06b6d4,
+            #3b82f6,
+            #a855f7,
+            #ef4444
+        ) border-box !important;
+    background-size: 100% 100%, 300% 300%;
+    box-shadow:
+        0 0 16px rgba(236, 72, 153, 0.65),
+        0 0 35px rgba(59, 130, 246, 0.35),
+        inset 0 0 15px rgba(255, 255, 255, 0.12);
+    animation: rainbowAura 5s linear infinite;
+}
+
+.aura-rainbow::before {
+    opacity: 0.55 !important;
+    background:
+        linear-gradient(
+            120deg,
+            transparent,
+            rgba(255, 255, 255, 0.35),
+            transparent
+        );
+    background-size: 220% 100%;
+    animation: rainbowSheen 2.5s ease-in-out infinite;
+}
+
+@keyframes rainbowAura {
+    from {
+        background-position: 0 0, 0% 50%;
+    }
+
+    to {
+        background-position: 0 0, 300% 50%;
+    }
+}
+
+@keyframes rainbowSheen {
+    from {
+        background-position: 180% 0;
+    }
+
+    to {
+        background-position: -40% 0;
+    }
+}
+
+/* --- TIERS DE RARIDADE --- */
+
+.tier-1,
+.tier-rosa {
+    box-shadow:
+        0 0 10px rgba(244, 114, 182, 0.3),
+        inset 0 0 8px rgba(244, 114, 182, 0.12);
+}
+
+.tier-2,
+.tier-verde {
+    box-shadow:
+        0 0 10px rgba(52, 211, 153, 0.32),
+        inset 0 0 8px rgba(52, 211, 153, 0.13);
+}
+
+.tier-3,
+.tier-azul {
+    box-shadow:
+        0 0 12px rgba(96, 165, 250, 0.38),
+        inset 0 0 9px rgba(96, 165, 250, 0.15);
+}
+
+.tier-4,
+.tier-vermelho {
+    box-shadow:
+        0 0 14px rgba(248, 113, 113, 0.42),
+        inset 0 0 10px rgba(248, 113, 113, 0.16);
+}
+
+.tier-5,
+.tier-amarelo {
+    box-shadow:
+        0 0 18px rgba(251, 191, 36, 0.55),
+        inset 0 0 12px rgba(251, 191, 36, 0.2);
+}
+
+/* --- ESTADOS DE BATALHA --- */
+
+.card-damaged {
+    animation: damageFlash 0.45s ease;
+}
+
+.card-healed {
+    animation: healFlash 0.7s ease;
+}
+
+.card-selected {
+    transform: translateY(-4px) scale(1.03);
+    border-color: #facc15 !important;
+    box-shadow:
+        0 0 0 2px rgba(250, 204, 21, 0.35),
+        0 0 24px rgba(250, 204, 21, 0.7);
+}
+
+.card-fainted,
+.fainted-card {
+    filter: grayscale(0.9) brightness(0.58) saturate(0.55);
+    opacity: 0.72;
+}
+
+.card-fainted::after,
+.fainted-card::after {
+    content: "DESMAIADO";
+    position: absolute;
+    inset: auto 5px 5px;
+    padding: 3px 5px;
+    color: #fecaca;
+    background: rgba(127, 29, 29, 0.9);
+    border: 1px solid rgba(248, 113, 113, 0.75);
+    border-radius: 6px;
+    text-align: center;
+    font-size: 8px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    z-index: 5;
+}
+
+@keyframes damageFlash {
+    0%, 100% {
+        filter: brightness(1);
+    }
+
+    25% {
+        filter: brightness(2) saturate(0.65);
+        transform: translateX(-3px);
+    }
+
+    50% {
+        filter: brightness(0.72);
+        transform: translateX(3px);
+    }
+}
+
+@keyframes healFlash {
+    0% {
+        box-shadow: 0 0 0 rgba(52, 211, 153, 0);
+    }
+
+    50% {
+        box-shadow:
+            0 0 25px rgba(52, 211, 153, 0.9),
+            inset 0 0 15px rgba(110, 231, 183, 0.7);
+    }
+
+    100% {
+        box-shadow: 0 0 0 rgba(52, 211, 153, 0);
+    }
+}
+
+/* --- BARRAS DE HP E INDICADORES --- */
+
+.hp-bar,
+.health-bar {
+    position: relative;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.9);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.75);
+}
+
+.hp-bar::after,
+.health-bar::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.22),
+        transparent
+    );
+    transform: translateX(-100%);
+    animation: hpShine 2.8s ease-in-out infinite;
+}
+
+@keyframes hpShine {
+    0%, 45% {
+        transform: translateX(-100%);
+    }
+
+    75%, 100% {
+        transform: translateX(100%);
+    }
+}
+
+/* --- MODAIS E CONTROLES DE COMBATE --- */
+
+#main-battle-arena-modal,
+#encounter-modal,
+#capture-flow-modal,
+#arena-team-sel-modal {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+#main-battle-arena-modal button:not(:disabled),
+#encounter-modal button:not(:disabled),
+#capture-flow-modal button:not(:disabled),
+#arena-team-sel-modal button:not(:disabled) {
+    transition:
+        transform 0.18s ease,
+        filter 0.18s ease,
+        box-shadow 0.18s ease;
+}
+
+#main-battle-arena-modal button:not(:disabled):hover,
+#encounter-modal button:not(:disabled):hover,
+#capture-flow-modal button:not(:disabled):hover,
+#arena-team-sel-modal button:not(:disabled):hover {
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+    box-shadow: 0 7px 16px rgba(0, 0, 0, 0.4);
+}
+
+#main-battle-arena-modal button:disabled,
+#encounter-modal button:disabled,
+#capture-flow-modal button:disabled,
+#arena-team-sel-modal button:disabled {
+    cursor: not-allowed;
+    filter: grayscale(0.7);
+}
+
+/* --- RESPONSIVIDADE --- */
+
+@media (max-width: 640px) {
+    .player-token {
+        width: 38px;
+        height: 38px;
+    }
+
+    [id*="card-visual"] {
+        max-width: min(72vw, 288px);
+    }
+
+    [id*="trainer-card-slot-"] > div {
+        min-width: 0;
+    }
+
+    .shiny-card-glow {
+        box-shadow:
+            0 0 10px rgba(251, 191, 36, 0.75),
+            inset 0 0 8px rgba(251, 191, 36, 0.5);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.001ms !important;
+    }
 }
