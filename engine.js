@@ -1286,19 +1286,58 @@ function renderMartContent(modalEl) {
     `;
 
     itemsForSale.forEach(item => {
-        const itemImg = item.image ? `<img src="${item.image}" class="w-8 h-8 object-contain">` : `<span class="text-xl">${item.icon}</span>`;
+        const itemImg = item.image
+            ? `<img src="${item.image}" class="w-8 h-8 object-contain">`
+            : `<span class="text-xl">${item.icon}</span>`;
+
         shopHTML += `
-            <div class="flex items-center justify-between bg-black/50 p-2.5 rounded-xl border border-blue-900/50">
-                <div class="flex items-center gap-2">
+            <div class="flex items-center justify-between gap-3 bg-black/50 p-2.5 rounded-xl border border-blue-900/50">
+                <div class="flex items-center gap-2 min-w-0">
                     ${itemImg}
-                    <div>
-                        <p class="text-xs font-bold text-white">${item.name}</p>
+                    <div class="min-w-0">
+                        <p class="text-xs font-bold text-white truncate">${item.name}</p>
                         <p class="text-[9px] text-slate-400">${item.desc}</p>
+                        <p class="text-[10px] font-black text-amber-400 mt-0.5">${item.cost} 🪙 por unidade</p>
                     </div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <span class="text-xs font-black text-amber-400">${item.cost} 🪙</span>
-                    <button onclick="buyItemFromMart('${item.id}', ${item.cost})" class="bg-blue-600 hover:bg-blue-500 text-white font-black px-3 py-1 rounded-lg text-[10px] shadow cursor-pointer">
+
+                <div class="flex items-center gap-1.5 shrink-0">
+                    <label class="sr-only" for="mart-quantity-${item.id}">
+                        Quantidade de ${item.name}
+                    </label>
+
+                    <div class="flex items-center bg-slate-950 border border-blue-700 rounded-lg overflow-hidden">
+                        <button
+                            type="button"
+                            aria-label="Diminuir quantidade de ${item.name}"
+                            onclick="changeMartQuantity('${item.id}', -1)"
+                            class="px-2 py-1.5 text-blue-300 hover:bg-blue-900 hover:text-white font-black">
+                            −
+                        </button>
+
+                        <input
+                            id="mart-quantity-${item.id}"
+                            type="number"
+                            min="1"
+                            max="999"
+                            value="1"
+                            inputmode="numeric"
+                            class="w-12 bg-transparent px-1 py-1.5 text-center text-xs text-white font-black focus:outline-none"
+                            oninput="normalizeMartQuantity(this)">
+
+                        <button
+                            type="button"
+                            aria-label="Aumentar quantidade de ${item.name}"
+                            onclick="changeMartQuantity('${item.id}', 1)"
+                            class="px-2 py-1.5 text-blue-300 hover:bg-blue-900 hover:text-white font-black">
+                            +
+                        </button>
+                    </div>
+
+                    <button
+                        type="button"
+                        onclick="buyItemFromMart('${item.id}', ${item.cost}, document.getElementById('mart-quantity-${item.id}').value)"
+                        class="bg-blue-600 hover:bg-blue-500 text-white font-black px-2.5 py-1.5 rounded-lg text-[10px] shadow cursor-pointer whitespace-nowrap">
                         Comprar
                     </button>
                 </div>
@@ -1306,51 +1345,194 @@ function renderMartContent(modalEl) {
         `;
     });
 
-    shopHTML += `
-            </div>
-            <button onclick="document.getElementById('pokemart-modal').remove()" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-black py-2 rounded-xl text-xs uppercase shadow cursor-pointer">
-                Sair da Loja
-            </button>
-        </div>
-    `;
+window.normalizeMartQuantity = function(input) {
+    if (!input) return 1;
 
-    modalEl.innerHTML = shopHTML;
-}
+    const normalized = Math.max(
+        1,
+        Math.min(999, Math.floor(Number(input.value) || 1))
+    );
 
-window.buyItemFromMart = function(itemId, cost) {
+    input.value = normalized;
+    return normalized;
+};
+
+window.changeMartQuantity = function(itemId, amount) {
+    const input = document.getElementById(`mart-quantity-${itemId}`);
+    if (!input) return;
+
+    const currentValue = Math.floor(Number(input.value) || 1);
+    input.value = Math.max(
+        1,
+        Math.min(999, currentValue + Number(amount || 0))
+    );
+};
+
+window.buyItemFromMart = function(itemId, cost, requestedQuantity = 1) {
     const cp = getCurrentPlayer();
-    if (cp.gold < cost) {
-        showCustomPopup("Sem Ouro", "❌ Não tens ouro suficiente para comprar este item!", false);
+
+    const quantity = Math.max(
+        1,
+        Math.min(999, Math.floor(Number(requestedQuantity) || 1))
+    );
+
+    const unitCost = Math.max(
+        0,
+        Math.floor(Number(cost) || 0)
+    );
+
+    const totalCost = unitCost * quantity;
+
+    if (!Number.isSafeInteger(totalCost)) {
+        showCustomPopup(
+            "Compra inválida",
+            "❌ A quantidade informada é muito alta.",
+            false
+        );
         return;
     }
 
-    cp.gold -= cost;
-    if (!Array.isArray(cp.inventory)) cp.inventory = [];
-    let existingItem = cp.inventory.find(i => i.id === itemId);
-    if (existingItem) {
-        existingItem.count++;
-    } else {
-        let baseItemsCatalog = {
-            poke_ball: { id: 'poke_ball', name: 'Poké Ball', type: 'sphere', value: 0, icon: '🔴', image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`, count: 1, desc: 'Esfera clássica.' },
-            ball_great: { id: 'ball_great', name: 'Great Ball', type: 'sphere', value: 1, icon: '🔵', image: `${SUPABASE_STORAGE_URL}items/great_ball.png`, count: 1, desc: '+1 na captura.' },
-            ball_ultra: { id: 'ball_ultra', name: 'Ultra Ball', type: 'sphere', value: 2, icon: '🟡', image: `${SUPABASE_STORAGE_URL}items/ultra_ball.png`, count: 1, desc: '+2 na captura.' },
-            item_rarecandy: { id: 'item_rarecandy', name: 'Rare Candy', type: 'rarecandy', value: 100, icon: '🍬', image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`, count: 1, desc: 'Dá 100 XP (Sobe de Nível).' },
-            evolution_stone: { id: 'evolution_stone', name: 'Evolution Stone', type: 'evolution', value: 1, icon: '💎', image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`, count: 1, desc: 'Evolve um Anima compatível.' },
-            item_potion: { id: 'item_potion', name: 'Potion', type: 'heal', value: 20, icon: '💊', image: `${SUPABASE_STORAGE_URL}items/potion.png`, count: 1, desc: 'Restaura 20 HP.' },
-            item_revive: { id: 'item_revive', name: 'Revive', type: 'revive', value: 50, icon: '🌟', image: `${SUPABASE_STORAGE_URL}items/revive.png`, count: 1, desc: 'Revive um Anima desmaiado.' },
-            item_vitamin: { id: 'item_vitamin', name: 'Vitamin', type: 'battle', value: 2, icon: '🧪', image: `${SUPABASE_STORAGE_URL}items/vitamin.png`, count: 1, desc: 'Aumenta o STR do Pokémon.' }
-        };
-        if (baseItemsCatalog[itemId]) {
-            cp.inventory.push(baseItemsCatalog[itemId]);
+    if (!cp) {
+        showCustomPopup(
+            "Erro",
+            "❌ Não foi possível identificar o treinador atual.",
+            false
+        );
+        return;
+    }
+
+    if (cp.gold < totalCost) {
+        showCustomPopup(
+            "Sem Ouro",
+            `❌ Ouro insuficiente para comprar ${quantity} unidade(s).\n\nNecessário: ${totalCost} 🪙\nDisponível: ${Number(cp.gold) || 0} 🪙`,
+            false
+        );
+        return;
+    }
+
+    if (!Array.isArray(cp.inventory)) {
+        cp.inventory = [];
+    }
+
+    const baseItemsCatalog = {
+        poke_ball: {
+            id: 'poke_ball',
+            name: 'Poké Ball',
+            type: 'sphere',
+            value: 0,
+            icon: '🔴',
+            image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`,
+            desc: 'Esfera clássica.'
+        },
+        ball_great: {
+            id: 'ball_great',
+            name: 'Great Ball',
+            type: 'sphere',
+            value: 1,
+            icon: '🔵',
+            image: `${SUPABASE_STORAGE_URL}items/ball_great.png`,
+            desc: '+1 na captura.'
+        },
+        ball_ultra: {
+            id: 'ball_ultra',
+            name: 'Ultra Ball',
+            type: 'sphere',
+            value: 2,
+            icon: '🟡',
+            image: `${SUPABASE_STORAGE_URL}items/ball_ultra.png`,
+            desc: '+2 na captura.'
+        },
+        item_rarecandy: {
+            id: 'item_rarecandy',
+            name: 'Rare Candy',
+            type: 'rarecandy',
+            value: 100,
+            icon: '🍬',
+            image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`,
+            desc: 'Dá 100 XP (Sobe de Nível).'
+        },
+        evolution_stone: {
+            id: 'evolution_stone',
+            name: 'Evolution Stone',
+            type: 'evolution',
+            value: 1,
+            icon: '💎',
+            image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`,
+            desc: 'Evolve um Anima compatível.'
+        },
+        item_potion: {
+            id: 'item_potion',
+            name: 'Potion',
+            type: 'heal',
+            value: 20,
+            icon: '💊',
+            image: `${SUPABASE_STORAGE_URL}items/potion.png`,
+            desc: 'Restaura 20 HP.'
+        },
+        item_revive: {
+            id: 'item_revive',
+            name: 'Revive',
+            type: 'revive',
+            value: 50,
+            icon: '🌟',
+            image: `${SUPABASE_STORAGE_URL}items/revive.png`,
+            desc: 'Revive um Anima desmaiado.'
+        },
+        item_vitamin: {
+            id: 'item_vitamin',
+            name: 'Vitamin',
+            type: 'battle',
+            value: 2,
+            icon: '🧪',
+            image: `${SUPABASE_STORAGE_URL}items/vitamin.png`,
+            desc: 'Aumenta o STR do Pokémon.'
         }
+    };
+
+    const itemTemplate = baseItemsCatalog[itemId];
+
+    if (!itemTemplate) {
+        showCustomPopup(
+            "Item Indisponível",
+            "❌ Este item não está disponível no Poké Mart.",
+            false
+        );
+        return;
+    }
+
+    cp.gold -= totalCost;
+
+    const existingItem = cp.inventory.find(item => item && item.id === itemId);
+
+    if (existingItem) {
+        existingItem.count = (Number(existingItem.count) || 0) + quantity;
+    } else {
+        cp.inventory.push({
+            ...itemTemplate,
+            count: quantity
+        });
     }
 
     updatePlayerUI();
     renderBottomPanel();
-    showCustomPopup("Compra Realizada", "🎉 Item comprado com sucesso!", true);
-    
-    let martModal = document.getElementById('pokemart-modal');
-    if (martModal) renderMartContent(martModal);
+
+    if (typeof persistAfterChange === 'function') {
+        persistAfterChange();
+    } else if (typeof saveGameProgress === 'function') {
+        saveGameProgress();
+    }
+
+    showCustomPopup(
+        "Compra Realizada",
+        `🎉 ${quantity} unidade(s) de ${itemTemplate.name} adicionada(s) à mochila!\n\n💰 Total pago: ${totalCost} 🪙`,
+        true
+    );
+
+    const martModal = document.getElementById('pokemart-modal');
+
+    if (martModal) {
+        renderMartContent(martModal);
+    }
 };
 
 // --- FLUXO DE GINÁSIO INTEGRADO COM A ARENA TCG ---
