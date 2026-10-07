@@ -1399,6 +1399,9 @@ window.changeMartQuantity = function(itemId, amount) {
 
 window.buyItemFromMart = function(itemId, cost, requestedQuantity = 1) {
     const cp = getCurrentPlayer();
+    // cálculos da quantidade
+    // validação do ouro
+    const cp = getCurrentPlayer();
 
     if (!cp) {
         showCustomPopup(
