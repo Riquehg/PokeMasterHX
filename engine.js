@@ -101,10 +101,8 @@ function saveGameProgress() {
             boardPokemonCards: boardPokemonCards,
             timestamp: new Date().toISOString()
         };
-        // Salva uma cópia de segurança local no navegador
         localStorage.setItem('pokemon_master_trainer_save', JSON.stringify(saveData));
 
-        // Sincroniza e guarda diretamente na nuvem (Supabase via Socket.io)
         if (currentAuthenticatedAccount) {
             socket.emit('save_game_state', {
                 email: currentAuthenticatedAccount,
@@ -827,7 +825,6 @@ window.resolveBattleAttempt = function() {
     const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex];
     if (!wild || !activeMon) return;
 
-    // Se o Pokémon ativo já estiver desmaiado, impede a ação
     if ((activeMon.currentHp !== undefined ? activeMon.currentHp : activeMon.maxHp) <= 0) {
         showCustomPopup("Pokémon Desmaiado", "⚠ O teu Anima atual está com 0 de HP e não pode lutar! Troca de Anima ou usa um Revive.", false);
         return;
@@ -891,7 +888,23 @@ function loadGlobalTrainerAccountData() {
     return null;
 }
 
+// --- VALIDAÇÃO OBRIGATÓRIA DE POKÉ BALLS NA CAPTURA (Fase 1) ---
 function triggerCaptureFlow(wildPokemon) {
+    const cp = getCurrentPlayer();
+    if (!cp.inventory) cp.inventory = [];
+
+    // Filtra itens do tipo esfera que possuem quantidade maior que zero
+    const availableSpheres = cp.inventory.filter(i => i.type === 'sphere' && i.count > 0);
+
+    if (availableSpheres.length === 0) {
+        showCustomPopup(
+            "Sem Poké Balls!", 
+            "❌ Não tens nenhuma Poké Ball, Great Ball ou Ultra Ball na tua mochila!\n\nVisita o Poké Mart numa cidade para adquirir esferas antes de tentares capturar este Anima.", 
+            false
+        );
+        return;
+    }
+
     let captureModal = document.getElementById('capture-flow-modal');
     if (!captureModal) {
         captureModal = document.createElement('div');
@@ -900,19 +913,54 @@ function triggerCaptureFlow(wildPokemon) {
         document.body.appendChild(captureModal);
     }
 
+    let sphereButtonsHtml = '';
+    availableSpheres.forEach(sphere => {
+        let btnColor = 'bg-red-600 hover:bg-red-500';
+        if (sphere.id === 'ball_great') btnColor = 'bg-blue-600 hover:bg-blue-500';
+        if (sphere.id === 'ball_ultra') btnColor = 'bg-amber-600 hover:bg-amber-500';
+
+        sphereButtonsHtml += `
+            <button onclick="document.getElementById('capture-flow-modal').remove(); attemptCatchWithSpecificBall('${sphere.id}', '${wildPokemon.waypointId}')" class="${btnColor} text-white font-bold px-4 py-2 rounded-xl text-xs cursor-pointer flex items-center gap-1.5 shadow">
+                <span>${sphere.icon || '🔴'}</span> ${sphere.name} (${sphere.count})
+            </button>
+        `;
+    });
+
     captureModal.innerHTML = `
         <div class="trainer-card max-w-md w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] text-white text-center">
             <h3 class="text-sm font-black text-amber-400 uppercase">🎯 TENTATIVA DE CAPTURA</h3>
-            <p class="text-xs text-slate-300">O ${wildPokemon.name} está debilitado! Escolha uma Pokébola para tentar capturá-lo:</p>
-            <div class="flex justify-center gap-3 my-4">
-                <button onclick="document.getElementById('capture-flow-modal').remove(); attemptCatchWithBall('pokeball', '${wildPokemon.waypointId}')" class="bg-red-600 hover:bg-red-500 text-white font-bold px-4 py-2 rounded-xl text-xs cursor-pointer">Pokébola</button>
-                <button onclick="document.getElementById('capture-flow-modal').remove(); attemptCatchWithBall('greatball', '${wildPokemon.waypointId}')" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-xl text-xs cursor-pointer">Great Ball</button>
+            <p class="text-xs text-slate-300">O ${wildPokemon.name} está debilitado! Escolha uma esfera da sua mochila:</p>
+            <div class="flex flex-wrap justify-center gap-3 my-4">
+                ${sphereButtonsHtml}
             </div>
-            <button onclick="document.getElementById('capture-flow-modal').remove()" class="text-xs text-slate-400 hover:text-white underline">Fugir / Ignorar</button>
+            <button onclick="document.getElementById('capture-flow-modal').remove()" class="text-xs text-slate-400 hover:text-white underline cursor-pointer">Fugir / Ignorar</button>
         </div>
     `;
     captureModal.classList.remove('hidden');
 }
+
+window.attemptCatchWithSpecificBall = function(ballItemId, waypointId) {
+    const cp = getCurrentPlayer();
+    if (!cp.inventory) return;
+
+    let sphereItem = cp.inventory.find(i => i.id === ballItemId);
+    if (!sphereItem || sphereItem.count <= 0) {
+        showCustomPopup("Esfera Esgotada", "❌ Não tens unidades suficientes desta esfera!", false);
+        return;
+    }
+
+    // Consome obrigatoriamente 1 unidade da esfera selecionada
+    sphereItem.count--;
+
+    let bonus = sphereItem.value || 0;
+    if (sphereItem.aura) {
+        selectedBallAura = sphereItem.aura;
+    }
+
+    currentEncounterState.itemBonus = bonus;
+    resolveCaptureAttempt();
+    renderBottomPanel();
+};
 
 window.attemptCatchWithBall = function(ballType, waypointId) {
     let bonus = 0;
