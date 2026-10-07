@@ -1371,6 +1371,46 @@ window.changeMartQuantity = function(itemId, amount) {
 window.buyItemFromMart = function(itemId, cost, requestedQuantity = 1) {
     const cp = getCurrentPlayer();
 
+    if (!cp) {
+        showCustomPopup(
+            "Erro",
+            "❌ Não foi possível identificar o treinador atual.",
+            false
+        );
+        return;
+    }
+
+    const quantity = Math.max(
+        1,
+        Math.min(999, Math.floor(Number(requestedQuantity) || 1))
+    );
+
+    const unitCost = Math.max(
+        0,
+        Math.floor(Number(cost) || 0)
+    );
+
+    const totalCost = unitCost * quantity;
+
+    if (!Number.isSafeInteger(totalCost)) {
+        showCustomPopup(
+            "Compra inválida",
+            "❌ A quantidade informada é muito alta.",
+            false
+        );
+        return;
+    }
+
+    if (Number(cp.gold) < totalCost) {
+        showCustomPopup(
+            "Sem Ouro",
+            `❌ Ouro insuficiente para comprar ${quantity} unidade(s).\n\nNecessário: ${totalCost} 🪙\nDisponível: ${Number(cp.gold) || 0} 🪙`,
+            false
+        );
+        return;
+    }
+    const cp = getCurrentPlayer();
+
     const quantity = Math.max(
         1,
         Math.min(999, Math.floor(Number(requestedQuantity) || 1))
@@ -1401,7 +1441,7 @@ window.buyItemFromMart = function(itemId, cost, requestedQuantity = 1) {
         return;
     }
 
-    if (cp.gold < totalCost) {
+    if (Number(cp.gold) < totalCost) {
         showCustomPopup(
             "Sem Ouro",
             `❌ Ouro insuficiente para comprar ${quantity} unidade(s).\n\nNecessário: ${totalCost} 🪙\nDisponível: ${Number(cp.gold) || 0} 🪙`,
@@ -1500,7 +1540,10 @@ window.buyItemFromMart = function(itemId, cost, requestedQuantity = 1) {
         return;
     }
 
-    cp.gold -= totalCost;
+    cp.gold = Math.max(
+        0,
+        Number(cp.gold || 0) - totalCost
+    );
 
     const existingItem = cp.inventory.find(item => item && item.id === itemId);
 
@@ -1534,7 +1577,6 @@ window.buyItemFromMart = function(itemId, cost, requestedQuantity = 1) {
         renderMartContent(martModal);
     }
 };
-
 // --- FLUXO DE GINÁSIO INTEGRADO COM A ARENA TCG ---
 
 let currentGymBattleSession = null;
