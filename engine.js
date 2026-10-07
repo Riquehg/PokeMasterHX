@@ -679,7 +679,8 @@ function initializeBoardPokemonCards() {
                 isShiny: isShiny,
                 image: randomMonster.image || '',
                 shinyImage: randomMonster.shinyImage || null,
-                auraEffect: isShiny ? 'shiny-gold-aura' : null
+                auraEffect: selectedBallAura || monster.auraEffect || null,
+                visualClass: selectedBallAura || monster.visualClass || null
             };
         }
     });
@@ -698,7 +699,7 @@ function addMonsterToPlayer(monster) {
         uniqueId: 'mon_' + Date.now() + Math.random(),
         isShiny: !!monster.isShiny,
         shinyImage: monster.shinyImage || null,
-        auraEffect: selectedBallAura || monster.auraEffect || (monster.isShiny ? 'shiny-gold-aura' : null)
+        auraEffect: selectedBallAura || monster.auraEffect || null,
     };
 
     selectedBallAura = null;
