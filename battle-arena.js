@@ -778,35 +778,139 @@ function arenaForcePlayerReplacement() {
     return true;
 }
 
+function arenaTypeMultiplier(attacker, defender) {
+    if (
+        typeof calculateTypeAdvantageMultiplier !== 'function' ||
+        !attacker ||
+        !defender
+    ) {
+        return 1;
+    }
+
+    return calculateTypeAdvantageMultiplier(
+        attacker.type,
+        defender.type
+    );
+}
+
+function arenaShouldEnemySwitch() {
+    if (
+        currentBattleSession.mode === 'wild' ||
+        currentBattleSession.enemySwitchedThisTurn
+    ) {
+        return false;
+    }
+
+    const enemyTeam = currentBattleSession.enemyTeam;
+    const activeIndex = currentBattleSession.activeEnemyIndex;
+    const activeEnemy = enemyTeam[activeIndex];
+    const playerMonster =
+        currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
+
+    if (!activeEnemy || !playerMonster) return false;
+
+    const replacementIndex = arenaFindNextHealthy(
+        enemyTeam,
+        activeIndex
+    );
+
+    if (replacementIndex < 0) return false;
+
+    const activeHpRatio =
+        arenaHp(activeEnemy) / arenaMaxHp(activeEnemy);
+
+    const activeMultiplier =
+        arenaTypeMultiplier(activeEnemy, playerMonster);
+
+    const replacement = enemyTeam[replacementIndex];
+    const replacementMultiplier =
+        arenaTypeMultiplier(replacement, playerMonster);
+
+    return (
+        activeHpRatio <= 0.3 &&
+        replacementMultiplier > activeMultiplier
+    ) || (
+        activeMultiplier < 1 &&
+        replacementMultiplier > activeMultiplier
+    );
+}
+
 function arenaResolveEnemyResponse() {
-    const pMon = currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
-    const eMon = currentBattleSession.enemyTeam[currentBattleSession.activeEnemyIndex];
+    const pMon =
+        currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
+
+    const eMon =
+        currentBattleSession.enemyTeam[currentBattleSession.activeEnemyIndex];
 
     if (!pMon || !eMon || currentBattleSession.battleEnded) return;
 
+    if (arenaShouldEnemySwitch()) {
+        const nextIndex = arenaFindNextHealthy(
+            currentBattleSession.enemyTeam,
+            currentBattleSession.activeEnemyIndex
+        );
+
+        if (nextIndex >= 0) {
+            currentBattleSession.activeEnemyIndex = nextIndex;
+            currentBattleSession.enemySwitchedThisTurn = true;
+
+            const nextEnemy =
+                currentBattleSession.enemyTeam[nextIndex];
+
+            currentBattleSession.lastAction =
+                `O adversário trocou para ${nextEnemy.name}.`;
+
+            showCustomPopup(
+                "Troca do Adversário",
+                `🔄 O adversário percebeu uma desvantagem e enviou ${nextEnemy.name} para o combate.\n\nA troca encerrou a rodada.`,
+                true
+            );
+
+            arenaFinishTurn();
+            return;
+        }
+    }
+
     rollDiceWithAnimation((playerRoll, enemyRoll) => {
+        const typeMultiplier =
+            arenaTypeMultiplier(eMon, pMon);
+
         const playerPower =
             (Number(pMon.str) || 4) +
             Number(currentBattleSession.combatBonus) +
             Number(playerRoll || 0);
 
-        const enemyPower =
-            (Number(eMon.str) || 5) +
-            Number(enemyRoll || 0);
+        const enemyPower = Math.round(
+            (
+                (Number(eMon.str) || 5) +
+                Number(enemyRoll || 0)
+            ) *
+            typeMultiplier
+        );
 
-        const damage = enemyPower >= playerPower
+        const enemyWon = enemyPower >= playerPower;
+
+        const damage = enemyWon
             ? Math.max(6, enemyPower - playerPower + 8)
             : Math.max(4, Math.floor((enemyPower - playerPower + 8) / 2));
 
-        pMon.currentHp = Math.max(0, arenaHp(pMon) - damage);
+        pMon.currentHp = Math.max(
+            0,
+            arenaHp(pMon) - damage
+        );
 
-        currentBattleSession.lastAction =
-            `${eMon.name} atacou ${pMon.name} e causou ${damage} de dano.`;
+        currentBattleSession.lastAction = enemyWon
+            ? `${eMon.name} atacou ${pMon.name} e causou ${damage} de dano.`
+            : `${pMon.name} resistiu ao ataque de ${eMon.name}.`;
 
         showCustomPopup(
-            enemyPower >= playerPower ? "Contra-ataque do Adversário!" : "Defesa Bem-Sucedida!",
-            `${eMon.name} respondeu à ação!\n\n💥 ${pMon.name} sofreu ${damage} de dano.\n\nHP: ${pMon.currentHp}/${pMon.maxHp}`,
-            enemyPower >= playerPower ? false : true
+            enemyWon
+                ? "Contra-ataque do Adversário!"
+                : "Defesa Bem-Sucedida!",
+            enemyWon
+                ? `${eMon.name} respondeu à ação!\n\n💥 ${pMon.name} sofreu ${damage} de dano.\n\nHP: ${pMon.currentHp}/${pMon.maxHp}`
+                : `${pMon.name} resistiu ao ataque de ${eMon.name}.\n\nDano reduzido: ${damage}\n\nHP: ${pMon.currentHp}/${pMon.maxHp}`,
+            enemyWon ? false : true
         );
 
         if (!arenaIsHealthy(pMon)) {
@@ -869,6 +973,7 @@ function useArenaItem(itemId) {
     }
 
     const cp = getCurrentPlayer();
+
     const item = cp && Array.isArray(cp.inventory)
         ? cp.inventory.find(entry =>
             entry &&
@@ -891,6 +996,7 @@ function useArenaItem(itemId) {
 
     const currentHp = arenaHp(activeMon);
     const maxHp = arenaMaxHp(activeMon);
+    let itemWasUsed = false;
 
     if (item.type === 'heal') {
         if (currentHp >= maxHp) {
@@ -903,49 +1009,72 @@ function useArenaItem(itemId) {
         }
 
         const healing = Math.max(1, Number(item.value) || 20);
-        activeMon.currentHp = Math.min(maxHp, currentHp + healing);
+
+        activeMon.currentHp = Math.min(
+            maxHp,
+            currentHp + healing
+        );
+
         item.count--;
+        itemWasUsed = true;
 
         currentBattleSession.lastAction =
             `${activeMon.name} recuperou ${healing} HP.`;
 
         showCustomPopup(
             "Item Usado",
-            `💊 ${item.name || 'Potion'} usada em ${activeMon.name}.\n\nHP: ${activeMon.currentHp}/${maxHp}\n\nO uso do item não encerrou o turno.`,
+            `💊 ${item.name || 'Potion'} usada em ${activeMon.name}.\n\nHP: ${activeMon.currentHp}/${maxHp}\n\nO item não encerra o turno. Ainda podes atacar ou trocar.`,
             true
         );
     } else if (item.type === 'revive') {
-        if (currentHp > 0) {
+        const faintedTarget =
+            currentBattleSession.playerTeam.find(monster =>
+                !arenaIsHealthy(monster)
+            );
+
+        if (!faintedTarget) {
             showCustomPopup(
                 "Item não utilizado",
-                "⚠️ O Revive só pode ser usado em um Pokémon desmaiado.",
+                "⚠️ Não há Pokémon desmaiado disponível para usar o Revive.",
                 false
             );
             return;
         }
 
-        activeMon.currentHp = Math.max(1, Math.floor(maxHp / 2));
+        const reviveMaxHp = arenaMaxHp(faintedTarget);
+
+        faintedTarget.currentHp = Math.max(
+            1,
+            Math.floor(reviveMaxHp / 2)
+        );
+
         item.count--;
+        itemWasUsed = true;
 
         currentBattleSession.lastAction =
-            `${activeMon.name} foi revivido.`;
+            `${faintedTarget.name} foi revivido.`;
 
         showCustomPopup(
             "Revive Usado",
-            `🌟 ${activeMon.name} foi revivido com ${activeMon.currentHp} HP.\n\nO uso do item não encerrou o turno.`,
+            `🌟 ${faintedTarget.name} foi revivido com ${faintedTarget.currentHp} HP.\n\nO item não encerra o turno.`,
             true
         );
     } else if (item.type === 'battle') {
-        const bonus = Math.max(1, Number(item.value) || 2);
+        const bonus = Math.max(
+            1,
+            Number(item.value) || 2
+        );
+
         currentBattleSession.combatBonus += bonus;
         item.count--;
+        itemWasUsed = true;
 
         currentBattleSession.lastAction =
             `Bónus de combate aumentado em +${bonus}.`;
 
         showCustomPopup(
             "Bónus Aplicado",
-            `🧪 ${item.name || 'Vitamin'} aplicado.\n\nBónus temporário de combate: +${currentBattleSession.combatBonus}\n\nO uso do item não encerrou o turno.`,
+            `🧪 ${item.name || 'Vitamin'} aplicado.\n\nBónus acumulado nesta batalha: +${currentBattleSession.combatBonus}\n\nO item não encerra o turno. Ainda podes atacar ou trocar.`,
             true
         );
     } else {
@@ -957,9 +1086,22 @@ function useArenaItem(itemId) {
         return;
     }
 
-    renderEncounterItemsList();
+    if (!itemWasUsed) return;
 
-    const arenaModal = document.getElementById('main-battle-arena-modal');
+    if (typeof updatePlayerUI === 'function') {
+        updatePlayerUI();
+    }
+
+    if (typeof renderTeamCardSlots === 'function') {
+        renderTeamCardSlots();
+    }
+
+    if (typeof renderBottomPanel === 'function') {
+        renderBottomPanel();
+    }
+
+    const arenaModal =
+        document.getElementById('main-battle-arena-modal');
 
     if (arenaModal) {
         renderArenaCombatUI(arenaModal);
