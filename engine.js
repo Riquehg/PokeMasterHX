@@ -53,7 +53,8 @@ let currentEncounterState = {
     selectedTeamMemberIndex: 0,
     itemBonus: 0,
     battlePowerBonus: 0,
-    hasAttemptedCapture: false
+    hasAttemptedCapture: false,
+    selectedCaptureBallId: null
 };
 
 // Variável temporária para armazenar a aura da Poké Ball selecionada no turno atual
@@ -938,24 +939,52 @@ function triggerCaptureFlow(wildPokemon) {
     captureModal.classList.remove('hidden');
 }
 
+// Substitua a função attemptCatchWithSpecificBall() por esta versão.
 window.attemptCatchWithSpecificBall = function(ballItemId, waypointId) {
     const cp = getCurrentPlayer();
-    if (!cp.inventory) return;
 
-    let sphereItem = cp.inventory.find(i => i.id === ballItemId);
-    if (!sphereItem || sphereItem.count <= 0) {
-        showCustomPopup("Esfera Esgotada", "❌ Não tens unidades suficientes desta esfera!", false);
+    if (!cp || !Array.isArray(cp.inventory)) return;
+
+    if (currentEncounterState.hasAttemptedCapture) {
+        showCustomPopup(
+            "Tentativa já realizada",
+            "⚠️ Você já tentou capturar neste turno. Aguarde o próximo turno.",
+            false
+        );
+        return;
+    }
+
+    const sphereItem = cp.inventory.find(
+        item =>
+            item &&
+            item.id === ballItemId &&
+            item.type === 'sphere' &&
+            Number(item.count) > 0
+    );
+
+    if (!sphereItem) {
+        showCustomPopup(
+            "Sem Poké Ball",
+            "❌ Você não possui essa Poké Ball em quantidade disponível.",
+            false
+        );
         return;
     }
 
     sphereItem.count--;
 
-    let bonus = sphereItem.value || 0;
+    currentEncounterState.itemBonus =
+        Number(sphereItem.value) || 0;
+
+    currentEncounterState.selectedCaptureBallId =
+        sphereItem.id;
+
+    currentEncounterState.hasAttemptedCapture = true;
+
     if (sphereItem.aura) {
         selectedBallAura = sphereItem.aura;
     }
 
-    currentEncounterState.itemBonus = bonus;
     resolveCaptureAttempt();
     renderBottomPanel();
 };
@@ -1936,50 +1965,109 @@ function renderEncounterItemsList() {
     }
 }
 
+// Substitua a função useItemInEncounter() por esta versão.
 function useItemInEncounter(item, itemIndex) {
     const cp = getCurrentPlayer();
-    const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex];
-    if (!activeMon) return;
+    const activeMon =
+        cp.activeTeam[currentEncounterState.selectedTeamMemberIndex];
+
+    if (!activeMon || !item || Number(item.count) <= 0) return;
 
     if (item.type === 'sphere') {
+        if (currentEncounterState.hasAttemptedCapture) {
+            showCustomPopup(
+                "Tentativa já realizada",
+                "⚠️ Você já tentou capturar este Pokémon neste turno. Uma nova tentativa será liberada somente no próximo turno.",
+                false
+            );
+            return;
+        }
+
         item.count--;
-        currentEncounterState.itemBonus = item.value || 0;
-        
+        currentEncounterState.itemBonus = Number(item.value) || 0;
+        currentEncounterState.selectedCaptureBallId = item.id;
+        currentEncounterState.hasAttemptedCapture = true;
+
         if (item.aura) {
             selectedBallAura = item.aura;
         }
 
-        showCustomPopup("Poké Ball Lançada", `🔴 Lançaste uma ${item.name}!\nBónus aplicado: +${item.value || 0}`);
-        
+        showCustomPopup(
+            "Poké Ball lançada",
+            `🔴 Você usou ${item.name}.\nBônus aplicado: +${Number(item.value) || 0}`,
+            true
+        );
+
         renderEncounterItemsList();
         updateEncounterUIInfo();
         resolveCaptureAttempt();
+        return;
+    }
 
-    } else if (item.type === 'battle') {
+    if (item.type === 'battle') {
         item.count--;
-        currentEncounterState.battlePowerBonus += (item.value || 2);
-        showCustomPopup("Item Usado", `⚔️ ${item.name} aplicada! STR +${item.value} para este combate.`);
+        currentEncounterState.battlePowerBonus += Number(item.value) || 2;
+
+        showCustomPopup(
+            "Item Usado",
+            `⚔️ ${item.name} aplicada!\nBônus de combate: +${Number(item.value) || 2}.`,
+            true
+        );
+
         renderEncounterItemsList();
         updateEncounterUIInfo();
-    } else if (item.type === 'heal') {
+        return;
+    }
+
+    if (item.type === 'heal') {
         if (activeMon.currentHp >= activeMon.maxHp) {
-            showCustomPopup("Aviso", `${activeMon.name} já está com HP máximo!`, false);
+            showCustomPopup(
+                "Aviso",
+                `${activeMon.name} já está com HP máximo!`,
+                false
+            );
             return;
         }
+
         item.count--;
-        activeMon.currentHp = Math.min(activeMon.maxHp, activeMon.currentHp + item.value);
-        showCustomPopup("Item Usado", `💊 Potion usada em ${activeMon.name}!`);
+        activeMon.currentHp = Math.min(
+            activeMon.maxHp,
+            activeMon.currentHp + (Number(item.value) || 20)
+        );
+
+        showCustomPopup(
+            "Item Usado",
+            `💊 ${item.name} usada em ${activeMon.name}!`,
+            true
+        );
+
         renderEncounterItemsList();
         updateEncounterUIInfo();
         renderTeamCardSlots();
-    } else if (item.type === 'revive') {
+        return;
+    }
+
+    if (item.type === 'revive') {
         if (activeMon.currentHp > 0) {
-            showCustomPopup("Aviso", `${activeMon.name} não está desmaiado!`, false);
+            showCustomPopup(
+                "Aviso",
+                `${activeMon.name} não está desmaiado!`,
+                false
+            );
             return;
         }
+
         item.count--;
-        activeMon.currentHp = Math.floor(activeMon.maxHp / 2);
-        showCustomPopup("Item Usado", `🌟 Revive usado em ${activeMon.name}!`, true);
+        activeMon.currentHp = Math.floor(
+            (activeMon.maxHp || activeMon.hp || 20) / 2
+        );
+
+        showCustomPopup(
+            "Item Usado",
+            `🌟 Revive usado em ${activeMon.name}!`,
+            true
+        );
+
         renderEncounterItemsList();
         updateEncounterUIInfo();
         renderTeamCardSlots();
@@ -2060,66 +2148,118 @@ function showCustomPopup(title, message, isSuccess = true) {
     popupEl.classList.remove('hidden');
 }
 
+// Substitua a função resolveCaptureAttempt() por esta versão.
 function resolveCaptureAttempt() {
     const cp = getCurrentPlayer();
     const wild = currentEncounterState.wildPokemon;
-    const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex];
-    if (!wild) return;
+    const activeMon =
+        cp.activeTeam[currentEncounterState.selectedTeamMemberIndex];
+
+    if (!wild || !activeMon) return;
+
+    if (!currentEncounterState.selectedCaptureBallId) {
+        showCustomPopup(
+            "Poké Ball necessária",
+            "❌ Escolha uma Poké Ball na área de itens antes de tentar capturar.",
+            false
+        );
+        return;
+    }
+
+    if (!currentEncounterState.hasAttemptedCapture) {
+        showCustomPopup(
+            "Captura bloqueada",
+            "❌ A tentativa precisa ser iniciada pelo uso de uma Poké Ball.",
+            false
+        );
+        return;
+    }
+
+    const selectedBall = cp.inventory.find(
+        item =>
+            item &&
+            item.id === currentEncounterState.selectedCaptureBallId
+    );
+
+    if (!selectedBall || Number(selectedBall.count) < 0) {
+        showCustomPopup(
+            "Poké Ball inválida",
+            "❌ A esfera selecionada não está disponível.",
+            false
+        );
+        return;
+    }
 
     let requiredTarget = 4;
     const tier = wild.tier || 1;
-    const isLegendary = (tier === 5) || (wild.color && wild.color.toLowerCase() === 'amarelo');
+    const isLegendary =
+        tier === 5 ||
+        String(wild.color || '').toLowerCase() === 'amarelo';
 
-    if (tier === 2) {
-        requiredTarget = 5;
-    } else if (tier === 3 || tier === 4) {
-        requiredTarget = 6;
-    } else if (isLegendary) {
-        requiredTarget = 7;
-    }
+    if (tier === 2) requiredTarget = 5;
+    if (tier === 3 || tier === 4) requiredTarget = 6;
+    if (isLegendary) requiredTarget = 7;
+    if (wild.isShiny) requiredTarget++;
 
-    if (wild.isShiny) {
-        requiredTarget += 1;
-    }
+    const weakenedBonus =
+        wild.weakened && !isLegendary ? 1 : 0;
 
-    const weakenedBonus = (wild.weakened && !isLegendary) ? 1 : 0;
+    const captureBonus =
+        Number(currentEncounterState.itemBonus) || 0;
 
-    rollDiceWithAnimation((roll, _) => {
-        const totalCaptureValue = roll + currentEncounterState.itemBonus + weakenedBonus;
-        let success = totalCaptureValue >= requiredTarget;
+    rollDiceWithAnimation((roll) => {
+        const totalCaptureValue =
+            Number(roll) + captureBonus + weakenedBonus;
 
-        if (success) {
-            showCustomPopup("🔴🔵 CAPTURA BEM-SUCEDIDA!", `A Poké Ball abanou... Click!\nCapturaste o ${wild.isShiny ? '✨ Shiny ' : ''}${wild.name} (Nv. ${wild.level}) e foi enviado para a PC Box!\n(Dado: ${roll} + Bónus: ${currentEncounterState.itemBonus + weakenedBonus} = ${totalCaptureValue} vs Alvo ${requiredTarget}+)`, true);
+        if (totalCaptureValue >= requiredTarget) {
+            showCustomPopup(
+                "🔴🔵 Captura bem-sucedida!",
+                `Você capturou ${wild.isShiny ? '✨ Shiny ' : ''}${wild.name} (Nv. ${wild.level || 1})!\n\nDado: ${roll} + Bônus: ${captureBonus + weakenedBonus} = ${totalCaptureValue}\nAlvo: ${requiredTarget}+`,
+                true
+            );
+
             addMonsterToPlayer(wild);
 
             if (wild.waypointId) {
                 cp.currentZone = wild.waypointId;
+
                 if (boardPokemonCards[wild.waypointId]) {
                     delete boardPokemonCards[wild.waypointId];
                 }
             }
-            if (typeof renderBoardMap === 'function') renderBoardMap();
 
-            if (activeMon && activeMon.currentHp > 0) addExperienceToMonster(activeMon, 30);
+            if (activeMon.currentHp > 0) {
+                addExperienceToMonster(activeMon, 30);
+            }
+
+            if (typeof renderBoardMap === 'function') {
+                renderBoardMap();
+            }
+
             closeEncounterModalUI();
         } else {
             if (!isLegendary) {
                 wild.weakened = true;
-                if (wild.waypointId && boardPokemonCards[wild.waypointId]) {
+
+                if (
+                    wild.waypointId &&
+                    boardPokemonCards[wild.waypointId]
+                ) {
                     boardPokemonCards[wild.waypointId].weakened = true;
                 }
             }
 
-            if (wild.waypointId) {
-                cp.currentZone = wild.waypointId;
-            }
-            if (typeof renderBoardMap === 'function') renderBoardMap();
+            showCustomPopup(
+                "❌ Captura falhou",
+                `${wild.name} escapou da Poké Ball.\n\nDado: ${roll} + Bônus: ${captureBonus + weakenedBonus} = ${totalCaptureValue}\nAlvo: ${requiredTarget}+\n\nUma nova tentativa será liberada somente no próximo turno.`,
+                false
+            );
 
-            const weakenedNotice = (!isLegendary) ? "\n🩹 O Pokémon ficou enfraquecido no tabuleiro (+1 bónus permanente na próxima tentativa)!" : "";
-            showCustomPopup("❌ A CAPTURA FALHOU!", `O ${wild.name} libertou-se!\n(Dado: ${roll} + Bónus: ${currentEncounterState.itemBonus + weakenedBonus} = ${totalCaptureValue} | Necessário: ${requiredTarget}+).${weakenedNotice}`, false);
-            
             updateEncounterUIInfo();
         }
+
+        currentEncounterState.selectedCaptureBallId = null;
+        currentEncounterState.itemBonus = 0;
     });
 }
 
@@ -2411,16 +2551,35 @@ window.changePcBoxPage = function(direction) {
 };
 
 // --- PASSAR A VEZ ---
+// Substitua o início da função passTurnToNextPlayer() por esta versão.
 function passTurnToNextPlayer() {
     gymAttemptedThisTurn = {};
 
-    if (!gameState.players || !Array.isArray(gameState.players) || gameState.players.length <= 1) {
+    currentEncounterState.hasAttemptedCapture = false;
+    currentEncounterState.selectedCaptureBallId = null;
+    currentEncounterState.itemBonus = 0;
+    currentEncounterState.battlePowerBonus = 0;
+
+    if (
+        !gameState.players ||
+        !Array.isArray(gameState.players) ||
+        gameState.players.length <= 1
+    ) {
         if (typeof movementState !== 'undefined') {
             movementState.hasRolledThisTurn = false;
             movementState.isMoving = false;
         }
-        showCustomPopup("🎲 Novo Turno", "Podes rolar o dado novamente para continuar a tua aventura a solo!", true);
-        appendAdventureLog(`Novo turno iniciado para ${getCurrentPlayer().name}.`);
+
+        showCustomPopup(
+            "🎲 Novo Turno",
+            "Uma nova tentativa de captura está disponível.",
+            true
+        );
+
+        appendAdventureLog(
+            `Novo turno iniciado para ${getCurrentPlayer().name}.`
+        );
+
         return;
     }
 
@@ -2429,24 +2588,34 @@ function passTurnToNextPlayer() {
         movementState.isMoving = false;
     }
 
-    gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
+    gameState.currentPlayerIndex =
+        (gameState.currentPlayerIndex + 1) %
+        gameState.players.length;
+
     if (gameState.currentPlayerIndex === 0) {
         gameState.turn++;
     }
 
     const cp = getCurrentPlayer();
-    
-    if (typeof movementState !== 'undefined') {
-        movementState.hasRolledThisTurn = false;
-    }
 
-    showCustomPopup("🔄 Mudança de Turno", `Agora é a vez do treinador:\n\n⭐ **${cp.name}** ⭐\n\nPrepare o dispositivo!`, true);
-    
+    showCustomPopup(
+        "🔄 Mudança de Turno",
+        `Agora é a vez de ${cp.name}.\n\nUma nova tentativa de captura está disponível.`,
+        true
+    );
+
     initGameEngine();
-    if (typeof moveTokenToWaypoint === 'function' && cp.currentZone) {
+
+    if (
+        typeof moveTokenToWaypoint === 'function' &&
+        cp.currentZone
+    ) {
         moveTokenToWaypoint(cp.currentZone);
     }
-    appendAdventureLog(`Turno passado para ${cp.name}.`);
+
+    appendAdventureLog(
+        `Turno passado para ${cp.name}.`
+    );
 }
 
 function checkAndRenderPassTurnButton() {
