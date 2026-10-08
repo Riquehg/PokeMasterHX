@@ -102,7 +102,9 @@ function updateDailyPokemonBannerUI() {
 
 // Executa a verificação assim que a página carregar
 window.addEventListener('DOMContentLoaded', () => {
-    updateDailyPokemonBannerUI();
+    if (typeof updateDailyPokemonBannerUI === 'function') {
+        updateDailyPokemonBannerUI();
+    }
 });
 
 // Fallback preventivo de estado válido para evitar travamentos ao limpar o navegador
