@@ -4072,7 +4072,7 @@ window.movePokemonToTeam = function(boxIndex) {
     // --- LOBBY ONLINE ---
 
     window.createOnlineRoom = function () {
-                const roomName = window.prompt(
+                        const roomName = window.prompt(
             'Insira o nome da sala online:',
             'Sala de Kanto'
         );
@@ -4081,13 +4081,23 @@ window.movePokemonToTeam = function(boxIndex) {
             return;
         }
 
+        const creatorPlayer = typeof getOnlinePlayerPayload === 'function'
+            ? getOnlinePlayerPayload()
+            : null;
+
         emitSocket('create_room', {
             roomName: roomName.trim(),
             host:
                 typeof currentAuthenticatedAccount !== 'undefined' &&
                 currentAuthenticatedAccount
                     ? currentAuthenticatedAccount
-                    : 'Treinador'
+                    : creatorPlayer?.name || 'Treinador',
+            maxPlayers: 4,
+            player: creatorPlayer,
+            accountEmail:
+                typeof currentAuthenticatedAccount !== 'undefined'
+                    ? currentAuthenticatedAccount
+                    : null
         });
     };
 
@@ -4192,22 +4202,135 @@ window.movePokemonToTeam = function(boxIndex) {
 let currentJoinedOnlineRoomId = null;
 let onlineRoomStarted = false;
 let onlineBoardReady = false;
+let onlineLocalPlayerId = null;
+let onlineLastTurnKey = null;
+let onlineActionWrappersInstalled = false;
+
+function getOnlinePlayerIdentity(player) {
+    if (!player || typeof player !== 'object') {
+        return '';
+    }
+
+    return String(
+        player.playerId ||
+        player.accountEmail ||
+        player.email ||
+        player.name ||
+        ''
+    ).trim().toLowerCase();
+}
+
+function getLocalOnlineIdentity() {
+    if (onlineLocalPlayerId) {
+        return String(onlineLocalPlayerId).trim().toLowerCase();
+    }
+
+    const accountEmail =
+        typeof currentAuthenticatedAccount !== 'undefined'
+            ? String(currentAuthenticatedAccount || '').trim().toLowerCase()
+            : '';
+
+    if (accountEmail) {
+        onlineLocalPlayerId = accountEmail;
+        return accountEmail;
+    }
+
+    return '';
+}
+
+function isOnlineMyTurn() {
+    if (
+        !onlineRoomStarted ||
+        !gameState ||
+        !Array.isArray(gameState.players)
+    ) {
+        return true;
+    }
+
+    const activePlayer =
+        gameState.players[Number(gameState.currentPlayerIndex) || 0];
+
+    const activeIdentity = getOnlinePlayerIdentity(activePlayer);
+    const localIdentity = getLocalOnlineIdentity();
+
+    return Boolean(
+        activeIdentity &&
+        localIdentity &&
+        activeIdentity === localIdentity
+    );
+}
+
+function guardOnlineAction(actionName) {
+    if (!onlineRoomStarted || isOnlineMyTurn()) {
+        return true;
+    }
+
+    if (typeof showCustomPopup === 'function') {
+        showCustomPopup(
+            'Aguarde a sua vez',
+            `A ação "${actionName}" está bloqueada enquanto ${gameState.players?.[gameState.currentPlayerIndex]?.name || 'outro jogador'} estiver jogando.`,
+            false
+        );
+    }
+
+    return false;
+}
+
+function requestOnlineRoomState() {
+    const socketInstance =
+        typeof getSocket === 'function'
+            ? getSocket()
+            : null;
+
+    if (
+        socketInstance &&
+        typeof socketInstance.emit === 'function' &&
+        currentJoinedOnlineRoomId
+    ) {
+        socketInstance.emit('request_room_state', {
+            roomId: currentJoinedOnlineRoomId,
+            accountEmail:
+                typeof currentAuthenticatedAccount !== 'undefined'
+                    ? currentAuthenticatedAccount
+                    : null
+        });
+    }
+}
 
 function getOnlinePlayerPayload() {
     try {
-        const player = typeof getCurrentPlayer === 'function'
-            ? getCurrentPlayer()
-            : null;
+        const player =
+            typeof getCurrentPlayer === 'function'
+                ? getCurrentPlayer()
+                : null;
 
-        return player
-            ? {
-                ...player,
-                accountEmail:
-                    typeof currentAuthenticatedAccount !== 'undefined'
-                        ? currentAuthenticatedAccount
-                        : null
-            }
-            : null;
+        if (!player) {
+            return null;
+        }
+
+        const accountEmail =
+            typeof currentAuthenticatedAccount !== 'undefined'
+                ? String(currentAuthenticatedAccount || '').trim().toLowerCase()
+                : '';
+
+        const playerId = String(
+            accountEmail ||
+            player.playerId ||
+            player.accountEmail ||
+            player.email ||
+            player.name ||
+            ''
+        ).trim().toLowerCase();
+
+        if (playerId && !onlineLocalPlayerId) {
+            onlineLocalPlayerId = playerId;
+        }
+
+        return {
+            ...player,
+            playerId,
+            accountEmail: accountEmail || player.accountEmail || null
+        };
     } catch (error) {
         return null;
     }
@@ -4291,40 +4414,64 @@ function applyOnlineRoomState(data) {
         return false;
     }
 
+    const normalizedPlayers = sharedState.players.map(player => ({
+        ...player,
+        playerId: getOnlinePlayerIdentity(player),
+        activeTeam: Array.isArray(player?.activeTeam)
+            ? player.activeTeam
+            : [],
+        pcBox: Array.isArray(player?.pcBox)
+            ? player.pcBox
+            : [],
+        inventory: Array.isArray(player?.inventory)
+            ? player.inventory
+            : [],
+        badges: Array.isArray(player?.badges)
+            ? player.badges
+            : [],
+        equipmentSlots: Array.isArray(player?.equipmentSlots)
+            ? player.equipmentSlots
+            : [null, null]
+    }));
+
+    const previousTurnKey = onlineLastTurnKey;
+
     gameState = {
         ...sharedState,
         setupDone: true,
         online: true,
         onlineRoomId: currentJoinedOnlineRoomId,
-        currentPlayerIndex: Number.isInteger(
-            Number(sharedState.currentPlayerIndex)
-        )
-            ? Number(sharedState.currentPlayerIndex)
-            : 0,
+        currentPlayerIndex: Math.max(
+            0,
+            Math.min(
+                normalizedPlayers.length - 1,
+                Number(sharedState.currentPlayerIndex) || 0
+            )
+        ),
         turn: Math.max(1, Number(sharedState.turn) || 1),
-        players: sharedState.players.map(player => ({
-            ...player,
-            activeTeam: Array.isArray(player?.activeTeam)
-                ? player.activeTeam
-                : [],
-            pcBox: Array.isArray(player?.pcBox)
-                ? player.pcBox
-                : [],
-            inventory: Array.isArray(player?.inventory)
-                ? player.inventory
-                : [],
-            badges: Array.isArray(player?.badges)
-                ? player.badges
-                : [],
-            equipmentSlots: Array.isArray(player?.equipmentSlots)
-                ? player.equipmentSlots
-                : [null, null]
-        }))
+        players: normalizedPlayers
     };
 
-    if (sharedBoard) {
+    if (sharedBoard && typeof sharedBoard === 'object') {
         boardPokemonCards = sharedBoard;
         onlineBoardReady = true;
+    } else {
+        onlineBoardReady = false;
+    }
+
+    const currentTurnKey =
+        `${gameState.turn}:${gameState.currentPlayerIndex}`;
+
+    onlineLastTurnKey = currentTurnKey;
+
+    if (
+        previousTurnKey !== currentTurnKey &&
+        typeof movementState !== 'undefined'
+    ) {
+        movementState.isMoving = false;
+        movementState.validDestinations = [];
+        movementState.diceRolledValue = 0;
+        movementState.hasRolledThisTurn = !isOnlineMyTurn();
     }
 
     if (typeof ensureValidGameState === 'function') {
@@ -4411,13 +4558,24 @@ function syncOnlineGameState(changeType = 'state_update') {
         return false;
     }
 
+    const actorPlayer = getOnlinePlayerPayload();
+
     socketInstance.emit('update_game_state', {
         roomId: currentJoinedOnlineRoomId,
+        room_id: currentJoinedOnlineRoomId,
         type: changeType,
+        action: changeType,
+        actorPlayerId: onlineLocalPlayerId,
+        actorEmail:
+            typeof currentAuthenticatedAccount !== 'undefined'
+                ? currentAuthenticatedAccount
+                : null,
         gameState,
         boardPokemonCards: onlineBoardReady
             ? boardPokemonCards
-            : {}
+            : {},
+        player: actorPlayer,
+        sentAt: Date.now()
     });
 
     return true;
@@ -4496,8 +4654,16 @@ function installOnlineTurnSynchronization() {
         const originalPassTurn = window.passTurnToNextPlayer;
 
         window.passTurnToNextPlayer = function (...args) {
+            if (!guardOnlineAction('passar a vez')) {
+                return false;
+            }
+
             const result = originalPassTurn.apply(this, args);
-            syncOnlineGameState('turn_passed');
+
+            setTimeout(() => {
+                syncOnlineGameState('turn_passed');
+            }, 100);
+
             return result;
         };
 
@@ -4518,6 +4684,118 @@ function installOnlineTurnSynchronization() {
 
         window.__hexSaveGameWrapped = true;
     }
+}
+
+function installOnlineGameplayBridge() {
+    if (onlineActionWrappersInstalled) {
+        return;
+    }
+
+    onlineActionWrappersInstalled = true;
+
+    const wrapAction = (functionName, actionName, syncType, delay = 150) => {
+        const original = window[functionName];
+
+        if (
+            typeof original !== 'function' ||
+            window[`__hexWrapped_${functionName}`]
+        ) {
+            return;
+        }
+
+        window[functionName] = function (...args) {
+            if (!guardOnlineAction(actionName)) {
+                return false;
+            }
+
+            const result = original.apply(this, args);
+
+            if (syncType) {
+                setTimeout(() => {
+                    syncOnlineGameState(syncType);
+                }, delay);
+            }
+
+            return result;
+        };
+
+        window[`__hexWrapped_${functionName}`] = true;
+    };
+
+    wrapAction(
+        'rollDiceForMovement',
+        'rolar o dado',
+        null
+    );
+
+    wrapAction(
+        'finishMovementSession',
+        'concluir o movimento',
+        'movement_finished'
+    );
+
+    wrapAction(
+        'handleWaypointArrival',
+        'chegar a uma casa',
+        'waypoint_arrival'
+    );
+
+    wrapAction(
+        'attemptCatchWithSpecificBall',
+        'tentar capturar',
+        'capture_attempt',
+        2800
+    );
+
+    wrapAction(
+        'resolveBattleAttempt',
+        'atacar um Pokémon selvagem',
+        'wild_battle',
+        2800
+    );
+
+    wrapAction(
+        'addMonsterToPlayer',
+        'adicionar um Pokémon',
+        'pokemon_captured'
+    );
+
+    wrapAction(
+        'useItemInEncounter',
+        'usar item no encontro',
+        'encounter_item'
+    );
+
+    wrapAction(
+        'useInventoryItemMainScreen',
+        'usar item',
+        'inventory_item'
+    );
+
+    wrapAction(
+        'buyItemFromMart',
+        'comprar no Poké Mart',
+        'mart_purchase'
+    );
+
+    wrapAction(
+        'executePlayerTrade',
+        'efetivar uma troca',
+        'trade_completed'
+    );
+
+    wrapAction(
+        'executeLockedGymBattleSequence',
+        'desafiar o ginásio',
+        'gym_battle',
+        2800
+    );
+
+    wrapAction(
+        'triggerPvPBattleArena',
+        'iniciar uma batalha PvP',
+        'pvp_started'
+    );
 }
 
 window.joinAndStartOnlineGame = function () {
@@ -4551,14 +4829,35 @@ window.joinAndStartOnlineGame = function () {
         return;
     }
 
+    const player = getOnlinePlayerPayload();
+
+    if (
+        (!boardPokemonCards ||
+            Object.keys(boardPokemonCards).length === 0) &&
+        typeof initializeBoardPokemonCards === 'function'
+    ) {
+        initializeBoardPokemonCards();
+    }
+
     socketInstance.emit('start_room_game', {
         roomId: currentJoinedOnlineRoomId,
-        player: getOnlinePlayerPayload(),
+        room_id: currentJoinedOnlineRoomId,
+        player,
         accountEmail:
             typeof currentAuthenticatedAccount !== 'undefined'
                 ? currentAuthenticatedAccount
-                : null
+                : null,
+        boardPokemonCards: boardPokemonCards || {},
+        maxPlayers: 4
     });
+
+    if (typeof showCustomPopup === 'function') {
+        showCustomPopup(
+            'Iniciando partida online',
+            'Aguardando o estado compartilhado da sala e a entrada dos jogadores.',
+            true
+        );
+    }
 };
 
 function renderRoomsList(rooms) {
@@ -4674,6 +4973,7 @@ if (
 
     installOnlineSocketPatch(currentSocketInstance);
     installOnlineTurnSynchronization();
+    installOnlineGameplayBridge();
 
     if (typeof currentSocketInstance.off === 'function') {
         currentSocketInstance.off('sync_game_state');
@@ -4735,21 +5035,29 @@ if (
     });
 
     currentSocketInstance.on('room_joined', roomData => {
-        if (roomData?.roomId) {
-            currentJoinedOnlineRoomId = roomData.roomId;
+        if (roomData?.roomId || roomData?.room_id) {
+            currentJoinedOnlineRoomId =
+                roomData.roomId || roomData.room_id;
         }
 
         const stateApplied = applyOnlineRoomState(roomData);
 
-        if (stateApplied && roomData?.started) {
+        if (roomData?.started || roomData?.onlineRoomStarted) {
             onlineRoomStarted = true;
-            showOnlineGameLayout();
+
+            if (!stateApplied) {
+                requestOnlineRoomState();
+            } else {
+                showOnlineGameLayout();
+            }
         }
 
         if (typeof showCustomPopup === 'function') {
             showCustomPopup(
-                'Sala online',
-                `Você entrou na sala ${roomData?.roomName || 'selecionada'}. Agora todos os jogadores usam o mesmo estado de partida.`,
+                'Sala online conectada',
+                stateApplied
+                    ? 'Você entrou na sala e recebeu o mesmo estado de jogo dos demais jogadores.'
+                    : 'Você entrou na sala. Aguardando o estado compartilhado do tabuleiro.',
                 true
             );
         }
@@ -4760,6 +5068,7 @@ if (
             data?.roomId ||
             data?.room_id ||
             data?.room?.id ||
+            data?.roomState?.roomId ||
             currentJoinedOnlineRoomId;
 
         if (roomId) {
@@ -4768,43 +5077,39 @@ if (
 
         onlineRoomStarted = true;
 
+        const stateApplied = applyOnlineRoomState(data);
         const receivedBoard = extractOnlineBoard(data);
 
-        if (!receivedBoard || Object.keys(receivedBoard).length === 0) {
-            if (typeof initializeBoardPokemonCards === 'function' && (!boardPokemonCards || Object.keys(boardPokemonCards).length === 0)) {
-                initializeBoardPokemonCards();
-            }
-            onlineBoardReady = true;
-        } else {
+        if (receivedBoard && Object.keys(receivedBoard).length > 0) {
             boardPokemonCards = receivedBoard;
             onlineBoardReady = true;
         }
 
-        const stateApplied = applyOnlineRoomState(data);
-
-        if (!stateApplied) {
-            currentSocketInstance.emit('request_room_state', {
-                roomId: currentJoinedOnlineRoomId
-            });
+        if (!stateApplied || !onlineBoardReady) {
+            requestOnlineRoomState();
 
             if (typeof showCustomPopup === 'function') {
                 showCustomPopup(
-                    'Aguardando estado da sala',
-                    'O servidor iniciou a sala, mas ainda não enviou o estado compartilhado dos jogadores.',
-                    false
+                    'Sincronizando partida',
+                    'A sala foi iniciada. Aguardando o estado único do tabuleiro e dos jogadores.',
+                    true
                 );
+            }
+
+            if (stateApplied) {
+                showOnlineGameLayout();
             }
 
             return;
         }
 
         console.log(
-            'Partida online iniciada na sala:',
+            'Partida online compartilhada iniciada na sala:',
             currentJoinedOnlineRoomId
         );
 
         showOnlineGameLayout();
-        syncOnlineGameState('room_started');
+        refreshOnlineGameInterface();
     });
 
     currentSocketInstance.on('lobby_error', message => {
