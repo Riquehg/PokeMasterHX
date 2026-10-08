@@ -2630,7 +2630,7 @@ function renderChatMessages() {
 
     let htmlContent = '';
     validMessages.forEach(msg => {
-        htmlContent += `<p class="text-[9px] text-amber-300 my-0.5"><span class="font-bold text-amber-400">[${msg.sender \vert{}\vert{} 'Sistema'}]:</span>${msg.text || ''}</p>`;
+        htmlContent += `<p class="text-[9px] text-amber-300 my-0.5"><span class="font-bold text-amber-400">[${msg.sender || 'Sistema'}]:</span> ${msg.text || ''}</p>`;
     });
 
     if (chatBox) {
