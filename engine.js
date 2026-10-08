@@ -1485,6 +1485,14 @@ Disponível: ${Number(cp.gold) || 0} 🪙`,
         return;
     }
 
+    if (Number(cp.gold) < totalCost) {
+        showCustomPopup(
+            "Sem Ouro",
+            `❌ Ouro insuficiente para comprar ${quantity} unidade(s).\n\nNecessário: ${totalCost} 🪙\nDisponível: ${Number(cp.gold) || 0} 🪙`,
+            false
+        );
+        return;
+    }
 
     if (!Array.isArray(cp.inventory)) {
         cp.inventory = [];
