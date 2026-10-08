@@ -4210,6 +4210,7 @@ window.joinAndStartOnlineGame = function () {
                     const roomId = button.getAttribute('data-room-id');
 
                     if (roomId) {
+                        currentJoinedOnlineRoomId = roomId; // Salva a sala ativa
                         emitSocket('join_room', { roomId });
                     }
                 });
