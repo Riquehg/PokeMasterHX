@@ -4757,9 +4757,15 @@ if (
 
         const receivedBoard = extractOnlineBoard(data);
 
-        if (!receivedBoard) {
-            boardPokemonCards = {};
-            onlineBoardReady = false;
+        if (!receivedBoard || Object.keys(receivedBoard).length === 0) {
+            // Se o servidor não enviou o tabuleiro pronto, inicializa localmente se necessário
+            if (typeof initializeBoardPokemonCards === 'function' && (!boardPokemonCards || Object.keys(boardPokemonCards).length === 0)) {
+                initializeBoardPokemonCards();
+            }
+            onlineBoardReady = true;
+        } else {
+            boardPokemonCards = receivedBoard;
+            onlineBoardReady = true;
         }
 
         const stateApplied = applyOnlineRoomState(data);
@@ -4786,7 +4792,6 @@ if (
         );
 
         showOnlineGameLayout();
-
         syncOnlineGameState('room_started');
     });
 
