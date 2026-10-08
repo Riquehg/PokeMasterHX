@@ -33,7 +33,7 @@
             <div id="daily-pokemon-banner" class="bg-gradient-to-r from-amber-950/80 via-yellow-950/50 to-amber-950/80 border border-amber-500/40 p-3 rounded-xl flex items-center justify-between shadow-lg">
                 <div class="flex items-center gap-3">
                     <div id="daily-pokemon-img-container" class="w-12 h-12 bg-black/60 rounded-lg border border-amber-400/60 flex items-center justify-center overflow-hidden">
-                        <img id="daily-pokemon-sprite" src="" alt="Pokémon do Dia" class="w-10 h-10 object-contain drop-shadow">
+                        <img id="daily-pokemon-sprite" src="" alt="Pokémon do Dia" class="w-10 h-10 object-contain drop-shadow" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                     </div>
                     <div>
                         <span class="text-[9px] text-amber-400 font-bold uppercase tracking-wider block"><i class="fa-solid fa-star"></i> Pokémon do Dia (Bônus XP/Gold)</span>
@@ -314,7 +314,7 @@
                         </div>
                         <div class="flex gap-1">
                             <input type="text" id="chat-input-field" placeholder="Escrever mensagem..." class="bg-black/80 border border-amber-900/60 rounded px-2 py-1 text-[9px] text-white flex-1 focus:outline-none focus:border-amber-500">
-                            <button onclick="sendChatMessage()" class="bg-amber-600 hover:bg-amber-500 text-black px-2 py-1 rounded text-[9px] font-bold cursor-pointer">Enviar</button>
+                            <button id="send-chat-btn" onclick="sendChatMessage()" class="bg-amber-600 hover:bg-amber-500 text-black px-2 py-1 rounded text-[9px] font-bold cursor-pointer">Enviar</button>
                         </div>
                     </div>
                 </div>
@@ -420,7 +420,7 @@
         </div>
     </div>
 
-    <!-- SCRIPTS MODULARES (ATUALIZADO PARA engine_2.js) -->
+    <!-- SCRIPTS MODULARES -->
     <script src="cards-data.js"></script>
     <script src="items.js"></script>
     <script src="events.js"></script>
