@@ -52,7 +52,9 @@ const io = new Server(server, {
         origin: allowedOrigins,
         methods: ['GET', 'POST']
     },
-    maxHttpBufferSize: 10e6
+    maxHttpBufferSize: 10e6,
+    pingTimeout: 60000,   // 60 segundos sem resposta antes de dropar o cliente
+    pingInterval: 25000   // Envia um ping a cada 25 segundos para manter a conexão ativa
 });
 
 // ============================================================
@@ -411,6 +413,31 @@ io.on('connection', socket => {
     socket.data.trainerName = 'Treinador';
     socket.data.avatarId = 1;
 
+// ========================================================
+    // RECONEXÃO E SINCRONIZAÇÃO DE SALA
+    // ========================================================
+    socket.on('reconnect_sync', payload => {
+        const roomId = sanitizeText(payload?.roomId, 120);
+        const room = getRoomById(roomId);
+        
+        if (room) {
+            socket.join(room.id);
+            console.log(`🔄 Jogador ${socket.id} resincronizado com a sala ${room.name}`);
+            socket.emit('room_joined', {
+                success: true,
+                roomId: room.id,
+                room: {
+                    id: room.id,
+                    name: room.name,
+                    host: room.host,
+                    playerCount: room.players.length,
+                    maxPlayers: MAX_ROOM_PLAYERS,
+                    status: room.status
+                }
+            });
+        }
+    });
+    
     // ========================================================
     // LOGIN E CRIAÇÃO AUTOMÁTICA DA CONTA
     // ========================================================
