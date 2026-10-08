@@ -67,6 +67,7 @@ let currentEncounterState = {
 let selectedBallAura = null;
 
 // --- CONFIGURAÇÃO DO POKÉMON DO DIA (Integrado com o MONSTER_CATALOG do card-data.js) ---
+// --- CONFIGURAÇÃO DO POKÉMON DO DIA (Integrado com o MONSTER_CATALOG do card-data.js) ---
 let dailyFeaturedPokemonConfig = {
     pokemonId: 'pikachu',
     pokemonName: 'Pikachu',
@@ -75,13 +76,14 @@ let dailyFeaturedPokemonConfig = {
     activeDate: new Date().toDateString()
 };
 
-// Função auxiliar para atualizar visualmente o banner do Pokémon do Dia com base no catálogo
+// Função auxiliar para atualizar visualmente o banner do Pokémon do Dia tanto no Login quanto no Admin
 function updateDailyPokemonBannerUI() {
     if (typeof MONSTER_CATALOG === 'undefined') return;
     
-    // Procura o Pokémon no catálogo pelo ID ou nome
+    // Procura o Pokémon no catálogo pelo ID, número da Pokédex ou nome
     const found = MONSTER_CATALOG.find(m => 
         String(m.id).toLowerCase() === String(dailyFeaturedPokemonConfig.pokemonId).toLowerCase() ||
+        String(m.dexNumber) === String(dailyFeaturedPokemonConfig.pokemonId) ||
         String(m.name).toLowerCase() === String(dailyFeaturedPokemonConfig.pokemonName).toLowerCase()
     );
 
@@ -89,6 +91,7 @@ function updateDailyPokemonBannerUI() {
         dailyFeaturedPokemonConfig.pokemonId = found.id;
         dailyFeaturedPokemonConfig.pokemonName = found.name;
         
+        // Elemento da Tela de Login / Hub inicial
         const nameEl = document.getElementById('daily-pokemon-name');
         const spriteEl = document.getElementById('daily-pokemon-sprite');
         
@@ -97,14 +100,18 @@ function updateDailyPokemonBannerUI() {
             const paddedDex = String(found.dexNumber).padStart(3, '0');
             spriteEl.src = found.image || `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
         }
+
+        // Elemento de pré-visualização do Painel Admin (se estiver aberto)
+        const previewAdminImg = document.getElementById('admin-preview-daily-sprite');
+        if (previewAdminImg) {
+            previewAdminImg.src = found.image || `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
+        }
     }
 }
 
-// Executa a verificação assim que a página carregar
+// Executa assim que o DOM carregar para preencher a tela de login (Print 1)
 window.addEventListener('DOMContentLoaded', () => {
-    if (typeof updateDailyPokemonBannerUI === 'function') {
-        updateDailyPokemonBannerUI();
-    }
+    updateDailyPokemonBannerUI();
 });
 
 // Fallback preventivo de estado válido para evitar travamentos ao limpar o navegador
