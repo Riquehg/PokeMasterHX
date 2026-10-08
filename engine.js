@@ -990,11 +990,24 @@ window.attemptCatchWithSpecificBall = function(ballItemId, waypointId) {
 };
 
 window.attemptCatchWithBall = function(ballType, waypointId) {
-    let bonus = 0;
-    if (ballType === 'greatball') bonus = 1;
-    if (ballType === 'ultraball') bonus = 2;
-    currentEncounterState.itemBonus = bonus;
-    resolveCaptureAttempt();
+    const ballIdMap = {
+        pokeball: 'poke_ball',
+        greatball: 'ball_great',
+        ultraball: 'ball_ultra'
+    };
+
+    const ballItemId = ballIdMap[ballType];
+
+    if (!ballItemId) {
+        showCustomPopup(
+            "Poké Ball inválida",
+            "❌ Escolha uma Poké Ball válida para tentar a captura.",
+            false
+        );
+        return;
+    }
+
+    window.attemptCatchWithSpecificBall(ballItemId, waypointId);
 };
 
 // --- MODAL DETALHADO DO POKÉMON ---
@@ -1430,7 +1443,7 @@ window.buyItemFromMart = function(itemId, cost, requestedQuantity = 1) {
         return;
     }
 
-    if (Number(cp.gold) < totalCost) {
+   if (Number(cp.gold) < totalCost) {
         showCustomPopup(
             "Sem Ouro",
             `❌ Ouro insuficiente para comprar ${quantity} unidade(s).
@@ -1467,15 +1480,6 @@ Disponível: ${Number(cp.gold) || 0} 🪙`,
         showCustomPopup(
             "Erro",
             "❌ Não foi possível identificar o treinador atual.",
-            false
-        );
-        return;
-    }
-
-    if (Number(cp.gold) < totalCost) {
-        showCustomPopup(
-            "Sem Ouro",
-            `❌ Ouro insuficiente para comprar ${quantity} unidade(s).\n\nNecessário: ${totalCost} 🪙\nDisponível: ${Number(cp.gold) || 0} 🪙`,
             false
         );
         return;
@@ -1922,6 +1926,7 @@ function openEncounterModalWithPokemon(pokemon) {
         currentEncounterState.itemBonus = 0;
         currentEncounterState.battlePowerBonus = 0;
         currentEncounterState.selectedTeamMemberIndex = validIndex;
+        currentEncounterState.selectedCaptureBallId = null;
         currentEncounterState.hasAttemptedCapture = false;
     }
 
@@ -1980,33 +1985,28 @@ function useItemInEncounter(item, itemIndex) {
         if (currentEncounterState.hasAttemptedCapture) {
             showCustomPopup(
                 "Tentativa já realizada",
-                "⚠️ Você já tentou capturar este Pokémon neste turno. Uma nova tentativa será liberada somente no próximo turno.",
+                "⚠️ Você já tentou capturar neste turno. Passe a vez para liberar uma nova tentativa.",
                 false
             );
             return;
         }
-
         item.count--;
         currentEncounterState.itemBonus = Number(item.value) || 0;
         currentEncounterState.selectedCaptureBallId = item.id;
         currentEncounterState.hasAttemptedCapture = true;
-
         if (item.aura) {
             selectedBallAura = item.aura;
         }
-
         showCustomPopup(
-            "Poké Ball lançada",
-            `🔴 Você usou ${item.name}.\nBônus aplicado: +${Number(item.value) || 0}`,
+            "Poké Ball Lançada",
+            `🔴 Lançaste uma ${item.name}!\nBónus aplicado: +${Number(item.value) || 0}`,
             true
         );
-
         renderEncounterItemsList();
         updateEncounterUIInfo();
         resolveCaptureAttempt();
         return;
     }
-
     if (item.type === 'battle') {
         item.count--;
         currentEncounterState.battlePowerBonus += Number(item.value) || 2;
@@ -2182,9 +2182,10 @@ function resolveCaptureAttempt() {
         item =>
             item &&
             item.id === currentEncounterState.selectedCaptureBallId &&
-            item.type === 'sphere'
+            item.type === 'sphere' &&
+            Number(item.count) >= 0
     );
-    if (!selectedBall || Number(selectedBall.count) < 0) {
+    if (!selectedBall || Number(selectedBall.count) <= 0) {
         showCustomPopup(
             "Poké Ball inválida",
             "❌ A esfera selecionada não está disponível.",
