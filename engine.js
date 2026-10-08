@@ -4136,163 +4136,189 @@ window.joinAndStartOnlineGame = function () {
         return;
     }
 
-    // Emite o evento para o servidor iniciar a partida da sala atual
+    // Emite o evento para o servidor iniciar a partida da sala atual e garante a sincronia
     if (typeof emitSocket === 'function') {
         emitSocket('start_room_game', { roomId: currentJoinedOnlineRoomId });
+    } else {
+        const socketInstance = typeof getSocket === 'function' ? getSocket() : null;
+        if (socketInstance && typeof socketInstance.emit === 'function') {
+            socketInstance.emit('start_room_game', { roomId: currentJoinedOnlineRoomId });
+        }
     }
 };
 
-    function renderRoomsList(rooms) {
-        const container =
-            document.getElementById('rooms-list-box') ||
-            document.getElementById('online-rooms-list-container');
+function renderRoomsList(rooms) {
+    const container =
+        document.getElementById('rooms-list-box') ||
+        document.getElementById('online-rooms-list-container');
 
-        if (!container) {
-            return;
-        }
+    if (!container) {
+        return;
+    }
 
-        if (!Array.isArray(rooms) || rooms.length === 0) {
-            container.innerHTML = `
-                <p class="text-[10px] text-slate-500 text-center py-6">
-                    Nenhuma sala encontrada. Crie uma sala para começar.
-                </p>
-            `;
-            return;
-        }
+    if (!Array.isArray(rooms) || rooms.length === 0) {
+        container.innerHTML = `
+            <p class="text-[10px] text-slate-500 text-center py-6">
+                Nenhuma sala encontrada. Crie uma sala para começar.
+            </p>
+        `;
+        return;
+    }
 
-        container.innerHTML = rooms
-            .map((room, index) => {
-                const roomId = escapeAccountHtml(
-                    room?.id || room?.roomId || `room-${index}`
-                );
+    container.innerHTML = rooms
+        .map((room, index) => {
+            const roomId = escapeAccountHtml(
+                room?.id || room?.roomId || `room-${index}`
+            );
 
-                const roomName = escapeAccountHtml(
-                    room?.name || room?.roomName || 'Sala sem nome'
-                );
+            const roomName = escapeAccountHtml(
+                room?.name || room?.roomName || 'Sala sem nome'
+            );
 
-                const host = escapeAccountHtml(
-                    room?.host || 'Treinador'
-                );
+            const host = escapeAccountHtml(
+                room?.host || 'Treinador'
+            );
 
-                const playerCount = Number(
-                    room?.playerCount ?? room?.players?.length ?? 0
-                );
+            const playerCount = Number(
+                room?.playerCount ?? room?.players?.length ?? 0
+            );
 
-                const maxPlayers = Number(room?.maxPlayers) || 4;
+            const maxPlayers = Number(room?.maxPlayers) || 4;
 
-                return `
-                    <div class="flex justify-between items-center gap-2 bg-black/60 p-2.5 rounded-xl border border-amber-600/50 text-white text-[10px] my-1">
-                        <div class="min-w-0">
-                            <p class="font-bold text-amber-300 truncate">
-                                ${roomName}
-                            </p>
+            return `
+                <div class="flex justify-between items-center gap-2 bg-black/60 p-2.5 rounded-xl border border-amber-600/50 text-white text-[10px] my-1">
+                    <div class="min-w-0">
+                        <p class="font-bold text-amber-300 truncate">
+                            ${roomName}
+                        </p>
 
-                            <p class="text-slate-400 truncate">
-                                Host: ${host} · ${playerCount}/${maxPlayers}
-                            </p>
-                        </div>
-
-                        <button
-                            type="button"
-                            data-room-id="${roomId}"
-                            class="join-online-room-button bg-amber-600 hover:bg-amber-500 text-black font-bold px-3 py-1 rounded cursor-pointer whitespace-nowrap">
-                            Entrar
-                        </button>
+                        <p class="text-slate-400 truncate">
+                            Host: ${host} · ${playerCount}/${maxPlayers}
+                        </p>
                     </div>
-                `;
-            })
-            .join('');
 
-        container
-            .querySelectorAll('.join-online-room-button')
-            .forEach(button => {
-                button.addEventListener('click', () => {
-                    const roomId = button.getAttribute('data-room-id');
+                    <button
+                        type="button"
+                        data-room-id="${roomId}"
+                        class="join-online-room-button bg-amber-600 hover:bg-amber-500 text-black font-bold px-3 py-1 rounded cursor-pointer whitespace-nowrap">
+                        Entrar
+                    </button>
+                </div>
+            `;
+        })
+        .join('');
 
-                    if (roomId) {
-                        currentJoinedOnlineRoomId = roomId; // Salva a sala ativa
+    container
+        .querySelectorAll('.join-online-room-button')
+        .forEach(button => {
+            button.addEventListener('click', () => {
+                const roomId = button.getAttribute('data-room-id');
+
+                if (roomId) {
+                    currentJoinedOnlineRoomId = roomId; // Salva a sala ativa
+                    if (typeof emitSocket === 'function') {
                         emitSocket('join_room', { roomId });
+                    } else {
+                        const socketInstance = typeof getSocket === 'function' ? getSocket() : null;
+                        if (socketInstance && typeof socketInstance.emit === 'function') {
+                            socketInstance.emit('join_room', { roomId });
+                        }
                     }
-                });
+                }
             });
-    }
-
-    const currentSocketInstance = getSocket();
-    if (
-        currentSocketInstance &&
-        typeof currentSocketInstance.on === 'function'
-    ) {
-        currentSocketInstance.on('rooms_list_response', renderRoomsList);
-        currentSocketInstance.on('rooms_list', renderRoomsList);
-        currentSocketInstance.on('login_response', handleLoginResponse);
-
-        currentSocketInstance.on('room_created', () => {
-            if (typeof refreshRoomsList === 'function') {
-                refreshRoomsList();
-            }
         });
+}
 
-        currentSocketInstance.on('room_joined', roomData => {
-            if (typeof showCustomPopup === 'function') {
-                showCustomPopup(
-                    'Sala online',
-                    `Você entrou na sala ${roomData?.roomName || 'selecionada'}.`,
-                    true
-                );
-            }
-        });
+const currentSocketInstance = typeof getSocket === 'function' ? getSocket() : null;
+if (
+    currentSocketInstance &&
+    typeof currentSocketInstance.on === 'function'
+) {
+    currentSocketInstance.on('rooms_list_response', renderRoomsList);
+    currentSocketInstance.on('rooms_list', renderRoomsList);
+    currentSocketInstance.on('login_response', handleLoginResponse);
 
-        currentSocketInstance.on('lobby_error', message => {
-            if (typeof showCustomPopup === 'function') {
-                showCustomPopup(
-                    'Erro no lobby',
-                    escapeAccountHtml(
-                        message ||
-                            'Não foi possível concluir a ação na sala.'
-                    ),
-                    false
-                );
-            }
-        });
-    }
-
-    // --- CRIAÇÃO DE PERSONAGEM ---
-
-    window.finalizeCharacterCreation = function () {
-        const nameInput = document.getElementById('setup-trainer-name');
-
-        const trainerName =
-            nameInput && nameInput.value.trim()
-                ? nameInput.value.trim()
-                : 'Treinador';
-
-        if (typeof setupConfig !== 'undefined') {
-            setupConfig.mode = 'solo';
+    currentSocketInstance.on('room_created', () => {
+        if (typeof refreshRoomsList === 'function') {
+            refreshRoomsList();
         }
+    });
 
-        if (typeof startMainGame === 'function') {
-            startMainGame();
-        } else {
-            if (typeof showCustomPopup === 'function') {
-                showCustomPopup(
-                    'Erro',
-                    'A função de inicialização da partida não foi carregada.',
-                    false
-                );
-            }
-            return;
+    currentSocketInstance.on('room_joined', roomData => {
+        if (roomData?.roomId) {
+            currentJoinedOnlineRoomId = roomData.roomId;
         }
-
-        persistAfterChange();
-
         if (typeof showCustomPopup === 'function') {
             showCustomPopup(
-                'Personagem criado',
-                `Parabéns, ${trainerName}! A sua jornada foi inicializada.`,
+                'Sala online',
+                `Você entrou na sala ${roomData?.roomName || 'selecionada'}.`,
                 true
             );
         }
-    };
+    });
+
+    // Ouvinte adicionado para garantir que a partida inicie quando o servidor confirmar
+    currentSocketInstance.on('game_started', () => {
+        const setupScreen = document.getElementById('setup-screen');
+        const mainLayout = document.getElementById('main-game-layout');
+        if (setupScreen) setupScreen.classList.add('hidden');
+        if (mainLayout) mainLayout.classList.remove('hidden');
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup('Partida Iniciada', 'A batalha multijogador começou!', true);
+        }
+    });
+
+    currentSocketInstance.on('lobby_error', message => {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup(
+                'Erro no lobby',
+                escapeAccountHtml(
+                    message ||
+                        'Não foi possível concluir a ação na sala.'
+                ),
+                false
+            );
+        }
+    });
+}
+
+// --- CRIAÇÃO DE PERSONAGEM ---
+
+window.finalizeCharacterCreation = function () {
+    const nameInput = document.getElementById('setup-trainer-name');
+
+    const trainerName =
+        nameInput && nameInput.value.trim()
+            ? nameInput.value.trim()
+            : 'Treinador';
+
+    if (typeof setupConfig !== 'undefined') {
+        setupConfig.mode = 'solo';
+    }
+
+    if (typeof startMainGame === 'function') {
+        startMainGame();
+    } else {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup(
+                'Erro',
+                'A função de inicialização da partida não foi carregada.',
+                false
+            );
+        }
+        return;
+    }
+
+    persistAfterChange();
+
+    if (typeof showCustomPopup === 'function') {
+        showCustomPopup(
+            'Personagem criado',
+            `Parabéns, ${trainerName}! A sua jornada foi inicializada.`,
+            true
+        );
+    }
+};
 
    // --- PAINEL ADMINISTRATIVO COMPLETO ---
 
