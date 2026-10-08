@@ -3058,82 +3058,153 @@ function saveMonsterToVault(uniqueId) {
     appendAdventureLog(`Pokémon ${vaultMon.name} guardado no Cofre Global.`);
 }
 
-window.openVaultModal = function() {
-    let vault = [];
-    try {
-        vault = JSON.parse(localStorage.getItem('pokemon_master_trainer_vault') || '[]');
-    } catch (e) {
-        vault = [];
-    }
+// --- COFRE GLOBAL E GERENCIAMENTO DE EQUIPE ---
 
-    let vaultModal = document.getElementById('vault-modal');
+window.openVaultModal = function() {
+    let vaultModal = document.getElementById('global-vault-modal');
+    
     if (!vaultModal) {
         vaultModal = document.createElement('div');
-        vaultModal.id = 'vault-modal';
-        vaultModal.className = 'fixed inset-0 bg-black/90 z-[430] flex items-center justify-center p-4 backdrop-blur-md';
+        vaultModal.id = 'global-vault-modal';
+        vaultModal.className = 'fixed inset-0 bg-black/90 z-[500] flex items-center justify-center p-4 backdrop-blur-md';
         document.body.appendChild(vaultModal);
     }
 
-    let listHtml = '';
-    if (vault.length === 0) {
-        listHtml = `<p class="text-xs text-slate-400 text-center col-span-full py-8">O cofre está vazio. Jogue, evolua e guarde os seus melhores Pokémon!</p>`;
-    } else {
-        vault.forEach((mon, index) => {
-            const isShiny = mon.isShiny;
-            const img = (isShiny && mon.shinyImage) ? mon.shinyImage : mon.image;
-            listHtml += `
-                <div class="bg-black/60 border-2 ${isShiny ? 'border-amber-400' : 'border-amber-700'} rounded-2xl p-3 flex flex-col justify-between items-center text-white space-y-2">
-                    <span class="text-[10px] font-bold text-amber-300">${mon.name}${isShiny ? '✨' : ''}</span>
-                    <img src="${img}" class="w-12 h-12 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
-                    <div class="text-[9px] text-center text-slate-300">
-                        Nv.${mon.level || 1} | STR:${mon.str || 4}
+    renderVaultModalContent(vaultModal);
+    vaultModal.classList.remove('hidden');
+};
+
+window.closeVaultModal = function() {
+    const vaultModal = document.getElementById('global-vault-modal');
+    if (vaultModal) {
+        vaultModal.classList.add('hidden');
+    }
+};
+
+window.renderVaultModalContent = function(modalElement) {
+    const cp = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[0] || {});
+    const activeTeam = cp.activeTeam || [];
+    const pcBox = cp.pcBox || cp.box || [];
+
+    // Renderiza Slots Ativos (Equipe)
+    let activeSlotsHtml = '';
+    for (let i = 0; i < 6; i++) {
+        const mon = activeTeam[i];
+        if (mon) {
+            const spriteUrl = mon.image || `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/${String(mon.dexNumber || '001').padStart(3, '0')}.png`;
+            activeSlotsHtml += `
+                <div class="bg-blue-950/80 border-2 border-amber-400 p-2 rounded-xl flex flex-col items-center justify-between relative group shadow-md">
+                    <span class="absolute top-1 left-1 bg-black/60 text-[8px] text-amber-300 px-1 rounded">#${i+1}</span>
+                    <img src="${spriteUrl}" class="w-12 h-12 object-contain drop-shadow my-1">
+                    <div class="text-center w-full truncate">
+                        <p class="text-[10px] font-bold text-white truncate">${mon.name}</p>
+                        <p class="text-[8px] text-amber-300">Nv. ${mon.level || 1}</p>
                     </div>
-                    <button onclick="withdrawMonsterFromVault(${index})" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-1 rounded text-[9px] uppercase shadow cursor-pointer">
-                        Resgatar
+                    <button onclick="window.movePokemonToBox(${i})" class="mt-1 bg-red-800 hover:bg-red-700 text-white text-[8px] font-bold px-2 py-0.5 rounded cursor-pointer w-full">
+                        Guardar 📥
+                    </button>
+                </div>
+            `;
+        } else {
+            activeSlotsHtml += `
+                <div class="bg-black/40 border-2 border-dashed border-blue-500/40 p-2 rounded-xl flex flex-col items-center justify-center text-slate-500 min-h-[90px]">
+                    <span class="text-[9px]">Vazio #${i+1}</span>
+                </div>
+            `;
+        }
+    }
+
+    // Renderiza Slots do Cofre / PC Box
+    let pcSlotsHtml = '';
+    if (pcBox.length === 0) {
+        pcSlotsHtml = `
+            <div class="col-span-full text-center py-8 text-slate-400 text-xs">
+                O seu cofre global está vazio. Capture mais Pokémon nas partidas para armazená-los aqui!
+            </div>
+        `;
+    } else {
+        pcBox.forEach((mon, index) => {
+            const spriteUrl = mon.image || `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/${String(mon.dexNumber || '001').padStart(3, '0')}.png`;
+            pcSlotsHtml += `
+                <div class="bg-purple-950/60 border border-purple-500/60 p-2 rounded-xl flex flex-col items-center justify-between relative shadow hover:border-amber-400 transition-all">
+                    <img src="${spriteUrl}" class="w-12 h-12 object-contain drop-shadow my-1">
+                    <div class="text-center w-full truncate">
+                        <p class="text-[10px] font-bold text-white truncate">${mon.name}</p>
+                        <p class="text-[8px] text-purple-300">Nv. ${mon.level || 1}</p>
+                    </div>
+                    <button onclick="window.movePokemonToTeam(${index})" class="mt-1 bg-emerald-700 hover:bg-emerald-600 text-white text-[8px] font-bold px-2 py-0.5 rounded cursor-pointer w-full">
+                        Usar no Time 🚀
                     </button>
                 </div>
             `;
         });
     }
 
-    vaultModal.innerHTML = `
-        <div class="trainer-card max-w-2xl w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
-            <div class="flex justify-between items-center border-b border-amber-900/60 pb-2">
-                <span class="text-xs font-black text-amber-400 font-cinzel">📦 COFRE GLOBAL DE HERANÇA</span>
-                <button onclick="document.getElementById('vault-modal').remove()" class="text-amber-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-amber-800">✕ Fechar</button>
+    modalElement.innerHTML = `
+        <div class="trainer-card max-w-4xl w-full p-6 space-y-5 border-4 border-purple-600 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
+            <div class="flex justify-between items-center border-b border-purple-900 pb-2">
+                <span class="text-xs font-black text-purple-300 font-cinzel">
+                    <i class="fa-solid fa-box-archive"></i> COFRE GLOBAL / GERENCIADOR DE EQUIPE
+                </span>
+                <button type="button" onclick="closeVaultModal()" class="text-purple-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-purple-800 cursor-pointer">
+                    ✕ Fechar
+                </button>
             </div>
-            <div class="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-72 overflow-y-auto p-1">
-                ${listHtml}
+
+            <!-- EQUIPE ATIVA -->
+            <div class="space-y-2">
+                <p class="text-[11px] font-bold text-amber-300">Equipe Ativa (Máximo 6 Pokémon):</p>
+                <div class="grid grid-cols-6 gap-2 bg-black/50 p-3 rounded-xl border border-blue-900/60">
+                    ${activeSlotsHtml}
+                </div>
+            </div>
+
+            <!-- COFRE / PC BOX -->
+            <div class="space-y-2">
+                <p class="text-[11px] font-bold text-purple-300">Pokémon Armazenados no Cofre (PC Box):</p>
+                <div class="grid grid-cols-6 gap-2 bg-black/60 p-3 rounded-xl border border-purple-900/60 max-h-56 overflow-y-auto">
+                    ${pcSlotsHtml}
+                </div>
             </div>
         </div>
     `;
-    vaultModal.classList.remove('hidden');
 };
 
-function withdrawMonsterFromVault(vaultIndex) {
-    let vault = [];
-    try {
-        vault = JSON.parse(localStorage.getItem('pokemon_master_trainer_vault') || '[]');
-    } catch (e) {
-        vault = [];
+window.movePokemonToBox = function(teamIndex) {
+    const cp = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[0] || {});
+    if (!cp.activeTeam || !cp.activeTeam[teamIndex]) return;
+
+    if (!cp.pcBox) cp.pcBox = [];
+
+    const removedMon = cp.activeTeam.splice(teamIndex, 1)[0];
+    cp.pcBox.push(removedMon);
+
+    // Atualiza a visualização do cofre e do HUB
+    const modal = document.getElementById('global-vault-modal');
+    if (modal) renderVaultModalContent(modal);
+    if (typeof renderHubActiveTeam === 'function') renderHubActiveTeam(cp);
+};
+
+window.movePokemonToTeam = function(boxIndex) {
+    const cp = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[0] || {});
+    if (!cp.pcBox || !cp.pcBox[boxIndex]) return;
+
+    if (!cp.activeTeam) cp.activeTeam = [];
+    if (cp.activeTeam.length >= 6) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup('Equipe Cheia', 'Sua equipe ativa já possui 6 Pokémon. Guarde um na Box antes de adicionar outro.', false);
+        }
+        return;
     }
 
-    const monToWithdraw = vault[vaultIndex];
-    if (!monToWithdraw) return;
+    const selectedMon = cp.pcBox.splice(boxIndex, 1)[0];
+    cp.activeTeam.push(selectedMon);
 
-    const cp = getCurrentPlayer();
-    if (!Array.isArray(cp.pcBox)) cp.pcBox = [];
-    cp.pcBox.push(monToWithdraw);
-
-    vault.splice(vaultIndex, 1);
-    localStorage.setItem('pokemon_master_trainer_vault', JSON.stringify(vault));
-
-    const modal = document.getElementById('vault-modal');
-    if (modal) modal.remove();
-
-    showCustomPopup("Resgatado!", `O ${monToWithdraw.name} foi transferido do cofre para a sua PC Box!`, true);
-    renderBottomPanel();
-}
+    // Atualiza a visualização do cofre e do HUB
+    const modal = document.getElementById('global-vault-modal');
+    if (modal) renderVaultModalContent(modal);
+    if (typeof renderHubActiveTeam === 'function') renderHubActiveTeam(cp);
+};
 
 // --- SISTEMA DE TROCAS E CONTAS ONLINE ---
 
