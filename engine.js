@@ -4243,7 +4243,7 @@ function withdrawMonsterFromVault(vaultIndex) {
         }
     };
 
-    // --- PAINEL ADMINISTRATIVO COMPLETO ---
+   // --- PAINEL ADMINISTRATIVO COMPLETO ---
 
     let adminUsersListenerRegistered = false;
 
@@ -4329,10 +4329,10 @@ function withdrawMonsterFromVault(vaultIndex) {
 
                         const lastLogin = user?.lastLogin
                             ? escapeAccountHtml(
-                                  new Date(
-                                      user.lastLogin
-                                  ).toLocaleString('pt-BR')
-                              )
+                                    new Date(
+                                        user.lastLogin
+                                    ).toLocaleString('pt-BR')
+                                )
                             : 'Nunca';
 
                         const gold = Number(
@@ -4422,11 +4422,16 @@ function withdrawMonsterFromVault(vaultIndex) {
                     </button>
                 </div>
 
-                <!-- SEÇÃO CONFIGURAR POKÉMON DO DIA -->
+                <!-- SEÇÃO CONFIGURAR POKÉMON DO DIA COM SUPORTE AO CARD-DATA.JS -->
                 <div class="bg-black/60 border-2 border-amber-500/60 p-4 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
-                    <div class="text-left space-y-1">
-                        <p class="text-xs font-bold text-amber-300">⭐ Configurar Pokémon do Dia</p>
-                        <p class="text-[10px] text-slate-300">Atual: <strong class="text-amber-400">${dailyFeaturedPokemonConfig.pokemonName}</strong> (Bónus: ${dailyFeaturedPokemonConfig.bonusItemName})</p>
+                    <div class="flex items-center gap-3 text-left">
+                        <div class="w-12 h-12 bg-black/80 rounded-xl border border-amber-400/60 flex items-center justify-center overflow-hidden">
+                            <img id="admin-preview-daily-sprite" src="" class="w-10 h-10 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-xs font-bold text-amber-300">⭐ Configurar Pokémon do Dia</p>
+                            <p class="text-[10px] text-slate-300">Atual: <strong class="text-amber-400">${dailyFeaturedPokemonConfig.pokemonName || 'Nenhum'}</strong> (Bónus: ${dailyFeaturedPokemonConfig.bonusItemName})</p>
+                        </div>
                     </div>
                     <button type="button" onclick="window.openAdminDailyFeaturedModal()" class="bg-amber-600 hover:bg-amber-500 text-black font-black px-4 py-2 rounded-xl text-xs uppercase shadow cursor-pointer">
                         Configurar Destaque
@@ -4469,6 +4474,15 @@ function withdrawMonsterFromVault(vaultIndex) {
 
         modalElement.classList.remove('hidden');
 
+        // Carregar imagem de pré-visualização atual do Pokémon do dia no admin, se existir no catálogo
+        if (typeof MONSTER_CATALOG !== 'undefined' && dailyFeaturedPokemonConfig.pokemonId) {
+            const foundMon = MONSTER_CATALOG.find(m => String(m.id).toLowerCase() === String(dailyFeaturedPokemonConfig.pokemonId).toLowerCase() || String(m.dexNumber) === String(dailyFeaturedPokemonConfig.pokemonId));
+            const previewImg = document.getElementById('admin-preview-daily-sprite');
+            if (foundMon && previewImg) {
+                previewImg.src = foundMon.image || (foundMon.dexNumber ? `${SUPABASE_STORAGE_URL}monsters/${String(foundMon.dexNumber).padStart(3, '0')}.png` : '');
+            }
+        }
+
         document
             .getElementById('close-admin-panel-button')
             ?.addEventListener('click', () => {
@@ -4504,21 +4518,54 @@ function withdrawMonsterFromVault(vaultIndex) {
     }
 
     window.openAdminDailyFeaturedModal = function() {
-        const newMon = window.prompt("Insira o ID do Pokémon do Dia (ex: charizard, mewtwo, pikachu):", dailyFeaturedPokemonConfig.pokemonId);
-        if (!newMon) return;
-        const newItem = window.prompt("Insira o ID do item bônus (ex: item_rarecandy, ball_ultra, item_potion):", dailyFeaturedPokemonConfig.bonusItem);
+        const inputQuery = window.prompt("Insira o ID ou o número da Pokédex do Pokémon do Dia (ex: charizard, 6, mewtwo):", dailyFeaturedPokemonConfig.pokemonId || '1');
+        if (!inputQuery) return;
+
+        const queryClean = inputQuery.trim().toLowerCase();
+        
+        // Verifica no MONSTER_CATALOG se o Pokémon existe
+        let matchedMon = null;
+        if (typeof MONSTER_CATALOG !== 'undefined') {
+            matchedMon = MONSTER_CATALOG.find(m => 
+                String(m.id).toLowerCase() === queryClean || 
+                String(m.dexNumber) === queryClean ||
+                String(m.name).toLowerCase() === queryClean
+            );
+        }
+
+        if (!matchedMon) {
+            if (typeof showCustomPopup === 'function') {
+                showCustomPopup("❌ Pokémon não encontrado", `Não foi encontrado nenhum Pokémon com ID/Número "${inputQuery}" no catálogo cards-data.js.`, false);
+            }
+            return;
+        }
+
+        const newItem = window.prompt("Insira o ID do item bônus (ex: item_rarecandy, ball_ultra, item_potion):", dailyFeaturedPokemonConfig.bonusItem || 'ball_ultra');
         if (!newItem) return;
 
-        dailyFeaturedPokemonConfig.pokemonId = newMon.trim().toLowerCase();
-        dailyFeaturedPokemonConfig.pokemonName = newMon.charAt(0).toUpperCase() + newMon.slice(1);
+        // Atribui os dados corretos estruturados do catálogo
+        dailyFeaturedPokemonConfig.pokemonId = matchedMon.id;
+        dailyFeaturedPokemonConfig.pokemonName = matchedMon.name;
         dailyFeaturedPokemonConfig.bonusItem = newItem.trim().toLowerCase();
         dailyFeaturedPokemonConfig.bonusItemName = newItem.replace('item_', '').replace('ball_', '').toUpperCase();
 
-        showCustomPopup("✨ Pokémon do Dia Atualizado", `Novo destaque configurado com sucesso:\n\nPokémon: ${dailyFeaturedPokemonConfig.pokemonName}\nItem Bônus: ${dailyFeaturedPokemonConfig.bonusItemName}`, true);
-        socket.emit('global_notification', {
-            title: "⭐ POKÉMON DO DIA",
-            message: `O Pokémon em destaque de hoje é ${dailyFeaturedPokemonConfig.pokemonName}! Capture-o para receber bônus especiais!`
-        });
+        // Atualiza a interface visualmente se estiver em execução
+        const dailyBannerSprite = document.getElementById('daily-pokemon-sprite');
+        const dailyBannerName = document.getElementById('daily-pokemon-name');
+        if (dailyBannerName) dailyBannerName.textContent = matchedMon.name;
+        if (dailyBannerSprite) {
+            const paddedDex = String(matchedMon.dexNumber).padStart(3, '0');
+            dailyBannerSprite.src = matchedMon.image || `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
+        }
+
+        showCustomPopup("✨ Pokémon do Dia Atualizado", `Novo destaque configurado com sucesso:\n\nPokémon: ${matchedMon.name} (#${matchedMon.dexNumber})\nItem Bônus: ${dailyFeaturedPokemonConfig.bonusItemName}`, true);
+        
+        if (typeof emitSocket === 'function') {
+            emitSocket('global_notification', {
+                title: "⭐ POKÉMON DO DIA",
+                message: `O Pokémon em destaque de hoje é ${matchedMon.name}! Capture-o no mapa para receber bônus especiais!`
+            });
+        }
     };
 
     window.adminGiveGold = function (email) {
@@ -4545,15 +4592,27 @@ function withdrawMonsterFromVault(vaultIndex) {
     };
 
     window.adminGivePokemon = function(email) {
-        const monId = window.prompt(`Insira o ID do Pokémon para enviar ao treinador ${email} (ex: charizard, mewtwo):`, 'charizard');
+        const monId = window.prompt(`Insira o ID ou número do Pokémon para enviar ao treinador ${email} (ex: charizard, 6):`, 'charizard');
         if (!monId) return;
+
+        const queryClean = monId.trim().toLowerCase();
+        let matchedMon = null;
+        if (typeof MONSTER_CATALOG !== 'undefined') {
+            matchedMon = MONSTER_CATALOG.find(m => 
+                String(m.id).toLowerCase() === queryClean || 
+                String(m.dexNumber) === queryClean ||
+                String(m.name).toLowerCase() === queryClean
+            );
+        }
+
+        const finalMonId = matchedMon ? matchedMon.id : queryClean;
 
         emitSocket('admin_action', {
             action: 'give_pokemon',
             email,
-            pokemonId: monId.trim().toLowerCase()
+            pokemonId: finalMonId
         });
-        showCustomPopup("Pokémon Enviado", `O Pokémon foi adicionado à conta ${email} com sucesso!`, true);
+        showCustomPopup("Pokémon Enviado", `O Pokémon ${matchedMon ? matchedMon.name : finalMonId} foi adicionado à conta ${email} com sucesso!`, true);
     };
 
     window.adminGiveItem = function(email) {
