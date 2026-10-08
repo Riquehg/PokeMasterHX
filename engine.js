@@ -5088,7 +5088,7 @@ function renderAdminDashboard(modalElement, users) {
                         <p class="text-[10px] text-slate-300">Atual: <strong class="text-amber-400">${dailyFeaturedPokemonConfig.pokemonName || 'Nenhum'}</strong> (Bónus: ${dailyFeaturedPokemonConfig.bonusItemName})</p>
                     </div>
                 </div>
-                <button type="button" onclick="window.openAdminDailyFeaturedModal()" class="bg-amber-600 hover:bg-amber-500 text-black font-black px-4 py-2 rounded-xl text-xs uppercase shadow cursor-pointer">
+                </button type="button" onclick="window.openAdminDailyFeaturedModal()" class="bg-amber-600 hover:bg-amber-500 text-black font-black px-4 py-2 rounded-xl text-xs uppercase shadow cursor-pointer">
                     Configurar Destaque
                 </button>
             </div>
