@@ -4069,136 +4069,57 @@ window.movePokemonToTeam = function(boxIndex) {
             }
         }
     };
-    // --- LOBBY ONLINE ---
+// --- LOBBY ONLINE ---
 
-    window.createOnlineRoom = function () {
-                        const roomName = window.prompt(
-            'Insira o nome da sala online:',
-            'Sala de Kanto'
-        );
+window.createOnlineRoom = function () {
+    const roomName = window.prompt('Insira o nome da sala online:', 'Sala de Kanto');
+    if (!roomName || !roomName.trim()) return;
 
-        if (!roomName || !roomName.trim()) {
-            return;
+    const creatorPlayer = typeof getOnlinePlayerPayload === 'function' ? getOnlinePlayerPayload() : null;
+
+    emitSocket('create_room', {
+        roomName: roomName.trim(),
+        host: typeof currentAuthenticatedAccount !== 'undefined' && currentAuthenticatedAccount 
+              ? currentAuthenticatedAccount 
+              : (creatorPlayer?.name || 'Treinador'),
+        maxPlayers: 4,
+        player: creatorPlayer,
+        accountEmail: typeof currentAuthenticatedAccount !== 'undefined' ? currentAuthenticatedAccount : null
+    });
+};
+
+window.searchOnlineRooms = function () {
+    if (emitSocket('get_rooms_list')) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup('Procurando salas', 'Buscando salas online disponíveis.', true);
         }
-
-        const creatorPlayer = typeof getOnlinePlayerPayload === 'function'
-            ? getOnlinePlayerPayload()
-            : null;
-
-        emitSocket('create_room', {
-            roomName: roomName.trim(),
-            host:
-                typeof currentAuthenticatedAccount !== 'undefined' &&
-                currentAuthenticatedAccount
-                    ? currentAuthenticatedAccount
-                    : creatorPlayer?.name || 'Treinador',
-            maxPlayers: 4,
-            player: creatorPlayer,
-            accountEmail:
-                typeof currentAuthenticatedAccount !== 'undefined'
-                    ? currentAuthenticatedAccount
-                    : null
-        });
-    };
-
-    window.searchOnlineRooms = function () {
-        if (emitSocket('get_rooms_list')) {
-            if (typeof showCustomPopup === 'function') {
-                showCustomPopup(
-                    'Procurando salas',
-                    'Buscando salas online disponíveis.',
-                    true
-                );
-            }
-        }
-    };
-
-    window.refreshRoomsList = function () {
-        if (emitSocket('get_rooms_list')) {
-            if (typeof showCustomPopup === 'function') {
-                showCustomPopup(
-                    'Salas atualizadas',
-                    'A lista de salas foi solicitada ao servidor.',
-                    true
-                );
-            }
-        }
-    };
-
-    window.sendLobbyChatMessage = function () {
-        const input = document.getElementById('lobby-chat-input');
-
-        if (!input || !input.value.trim()) {
-            return;
-        }
-
-        emitSocket('lobby_chat_message', {
-            roomId: currentJoinedOnlineRoomId,
-            message: input.value.trim(),
-            text: input.value.trim(),
-            sender:
-                typeof currentAuthenticatedAccount !== 'undefined' &&
-                currentAuthenticatedAccount
-                    ? currentAuthenticatedAccount
-                    : getCurrentPlayer()?.name || 'Treinador'
-        });
-
-        input.value = '';
-    };
-
-    if (typeof window.sendChatMessage !== 'function') {
-        window.sendChatMessage = function () {
-            const chatInput =
-                document.getElementById('chat-input-field') ||
-                document.getElementById('map-chat-input');
-
-            if (!chatInput || !chatInput.value.trim()) {
-                return;
-            }
-
-            const message = chatInput.value.trim();
-            const sender =
-                typeof currentAuthenticatedAccount !== 'undefined' &&
-                currentAuthenticatedAccount
-                    ? currentAuthenticatedAccount
-                    : getCurrentPlayer()?.name || 'Treinador';
-
-            if (!Array.isArray(gameState.chatMessages)) {
-                gameState.chatMessages = [];
-            }
-
-            gameState.chatMessages.push({
-                sender,
-                text: message
-            });
-
-            if (gameState.chatMessages.length > 100) {
-                gameState.chatMessages =
-                    gameState.chatMessages.slice(-100);
-            }
-
-            if (typeof renderChatMessages === 'function') {
-                renderChatMessages();
-            }
-
-            emitSocket('room_chat_message', {
-                roomId: currentJoinedOnlineRoomId,
-                sender,
-                message,
-                text: message
-            });
-
-            chatInput.value = '';
-        };
     }
+};
 
-    if (typeof window.sendMessage !== 'function') {
-        window.sendMessage = function () {
-            window.sendChatMessage();
-        };
+window.refreshRoomsList = function () {
+    if (emitSocket('get_rooms_list')) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup('Salas atualizadas', 'A lista de salas foi solicitada ao servidor.', true);
+        }
     }
+};
 
-    // --- CORREÇÃO DO BOTÃO DE INICIAR PARTIDA ONLINE ---
+window.sendLobbyChatMessage = function () {
+    const input = document.getElementById('lobby-chat-input');
+    if (!input || !input.value.trim()) return;
+
+    emitSocket('lobby_chat_message', {
+        roomId: currentJoinedOnlineRoomId,
+        message: input.value.trim(),
+        text: input.value.trim(),
+        sender: typeof currentAuthenticatedAccount !== 'undefined' && currentAuthenticatedAccount
+                ? currentAuthenticatedAccount
+                : (getCurrentPlayer()?.name || 'Treinador')
+    });
+    input.value = '';
+};
+
+// --- CORREÇÃO DO BOTÃO DE INICIAR PARTIDA ONLINE ---
 let currentJoinedOnlineRoomId = null;
 let onlineRoomStarted = false;
 let onlineBoardReady = false;
@@ -4207,247 +4128,78 @@ let onlineLastTurnKey = null;
 let onlineActionWrappersInstalled = false;
 
 function getOnlinePlayerIdentity(player) {
-    if (!player || typeof player !== 'object') {
-        return '';
-    }
-
-    return String(
-        player.playerId ||
-        player.accountEmail ||
-        player.email ||
-        player.name ||
-        ''
-    ).trim().toLowerCase();
+    if (!player || typeof player !== 'object') return '';
+    return String(player.playerId || player.accountEmail || player.email || player.name || '').trim().toLowerCase();
 }
 
 function getLocalOnlineIdentity() {
-    if (onlineLocalPlayerId) {
-        return String(onlineLocalPlayerId).trim().toLowerCase();
-    }
-
-    const accountEmail =
-        typeof currentAuthenticatedAccount !== 'undefined'
-            ? String(currentAuthenticatedAccount || '').trim().toLowerCase()
-            : '';
-
+    if (onlineLocalPlayerId) return String(onlineLocalPlayerId).trim().toLowerCase();
+    const accountEmail = typeof currentAuthenticatedAccount !== 'undefined' ? String(currentAuthenticatedAccount || '').trim().toLowerCase() : '';
     if (accountEmail) {
         onlineLocalPlayerId = accountEmail;
         return accountEmail;
     }
-
     return '';
 }
 
 function isOnlineMyTurn() {
-    if (
-        !onlineRoomStarted ||
-        !gameState ||
-        !Array.isArray(gameState.players)
-    ) {
-        return true;
-    }
-
-    const activePlayer =
-        gameState.players[Number(gameState.currentPlayerIndex) || 0];
-
+    if (!onlineRoomStarted || !gameState || !Array.isArray(gameState.players)) return true;
+    const activePlayer = gameState.players[Number(gameState.currentPlayerIndex) || 0];
     const activeIdentity = getOnlinePlayerIdentity(activePlayer);
     const localIdentity = getLocalOnlineIdentity();
-
-    return Boolean(
-        activeIdentity &&
-        localIdentity &&
-        activeIdentity === localIdentity
-    );
+    return Boolean(activeIdentity && localIdentity && activeIdentity === localIdentity);
 }
 
 function guardOnlineAction(actionName) {
-    if (!onlineRoomStarted || isOnlineMyTurn()) {
-        return true;
-    }
-
+    if (!onlineRoomStarted || isOnlineMyTurn()) return true;
     if (typeof showCustomPopup === 'function') {
-        showCustomPopup(
-            'Aguarde a sua vez',
-            `A ação "${actionName}" está bloqueada enquanto ${gameState.players?.[gameState.currentPlayerIndex]?.name || 'outro jogador'} estiver jogando.`,
-            false
-        );
+        showCustomPopup('Aguarde a sua vez', `A ação "${actionName}" está bloqueada enquanto ${gameState.players?.[gameState.currentPlayerIndex]?.name || 'outro jogador'} estiver jogando.`, false);
     }
-
     return false;
 }
 
 function requestOnlineRoomState() {
-    const socketInstance =
-        typeof getSocket === 'function'
-            ? getSocket()
-            : null;
-
-    if (
-        socketInstance &&
-        typeof socketInstance.emit === 'function' &&
-        currentJoinedOnlineRoomId
-    ) {
+    const socketInstance = typeof getSocket === 'function' ? getSocket() : null;
+    if (socketInstance && typeof socketInstance.emit === 'function' && currentJoinedOnlineRoomId) {
         socketInstance.emit('request_room_state', {
             roomId: currentJoinedOnlineRoomId,
-            accountEmail:
-                typeof currentAuthenticatedAccount !== 'undefined'
-                    ? currentAuthenticatedAccount
-                    : null
+            accountEmail: typeof currentAuthenticatedAccount !== 'undefined' ? currentAuthenticatedAccount : null
         });
     }
 }
 
 function getOnlinePlayerPayload() {
     try {
-        const player =
-            typeof getCurrentPlayer === 'function'
-                ? getCurrentPlayer()
-                : null;
-
-        if (!player) {
-            return null;
-        }
-
-        const accountEmail =
-            typeof currentAuthenticatedAccount !== 'undefined'
-                ? String(currentAuthenticatedAccount || '').trim().toLowerCase()
-                : '';
-
-        const playerId = String(
-            accountEmail ||
-            player.playerId ||
-            player.accountEmail ||
-            player.email ||
-            player.name ||
-            ''
-        ).trim().toLowerCase();
-
-        if (playerId && !onlineLocalPlayerId) {
-            onlineLocalPlayerId = playerId;
-        }
-
-        return {
-            ...player,
-            playerId,
-            accountEmail: accountEmail || player.accountEmail || null
-        };
-    } catch (error) {
-        return null;
-    }
-}
-
-function extractOnlineGameState(data) {
-    if (!data || typeof data !== 'object') {
-        return null;
-    }
-
-    const possibleStates = [
-        data.gameState,
-        data.game_state,
-        data.roomState?.gameState,
-        data.roomState?.game_state,
-        data.room?.gameState,
-        data.room?.game_state,
-        data.state?.gameState,
-        data.state?.game_state,
-        data.state
-    ];
-
-    for (const candidate of possibleStates) {
-        if (
-            candidate &&
-            typeof candidate === 'object' &&
-            Array.isArray(candidate.players)
-        ) {
-            return candidate;
-        }
-    }
-
-    if (Array.isArray(data.players)) {
-        return {
-            ...(typeof gameState !== 'undefined' && gameState
-                ? gameState
-                : {}),
-            players: data.players,
-            currentPlayerIndex: Number(data.currentPlayerIndex) || 0,
-            turn: Number(data.turn) || 1
-        };
-    }
-
-    return null;
-}
-
-function extractOnlineBoard(data) {
-    if (!data || typeof data !== 'object') {
-        return null;
-    }
-
-    const possibleBoards = [
-        data.boardPokemonCards,
-        data.board_pokemon_cards,
-        data.roomState?.boardPokemonCards,
-        data.roomState?.board_pokemon_cards,
-        data.room?.boardPokemonCards,
-        data.room?.board_pokemon_cards,
-        data.state?.boardPokemonCards,
-        data.state?.board_pokemon_cards
-    ];
-
-    for (const candidate of possibleBoards) {
-        if (
-            candidate &&
-            typeof candidate === 'object' &&
-            !Array.isArray(candidate)
-        ) {
-            return candidate;
-        }
-    }
-
-    return null;
+        const player = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : null;
+        if (!player) return null;
+        const accountEmail = typeof currentAuthenticatedAccount !== 'undefined' ? String(currentAuthenticatedAccount || '').trim().toLowerCase() : '';
+        const playerId = String(accountEmail || player.playerId || player.accountEmail || player.email || player.name || '').trim().toLowerCase();
+        if (playerId && !onlineLocalPlayerId) onlineLocalPlayerId = playerId;
+        return { ...player, playerId, accountEmail: accountEmail || player.accountEmail || null };
+    } catch (error) { return null; }
 }
 
 function applyOnlineRoomState(data) {
     const sharedState = extractOnlineGameState(data);
     const sharedBoard = extractOnlineBoard(data);
-
-    if (!sharedState || !Array.isArray(sharedState.players)) {
-        return false;
-    }
+    if (!sharedState || !Array.isArray(sharedState.players)) return false;
 
     const normalizedPlayers = sharedState.players.map(player => ({
         ...player,
         playerId: getOnlinePlayerIdentity(player),
-        activeTeam: Array.isArray(player?.activeTeam)
-            ? player.activeTeam
-            : [],
-        pcBox: Array.isArray(player?.pcBox)
-            ? player.pcBox
-            : [],
-        inventory: Array.isArray(player?.inventory)
-            ? player.inventory
-            : [],
-        badges: Array.isArray(player?.badges)
-            ? player.badges
-            : [],
-        equipmentSlots: Array.isArray(player?.equipmentSlots)
-            ? player.equipmentSlots
-            : [null, null]
+        activeTeam: Array.isArray(player?.activeTeam) ? player.activeTeam : [],
+        pcBox: Array.isArray(player?.pcBox) ? player.pcBox : [],
+        inventory: Array.isArray(player?.inventory) ? player.inventory : [],
+        badges: Array.isArray(player?.badges) ? player.badges : [],
+        equipmentSlots: Array.isArray(player?.equipmentSlots) ? player.equipmentSlots : [null, null]
     }));
-
-    const previousTurnKey = onlineLastTurnKey;
 
     gameState = {
         ...sharedState,
         setupDone: true,
         online: true,
         onlineRoomId: currentJoinedOnlineRoomId,
-        currentPlayerIndex: Math.max(
-            0,
-            Math.min(
-                normalizedPlayers.length - 1,
-                Number(sharedState.currentPlayerIndex) || 0
-            )
-        ),
+        currentPlayerIndex: Math.max(0, Math.min(normalizedPlayers.length - 1, Number(sharedState.currentPlayerIndex) || 0)),
         turn: Math.max(1, Number(sharedState.turn) || 1),
         players: normalizedPlayers
     };
@@ -4458,107 +4210,14 @@ function applyOnlineRoomState(data) {
     } else {
         onlineBoardReady = false;
     }
-
-    const currentTurnKey =
-        `${gameState.turn}:${gameState.currentPlayerIndex}`;
-
-    onlineLastTurnKey = currentTurnKey;
-
-    if (
-        previousTurnKey !== currentTurnKey &&
-        typeof movementState !== 'undefined'
-    ) {
-        movementState.isMoving = false;
-        movementState.validDestinations = [];
-        movementState.diceRolledValue = 0;
-        movementState.hasRolledThisTurn = !isOnlineMyTurn();
-    }
-
-    if (typeof ensureValidGameState === 'function') {
-        ensureValidGameState();
-    }
-
+    if (typeof ensureValidGameState === 'function') ensureValidGameState();
     return true;
 }
 
-function refreshOnlineGameInterface() {
-    if (typeof ensureValidGameState === 'function') {
-        ensureValidGameState();
-    }
-
-    if (typeof renderTeamCardSlots === 'function') {
-        renderTeamCardSlots();
-    }
-
-    if (typeof renderEquipmentSlots === 'function') {
-        renderEquipmentSlots();
-    }
-
-    if (typeof renderBottomPanel === 'function') {
-        renderBottomPanel();
-    }
-
-    if (typeof renderChatMessages === 'function') {
-        renderChatMessages();
-    }
-
-    if (typeof updatePlayerUI === 'function') {
-        updatePlayerUI();
-    }
-
-    if (typeof renderBoardMap === 'function') {
-        renderBoardMap();
-    }
-}
-
-function showOnlineGameLayout() {
-    const setupScreen = document.getElementById('setup-screen');
-    const mainLayout = document.getElementById('main-game-layout');
-    const authContainer = document.getElementById('auth-container');
-    const onlineLobby = document.getElementById('online-lobby-container');
-    const trainerMenu = document.getElementById('trainer-main-menu');
-    const characterCreation = document.getElementById(
-        'character-creation-container'
-    );
-    const dashboard = document.getElementById('post-login-dashboard');
-
-    setupScreen?.classList.add('hidden');
-    authContainer?.classList.add('hidden');
-    onlineLobby?.classList.add('hidden');
-    trainerMenu?.classList.add('hidden');
-    characterCreation?.classList.add('hidden');
-    dashboard?.classList.add('hidden');
-    mainLayout?.classList.remove('hidden');
-
-    refreshOnlineGameInterface();
-
-    if (typeof showCustomPopup === 'function') {
-        showCustomPopup(
-            'Partida Online',
-            'Todos os jogadores estão conectados ao mesmo estado de partida e ao mesmo tabuleiro.',
-            true
-        );
-    }
-}
-
 function syncOnlineGameState(changeType = 'state_update') {
-    if (!onlineRoomStarted || !currentJoinedOnlineRoomId) {
-        return false;
-    }
-
-    const socketInstance =
-        typeof getSocket === 'function'
-            ? getSocket()
-            : null;
-
-    if (
-        !socketInstance ||
-        typeof socketInstance.emit !== 'function'
-    ) {
-        return false;
-    }
-
-    const actorPlayer = getOnlinePlayerPayload();
+    if (!onlineRoomStarted || !currentJoinedOnlineRoomId) return false;
+    const socketInstance = typeof getSocket === 'function' ? getSocket() : null;
+    if (!socketInstance || typeof socketInstance.emit !== 'function') return false;
 
     socketInstance.emit('update_game_state', {
         roomId: currentJoinedOnlineRoomId,
@@ -4566,577 +4225,38 @@ function syncOnlineGameState(changeType = 'state_update') {
         type: changeType,
         action: changeType,
         actorPlayerId: onlineLocalPlayerId,
-        actorEmail:
-            typeof currentAuthenticatedAccount !== 'undefined'
-                ? currentAuthenticatedAccount
-                : null,
         gameState,
-        boardPokemonCards: onlineBoardReady
-            ? boardPokemonCards
-            : {},
-        player: actorPlayer,
+        boardPokemonCards: onlineBoardReady ? boardPokemonCards : {},
         sentAt: Date.now()
     });
-
     return true;
 }
 
-function handleSharedOnlineGameState(data) {
-    if (!data || typeof data !== 'object') {
-        return;
+// --- PAINEL ADMINISTRATIVO E CONFIGURAÇÃO ---
+
+window.openAdminPanelModal = function () {
+    const password = window.prompt('🔐 Insira a senha de Administrador:', '');
+    if (password !== 'admin123' && password !== 'pokemonadmin') return;
+
+    let adminModal = document.getElementById('admin-panel-modal');
+    if (!adminModal) {
+        adminModal = document.createElement('div');
+        adminModal.id = 'admin-panel-modal';
+        adminModal.className = 'fixed inset-0 bg-black/95 z-[500] flex items-center justify-center p-4 backdrop-blur-md';
+        document.body.appendChild(adminModal);
     }
-
-    const receivedRoomId =
-        data.roomId ||
-        data.room_id ||
-        data.room?.id ||
-        data.roomState?.roomId;
-
-    if (
-        receivedRoomId &&
-        currentJoinedOnlineRoomId &&
-        String(receivedRoomId) !== String(currentJoinedOnlineRoomId)
-    ) {
-        return;
-    }
-
-    if (receivedRoomId && !currentJoinedOnlineRoomId) {
-        currentJoinedOnlineRoomId = receivedRoomId;
-    }
-
-    if (!applyOnlineRoomState(data)) {
-        return;
-    }
-
-    onlineRoomStarted = true;
-    showOnlineGameLayout();
-}
-
-function installOnlineSocketPatch(socketInstance) {
-    if (
-        !socketInstance ||
-        socketInstance.__hexOnlineEmitPatched
-    ) {
-        return;
-    }
-
-    const originalEmit = socketInstance.emit.bind(socketInstance);
-
-    socketInstance.emit = function (eventName, payload, ...args) {
-        if (
-            eventName === 'update_game_state' &&
-            payload &&
-            typeof payload === 'object' &&
-            currentJoinedOnlineRoomId
-        ) {
-            payload = {
-                ...payload,
-                roomId:
-                    payload.roomId ||
-                    currentJoinedOnlineRoomId,
-                boardPokemonCards:
-                    payload.boardPokemonCards ||
-                    (onlineBoardReady ? boardPokemonCards : {})
-            };
-        }
-
-        return originalEmit(eventName, payload, ...args);
-    };
-
-    socketInstance.__hexOnlineEmitPatched = true;
-}
-
-function installOnlineTurnSynchronization() {
-    if (
-        !window.__hexPassTurnWrapped &&
-        typeof window.passTurnToNextPlayer === 'function'
-    ) {
-        const originalPassTurn = window.passTurnToNextPlayer;
-
-        window.passTurnToNextPlayer = function (...args) {
-            if (!guardOnlineAction('passar a vez')) {
-                return false;
-            }
-
-            const result = originalPassTurn.apply(this, args);
-
-            setTimeout(() => {
-                syncOnlineGameState('turn_passed');
-            }, 100);
-
-            return result;
-        };
-
-        window.__hexPassTurnWrapped = true;
-    }
-
-    if (
-        !window.__hexSaveGameWrapped &&
-        typeof window.saveGameProgress === 'function'
-    ) {
-        const originalSaveGame = window.saveGameProgress;
-
-        window.saveGameProgress = function (...args) {
-            const result = originalSaveGame.apply(this, args);
-            syncOnlineGameState('manual_save');
-            return result;
-        };
-
-        window.__hexSaveGameWrapped = true;
-    }
-}
-
-function installOnlineGameplayBridge() {
-    if (onlineActionWrappersInstalled) {
-        return;
-    }
-
-    onlineActionWrappersInstalled = true;
-
-    const wrapAction = (functionName, actionName, syncType, delay = 150) => {
-        const original = window[functionName];
-
-        if (
-            typeof original !== 'function' ||
-            window[`__hexWrapped_${functionName}`]
-        ) {
-            return;
-        }
-
-        window[functionName] = function (...args) {
-            if (!guardOnlineAction(actionName)) {
-                return false;
-            }
-
-            const result = original.apply(this, args);
-
-            if (syncType) {
-                setTimeout(() => {
-                    syncOnlineGameState(syncType);
-                }, delay);
-            }
-
-            return result;
-        };
-
-        window[`__hexWrapped_${functionName}`] = true;
-    };
-
-    wrapAction(
-        'rollDiceForMovement',
-        'rolar o dado',
-        null
-    );
-
-    wrapAction(
-        'finishMovementSession',
-        'concluir o movimento',
-        'movement_finished'
-    );
-
-    wrapAction(
-        'handleWaypointArrival',
-        'chegar a uma casa',
-        'waypoint_arrival'
-    );
-
-    wrapAction(
-        'attemptCatchWithSpecificBall',
-        'tentar capturar',
-        'capture_attempt',
-        2800
-    );
-
-    wrapAction(
-        'resolveBattleAttempt',
-        'atacar um Pokémon selvagem',
-        'wild_battle',
-        2800
-    );
-
-    wrapAction(
-        'addMonsterToPlayer',
-        'adicionar um Pokémon',
-        'pokemon_captured'
-    );
-
-    wrapAction(
-        'useItemInEncounter',
-        'usar item no encontro',
-        'encounter_item'
-    );
-
-    wrapAction(
-        'useInventoryItemMainScreen',
-        'usar item',
-        'inventory_item'
-    );
-
-    wrapAction(
-        'buyItemFromMart',
-        'comprar no Poké Mart',
-        'mart_purchase'
-    );
-
-    wrapAction(
-        'executePlayerTrade',
-        'efetivar uma troca',
-        'trade_completed'
-    );
-
-    wrapAction(
-        'executeLockedGymBattleSequence',
-        'desafiar o ginásio',
-        'gym_battle',
-        2800
-    );
-
-    wrapAction(
-        'triggerPvPBattleArena',
-        'iniciar uma batalha PvP',
-        'pvp_started'
-    );
-}
-
-window.joinAndStartOnlineGame = function () {
-    if (!currentJoinedOnlineRoomId) {
-        if (typeof showCustomPopup === 'function') {
-            showCustomPopup(
-                'Modo online',
-                'Entre em uma sala antes de iniciar a partida.',
-                false
-            );
-        }
-        return;
-    }
-
-    const socketInstance =
-        typeof getSocket === 'function'
-            ? getSocket()
-            : null;
-
-    if (
-        !socketInstance ||
-        typeof socketInstance.emit !== 'function'
-    ) {
-        if (typeof showCustomPopup === 'function') {
-            showCustomPopup(
-                'Conexão indisponível',
-                'Não foi possível comunicar com o servidor online.',
-                false
-            );
-        }
-        return;
-    }
-
-    const player = getOnlinePlayerPayload();
-
-    if (
-        (!boardPokemonCards ||
-            Object.keys(boardPokemonCards).length === 0) &&
-        typeof initializeBoardPokemonCards === 'function'
-    ) {
-        initializeBoardPokemonCards();
-    }
-
-    socketInstance.emit('start_room_game', {
-        roomId: currentJoinedOnlineRoomId,
-        room_id: currentJoinedOnlineRoomId,
-        player,
-        accountEmail:
-            typeof currentAuthenticatedAccount !== 'undefined'
-                ? currentAuthenticatedAccount
-                : null,
-        boardPokemonCards: boardPokemonCards || {},
-        maxPlayers: 4
-    });
-
-    if (typeof showCustomPopup === 'function') {
-        showCustomPopup(
-            'Iniciando partida online',
-            'Aguardando o estado compartilhado da sala e a entrada dos jogadores.',
-            true
-        );
-    }
+    emitSocket('admin_get_users');
+    adminModal.classList.remove('hidden');
 };
 
-function renderRoomsList(rooms) {
-    const container =
-        document.getElementById('rooms-list-box') ||
-        document.getElementById('online-rooms-list-container');
-
-    if (!container) {
-        return;
-    }
-
-    if (!Array.isArray(rooms) || rooms.length === 0) {
-        container.innerHTML = `
-            <p class="text-[10px] text-slate-500 text-center py-6">
-                Nenhuma sala encontrada. Crie uma sala para começar.
-            </p>
-        `;
-        return;
-    }
-
-    container.innerHTML = rooms
-        .map((room, index) => {
-            const roomId = escapeAccountHtml(
-                room?.id || room?.roomId || `room-${index}`
-            );
-
-            const roomName = escapeAccountHtml(
-                room?.name || room?.roomName || 'Sala sem nome'
-            );
-
-            const host = escapeAccountHtml(
-                room?.host || 'Treinador'
-            );
-
-            const playerCount = Number(
-                room?.playerCount ?? room?.players?.length ?? 0
-            );
-
-            const maxPlayers = Number(room?.maxPlayers) || 4;
-
-            return `
-                <div class="flex justify-between items-center gap-2 bg-black/60 p-2.5 rounded-xl border border-amber-600/50 text-white text-[10px] my-1">
-                    <div class="min-w-0">
-                        <p class="font-bold text-amber-300 truncate">
-                            ${roomName}
-                        </p>
-
-                        <p class="text-slate-400 truncate">
-                            Host: ${host} · ${playerCount}/${maxPlayers}
-                        </p>
-                    </div>
-
-                    <button
-                        type="button"
-                        data-room-id="${roomId}"
-                        class="join-online-room-button bg-amber-600 hover:bg-amber-500 text-black font-bold px-3 py-1 rounded cursor-pointer whitespace-nowrap">
-                        Entrar
-                    </button>
-                </div>
-            `;
-        })
-        .join('');
-
-    container
-        .querySelectorAll('.join-online-room-button')
-        .forEach(button => {
-            button.addEventListener('click', () => {
-                const roomId = button.getAttribute('data-room-id');
-
-                if (roomId) {
-                    currentJoinedOnlineRoomId = roomId;
-                    onlineRoomStarted = false;
-                    onlineBoardReady = false;
-                    boardPokemonCards = {};
-
-                    const joinPayload = {
-                        roomId,
-                        player: getOnlinePlayerPayload(),
-                        accountEmail:
-                            typeof currentAuthenticatedAccount !== 'undefined'
-                                ? currentAuthenticatedAccount
-                                : null
-                    };
-
-                    if (typeof emitSocket === 'function') {
-                        emitSocket('join_room', joinPayload);
-                    } else {
-                        const socketInstance =
-                            typeof getSocket === 'function'
-                                ? getSocket()
-                                : null;
-
-                        if (
-                            socketInstance &&
-                            typeof socketInstance.emit === 'function'
-                        ) {
-                            socketInstance.emit('join_room', joinPayload);
-                        }
-                    }
-                }
-            });
-        });
-}
-
-const currentSocketInstance = typeof getSocket === 'function' ? getSocket() : null;
-if (
-    currentSocketInstance &&
-    typeof currentSocketInstance.on === 'function'
-) {
-    currentSocketInstance.on('rooms_list_response', renderRoomsList);
-    currentSocketInstance.on('rooms_list', renderRoomsList);
-    currentSocketInstance.on('login_response', handleLoginResponse);
-
-    installOnlineSocketPatch(currentSocketInstance);
-    installOnlineTurnSynchronization();
-    installOnlineGameplayBridge();
-
-    if (typeof currentSocketInstance.off === 'function') {
-        currentSocketInstance.off('sync_game_state');
-        currentSocketInstance.off('room_state');
-        currentSocketInstance.off('room_game_state');
-        currentSocketInstance.off('room_chat_broadcast');
-    }
-
-    currentSocketInstance.on(
-        'sync_game_state',
-        handleSharedOnlineGameState
-    );
-
-    currentSocketInstance.on(
-        'room_state',
-        handleSharedOnlineGameState
-    );
-
-    currentSocketInstance.on(
-        'room_game_state',
-        handleSharedOnlineGameState
-    );
-
-    currentSocketInstance.on('room_chat_broadcast', data => {
-        if (!data || typeof data !== 'object') {
-            return;
-        }
-
-        const sender = data.sender || data.email || 'Treinador';
-        const message = data.text || data.message || '';
-
-        if (!message) {
-            return;
-        }
-
-        if (!Array.isArray(gameState.chatMessages)) {
-            gameState.chatMessages = [];
-        }
-
-        gameState.chatMessages.push({
-            sender,
-            text: message
-        });
-
-        if (gameState.chatMessages.length > 100) {
-            gameState.chatMessages =
-                gameState.chatMessages.slice(-100);
-        }
-
-        if (typeof renderChatMessages === 'function') {
-            renderChatMessages();
-        }
-    });
-
-    currentSocketInstance.on('room_created', () => {
-        if (typeof refreshRoomsList === 'function') {
-            refreshRoomsList();
-        }
-    });
-
-    currentSocketInstance.on('room_joined', roomData => {
-        if (roomData?.roomId || roomData?.room_id) {
-            currentJoinedOnlineRoomId =
-                roomData.roomId || roomData.room_id;
-        }
-
-        const stateApplied = applyOnlineRoomState(roomData);
-
-        if (roomData?.started || roomData?.onlineRoomStarted) {
-            onlineRoomStarted = true;
-
-            if (!stateApplied) {
-                requestOnlineRoomState();
-            } else {
-                showOnlineGameLayout();
-            }
-        }
-
-        if (typeof showCustomPopup === 'function') {
-            showCustomPopup(
-                'Sala online conectada',
-                stateApplied
-                    ? 'Você entrou na sala e recebeu o mesmo estado de jogo dos demais jogadores.'
-                    : 'Você entrou na sala. Aguardando o estado compartilhado do tabuleiro.',
-                true
-            );
-        }
-    });
-
-    currentSocketInstance.on('room_game_started', data => {
-        const roomId =
-            data?.roomId ||
-            data?.room_id ||
-            data?.room?.id ||
-            data?.roomState?.roomId ||
-            currentJoinedOnlineRoomId;
-
-        if (roomId) {
-            currentJoinedOnlineRoomId = roomId;
-        }
-
-        onlineRoomStarted = true;
-
-        const stateApplied = applyOnlineRoomState(data);
-        const receivedBoard = extractOnlineBoard(data);
-
-        if (receivedBoard && Object.keys(receivedBoard).length > 0) {
-            boardPokemonCards = receivedBoard;
-            onlineBoardReady = true;
-        }
-
-        if (!stateApplied || !onlineBoardReady) {
-            requestOnlineRoomState();
-
-            if (typeof showCustomPopup === 'function') {
-                showCustomPopup(
-                    'Sincronizando partida',
-                    'A sala foi iniciada. Aguardando o estado único do tabuleiro e dos jogadores.',
-                    true
-                );
-            }
-
-            if (stateApplied) {
-                showOnlineGameLayout();
-            }
-
-            return;
-        }
-
-        console.log(
-            'Partida online compartilhada iniciada na sala:',
-            currentJoinedOnlineRoomId
-        );
-
-        showOnlineGameLayout();
-        refreshOnlineGameInterface();
-    });
-
-    currentSocketInstance.on('lobby_error', message => {
-        if (typeof showCustomPopup === 'function') {
-            showCustomPopup(
-                'Erro no lobby',
-                escapeAccountHtml(
-                    message ||
-                        'Não foi possível concluir a ação na sala.'
-                ),
-                false
-            );
-        }
-    });
-}
-
-// --- CRIAÇÃO DE PERSONAGEM ---
-
+// --- NOVA PARTIDA PRESERVANDO BOX E OURO (SEM ITENS/BADGES) ---
 window.finalizeCharacterCreation = function () {
     const nameInput = document.getElementById('setup-trainer-name');
     const trainerName = nameInput && nameInput.value.trim() ? nameInput.value.trim() : 'Treinador';
 
     const existingPlayer = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : null;
-    
     const preservedGold = existingPlayer && existingPlayer.gold !== undefined ? existingPlayer.gold : 350;
     const preservedPcBox = existingPlayer && Array.isArray(existingPlayer.pcBox) ? existingPlayer.pcBox : [];
-    const preservedInventory = existingPlayer && Array.isArray(existingPlayer.inventory) ? existingPlayer.inventory : [];
 
     const starterKey = (window.selectedStarterPokemon || 'bulbasaur').toLowerCase();
     const starterMap = {
@@ -5153,33 +4273,30 @@ window.finalizeCharacterCreation = function () {
     const chosenStarter = starterMap[starterKey] || starterMap['bulbasaur'];
     chosenStarter.image = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/${chosenStarter.dexNumber}.png`;
 
-    if (typeof gameState !== 'undefined') {
-        gameState.turn = 1;
-        gameState.currentPlayerIndex = 0;
-        gameState.players = [
-            {
-                name: trainerName,
-                avatarId: window.selectedAvatarId || 1,
-                currentZone: 5,
-                level: 1,
-                gold: preservedGold,
-                badges: [],
-                activeTeam: [chosenStarter],
-                pcBox: preservedPcBox,
-                inventory: preservedInventory,
-                equipmentSlots: [null, null]
-            }
-        ];
-    }
+    gameState.turn = 1;
+    gameState.currentPlayerIndex = 0;
+    gameState.players = [{
+        name: trainerName,
+        avatarId: window.selectedAvatarId || 1,
+        currentZone: 5,
+        level: 1,
+        gold: preservedGold, // Mantém ouro
+        badges: [], // Reset insígnias
+        activeTeam: [chosenStarter],
+        pcBox: preservedPcBox, // Mantém Box
+        inventory: [], // Reset itens
+        equipmentSlots: [null, null]
+    }];
 
-    if (typeof ensureValidGameState === 'function') {
-        ensureValidGameState();
-    }
+    if (typeof saveGameProgress === 'function') saveGameProgress();
+    
+    document.getElementById('character-creation-container')?.classList.add('hidden');
+    document.getElementById('setup-screen')?.classList.add('hidden');
+    document.getElementById('main-game-layout')?.classList.remove('hidden');
 
-    if (typeof saveGameProgress === 'function') {
-        saveGameProgress();
-    }
-
+    if (typeof initGameEngine === 'function') initGameEngine();
+    showCustomPopup('Nova Jornada', `Boa sorte, ${trainerName}! Você começou sua jornada com ${chosenStarter.name}.`, true);
+};
     // Oculta telas de setup e exibe o layout principal do jogo
     const characterCreation = document.getElementById('character-creation-container');
     const setupScreen = document.getElementById('setup-screen');
