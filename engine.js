@@ -4059,7 +4059,7 @@ function withdrawMonsterFromVault(vaultIndex) {
     // --- LOBBY ONLINE ---
 
     window.createOnlineRoom = function () {
-        const roomName = window.prompt(
+                const roomName = window.prompt(
             'Insira o nome da sala online:',
             'Sala de Kanto'
         );
@@ -4110,41 +4110,442 @@ function withdrawMonsterFromVault(vaultIndex) {
         }
 
         emitSocket('lobby_chat_message', {
+            roomId: currentJoinedOnlineRoomId,
             message: input.value.trim(),
+            text: input.value.trim(),
             sender:
                 typeof currentAuthenticatedAccount !== 'undefined' &&
                 currentAuthenticatedAccount
                     ? currentAuthenticatedAccount
-                    : 'Treinador'
+                    : getCurrentPlayer()?.name || 'Treinador'
         });
 
         input.value = '';
     };
 
+    if (typeof window.sendChatMessage !== 'function') {
+        window.sendChatMessage = function () {
+            const chatInput =
+                document.getElementById('chat-input-field') ||
+                document.getElementById('map-chat-input');
+
+            if (!chatInput || !chatInput.value.trim()) {
+                return;
+            }
+
+            const message = chatInput.value.trim();
+            const sender =
+                typeof currentAuthenticatedAccount !== 'undefined' &&
+                currentAuthenticatedAccount
+                    ? currentAuthenticatedAccount
+                    : getCurrentPlayer()?.name || 'Treinador';
+
+            if (!Array.isArray(gameState.chatMessages)) {
+                gameState.chatMessages = [];
+            }
+
+            gameState.chatMessages.push({
+                sender,
+                text: message
+            });
+
+            if (gameState.chatMessages.length > 100) {
+                gameState.chatMessages =
+                    gameState.chatMessages.slice(-100);
+            }
+
+            if (typeof renderChatMessages === 'function') {
+                renderChatMessages();
+            }
+
+            emitSocket('room_chat_message', {
+                roomId: currentJoinedOnlineRoomId,
+                sender,
+                message,
+                text: message
+            });
+
+            chatInput.value = '';
+        };
+    }
+
+    if (typeof window.sendMessage !== 'function') {
+        window.sendMessage = function () {
+            window.sendChatMessage();
+        };
+    }
+
     // --- CORREÇÃO DO BOTÃO DE INICIAR PARTIDA ONLINE ---
 let currentJoinedOnlineRoomId = null;
+let onlineRoomStarted = false;
+let onlineBoardReady = false;
+
+function getOnlinePlayerPayload() {
+    try {
+        const player = typeof getCurrentPlayer === 'function'
+            ? getCurrentPlayer()
+            : null;
+
+        return player
+            ? {
+                ...player,
+                accountEmail:
+                    typeof currentAuthenticatedAccount !== 'undefined'
+                        ? currentAuthenticatedAccount
+                        : null
+            }
+            : null;
+    } catch (error) {
+        return null;
+    }
+}
+
+function extractOnlineGameState(data) {
+    if (!data || typeof data !== 'object') {
+        return null;
+    }
+
+    const possibleStates = [
+        data.gameState,
+        data.game_state,
+        data.roomState?.gameState,
+        data.roomState?.game_state,
+        data.room?.gameState,
+        data.room?.game_state,
+        data.state?.gameState,
+        data.state?.game_state,
+        data.state
+    ];
+
+    for (const candidate of possibleStates) {
+        if (
+            candidate &&
+            typeof candidate === 'object' &&
+            Array.isArray(candidate.players)
+        ) {
+            return candidate;
+        }
+    }
+
+    if (Array.isArray(data.players)) {
+        return {
+            ...(typeof gameState !== 'undefined' && gameState
+                ? gameState
+                : {}),
+            players: data.players,
+            currentPlayerIndex: Number(data.currentPlayerIndex) || 0,
+            turn: Number(data.turn) || 1
+        };
+    }
+
+    return null;
+}
+
+function extractOnlineBoard(data) {
+    if (!data || typeof data !== 'object') {
+        return null;
+    }
+
+    const possibleBoards = [
+        data.boardPokemonCards,
+        data.board_pokemon_cards,
+        data.roomState?.boardPokemonCards,
+        data.roomState?.board_pokemon_cards,
+        data.room?.boardPokemonCards,
+        data.room?.board_pokemon_cards,
+        data.state?.boardPokemonCards,
+        data.state?.board_pokemon_cards
+    ];
+
+    for (const candidate of possibleBoards) {
+        if (
+            candidate &&
+            typeof candidate === 'object' &&
+            !Array.isArray(candidate)
+        ) {
+            return candidate;
+        }
+    }
+
+    return null;
+}
+
+function applyOnlineRoomState(data) {
+    const sharedState = extractOnlineGameState(data);
+    const sharedBoard = extractOnlineBoard(data);
+
+    if (!sharedState || !Array.isArray(sharedState.players)) {
+        return false;
+    }
+
+    gameState = {
+        ...sharedState,
+        setupDone: true,
+        online: true,
+        onlineRoomId: currentJoinedOnlineRoomId,
+        currentPlayerIndex: Number.isInteger(
+            Number(sharedState.currentPlayerIndex)
+        )
+            ? Number(sharedState.currentPlayerIndex)
+            : 0,
+        turn: Math.max(1, Number(sharedState.turn) || 1),
+        players: sharedState.players.map(player => ({
+            ...player,
+            activeTeam: Array.isArray(player?.activeTeam)
+                ? player.activeTeam
+                : [],
+            pcBox: Array.isArray(player?.pcBox)
+                ? player.pcBox
+                : [],
+            inventory: Array.isArray(player?.inventory)
+                ? player.inventory
+                : [],
+            badges: Array.isArray(player?.badges)
+                ? player.badges
+                : [],
+            equipmentSlots: Array.isArray(player?.equipmentSlots)
+                ? player.equipmentSlots
+                : [null, null]
+        }))
+    };
+
+    if (sharedBoard) {
+        boardPokemonCards = sharedBoard;
+        onlineBoardReady = true;
+    }
+
+    if (typeof ensureValidGameState === 'function') {
+        ensureValidGameState();
+    }
+
+    return true;
+}
+
+function refreshOnlineGameInterface() {
+    if (typeof ensureValidGameState === 'function') {
+        ensureValidGameState();
+    }
+
+    if (typeof renderTeamCardSlots === 'function') {
+        renderTeamCardSlots();
+    }
+
+    if (typeof renderEquipmentSlots === 'function') {
+        renderEquipmentSlots();
+    }
+
+    if (typeof renderBottomPanel === 'function') {
+        renderBottomPanel();
+    }
+
+    if (typeof renderChatMessages === 'function') {
+        renderChatMessages();
+    }
+
+    if (typeof updatePlayerUI === 'function') {
+        updatePlayerUI();
+    }
+
+    if (typeof renderBoardMap === 'function') {
+        renderBoardMap();
+    }
+}
+
+function showOnlineGameLayout() {
+    const setupScreen = document.getElementById('setup-screen');
+    const mainLayout = document.getElementById('main-game-layout');
+    const authContainer = document.getElementById('auth-container');
+    const onlineLobby = document.getElementById('online-lobby-container');
+    const trainerMenu = document.getElementById('trainer-main-menu');
+    const characterCreation = document.getElementById(
+        'character-creation-container'
+    );
+    const dashboard = document.getElementById('post-login-dashboard');
+
+    setupScreen?.classList.add('hidden');
+    authContainer?.classList.add('hidden');
+    onlineLobby?.classList.add('hidden');
+    trainerMenu?.classList.add('hidden');
+    characterCreation?.classList.add('hidden');
+    dashboard?.classList.add('hidden');
+    mainLayout?.classList.remove('hidden');
+
+    refreshOnlineGameInterface();
+
+    if (typeof showCustomPopup === 'function') {
+        showCustomPopup(
+            'Partida Online',
+            'Todos os jogadores estão conectados ao mesmo estado de partida e ao mesmo tabuleiro.',
+            true
+        );
+    }
+}
+
+function syncOnlineGameState(changeType = 'state_update') {
+    if (!onlineRoomStarted || !currentJoinedOnlineRoomId) {
+        return false;
+    }
+
+    const socketInstance =
+        typeof getSocket === 'function'
+            ? getSocket()
+            : null;
+
+    if (
+        !socketInstance ||
+        typeof socketInstance.emit !== 'function'
+    ) {
+        return false;
+    }
+
+    socketInstance.emit('update_game_state', {
+        roomId: currentJoinedOnlineRoomId,
+        type: changeType,
+        gameState,
+        boardPokemonCards: onlineBoardReady
+            ? boardPokemonCards
+            : {}
+    });
+
+    return true;
+}
+
+function handleSharedOnlineGameState(data) {
+    if (!data || typeof data !== 'object') {
+        return;
+    }
+
+    const receivedRoomId =
+        data.roomId ||
+        data.room_id ||
+        data.room?.id ||
+        data.roomState?.roomId;
+
+    if (
+        receivedRoomId &&
+        currentJoinedOnlineRoomId &&
+        String(receivedRoomId) !== String(currentJoinedOnlineRoomId)
+    ) {
+        return;
+    }
+
+    if (receivedRoomId && !currentJoinedOnlineRoomId) {
+        currentJoinedOnlineRoomId = receivedRoomId;
+    }
+
+    if (!applyOnlineRoomState(data)) {
+        return;
+    }
+
+    onlineRoomStarted = true;
+    showOnlineGameLayout();
+}
+
+function installOnlineSocketPatch(socketInstance) {
+    if (
+        !socketInstance ||
+        socketInstance.__hexOnlineEmitPatched
+    ) {
+        return;
+    }
+
+    const originalEmit = socketInstance.emit.bind(socketInstance);
+
+    socketInstance.emit = function (eventName, payload, ...args) {
+        if (
+            eventName === 'update_game_state' &&
+            payload &&
+            typeof payload === 'object' &&
+            currentJoinedOnlineRoomId
+        ) {
+            payload = {
+                ...payload,
+                roomId:
+                    payload.roomId ||
+                    currentJoinedOnlineRoomId,
+                boardPokemonCards:
+                    payload.boardPokemonCards ||
+                    (onlineBoardReady ? boardPokemonCards : {})
+            };
+        }
+
+        return originalEmit(eventName, payload, ...args);
+    };
+
+    socketInstance.__hexOnlineEmitPatched = true;
+}
+
+function installOnlineTurnSynchronization() {
+    if (
+        !window.__hexPassTurnWrapped &&
+        typeof window.passTurnToNextPlayer === 'function'
+    ) {
+        const originalPassTurn = window.passTurnToNextPlayer;
+
+        window.passTurnToNextPlayer = function (...args) {
+            const result = originalPassTurn.apply(this, args);
+            syncOnlineGameState('turn_passed');
+            return result;
+        };
+
+        window.__hexPassTurnWrapped = true;
+    }
+
+    if (
+        !window.__hexSaveGameWrapped &&
+        typeof window.saveGameProgress === 'function'
+    ) {
+        const originalSaveGame = window.saveGameProgress;
+
+        window.saveGameProgress = function (...args) {
+            const result = originalSaveGame.apply(this, args);
+            syncOnlineGameState('manual_save');
+            return result;
+        };
+
+        window.__hexSaveGameWrapped = true;
+    }
+}
 
 window.joinAndStartOnlineGame = function () {
     if (!currentJoinedOnlineRoomId) {
         if (typeof showCustomPopup === 'function') {
             showCustomPopup(
                 'Modo online',
-                'Selecione uma sala disponível na lista acima e clique em "Entrar" para conectar-se à partida.',
-                true
+                'Entre em uma sala antes de iniciar a partida.',
+                false
             );
         }
         return;
     }
 
-    // Emite o evento para o servidor iniciar a partida da sala atual e garante a sincronia
-    if (typeof emitSocket === 'function') {
-        emitSocket('start_room_game', { roomId: currentJoinedOnlineRoomId });
-    } else {
-        const socketInstance = typeof getSocket === 'function' ? getSocket() : null;
-        if (socketInstance && typeof socketInstance.emit === 'function') {
-            socketInstance.emit('start_room_game', { roomId: currentJoinedOnlineRoomId });
+    const socketInstance =
+        typeof getSocket === 'function'
+            ? getSocket()
+            : null;
+
+    if (
+        !socketInstance ||
+        typeof socketInstance.emit !== 'function'
+    ) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup(
+                'Conexão indisponível',
+                'Não foi possível comunicar com o servidor online.',
+                false
+            );
         }
+        return;
     }
+
+    socketInstance.emit('start_room_game', {
+        roomId: currentJoinedOnlineRoomId,
+        player: getOnlinePlayerPayload(),
+        accountEmail:
+            typeof currentAuthenticatedAccount !== 'undefined'
+                ? currentAuthenticatedAccount
+                : null
+    });
 };
 
 function renderRoomsList(rooms) {
@@ -4215,13 +4616,33 @@ function renderRoomsList(rooms) {
                 const roomId = button.getAttribute('data-room-id');
 
                 if (roomId) {
-                    currentJoinedOnlineRoomId = roomId; // Salva a sala ativa
+                    currentJoinedOnlineRoomId = roomId;
+                    onlineRoomStarted = false;
+                    onlineBoardReady = false;
+                    boardPokemonCards = {};
+
+                    const joinPayload = {
+                        roomId,
+                        player: getOnlinePlayerPayload(),
+                        accountEmail:
+                            typeof currentAuthenticatedAccount !== 'undefined'
+                                ? currentAuthenticatedAccount
+                                : null
+                    };
+
                     if (typeof emitSocket === 'function') {
-                        emitSocket('join_room', { roomId });
+                        emitSocket('join_room', joinPayload);
                     } else {
-                        const socketInstance = typeof getSocket === 'function' ? getSocket() : null;
-                        if (socketInstance && typeof socketInstance.emit === 'function') {
-                            socketInstance.emit('join_room', { roomId });
+                        const socketInstance =
+                            typeof getSocket === 'function'
+                                ? getSocket()
+                                : null;
+
+                        if (
+                            socketInstance &&
+                            typeof socketInstance.emit === 'function'
+                        ) {
+                            socketInstance.emit('join_room', joinPayload);
                         }
                     }
                 }
@@ -4238,6 +4659,62 @@ if (
     currentSocketInstance.on('rooms_list', renderRoomsList);
     currentSocketInstance.on('login_response', handleLoginResponse);
 
+    installOnlineSocketPatch(currentSocketInstance);
+    installOnlineTurnSynchronization();
+
+    if (typeof currentSocketInstance.off === 'function') {
+        currentSocketInstance.off('sync_game_state');
+        currentSocketInstance.off('room_state');
+        currentSocketInstance.off('room_game_state');
+        currentSocketInstance.off('room_chat_broadcast');
+    }
+
+    currentSocketInstance.on(
+        'sync_game_state',
+        handleSharedOnlineGameState
+    );
+
+    currentSocketInstance.on(
+        'room_state',
+        handleSharedOnlineGameState
+    );
+
+    currentSocketInstance.on(
+        'room_game_state',
+        handleSharedOnlineGameState
+    );
+
+    currentSocketInstance.on('room_chat_broadcast', data => {
+        if (!data || typeof data !== 'object') {
+            return;
+        }
+
+        const sender = data.sender || data.email || 'Treinador';
+        const message = data.text || data.message || '';
+
+        if (!message) {
+            return;
+        }
+
+        if (!Array.isArray(gameState.chatMessages)) {
+            gameState.chatMessages = [];
+        }
+
+        gameState.chatMessages.push({
+            sender,
+            text: message
+        });
+
+        if (gameState.chatMessages.length > 100) {
+            gameState.chatMessages =
+                gameState.chatMessages.slice(-100);
+        }
+
+        if (typeof renderChatMessages === 'function') {
+            renderChatMessages();
+        }
+    });
+
     currentSocketInstance.on('room_created', () => {
         if (typeof refreshRoomsList === 'function') {
             refreshRoomsList();
@@ -4248,30 +4725,70 @@ if (
         if (roomData?.roomId) {
             currentJoinedOnlineRoomId = roomData.roomId;
         }
+
+        const stateApplied = applyOnlineRoomState(roomData);
+
+        if (stateApplied && roomData?.started) {
+            onlineRoomStarted = true;
+            showOnlineGameLayout();
+        }
+
         if (typeof showCustomPopup === 'function') {
             showCustomPopup(
                 'Sala online',
-                `Você entrou na sala ${roomData?.roomName || 'selecionada'}.`,
+                `Você entrou na sala ${roomData?.roomName || 'selecionada'}. Agora todos os jogadores usam o mesmo estado de partida.`,
                 true
             );
         }
     });
 
-    // Ouvinte adicionado para garantir que a partida inicie quando o servidor confirmar
-    currentSocketInstance.on('room_game_started', (data) => {
-    console.log('Partida online iniciada na sala:', data.roomId);
-    
-    // Oculta a tela de login/lobby e exibe o tabuleiro principal do jogo
-    const setupScreen = document.getElementById('setup-screen');
-    const mainLayout = document.getElementById('main-game-layout');
-    
-    if (setupScreen) setupScreen.classList.add('hidden');
-    if (mainLayout) mainLayout.classList.remove('hidden');
+    currentSocketInstance.on('room_game_started', data => {
+        const roomId =
+            data?.roomId ||
+            data?.room_id ||
+            data?.room?.id ||
+            currentJoinedOnlineRoomId;
 
-    if (typeof showCustomPopup === 'function') {
-        showCustomPopup('Partida Iniciada', 'A batalha multijogador começou!', true);
-    }
-});
+        if (roomId) {
+            currentJoinedOnlineRoomId = roomId;
+        }
+
+        onlineRoomStarted = true;
+
+        const receivedBoard = extractOnlineBoard(data);
+
+        if (!receivedBoard) {
+            boardPokemonCards = {};
+            onlineBoardReady = false;
+        }
+
+        const stateApplied = applyOnlineRoomState(data);
+
+        if (!stateApplied) {
+            currentSocketInstance.emit('request_room_state', {
+                roomId: currentJoinedOnlineRoomId
+            });
+
+            if (typeof showCustomPopup === 'function') {
+                showCustomPopup(
+                    'Aguardando estado da sala',
+                    'O servidor iniciou a sala, mas ainda não enviou o estado compartilhado dos jogadores.',
+                    false
+                );
+            }
+
+            return;
+        }
+
+        console.log(
+            'Partida online iniciada na sala:',
+            currentJoinedOnlineRoomId
+        );
+
+        showOnlineGameLayout();
+
+        syncOnlineGameState('room_started');
+    });
 
     currentSocketInstance.on('lobby_error', message => {
         if (typeof showCustomPopup === 'function') {
