@@ -4824,35 +4824,80 @@ if (
 
 window.finalizeCharacterCreation = function () {
     const nameInput = document.getElementById('setup-trainer-name');
+    const trainerName = nameInput && nameInput.value.trim() ? nameInput.value.trim() : 'Treinador';
 
-    const trainerName =
-        nameInput && nameInput.value.trim()
-            ? nameInput.value.trim()
-            : 'Treinador';
+    const existingPlayer = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : null;
+    
+    const preservedGold = existingPlayer && existingPlayer.gold !== undefined ? existingPlayer.gold : 350;
+    const preservedPcBox = existingPlayer && Array.isArray(existingPlayer.pcBox) ? existingPlayer.pcBox : [];
+    const preservedInventory = existingPlayer && Array.isArray(existingPlayer.inventory) ? existingPlayer.inventory : [];
 
-    if (typeof setupConfig !== 'undefined') {
-        setupConfig.mode = 'solo';
+    const starterKey = (window.selectedStarterPokemon || 'bulbasaur').toLowerCase();
+    const starterMap = {
+        'bulbasaur': { id: 'bulbasaur', name: 'Bulbasaur', dexNumber: '001', level: 5 },
+        'charmander': { id: 'charmander', name: 'Charmander', dexNumber: '004', level: 5 },
+        'squirtle': { id: 'squirtle', name: 'Squirtle', dexNumber: '007', level: 5 },
+        'pikachu': { id: 'pikachu', name: 'Pikachu', dexNumber: '025', level: 5 },
+        'chikorita': { id: 'chikorita', name: 'Chikorita', dexNumber: '152', level: 5 },
+        'cyndaquil': { id: 'cyndaquil', name: 'Cyndaquil', dexNumber: '155', level: 5 },
+        'totodile': { id: 'totodile', name: 'Totodile', dexNumber: '158', level: 5 },
+        'eevee': { id: 'eevee', name: 'Eevee', dexNumber: '133', level: 5 }
+    };
+
+    const chosenStarter = starterMap[starterKey] || starterMap['bulbasaur'];
+    chosenStarter.image = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/${chosenStarter.dexNumber}.png`;
+
+    if (typeof gameState !== 'undefined') {
+        gameState.turn = 1;
+        gameState.currentPlayerIndex = 0;
+        gameState.players = [
+            {
+                name: trainerName,
+                avatarId: window.selectedAvatarId || 1,
+                currentZone: 5,
+                level: 1,
+                gold: preservedGold,
+                badges: [],
+                activeTeam: [chosenStarter],
+                pcBox: preservedPcBox,
+                inventory: preservedInventory,
+                equipmentSlots: [null, null]
+            }
+        ];
     }
 
-    if (typeof startMainGame === 'function') {
-        startMainGame();
-    } else {
-        if (typeof showCustomPopup === 'function') {
-            showCustomPopup(
-                'Erro',
-                'A função de inicialização da partida não foi carregada.',
-                false
-            );
-        }
-        return;
+    if (typeof ensureValidGameState === 'function') {
+        ensureValidGameState();
     }
 
-    persistAfterChange();
+    if (typeof saveGameProgress === 'function') {
+        saveGameProgress();
+    }
+
+    // Oculta telas de setup e exibe o layout principal do jogo
+    const characterCreation = document.getElementById('character-creation-container');
+    const setupScreen = document.getElementById('setup-screen');
+    const mainLayout = document.getElementById('main-game-layout');
+
+    if (characterCreation) characterCreation.classList.add('hidden');
+    if (setupScreen) setupScreen.classList.add('hidden');
+    if (mainLayout) mainLayout.classList.remove('hidden');
+
+    // Inicializa os componentes visuais do tabuleiro e da engine do jogo
+    if (typeof initGameEngine === 'function') {
+        initGameEngine();
+    }
+    if (typeof renderBoardMap === 'function') {
+        renderBoardMap();
+    }
+    if (typeof updatePlayerUI === 'function') {
+        updatePlayerUI();
+    }
 
     if (typeof showCustomPopup === 'function') {
         showCustomPopup(
-            'Personagem criado',
-            `Parabéns, ${trainerName}! A sua jornada foi inicializada.`,
+            'Nova Jornada Iniciada',
+            `Boa sorte, ${trainerName}! Você começou sua jornada com ${chosenStarter.name}.`,
             true
         );
     }
