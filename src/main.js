@@ -3,18 +3,18 @@
 
 import { gameState, setupConfig, ensureValidGameState, getCurrentPlayer } from './core/state.js';
 import { loadGameProgress, saveGameProgress } from './core/storage.js';
-import { renderBoardMap } from './systems/map.js';
+import { renderBoardMap, tryInteractWithCity } from './systems/map.js';
 import { setupDiceListeners } from './systems/dice.js';
 import { openSpecificTrainerCardModal, showCustomPopup } from './ui/modals.js';
 import { openPokemartModal } from './systems/inventory.js';
 import { MONSTER_CATALOG } from './config/cards-data.js';
 
-// EXPOSIÇÃO GLOBAL PARA O HTML (Corrige os erros de onclick direto)
+// ==========================================
+// EXPOSIÇÃO GLOBAL PARA O HTML (Evita erros de onclick)
+// ==========================================
 window.openSpecificTrainerCardModal = openSpecificTrainerCardModal;
 window.openPokemartModal = openPokemartModal;
-
-// Caso a função tryInteractWithCity venha de outro módulo, importe-a e exponha-a aqui também:
-// window.tryInteractWithCity = tryInteractWithCity;
+window.tryInteractWithCity = tryInteractWithCity;
 
 // Executado assim que o DOM estiver totalmente carregado
 document.addEventListener('DOMContentLoaded', () => {
@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. Renderiza o tabuleiro modular inicial e as waypoints
     renderBoardMap();
 
-    // 3. Vincula os ouvintes de eventos da interface
+    // 3. Vincula os ouvintes de eventos da interface e menus
     setupDiceListeners();
     setupGlobalInterfaceListeners();
     setupAuthenticationListeners();
@@ -39,9 +39,12 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log("✅ Jogo inicializado com sucesso!");
 });
 
-// Configura os ouvintes de autenticação e transição do Hub inicial
+// Configura o fluxo de autenticação e transição controlada para o menu/jogo
 function setupAuthenticationListeners() {
     const submitBtn = document.getElementById('auth-submit-btn');
+    const trainerMainMenu = document.getElementById('trainer-main-menu');
+    const authContainer = document.getElementById('auth-container');
+
     if (submitBtn) {
         submitBtn.onclick = () => {
             const emailInput = document.getElementById('auth-email-input');
@@ -57,23 +60,42 @@ function setupAuthenticationListeners() {
 
             console.log("🔐 Autenticando treinador:", email);
 
-            // Simula o login bem-sucedido e oculta a tela de setup/login
-            const setupScreen = document.getElementById('setup-screen');
-            const mainGameLayout = document.getElementById('main-game-layout');
+            // Em vez de entrar direto no tabuleiro, exibe o Hub do Treinador (Menu Inicial completo)
+            if (authContainer) authContainer.classList.add('hidden');
+            if (trainerMainMenu) trainerMainMenu.classList.remove('hidden');
 
-            if (setupScreen) {
-                setupScreen.classList.add('hidden');
-            }
-            if (mainGameLayout) {
-                mainGameLayout.classList.remove('hidden');
-            }
-
-            // Atualiza os dados do jogador no estado global se necessário
+            // Atualiza os dados do jogador no estado global
             const player = getCurrentPlayer();
             if (player) {
                 player.email = email;
             }
             saveGameProgress();
+        };
+    }
+
+    // Configuração dos botões do Hub do Treinador (Continuar, Nova Partida, Online, etc.)
+    const resumeBtn = document.getElementById('hub-resume-btn');
+    if (resumeBtn) {
+        resumeBtn.onclick = () => {
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('main-game-layout').classList.remove('hidden');
+        };
+    }
+
+    const onlineBtn = document.getElementById('hub-online-btn');
+    const onlineLobby = document.getElementById('online-lobby-container');
+    if (onlineBtn && onlineLobby) {
+        onlineBtn.onclick = () => {
+            trainerMainMenu.classList.add('hidden');
+            onlineLobby.classList.remove('hidden');
+        };
+    }
+
+    const lobbyBackBtn = document.getElementById('lobby-back-btn');
+    if (lobbyBackBtn && onlineLobby) {
+        lobbyBackBtn.onclick = () => {
+            onlineLobby.classList.add('hidden');
+            trainerMainMenu.classList.remove('hidden');
         };
     }
 }
