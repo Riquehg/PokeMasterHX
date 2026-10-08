@@ -1398,7 +1398,7 @@ window.changeMartQuantity = function(itemId, amount) {
 };
 
 window.buyItemFromMart = function(itemId, cost, requestedQuantity = 1) {
-    const cp = getCurrentPlayer();
+        const cp = getCurrentPlayer();
 
     if (!cp) {
         showCustomPopup(
@@ -1480,6 +1480,7 @@ Disponível: ${Number(cp.gold) || 0} 🪙`,
         );
         return;
     }
+
 
     if (!Array.isArray(cp.inventory)) {
         cp.inventory = [];
