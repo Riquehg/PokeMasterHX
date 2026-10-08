@@ -3709,7 +3709,7 @@ function withdrawMonsterFromVault(vaultIndex) {
         tradeModal.classList.remove('hidden');
     };
 
-    // --- LOGIN E REGISTRO ---
+   // --- LOGIN E REGISTRO ---
 
     window.handleAccountLoginOrRegister = function () {
         const emailElement = document.getElementById('auth-email-input');
@@ -3895,6 +3895,30 @@ function withdrawMonsterFromVault(vaultIndex) {
             ensureValidGameState();
         }
 
+        // --- ATUALIZAÇÃO DO HUB DO TREINADOR COM DADOS REAIS ---
+        const cp = getCurrentPlayer();
+        const profileData = accountData.profile_data || accountData.profileData || {};
+        
+        const finalTrainerName = cp.name || accountData.trainerName || profileData.trainerName || 'Treinador';
+        const finalGold = cp.gold !== undefined ? cp.gold : (accountData.gold || profileData.gold || 350);
+        const finalAvatarId = cp.avatarId || accountData.avatarId || profileData.avatarId || 1;
+        const finalLevel = cp.level || profileData.level || 1;
+
+        // Atualiza elementos visuais do HUB do Treinador (Print)
+        const nameDisplay = document.querySelector('.hub-trainer-name, #trainer-card-name-display');
+        if (nameDisplay) nameDisplay.textContent = finalTrainerName;
+
+        const goldDisplay = document.querySelector('.hub-trainer-gold, #gold-counter');
+        if (goldDisplay) goldDisplay.textContent = `${finalGold} G`;
+
+        const levelDisplay = document.querySelector('.hub-trainer-level');
+        if (levelDisplay) levelDisplay.textContent = `Nv. ${finalLevel}`;
+
+        const avatarImg = document.querySelector('.hub-trainer-avatar, #trainer-avatar-img');
+        if (avatarImg) {
+            avatarImg.src = `${SUPABASE_STORAGE_URL}player_0${finalAvatarId}.png`;
+        }
+
         if (typeof showPostLoginDashboard === 'function') {
             showPostLoginDashboard();
         } else {
@@ -3921,13 +3945,10 @@ function withdrawMonsterFromVault(vaultIndex) {
             authContainer.classList.add('hidden');
         }
 
-        // Removemos a criação da div de "Sessão Autenticada" (Print 1)
-        // e chamamos diretamente o menu principal correto (Print 2)
         const mainMenu = document.getElementById('trainer-main-menu');
         if (mainMenu) {
             mainMenu.classList.remove('hidden');
         } else {
-            // Caso utilize outra função global para abrir o menu do Print 2, chame-a aqui:
             if (typeof showTrainerMainMenu === 'function') {
                 showTrainerMainMenu();
             }
@@ -4635,7 +4656,6 @@ if (
         const receivedBoard = extractOnlineBoard(data);
 
         if (!receivedBoard || Object.keys(receivedBoard).length === 0) {
-            // Se o servidor não enviou o tabuleiro pronto, inicializa localmente se necessário
             if (typeof initializeBoardPokemonCards === 'function' && (!boardPokemonCards || Object.keys(boardPokemonCards).length === 0)) {
                 initializeBoardPokemonCards();
             }
@@ -4955,7 +4975,6 @@ window.finalizeCharacterCreation = function () {
 
         modalElement.classList.remove('hidden');
 
-        // Carregar imagem de pré-visualização atual do Pokémon do dia no admin, se existir no catálogo
         if (typeof MONSTER_CATALOG !== 'undefined' && dailyFeaturedPokemonConfig.pokemonId) {
             const foundMon = MONSTER_CATALOG.find(m => String(m.id).toLowerCase() === String(dailyFeaturedPokemonConfig.pokemonId).toLowerCase() || String(m.dexNumber) === String(dailyFeaturedPokemonConfig.pokemonId));
             const previewImg = document.getElementById('admin-preview-daily-sprite');
@@ -5004,7 +5023,6 @@ window.finalizeCharacterCreation = function () {
 
         const queryClean = inputQuery.trim().toLowerCase();
         
-        // Verifica no MONSTER_CATALOG se o Pokémon existe
         let matchedMon = null;
         if (typeof MONSTER_CATALOG !== 'undefined') {
             matchedMon = MONSTER_CATALOG.find(m => 
@@ -5024,13 +5042,11 @@ window.finalizeCharacterCreation = function () {
         const newItem = window.prompt("Insira o ID do item bônus (ex: item_rarecandy, ball_ultra, item_potion):", dailyFeaturedPokemonConfig.bonusItem || 'ball_ultra');
         if (!newItem) return;
 
-        // Atribui os dados corretos estruturados do catálogo
         dailyFeaturedPokemonConfig.pokemonId = matchedMon.id;
         dailyFeaturedPokemonConfig.pokemonName = matchedMon.name;
         dailyFeaturedPokemonConfig.bonusItem = newItem.trim().toLowerCase();
         dailyFeaturedPokemonConfig.bonusItemName = newItem.replace('item_', '').replace('ball_', '').toUpperCase();
 
-        // Atualiza a interface visualmente se estiver em execução
         const dailyBannerSprite = document.getElementById('daily-pokemon-sprite');
         const dailyBannerName = document.getElementById('daily-pokemon-name');
         if (dailyBannerName) dailyBannerName.textContent = matchedMon.name;
