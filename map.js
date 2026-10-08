@@ -1,5 +1,5 @@
 // --- MÓDULO DO MAPA E CAMINHOS (MAP.JS) ---
-// Modo completo: Exibe os pontos de movimento, balões de Pokémon enfraquecidos, mini-ícones de ginásio, peões dos jogadores, Pokémon do Dia em destaque e chat interativo.
+// Modo completo com suporte a Multiplayer Online sincronizado
 
 if (typeof SUPABASE_STORAGE_URL === 'undefined') {
     var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
@@ -145,7 +145,7 @@ const BOARD_WAYPOINTS = [
     { id: 124, name: "Arena Final", hexagon: "H", top: 28.8, left: 92.1, type: "city", color: "amarelo", requiredType: "", connections: [114, 122] }
 ];
 
-// --- BFS OTIMIZADO: Contagem exata de passos em grafo bidirecional com histórico de rota único ---
+// --- BFS OTIMIZADO ---
 function getValidDestinations(startWaypointId, steps) {
     let validIds = new Set();
     const activePlayer = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : (gameState.players ? gameState.players[gameState.currentPlayerIndex || 0] : null);
@@ -292,6 +292,14 @@ function handleWaypointArrival(waypointId) {
         appendAdventureLog(`${cp.name} chegou a ${waypoint.name} (Zona #${waypoint.id}).`);
     }
 
+    // === INTEGRAÇÃO MULTIPLAYER: Sincroniza o movimento com os outros jogadores na sala ===
+    if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function') {
+        socket.emit('update_game_state', {
+            type: 'player_move',
+            gameState: typeof gameState !== 'undefined' ? gameState : null
+        });
+    }
+
     if (typeof checkPlayerCellCollision === 'function') {
         checkPlayerCellCollision(waypointId, gameState.currentPlayerIndex || 0);
     }
@@ -303,7 +311,6 @@ function handleWaypointArrival(waypointId) {
     } else if (waypoint.type === 'pokemon') {
         if (typeof boardPokemonCards !== 'undefined' && boardPokemonCards[waypointId]) {
             const poke = boardPokemonCards[waypointId];
-            // Bónus especial se for o Pokémon do Dia
             if (typeof dailyFeaturedPokemonConfig !== 'undefined' && poke.id === dailyFeaturedPokemonConfig.pokemonId) {
                 if (typeof showCustomPopup === 'function') {
                     showCustomPopup("⭐ POKÉMON DO DIA ENCONTRADO!", `Este é o Anima em destaque de hoje (${dailyFeaturedPokemonConfig.pokemonName})! Ao capturá-lo, receberá o item bónus (${dailyFeaturedPokemonConfig.bonusItemName})!`, true);
@@ -455,11 +462,10 @@ function renderBoardMap(highlightIds = []) {
         </div>
     `;
 
-    // Vincular ou sincronizar eventos de chat se existirem elementos no DOM
     setupMapChatListeners();
 }
 
-// --- CONFIGURAÇÃO E CORREÇÃO DO CHAT NO MAPA ---
+// --- CONFIGURAÇÃO E CORREÇÃO DO CHAT NO MAPA (Com suporte a Sala Online) ---
 function setupMapChatListeners() {
     const sendBtn = document.getElementById('send-chat-btn') || document.getElementById('map-send-chat-btn');
     const chatInput = document.getElementById('chat-input-field') || document.getElementById('map-chat-input');
@@ -472,20 +478,12 @@ function setupMapChatListeners() {
             
             const cp = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : { name: "Treinador" };
             
-            if (typeof gameState !== 'undefined' && gameState) {
-                if (!Array.isArray(gameState.chatMessages)) gameState.chatMessages = [];
-                gameState.chatMessages.push({ sender: cp.name, text: text });
-                if (gameState.chatMessages.length > 50) gameState.chatMessages.shift();
-            }
-
+            // Envia mensagem direcionada para a sala online atual via Socket.io
             if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function') {
-                socket.emit('lobby_chat_message', { sender: cp.name, message: text });
+                socket.emit('room_chat_message', { message: text });
             }
 
             chatInput.value = '';
-            if (typeof renderChatMessages === 'function') {
-                renderChatMessages();
-            }
         };
 
         chatInput.onkeydown = (e) => {
@@ -494,6 +492,33 @@ function setupMapChatListeners() {
             }
         };
     }
+}
+
+// --- OUVINTE GLOBAL DE SINCRONIZAÇÃO DE MAPA E ESTADO ---
+if (typeof socket !== 'undefined' && socket) {
+    socket.off('sync_game_state'); // Evita duplicação de ouvintes
+    socket.on('sync_game_state', (data) => {
+        if (data && data.gameState && typeof gameState !== 'undefined') {
+            gameState = data.gameState;
+            if (typeof renderBoardMap === 'function') {
+                renderBoardMap();
+            }
+        }
+    });
+
+    socket.off('room_chat_broadcast');
+    socket.on('room_chat_broadcast', (data) => {
+        const chatBoxes = [
+            document.getElementById('chat-messages-box'),
+            document.getElementById('lobby-chat-messages')
+        ];
+        chatBoxes.forEach(box => {
+            if (box) {
+                box.innerHTML += `<p class="text-[9px] text-amber-300"><strong>[${data.sender}]:</strong> ${data.text}</p>`;
+                box.scrollTop = box.scrollHeight;
+            }
+        });
+    });
 }
 
 function renderBoardMapWithHighlights(validNextSteps) {
