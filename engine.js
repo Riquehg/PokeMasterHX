@@ -3897,7 +3897,6 @@ function withdrawMonsterFromVault(vaultIndex) {
 
         // --- ATUALIZAÇÃO DO HUB DO TREINADOR COM DADOS REAIS ---
         const cp = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[0] || {});
-        renderHubActiveTeam(cp);
         const profileData = accountData.profile_data || accountData.profileData || {};
         
         const finalTrainerName = cp.name || accountData.trainerName || profileData.trainerName || 'Treinador';
@@ -3920,6 +3919,9 @@ function withdrawMonsterFromVault(vaultIndex) {
             avatarImg.src = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_${finalAvatarId}.png`;
         }
 
+        // Renderiza os Pokémon ativos no HUB
+        renderHubActiveTeam(cp);
+
         if (typeof showPostLoginDashboard === 'function') {
             showPostLoginDashboard();
         } else {
@@ -3934,36 +3936,44 @@ function withdrawMonsterFromVault(vaultIndex) {
     }
 
     window.renderHubActiveTeam = function(playerData) {
-    const activeTeam = playerData.activeTeam || [];
-    
-    // Procura ou cria o container dos Pokémon ativos no card do HUB
-    for (let i = 0; i < 6; i++) {
-        let slotEl = document.getElementById(`hub-team-slot-${i}`);
-        if (!slotEl) {
-            // Se o slot não existir no HTML, tenta encontrar pelo container geral do card
-            continue;
-        }
+        const activeTeam = playerData.activeTeam || [];
         
-        const mon = activeTeam[i];
-        if (mon) {
-            const spriteUrl = mon.image || `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/${String(mon.dexNumber || '001').padStart(3, '0')}.png`;
-            slotEl.innerHTML = `
-                <div class="w-full h-full bg-black/60 border border-amber-500/50 rounded-lg flex items-center justify-center relative cursor-pointer group" 
-                     onclick="openVaultModal()" title="${mon.name} - Clique para gerenciar no Cofre">
-                    <img src="${spriteUrl}" class="w-10 h-10 object-contain drop-shadow" alt="${mon.name}">
-                    <span class="absolute bottom-0 right-0 bg-amber-600 text-black text-[8px] font-bold px-1 rounded">Nv.${mon.level || 1}</span>
-                </div>
-            `;
-        } else {
-            slotEl.innerHTML = `
-                <div class="w-full h-full bg-black/30 border border-dashed border-blue-500/30 rounded-lg flex items-center justify-center cursor-pointer hover:bg-blue-900/20" 
-                     onclick="openVaultModal()" title="Slot Vazio - Clique para adicionar do Cofre">
-                    <i class="fa-solid fa-plus text-blue-400 text-xs"></i>
-                </div>
-            `;
+        // Garante que o container do HUB tenha uma grade para exibir os 6 Pokémon ativos
+        let teamContainer = document.getElementById('hub-active-team-grid');
+        const hubCardInfo = document.querySelector('#trainer-main-menu .flex.items-center.gap-4');
+        
+        if (!teamContainer && hubCardInfo) {
+            teamContainer = document.createElement('div');
+            teamContainer.id = 'hub-active-team-grid';
+            teamContainer.className = 'grid grid-cols-6 gap-1.5 mt-3 pt-3 border-t border-blue-500/30';
+            hubCardInfo.parentNode.appendChild(teamContainer);
         }
-    }
-};
+
+        if (teamContainer) {
+            let htmlContent = '';
+            for (let i = 0; i < 6; i++) {
+                const mon = activeTeam[i];
+                if (mon) {
+                    const spriteUrl = mon.image || `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/${String(mon.dexNumber || '001').padStart(3, '0')}.png`;
+                    htmlContent += `
+                        <div class="h-12 bg-black/60 border border-amber-500/50 rounded-lg flex items-center justify-center relative cursor-pointer group" 
+                             onclick="openVaultModal()" title="${mon.name} - Clique para gerenciar no Cofre">
+                            <img src="${spriteUrl}" class="w-8 h-8 object-contain drop-shadow" alt="${mon.name}">
+                            <span class="absolute bottom-0 right-0 bg-amber-600 text-black text-[7px] font-bold px-0.5 rounded">Nv.${mon.level || 1}</span>
+                        </div>
+                    `;
+                } else {
+                    htmlContent += `
+                        <div class="h-12 bg-black/30 border border-dashed border-blue-500/30 rounded-lg flex items-center justify-center cursor-pointer hover:bg-blue-900/20" 
+                             onclick="openVaultModal()" title="Slot Vazio - Clique para adicionar do Cofre">
+                            <i class="fa-solid fa-plus text-blue-400 text-[10px]"></i>
+                        </div>
+                    `;
+                }
+            }
+            teamContainer.innerHTML = htmlContent;
+        }
+    };
 
   // --- PAINEL PÓS-LOGIN (Redirecionado Direto para o Menu Principal Completo) ---
 
