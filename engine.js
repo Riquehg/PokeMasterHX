@@ -4297,6 +4297,7 @@ window.finalizeCharacterCreation = function () {
     if (typeof initGameEngine === 'function') initGameEngine();
     showCustomPopup('Nova Jornada', `Boa sorte, ${trainerName}! Você começou sua jornada com ${chosenStarter.name}.`, true);
 };
+
     // Oculta telas de setup e exibe o layout principal do jogo
     const characterCreation = document.getElementById('character-creation-container');
     const setupScreen = document.getElementById('setup-screen');
