@@ -3145,7 +3145,7 @@ window.renderVaultModalContent = function(modalElement) {
                 <span class="text-xs font-black text-purple-300 font-cinzel">
                     <i class="fa-solid fa-box-archive"></i> COFRE GLOBAL / GERENCIADOR DE EQUIPE
                 </span>
-                <button type="button" onclick="closeVaultModal()" class="text-purple-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-purple-800 cursor-pointer">
+                </button type="button" onclick="closeVaultModal()" class="text-purple-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-purple-800 cursor-pointer">
                     ✕ Fechar
                 </button>
             </div>
