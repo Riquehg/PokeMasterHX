@@ -19,6 +19,13 @@ socket.on('sync_game_state', (remoteData) => {
     if (typeof renderBoardMap === 'function') renderBoardMap();
 });
 
+// --- SISTEMA DE NOTIFICAÇÕES GLOBAIS (SOCKET.IO) ---
+socket.on('global_notification', (data) => {
+    if (!data || !data.message) return;
+    showCustomPopup(data.title || "📢 Alerta Global", data.message, true);
+    appendAdventureLog(`[Global]: ${data.message}`);
+});
+
 let gameState = {
     setupDone: false,
     players: [],
@@ -32,7 +39,7 @@ let gameState = {
     pcBoxCurrentPage: 0
 };
 
-// --- VARIÁVEIS DE CONFIGURAÇÃO DA TELA INICIAL ---
+// --- VARIÁVEIS DE CONFIGURAÇÃO DA TELA INICIAL (Com Botão Online e Modo 1-4 Jogadores Fixos) ---
 let setupConfig = {
     mode: 'solo', // 'solo' ou 'local_multi'
     playersCount: 1,
@@ -58,6 +65,15 @@ let currentEncounterState = {
 
 // Variável temporária para armazenar a aura da Poké Ball selecionada no turno atual
 let selectedBallAura = null;
+
+// --- CONFIGURAÇÃO DO POKÉMON DO DIA ---
+let dailyFeaturedPokemonConfig = {
+    pokemonId: 'pikachu',
+    pokemonName: 'Pikachu',
+    bonusItem: 'item_rarecandy',
+    bonusItemName: 'Rare Candy',
+    activeDate: new Date().toDateString()
+};
 
 // Fallback preventivo de estado válido para evitar travamentos ao limpar o navegador
 function ensureValidGameState() {
@@ -707,6 +723,15 @@ function addMonsterToPlayer(monster) {
     if (!Array.isArray(cp.pcBox)) cp.pcBox = [];
     cp.pcBox.push(newMon);
     appendAdventureLog(`${cp.name} capturou ${newMon.isShiny ? '✨ Shiny ' : ''}${newMon.name} (Nv. ${newMon.level}) e foi enviado diretamente para a PC Box!`);
+
+    // Notificação global se for Raro, Lendário ou Shiny
+    const isRareOrLegendary = (newMon.tier >= 3) || newMon.isShiny;
+    if (isRareOrLegendary) {
+        socket.emit('global_notification', {
+            title: "🌟 CAPTURA ÉPICA!",
+            message: `${cp.name} acabou de capturar um ${newMon.isShiny ? '✨ Shiny ' : ''}${newMon.name} (Tier ${newMon.tier})!`
+        });
+    }
 
     renderTeamCardSlots();
     renderBottomPanel();
@@ -4218,7 +4243,7 @@ function withdrawMonsterFromVault(vaultIndex) {
         }
     };
 
-    // --- PAINEL ADMINISTRATIVO ---
+    // --- PAINEL ADMINISTRATIVO COMPLETO ---
 
     let adminUsersListenerRegistered = false;
 
@@ -4256,9 +4281,9 @@ function withdrawMonsterFromVault(vaultIndex) {
         }
 
         adminModal.innerHTML = `
-            <div class="trainer-card max-w-4xl w-full p-6 border-4 border-red-600 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white text-center">
+            <div class="trainer-card max-w-4xl w-full p-6 border-4 border-red-600 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white text-center space-y-4">
                 <p class="text-sm text-red-300 font-black">
-                    Carregando contas...
+                    Carregando painel administrativo...
                 </p>
             </div>
         `;
@@ -4274,6 +4299,7 @@ function withdrawMonsterFromVault(vaultIndex) {
         }
 
         emitSocket('admin_get_users');
+        adminModal.classList.remove('hidden');
     };
 
     function renderAdminDashboard(modalElement, users) {
@@ -4345,6 +4371,22 @@ function withdrawMonsterFromVault(vaultIndex) {
 
                                         <button
                                             type="button"
+                                            data-admin-action="pokemon"
+                                            data-admin-email="${email}"
+                                            class="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded font-bold cursor-pointer">
+                                            👾 Pokémon
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            data-admin-action="item"
+                                            data-admin-email="${email}"
+                                            class="bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded font-bold cursor-pointer">
+                                            🎒 Item
+                                        </button>
+
+                                        <button
+                                            type="button"
                                             data-admin-action="password"
                                             data-admin-email="${email}"
                                             class="bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded font-bold cursor-pointer">
@@ -4366,11 +4408,10 @@ function withdrawMonsterFromVault(vaultIndex) {
                     .join('');
 
         modalElement.innerHTML = `
-            <div class="trainer-card max-w-4xl w-full p-6 space-y-4 border-4 border-red-600 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
+            <div class="trainer-card max-w-5xl w-full p-6 space-y-4 border-4 border-red-600 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
                 <div class="flex justify-between items-center border-b border-red-900 pb-2">
                     <span class="text-xs font-black text-red-400 font-cinzel">
-                        <i class="fa-solid fa-shield-halved"></i>
-                        PAINEL DO ADMINISTRADOR
+                        <i class="fa-solid fa-shield-halved"></i> PAINEL DO ADMINISTRADOR COMPLETO
                     </span>
 
                     <button
@@ -4381,9 +4422,20 @@ function withdrawMonsterFromVault(vaultIndex) {
                     </button>
                 </div>
 
+                <!-- SEÇÃO CONFIGURAR POKÉMON DO DIA -->
+                <div class="bg-black/60 border-2 border-amber-500/60 p-4 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div class="text-left space-y-1">
+                        <p class="text-xs font-bold text-amber-300">⭐ Configurar Pokémon do Dia</p>
+                        <p class="text-[10px] text-slate-300">Atual: <strong class="text-amber-400">${dailyFeaturedPokemonConfig.pokemonName}</strong> (Bónus: ${dailyFeaturedPokemonConfig.bonusItemName})</p>
+                    </div>
+                    <button type="button" onclick="window.openAdminDailyFeaturedModal()" class="bg-amber-600 hover:bg-amber-500 text-black font-black px-4 py-2 rounded-xl text-xs uppercase shadow cursor-pointer">
+                        Configurar Destaque
+                    </button>
+                </div>
+
                 <div class="flex justify-between items-center">
                     <span class="text-xs font-bold text-slate-300">
-                        Total de contas:
+                        Total de contas cadastradas:
                         <span class="text-amber-400">${safeUsers.length}</span>
                     </span>
 
@@ -4391,11 +4443,11 @@ function withdrawMonsterFromVault(vaultIndex) {
                         type="button"
                         id="refresh-admin-users-button"
                         class="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-1 rounded border border-red-700 cursor-pointer">
-                        🔄 Atualizar
+                        🔄 Atualizar Lista
                     </button>
                 </div>
 
-                <div class="max-h-96 overflow-y-auto border border-red-900/60 rounded-xl bg-black/60 p-2">
+                <div class="max-h-80 overflow-y-auto border border-red-900/60 rounded-xl bg-black/60 p-2">
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="border-b border-red-900 text-[10px] text-red-300 uppercase">
@@ -4403,7 +4455,7 @@ function withdrawMonsterFromVault(vaultIndex) {
                                 <th class="p-2">Treinador</th>
                                 <th class="p-2">Último Login</th>
                                 <th class="p-2">Ouro</th>
-                                <th class="p-2 text-right">Ações</th>
+                                <th class="p-2 text-right">Ações de Gestão</th>
                             </tr>
                         </thead>
 
@@ -4438,18 +4490,36 @@ function withdrawMonsterFromVault(vaultIndex) {
 
                     if (action === 'gold') {
                         window.adminGiveGold(email);
-                    }
-
-                    if (action === 'password') {
+                    } else if (action === 'pokemon') {
+                        window.adminGivePokemon(email);
+                    } else if (action === 'item') {
+                        window.adminGiveItem(email);
+                    } else if (action === 'password') {
                         window.adminResetPassword(email);
-                    }
-
-                    if (action === 'delete') {
+                    } else if (action === 'delete') {
                         window.adminDeleteAccount(email);
                     }
                 });
             });
     }
+
+    window.openAdminDailyFeaturedModal = function() {
+        const newMon = window.prompt("Insira o ID do Pokémon do Dia (ex: charizard, mewtwo, pikachu):", dailyFeaturedPokemonConfig.pokemonId);
+        if (!newMon) return;
+        const newItem = window.prompt("Insira o ID do item bônus (ex: item_rarecandy, ball_ultra, item_potion):", dailyFeaturedPokemonConfig.bonusItem);
+        if (!newItem) return;
+
+        dailyFeaturedPokemonConfig.pokemonId = newMon.trim().toLowerCase();
+        dailyFeaturedPokemonConfig.pokemonName = newMon.charAt(0).toUpperCase() + newMon.slice(1);
+        dailyFeaturedPokemonConfig.bonusItem = newItem.trim().toLowerCase();
+        dailyFeaturedPokemonConfig.bonusItemName = newItem.replace('item_', '').replace('ball_', '').toUpperCase();
+
+        showCustomPopup("✨ Pokémon do Dia Atualizado", `Novo destaque configurado com sucesso:\n\nPokémon: ${dailyFeaturedPokemonConfig.pokemonName}\nItem Bônus: ${dailyFeaturedPokemonConfig.bonusItemName}`, true);
+        socket.emit('global_notification', {
+            title: "⭐ POKÉMON DO DIA",
+            message: `O Pokémon em destaque de hoje é ${dailyFeaturedPokemonConfig.pokemonName}! Capture-o para receber bônus especiais!`
+        });
+    };
 
     window.adminGiveGold = function (email) {
         const amountText = window.prompt(
@@ -4472,6 +4542,33 @@ function withdrawMonsterFromVault(vaultIndex) {
         window.setTimeout(() => {
             emitSocket('admin_get_users');
         }, 500);
+    };
+
+    window.adminGivePokemon = function(email) {
+        const monId = window.prompt(`Insira o ID do Pokémon para enviar ao treinador ${email} (ex: charizard, mewtwo):`, 'charizard');
+        if (!monId) return;
+
+        emitSocket('admin_action', {
+            action: 'give_pokemon',
+            email,
+            pokemonId: monId.trim().toLowerCase()
+        });
+        showCustomPopup("Pokémon Enviado", `O Pokémon foi adicionado à conta ${email} com sucesso!`, true);
+    };
+
+    window.adminGiveItem = function(email) {
+        const itemId = window.prompt(`Insira o ID do item para enviar ao treinador ${email} (ex: ball_ultra, item_rarecandy):`, 'ball_ultra');
+        if (!itemId) return;
+        const qtyText = window.prompt(`Insira a quantidade:`, '5');
+        const quantity = Math.max(1, Number(qtyText) || 1);
+
+        emitSocket('admin_action', {
+            action: 'give_item',
+            email,
+            itemId: itemId.trim().toLowerCase(),
+            quantity
+        });
+        showCustomPopup("Item Enviado", `${quantity}x ${itemId} adicionado à conta ${email} com sucesso!`, true);
     };
 
     window.adminResetPassword = function (email) {
@@ -4497,6 +4594,7 @@ function withdrawMonsterFromVault(vaultIndex) {
             newPass: newPassword,
             newPassword
         });
+        showCustomPopup("Senha Alterada", `A senha da conta ${email} foi redefinida com sucesso.`, true);
     };
 
     window.adminDeleteAccount = function (email) {
