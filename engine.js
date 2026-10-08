@@ -3,7 +3,6 @@
 if (typeof SUPABASE_STORAGE_URL === 'undefined') {
     var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
 }
-var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
 
 // 1. Inicializar a conexão Socket.io com o servidor backend na nuvem (Render)
 const socket = io('https://pokemasterhx.onrender.com');
@@ -2997,26 +2996,26 @@ window.openVaultModal = function() {
     }
 
     let listHtml = '';
-if (vault.length === 0) {
-    listHtml = `<p class="text-xs text-slate-400 text-center col-span-full py-8">O cofre está vazio. Jogue, evolua e guarde os seus melhores Pokémon!</p>`;
-} else {
-    vault.forEach((mon, index) => {
-        const isShiny = mon.isShiny;
-        const img = (isShiny && mon.shinyImage) ? mon.shinyImage : mon.image;
-        listHtml += `
-            <div class="bg-black/60 border-2 ${isShiny ? 'border-amber-400' : 'border-amber-700'} rounded-2xl p-3 flex flex-col justify-between items-center text-white space-y-2">
-                <span class="text-[10px] font-bold text-amber-300">${mon.name}${isShiny ? '✨' : ''}</span>
-                <img src="${img}" class="w-12 h-12 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
-                <div class="text-[9px] text-center text-slate-300">
-                    Nv.${mon.level || 1} | STR:${mon.str || 4}
+    if (vault.length === 0) {
+        listHtml = `<p class="text-xs text-slate-400 text-center col-span-full py-8">O cofre está vazio. Jogue, evolua e guarde os seus melhores Pokémon!</p>`;
+    } else {
+        vault.forEach((mon, index) => {
+            const isShiny = mon.isShiny;
+            const img = (isShiny && mon.shinyImage) ? mon.shinyImage : mon.image;
+            listHtml += `
+                <div class="bg-black/60 border-2 ${isShiny ? 'border-amber-400' : 'border-amber-700'} rounded-2xl p-3 flex flex-col justify-between items-center text-white space-y-2">
+                    <span class="text-[10px] font-bold text-amber-300">${mon.name}${isShiny ? '✨' : ''}</span>
+                    <img src="${img}" class="w-12 h-12 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                    <div class="text-[9px] text-center text-slate-300">
+                        Nv.${mon.level || 1} | STR:${mon.str || 4}
+                    </div>
+                    <button onclick="withdrawMonsterFromVault(${index})" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-1 rounded text-[9px] uppercase shadow cursor-pointer">
+                        Resgatar
+                    </button>
                 </div>
-                <button onclick="withdrawMonsterFromVault(${index})" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-1 rounded text-[9px] uppercase shadow cursor-pointer">
-                    Resgatar
-                </button>
-            </div>
-        `;
-    });
-}
+            `;
+        });
+    }
 
     vaultModal.innerHTML = `
         <div class="trainer-card max-w-2xl w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
@@ -3818,14 +3817,15 @@ function withdrawMonsterFromVault(vaultIndex) {
         }
 
         if (typeof showPostLoginDashboard === 'function') {
-        showPostLoginDashboard();
-    } else {
-        const authContainer = document.getElementById('auth-container');
-        const characterCreation = document.getElementById('character-creation-container');
-        if (authContainer) authContainer.classList.add('hidden');
-        if (characterCreation) characterCreation.classList.add('hidden');
-        if (typeof launchGameSession === 'function') {
-            launchGameSession();
+            showPostLoginDashboard();
+        } else {
+            const authContainer = document.getElementById('auth-container');
+            const characterCreation = document.getElementById('character-creation-container');
+            if (authContainer) authContainer.classList.add('hidden');
+            if (characterCreation) characterCreation.classList.add('hidden');
+            if (typeof launchGameSession === 'function') {
+                launchGameSession();
+            }
         }
     }
 
@@ -4141,20 +4141,22 @@ function withdrawMonsterFromVault(vaultIndex) {
             });
     }
 
+    const currentSocketInstance = getSocket();
     if (
-        accountSocket &&
-        typeof accountSocket.on === 'function'
+        currentSocketInstance &&
+        typeof currentSocketInstance.on === 'function'
     ) {
-        accountSocket.on('rooms_list_response', renderRoomsList);
-        accountSocket.on('rooms_list', renderRoomsList);
+        currentSocketInstance.on('rooms_list_response', renderRoomsList);
+        currentSocketInstance.on('rooms_list', renderRoomsList);
+        currentSocketInstance.on('login_response', handleLoginResponse);
 
-        accountSocket.on('room_created', () => {
+        currentSocketInstance.on('room_created', () => {
             if (typeof refreshRoomsList === 'function') {
                 refreshRoomsList();
             }
         });
 
-        accountSocket.on('room_joined', roomData => {
+        currentSocketInstance.on('room_joined', roomData => {
             if (typeof showCustomPopup === 'function') {
                 showCustomPopup(
                     'Sala online',
@@ -4164,7 +4166,7 @@ function withdrawMonsterFromVault(vaultIndex) {
             }
         });
 
-        accountSocket.on('lobby_error', message => {
+        currentSocketInstance.on('lobby_error', message => {
             if (typeof showCustomPopup === 'function') {
                 showCustomPopup(
                     'Erro no lobby',
@@ -4261,12 +4263,13 @@ function withdrawMonsterFromVault(vaultIndex) {
             </div>
         `;
 
+        const sock = getSocket();
         if (
-            accountSocket &&
-            typeof accountSocket.on === 'function' &&
+            sock &&
+            typeof sock.on === 'function' &&
             !adminUsersListenerRegistered
         ) {
-            accountSocket.on('admin_users_list', handleAdminUsersList);
+            sock.on('admin_users_list', handleAdminUsersList);
             adminUsersListenerRegistered = true;
         }
 
@@ -4286,33 +4289,33 @@ function withdrawMonsterFromVault(vaultIndex) {
                     </tr>
                 `
                 : safeUsers
-                      .map(user => {
-                          const email = escapeAccountHtml(
-                              user?.email || ''
-                          );
+                    .map(user => {
+                        const email = escapeAccountHtml(
+                            user?.email || ''
+                        );
 
-                          const trainerName = escapeAccountHtml(
-                              user?.trainerName ||
-                                  user?.trainer_name ||
-                                  user?.name ||
-                                  'N/D'
-                          );
+                        const trainerName = escapeAccountHtml(
+                            user?.trainerName ||
+                                user?.trainer_name ||
+                                user?.name ||
+                                'N/D'
+                        );
 
-                          const lastLogin = user?.lastLogin
-                              ? escapeAccountHtml(
-                                    new Date(
-                                        user.lastLogin
-                                    ).toLocaleString('pt-BR')
-                                )
-                              : 'Nunca';
+                        const lastLogin = user?.lastLogin
+                            ? escapeAccountHtml(
+                                  new Date(
+                                      user.lastLogin
+                                  ).toLocaleString('pt-BR')
+                              )
+                            : 'Nunca';
 
-                          const gold = Number(
-                              user?.gold ||
-                                  user?.profile_data?.gold ||
-                                  0
-                          );
+                        const gold = Number(
+                            user?.gold ||
+                                user?.profile_data?.gold ||
+                                0
+                        );
 
-                          return `
+                        return `
                             <tr class="border-b border-red-900/40 text-[10px] hover:bg-red-950/20">
                                 <td class="p-2 font-bold text-amber-300">
                                     ${email}
@@ -4359,8 +4362,8 @@ function withdrawMonsterFromVault(vaultIndex) {
                                 </td>
                             </tr>
                           `;
-                      })
-                      .join('');
+                    })
+                    .join('');
 
         modalElement.innerHTML = `
             <div class="trainer-card max-w-4xl w-full p-6 space-y-4 border-4 border-red-600 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
