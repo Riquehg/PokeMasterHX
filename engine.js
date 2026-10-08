@@ -66,7 +66,7 @@ let currentEncounterState = {
 // Variável temporária para armazenar a aura da Poké Ball selecionada no turno atual
 let selectedBallAura = null;
 
-// --- CONFIGURAÇÃO DO POKÉMON DO DIA ---
+// --- CONFIGURAÇÃO DO POKÉMON DO DIA (Integrado com o MONSTER_CATALOG do card-data.js) ---
 let dailyFeaturedPokemonConfig = {
     pokemonId: 'pikachu',
     pokemonName: 'Pikachu',
@@ -74,6 +74,36 @@ let dailyFeaturedPokemonConfig = {
     bonusItemName: 'Rare Candy',
     activeDate: new Date().toDateString()
 };
+
+// Função auxiliar para atualizar visualmente o banner do Pokémon do Dia com base no catálogo
+function updateDailyPokemonBannerUI() {
+    if (typeof MONSTER_CATALOG === 'undefined') return;
+    
+    // Procura o Pokémon no catálogo pelo ID ou nome
+    const found = MONSTER_CATALOG.find(m => 
+        String(m.id).toLowerCase() === String(dailyFeaturedPokemonConfig.pokemonId).toLowerCase() ||
+        String(m.name).toLowerCase() === String(dailyFeaturedPokemonConfig.pokemonName).toLowerCase()
+    );
+
+    if (found) {
+        dailyFeaturedPokemonConfig.pokemonId = found.id;
+        dailyFeaturedPokemonConfig.pokemonName = found.name;
+        
+        const nameEl = document.getElementById('daily-pokemon-name');
+        const spriteEl = document.getElementById('daily-pokemon-sprite');
+        
+        if (nameEl) nameEl.textContent = found.name;
+        if (spriteEl) {
+            const paddedDex = String(found.dexNumber).padStart(3, '0');
+            spriteEl.src = found.image || `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
+        }
+    }
+}
+
+// Executa a verificação assim que a página carregar
+window.addEventListener('DOMContentLoaded', () => {
+    updateDailyPokemonBannerUI();
+});
 
 // Fallback preventivo de estado válido para evitar travamentos ao limpar o navegador
 function ensureValidGameState() {
