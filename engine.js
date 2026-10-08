@@ -3893,7 +3893,7 @@ function withdrawMonsterFromVault(vaultIndex) {
         }
     }
 
-    // --- PAINEL PÓS-LOGIN ---
+  // --- PAINEL PÓS-LOGIN (Redirecionado Direto para o Menu Principal Completo) ---
 
     window.showPostLoginDashboard = function () {
         if (typeof ensureValidGameState === 'function') {
@@ -3906,156 +3906,18 @@ function withdrawMonsterFromVault(vaultIndex) {
             authContainer.classList.add('hidden');
         }
 
-        let dashboard = document.getElementById('post-login-dashboard');
-
-        if (!dashboard) {
-            dashboard = document.createElement('div');
-            dashboard.id = 'post-login-dashboard';
-            dashboard.className =
-                'fixed inset-0 bg-[#020617] z-[300] flex items-center justify-center p-4 backdrop-blur-md';
-            document.body.appendChild(dashboard);
-        }
-
-        const currentPlayer =
-            typeof getCurrentPlayer === 'function'
-                ? getCurrentPlayer()
-                : null;
-
-        if (!currentPlayer) return;
-
-        const trainerName = escapeAccountHtml(
-            currentPlayer.name || 'Treinador'
-        );
-
-        const avatarId = Math.max(
-            1,
-            Math.min(8, Number(currentPlayer.avatarId) || 1)
-        );
-
-        const avatarBase =
-            typeof SUPABASE_STORAGE_URL !== 'undefined'
-                ? SUPABASE_STORAGE_URL
-                : '';
-
-        dashboard.innerHTML = `
-            <div class="trainer-card max-w-md w-full p-6 space-y-5 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white text-center">
-                <h2 class="text-base font-black text-amber-400 font-cinzel tracking-wider">
-                    SESSÃO AUTENTICADA
-                </h2>
-
-                <p class="text-xs text-slate-300">
-                    Bem-vindo de volta ao
-                    <strong class="text-amber-300">Master Trainer HEX</strong>.
-                </p>
-
-                <div class="bg-black/70 border-2 border-amber-600/80 p-4 rounded-2xl flex items-center gap-4 text-left shadow-inner">
-                    <img
-                        src="${avatarBase}player_0${avatarId}.png"
-                        class="w-16 h-16 object-contain"
-                        alt="Avatar de ${trainerName}"
-                        onerror="this.onerror=null;this.src='https://api.iconify.design/noto:boy.svg'">
-
-                    <div>
-                        <h3 class="text-sm font-black text-amber-300">
-                            ${trainerName}
-                        </h3>
-
-                        <p class="text-[10px] text-slate-300">
-                            Ouro:
-                            <strong class="text-yellow-400">
-                                ${Math.max(0, Number(currentPlayer.gold) || 0)} 🪙
-                            </strong>
-                        </p>
-
-                        <p class="text-[10px] text-slate-300">
-                            Zona atual:
-                            <strong class="text-blue-400">
-                                #${Number(currentPlayer.currentZone) || 5}
-                            </strong>
-                        </p>
-                    </div>
-                </div>
-
-                <div class="space-y-3 pt-2">
-                    <button
-                        type="button"
-                        onclick="resumeSavedGameFromDashboard()"
-                        class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer">
-                        ▶ Continuar Partida Salva
-                    </button>
-
-                    <button
-                        type="button"
-                        onclick="openNewGameSetupFromDashboard()"
-                        class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer">
-                        ✨ Nova Partida
-                    </button>
-
-                    <button
-                        type="button"
-                        onclick="openVaultModal()"
-                        class="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer">
-                        📦 Abrir Cofre Global
-                    </button>
-                </div>
-            </div>
-        `;
-
-        dashboard.classList.remove('hidden');
-    };
-
-    window.resumeSavedGameFromDashboard = function () {
-        closeModalById('post-login-dashboard');
-
-        const setupScreen = document.getElementById('setup-screen');
-        const mainLayout = document.getElementById('main-game-layout');
-
-        if (setupScreen) {
-            setupScreen.classList.add('hidden');
-        }
-
-        if (mainLayout) {
-            mainLayout.classList.remove('hidden');
-        }
-
-        refreshGameInterface();
-    };
-
-    window.openNewGameSetupFromDashboard = function () {
-        closeModalById('post-login-dashboard');
-
-        const setupScreen = document.getElementById('setup-screen');
-        const authContainer = document.getElementById('auth-container');
+        // Removemos a criação da div de "Sessão Autenticada" (Print 1)
+        // e chamamos diretamente o menu principal correto (Print 2)
         const mainMenu = document.getElementById('trainer-main-menu');
-        const characterCreation = document.getElementById(
-            'character-creation-container'
-        );
-
-        if (setupScreen) {
-            setupScreen.classList.remove('hidden');
-        }
-
-        if (authContainer) {
-            authContainer.classList.add('hidden');
-        }
-
         if (mainMenu) {
-            mainMenu.classList.add('hidden');
-        }
-
-        if (characterCreation) {
-            characterCreation.classList.remove('hidden');
-        }
-
-        if (typeof showCustomPopup === 'function') {
-            showCustomPopup(
-                'Nova partida',
-                'Configure o novo treinador. O Cofre Global permanece disponível.',
-                true
-            );
+            mainMenu.classList.remove('hidden');
+        } else {
+            // Caso utilize outra função global para abrir o menu do Print 2, chame-a aqui:
+            if (typeof showTrainerMainMenu === 'function') {
+                showTrainerMainMenu();
+            }
         }
     };
-
     // --- LOBBY ONLINE ---
 
     window.createOnlineRoom = function () {
