@@ -9,6 +9,13 @@ import { openSpecificTrainerCardModal, showCustomPopup } from './ui/modals.js';
 import { openPokemartModal } from './systems/inventory.js';
 import { MONSTER_CATALOG } from './config/cards-data.js';
 
+// EXPOSIÇÃO GLOBAL PARA O HTML (Corrige os erros de onclick direto)
+window.openSpecificTrainerCardModal = openSpecificTrainerCardModal;
+window.openPokemartModal = openPokemartModal;
+
+// Caso a função tryInteractWithCity venha de outro módulo, importe-a e exponha-a aqui também:
+// window.tryInteractWithCity = tryInteractWithCity;
+
 // Executado assim que o DOM estiver totalmente carregado
 document.addEventListener('DOMContentLoaded', () => {
     console.log("🚀 Inicializando o Motor Modular do Jogo...");
@@ -23,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. Renderiza o tabuleiro modular inicial e as waypoints
     renderBoardMap();
 
-    // 3. Vincula os ouvintes de eventos da interface (como o botão de rolar dado)
+    // 3. Vincula os ouvintes de eventos da interface
     setupDiceListeners();
     setupGlobalInterfaceListeners();
     setupAuthenticationListeners();
@@ -77,7 +84,6 @@ function loadDailyPokemonPreview() {
     const spriteEl = document.getElementById('daily-pokemon-sprite');
 
     if (MONSTER_CATALOG && MONSTER_CATALOG.length > 0) {
-        // Seleciona um Pokémon com base no dia atual ou aleatório
         const randomIndex = Math.floor(Math.random() * MONSTER_CATALOG.length);
         const dailyMon = MONSTER_CATALOG[randomIndex];
 
@@ -90,7 +96,6 @@ function loadDailyPokemonPreview() {
 
 // Vincula atalhos e botões globais da HUD
 function setupGlobalInterfaceListeners() {
-    // Botão de abrir Ficha do Treinador na HUD
     const trainerCardBtn = document.getElementById('open-trainer-card-btn') || document.getElementById('trainer-badge-btn');
     if (trainerCardBtn) {
         trainerCardBtn.onclick = () => {
@@ -98,7 +103,6 @@ function setupGlobalInterfaceListeners() {
         };
     }
 
-    // Botão de abrir Loja / Poké Mart
     const martBtn = document.getElementById('open-pokemart-btn');
     if (martBtn) {
         martBtn.onclick = () => {
