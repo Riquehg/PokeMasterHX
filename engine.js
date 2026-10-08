@@ -3897,6 +3897,7 @@ function withdrawMonsterFromVault(vaultIndex) {
 
         // --- ATUALIZAÇÃO DO HUB DO TREINADOR COM DADOS REAIS ---
         const cp = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[0] || {});
+        renderHubActiveTeam(cp);
         const profileData = accountData.profile_data || accountData.profileData || {};
         
         const finalTrainerName = cp.name || accountData.trainerName || profileData.trainerName || 'Treinador';
@@ -3931,6 +3932,38 @@ function withdrawMonsterFromVault(vaultIndex) {
             }
         }
     }
+
+    window.renderHubActiveTeam = function(playerData) {
+    const activeTeam = playerData.activeTeam || [];
+    
+    // Procura ou cria o container dos Pokémon ativos no card do HUB
+    for (let i = 0; i < 6; i++) {
+        let slotEl = document.getElementById(`hub-team-slot-${i}`);
+        if (!slotEl) {
+            // Se o slot não existir no HTML, tenta encontrar pelo container geral do card
+            continue;
+        }
+        
+        const mon = activeTeam[i];
+        if (mon) {
+            const spriteUrl = mon.image || `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/${String(mon.dexNumber || '001').padStart(3, '0')}.png`;
+            slotEl.innerHTML = `
+                <div class="w-full h-full bg-black/60 border border-amber-500/50 rounded-lg flex items-center justify-center relative cursor-pointer group" 
+                     onclick="openVaultModal()" title="${mon.name} - Clique para gerenciar no Cofre">
+                    <img src="${spriteUrl}" class="w-10 h-10 object-contain drop-shadow" alt="${mon.name}">
+                    <span class="absolute bottom-0 right-0 bg-amber-600 text-black text-[8px] font-bold px-1 rounded">Nv.${mon.level || 1}</span>
+                </div>
+            `;
+        } else {
+            slotEl.innerHTML = `
+                <div class="w-full h-full bg-black/30 border border-dashed border-blue-500/30 rounded-lg flex items-center justify-center cursor-pointer hover:bg-blue-900/20" 
+                     onclick="openVaultModal()" title="Slot Vazio - Clique para adicionar do Cofre">
+                    <i class="fa-solid fa-plus text-blue-400 text-xs"></i>
+                </div>
+            `;
+        }
+    }
+};
 
   // --- PAINEL PÓS-LOGIN (Redirecionado Direto para o Menu Principal Completo) ---
 
