@@ -6,6 +6,21 @@ if (typeof SUPABASE_STORAGE_URL === 'undefined') {
 
 // 1. Inicializar a conexão Socket.io com o servidor backend na nuvem (Render)
 const socket = io('https://pokemasterhx.onrender.com');
+// --- RESILIÊNCIA E RECONEXÃO AUTOMÁTICA (Fase 1) ---
+socket.on('connect', () => {
+    console.log('🔌 Conectado/Reconectado ao servidor com sucesso!');
+    // Se o jogador estiver em uma sala online, força a resincronização automática
+    if (typeof currentJoinedOnlineRoomId !== 'undefined' && currentJoinedOnlineRoomId) {
+        socket.emit('reconnect_sync', { roomId: currentJoinedOnlineRoomId });
+    }
+});
+
+socket.on('disconnect', (reason) => {
+    console.warn('⚠️ Conexão perdida com o servidor:', reason);
+    if (typeof showCustomPopup === 'function') {
+        showCustomPopup("Conexão Instável", "A conexão com o servidor foi interrompida. Tentando reconectar automaticamente...", false);
+    }
+});
 
 // Variável global de autenticação declarada apenas uma vez no início
 let currentAuthenticatedAccount = null;
