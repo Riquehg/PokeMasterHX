@@ -4121,15 +4121,26 @@ function withdrawMonsterFromVault(vaultIndex) {
         input.value = '';
     };
 
-    window.joinAndStartOnlineGame = function () {
+    // --- CORREÇÃO DO BOTÃO DE INICIAR PARTIDA ONLINE ---
+let currentJoinedOnlineRoomId = null;
+
+window.joinAndStartOnlineGame = function () {
+    if (!currentJoinedOnlineRoomId) {
         if (typeof showCustomPopup === 'function') {
             showCustomPopup(
                 'Modo online',
-                'Selecione uma sala disponível para entrar na partida.',
+                'Selecione uma sala disponível na lista acima e clique em "Entrar" para conectar-se à partida.',
                 true
             );
         }
-    };
+        return;
+    }
+
+    // Emite o evento para o servidor iniciar a partida da sala atual
+    if (typeof emitSocket === 'function') {
+        emitSocket('start_room_game', { roomId: currentJoinedOnlineRoomId });
+    }
+};
 
     function renderRoomsList(rooms) {
         const container =
