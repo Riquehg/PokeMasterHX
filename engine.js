@@ -678,7 +678,7 @@ function initializeBoardPokemonCards() {
                 revealed: false, 
                 weakened: false,
                 isShiny: isShiny,
-                                image: randomMonster.image || '',
+                image: randomMonster.image || '',
                 shinyImage: randomMonster.shinyImage || null,
                 auraEffect: randomMonster.auraEffect || null,
                 visualClass: randomMonster.visualClass || null
@@ -729,6 +729,7 @@ function renderEquipmentSlots() {
         }
     }
 }
+
 // --- ATUALIZAÇÃO DA UI DA BATALHA SELVAGEM (Com cartões e pré-soma corretos) ---
 function updateEncounterUIInfo() {
     const cp = getCurrentPlayer();
@@ -939,7 +940,6 @@ function triggerCaptureFlow(wildPokemon) {
     captureModal.classList.remove('hidden');
 }
 
-// Substitua a função attemptCatchWithSpecificBall() por esta versão.
 window.attemptCatchWithSpecificBall = function(ballItemId, waypointId) {
     const cp = getCurrentPlayer();
 
@@ -1182,6 +1182,7 @@ function useInventoryItemMainScreen(itemId) {
         showCustomPopup("Informação", `ℹ O item ${item.name} só pode ser aplicado diretamente durante uma Batalha ou Encontro.`, true);
     }
 }
+
 // --- SPRITES DOS GINÁSIOS CORRIGIDOS (leaders/) E FLUXO DE ARENA INTEGRADO ---
 window.openCityModal = function(cityName) {
     let cityModal = document.getElementById('city-hub-modal');
@@ -1387,6 +1388,10 @@ function renderMartContent(modalEl) {
         `;
     });
 
+    shopHTML += `</div></div>`;
+    modalEl.innerHTML = shopHTML;
+}
+
 window.normalizeMartQuantity = function(input) {
     if (!input) return 1;
 
@@ -1579,6 +1584,7 @@ window.buyItemFromMart = function(itemId, cost, requestedQuantity = 1) {
         renderMartContent(martModal);
     }
 };
+
 // --- FLUXO DE GINÁSIO INTEGRADO COM A ARENA TCG ---
 
 let currentGymBattleSession = null;
@@ -1689,7 +1695,7 @@ function openTeamSelectionModalForGym() {
                 const monImgSrc = mon.isShiny && mon.shinyImage ? mon.shinyImage : (mon.image || '');
 
                 teamGridHtml += `
-                    <div onclick="${isFainted ? '' : `toggleGymTeamSelection(${idx})`}" class="${tierCardBg} ${auraGymSelClass} p-3 rounded-2xl border-2 ${isSelected ? 'border-amber-400 bg-amber-950/80 scale-105' : 'border-amber-900/60'} ${isFainted ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-amber-500'} flex flex-col justify-between h-36 transition-all text-white">
+                    <div onclick="${isFainted ? '' : `toggleGymTeamSelection(${idx})`}" class="${tierCardBg}${auraGymSelClass} p-3 rounded-2xl border-2 ${isSelected ? 'border-amber-400 bg-amber-950/80 scale-105' : 'border-amber-900/60'} ${isFainted ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-amber-500'} flex flex-col justify-between h-36 transition-all text-white">
                         <div class="flex justify-between items-center text-[10px] font-bold text-amber-300">
                             <span>${mon.name}</span>
                             <span>Nv.${mon.level || 1}</span>
@@ -1800,7 +1806,7 @@ function executeLockedGymBattleSequence() {
 
             showCustomPopup(
                 `💥 DERROTA CONTRA ${gym.leader.toUpperCase()}`,
-                `O ${leaderPoke.name} do líder foi superior nesta ronda tática.\n\n💔 ${activeMon.name} sofreu ${damage} de dano!\n\n⚠ Tentativa de ginásio esgotada para este turno.`,
+                `O ${leaderPoke.name} do líder foi superior nesta ronda tática.\n\n💔 ${activeMon.name} sofreu${damage} de dano!\n\n⚠ Tentativa de ginásio esgotada para este turno.`,
                 false
             );
             renderTeamCardSlots();
@@ -1869,6 +1875,7 @@ function triggerPvPBattleArena(opponentName) {
         showCustomPopup("Erro", "Módulo da Arena de Batalha indisponível.", false);
     }
 }
+
 // --- SISTEMA DE ENCONTRO / BATALHA TCG (SELVAGENS) ---
 
 function openEncounterModalWithPokemon(pokemon) {
@@ -1939,7 +1946,6 @@ function renderEncounterItemsList() {
     }
 }
 
-// Substitua a função useItemInEncounter() por esta versão.
 function useItemInEncounter(item, itemIndex) {
     const cp = getCurrentPlayer();
     const activeMon =
@@ -2006,7 +2012,7 @@ function useItemInEncounter(item, itemIndex) {
 
         showCustomPopup(
             "Item Usado",
-            `💊 ${item.name} usada em ${activeMon.name}!`,
+            `💊 ${item.name} usada em${activeMon.name}!`,
             true
         );
 
@@ -2117,7 +2123,6 @@ function showCustomPopup(title, message, isSuccess = true) {
     popupEl.classList.remove('hidden');
 }
 
-// Substitua a função resolveCaptureAttempt() por esta versão.
 function resolveCaptureAttempt() {
     const cp = getCurrentPlayer();
     const wild = currentEncounterState.wildPokemon;
@@ -2184,7 +2189,7 @@ function resolveCaptureAttempt() {
         if (totalCaptureValue >= requiredTarget) {
             showCustomPopup(
                 "🔴🔵 Captura bem-sucedida!",
-                `Você capturou ${wild.isShiny ? '✨ Shiny ' : ''}${wild.name} (Nv. ${wild.level || 1})!\n\nDado: ${roll} + Bônus: ${captureBonus + weakenedBonus} = ${totalCaptureValue}\nAlvo: ${requiredTarget}+`,
+                `Você capturou ${wild.isShiny ? '✨ Shiny ' : ''}${wild.name} (Nv.${wild.level || 1})!\n\nDado: ${roll} + Bônus: ${captureBonus + weakenedBonus} = ${totalCaptureValue}\nAlvo:${requiredTarget}+`,
                 true
             );
 
@@ -2221,7 +2226,7 @@ function resolveCaptureAttempt() {
 
             showCustomPopup(
                 "❌ Captura falhou",
-                `${wild.name} escapou da Poké Ball.\n\nDado: ${roll} + Bônus: ${captureBonus + weakenedBonus} = ${totalCaptureValue}\nAlvo: ${requiredTarget}+\n\nUma nova tentativa será liberada somente no próximo turno.`,
+                `${wild.name} escapou da Poké Ball.\n\nDado: ${roll} + Bônus: ${captureBonus + weakenedBonus} = ${totalCaptureValue}\nAlvo:${requiredTarget}+\n\nUma nova tentativa será liberada somente no próximo turno.`,
                 false
             );
 
@@ -2265,7 +2270,7 @@ function checkMonsterEvolution(monster) {
             monster.maxHp = (monster.maxHp || 20) + 10;
             monster.currentHp = monster.maxHp;
             
-            appendAdventureLog(`✨ O ${oldName} evoluiu para ${monster.name}!`);
+            appendAdventureLog(`✨ O ${oldName} evoluiu para${monster.name}!`);
             showEvolutionModalUI(oldName, monster);
         }
     }
@@ -2290,7 +2295,7 @@ function showEvolutionModalUI(oldName, evolvedMonster) {
                 <img src="${evoImgUrl}" alt="${evolvedMonster.name}" class="w-24 h-24 object-contain drop-shadow-[0_0_15px_rgba(255,215,0,0.8)]" onerror="this.src='https://api.iconify.design/noto:star.svg'">
             </div>
             <h3 class="text-xl font-black text-amber-400 uppercase tracking-wider">${evolvedMonster.name}!</h3>
-            <p class="text-[10px] text-emerald-400 font-bold">Atributos melhorados: STR ${evolvedMonster.str} | HP ${evolvedMonster.maxHp}</p>
+            <p class="text-[10px] text-emerald-400 font-bold">Atributos melhorados: STR ${evolvedMonster.str} \vert{} HP${evolvedMonster.maxHp}</p>
             <button onclick="document.getElementById('evolution-popup-modal').remove()" class="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 rounded-xl text-xs uppercase shadow transition-all cursor-pointer">
                 Continuar Aventura
             </button>
@@ -2388,18 +2393,17 @@ function renderTeamCardSlots() {
             const tierCardBg = getTierColorClass(monster.tier || 1);
 
             slotContainer.innerHTML = `
-                <div draggable="true" ondragstart="handleDragStart(event, 'team', ${i})" ondragover="handleDragOver(event)" ondrop="handleDrop(event, 'team', ${i})" onclick="event.stopPropagation(); openPokemonDetailModal('${monster.uniqueId}', 'team')" class="${tierCardBg} ${isFainted ? 'from-red-950 to-red-900 border-red-600 text-red-200' : ''} ${monster.isShiny ? 'border-amber-400 shiny-card-glow' : 'border-amber-600'} ${auraClass} border rounded p-1 flex flex-col justify-between h-full shadow cursor-pointer hover:brightness-105 transition-all relative text-white">
+                <div draggable="true" ondragstart="handleDragStart(event, 'team', ${i})" ondragover="handleDragOver(event)" ondrop="handleDrop(event, 'team', ${i})" onclick="event.stopPropagation(); openPokemonDetailModal('${monster.uniqueId}', 'team')" class="${tierCardBg}${isFainted ? 'from-red-950 to-red-900 border-red-600 text-red-200' : ''} ${monster.isShiny ? 'border-amber-400 shiny-card-glow' : 'border-amber-600'} ${auraClass} border rounded p-1 flex flex-col justify-between h-full shadow cursor-pointer hover:brightness-105 transition-all relative text-white">
                     ${shinyMarker}
                     <div class="flex justify-between items-center text-[8px] font-bold">
                         <span class="truncate">${monster.name}</span>
                         <span>Nv.${monster.level || 1}</span>
                     </div>
                     <div class="my-auto bg-black/40 rounded border border-amber-400/50 flex items-center justify-center p-0.5 h-12 relative">
-                        ${visualContent}
-                        ${isFainted ? '<span class="absolute text-[8px] font-black bg-red-600 text-white px-1 rounded">DESMAIADO</span>' : ''}
+                        ${visualContent}${isFainted ? '<span class="absolute text-[8px] font-black bg-red-600 text-white px-1 rounded">DESMAIADO</span>' : ''}
                     </div>
                     <div class="text-[7px] text-center font-bold text-amber-300">
-                        HP: ${curHp}/${maxHp} | STR: ${monster.str || 4}
+                        HP: ${curHp}/${maxHp} \vert{} STR:${monster.str || 4}
                     </div>
                 </div>
             `;
@@ -2463,7 +2467,7 @@ function renderBottomPanel() {
 
         if (titleElement) {
             titleElement.innerHTML = `
-                <span>Banco PC Box (Página ${currentPage + 1} de ${maxPages + 1})</span>
+                <span>Banco PC Box (Página ${currentPage + 1} de${maxPages + 1})</span>
                 <div class="flex gap-2">
                     <button onclick="changePcBoxPage(-1)" class="bg-amber-600 hover:bg-amber-500 px-2 py-0.5 rounded text-[10px] text-black font-bold cursor-pointer">◀</button>
                     <button onclick="changePcBoxPage(1)" class="bg-amber-600 hover:bg-amber-500 px-2 py-0.5 rounded text-[10px] text-black font-bold cursor-pointer">▶</button>
@@ -2521,7 +2525,6 @@ window.changePcBoxPage = function(direction) {
 };
 
 // --- PASSAR A VEZ ---
-// Substitua o início da função passTurnToNextPlayer() por esta versão.
 function passTurnToNextPlayer() {
     gymAttemptedThisTurn = {};
 
@@ -2627,7 +2630,7 @@ function renderChatMessages() {
 
     let htmlContent = '';
     validMessages.forEach(msg => {
-        htmlContent += `<p class="text-[9px] text-amber-300 my-0.5"><span class="font-bold text-amber-400">[${msg.sender || 'Sistema'}]:</span> ${msg.text || ''}</p>`;
+        htmlContent += `<p class="text-[9px] text-amber-300 my-0.5"><span class="font-bold text-amber-400">[${msg.sender \vert{}\vert{} 'Sistema'}]:</span>${msg.text || ''}</p>`;
     });
 
     if (chatBox) {
@@ -2665,7 +2668,7 @@ function updatePlayerUI() {
     
     const loc = document.getElementById('current-location');
     if (loc) {
-        loc.innerText = (gameState.players && gameState.players.length > 1) ? `Vez de: ${cp.name} | Local: Zona #${cp.currentZone || 5}` : `Local: Zona #${cp.currentZone || 5}`;
+        loc.innerText = (gameState.players && gameState.players.length > 1) ? `Vez de: ${cp.name} \vert{} Local: Zona #${cp.currentZone || 5}` : `Local: Zona #${cp.currentZone || 5}`;
     }
     checkAndRenderPassTurnButton();
 }
@@ -2675,9 +2678,10 @@ function appendAdventureLog(text) {
     if (!box) return;
     const p = document.createElement('p');
     p.className = "text-[10px] text-slate-300 border-l-2 border-amber-500 pl-1 my-0.5";
-    p.innerText = `[${new Date().toLocaleTimeString()}] ${text}`;
+    p.innerText = `[${new Date().toLocaleTimeString()}]${text}`;
     box.prepend(p);
 }
+
 // --- CONTROLO DE ZOOM DO MAPA ---
 let currentMapZoom = 1.0;
 
@@ -2903,7 +2907,7 @@ window.openPokedexDetailCard = function(monsterId) {
     detailModal.innerHTML = `
         <div class="trainer-card max-w-md w-full p-6 space-y-4 border-4 ${isShiny ? 'border-yellow-400 bg-gradient-to-b from-yellow-950/90 to-[#0a0705]' : 'border-amber-500 bg-gradient-to-b from-[#1c1410] to-[#0a0705]'} shadow-2xl text-white relative">
             <div class="flex justify-between items-center border-b border-amber-900/60 pb-2">
-                <span class="text-xs font-black text-amber-400 font-cinzel">📖 Nº ${dexNumStr} - ${baseMon.name} ${isShiny ? '✨ [SHINY]' : ''}</span>
+                <span class="text-xs font-black text-amber-400 font-cinzel">📖 Nº ${dexNumStr} - ${baseMon.name}${isShiny ? '✨ [SHINY]' : ''}</span>
                 <button onclick="document.getElementById('pokedex-detail-modal').remove()" class="text-amber-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-amber-800">✕</button>
             </div>
 
@@ -2915,7 +2919,7 @@ window.openPokedexDetailCard = function(monsterId) {
 
                 <div class="text-center">
                     <h3 class="text-base font-black text-amber-300">${baseMon.name}</h3>
-                    <p class="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Tipo: ${baseMon.type} | Estágio: ${baseMon.stage || 'N/A'}</p>
+                    <p class="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Tipo: ${baseMon.type} \vert{} Estágio: ${baseMon.stage || 'N/A'}</p>
                 </div>
 
                 <div class="grid grid-cols-2 gap-2 w-full bg-black/40 p-2.5 rounded-xl border border-amber-900/50 text-xs">
@@ -3001,10 +3005,10 @@ window.openVaultModal = function() {
             const img = (isShiny && mon.shinyImage) ? mon.shinyImage : mon.image;
             listHtml += `
                 <div class="bg-black/60 border-2 ${isShiny ? 'border-amber-400' : 'border-amber-700'} rounded-2xl p-3 flex flex-col justify-between items-center text-white space-y-2">
-                    <span class="text-[10px] font-bold text-amber-300">${mon.name} ${isShiny ? '✨' : ''}</span>
+                    <span class="text-[10px] font-bold text-amber-300">${mon.name}${isShiny ? '✨' : ''}</span>
                     <img src="${img}" class="w-12 h-12 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                     <div class="text-[9px] text-center text-slate-300">
-                        Nv.${mon.level || 1} | STR: ${mon.str || 4}
+                        Nv.${mon.level \vert{}\vert{} 1} \vert{} STR:${mon.str || 4}
                     </div>
                     <button onclick="withdrawMonsterFromVault(${index})" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-1 rounded text-[9px] uppercase shadow cursor-pointer">
                         Resgatar
@@ -3052,6 +3056,7 @@ function withdrawMonsterFromVault(vaultIndex) {
     showCustomPopup("Resgatado!", `O ${monToWithdraw.name} foi transferido do cofre para a sua PC Box!`, true);
     renderBottomPanel();
 }
+
 // --- SISTEMA DE TROCAS E CONTAS ONLINE ---
 
 (function () {
