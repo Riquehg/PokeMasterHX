@@ -1,4 +1,4 @@
-// --- SISTEMA DE DADOS E MOVIMENTO DO TABULEIRO ---
+// --- SISTEMA DE DADOS E MOVIMENTO DO TABULEIRO (Com Suporte a Multiplayer Online) ---
 // dice.js
 
 if (typeof SUPABASE_STORAGE_URL === 'undefined') {
@@ -434,6 +434,14 @@ function finishMovementSession() {
             ? `Local: Zona #${finalWaypointId} (${player.name || 'Treinador'})`
             : `Local: Zona #${finalWaypointId}`
     );
+
+    // Sincroniza o estado atualizado do jogo (incluindo o novo destino) via Socket.io
+    if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function') {
+        socket.emit('update_game_state', {
+            type: 'player_movement_finished',
+            gameState: typeof gameState !== 'undefined' ? gameState : null
+        });
+    }
 
     if (typeof triggerWaypointEvent === 'function') {
         triggerWaypointEvent(finalWaypointId);
