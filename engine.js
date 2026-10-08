@@ -3780,24 +3780,19 @@ window.movePokemonToTeam = function(boxIndex) {
         tradeModal.classList.remove('hidden');
     };
 
-   // --- LOGIN E REGISTRO ---
+   (function(window) {
+    // --- LOGIN E REGISTRO ---
 
     window.handleAccountLoginOrRegister = function () {
         const emailElement = document.getElementById('auth-email-input');
-        const passwordElement = document.getElementById(
-            'auth-password-input'
-        );
+        const passwordElement = document.getElementById('auth-password-input');
 
         const email = normalizeEmail(emailElement?.value);
         const password = String(passwordElement?.value || '').trim();
 
         if (!email || !email.includes('@')) {
             if (typeof showCustomPopup === 'function') {
-                showCustomPopup(
-                    'Erro de acesso',
-                    'Digite um endereço de e-mail válido.',
-                    false
-                );
+                showCustomPopup('Erro de acesso', 'Digite um endereço de e-mail válido.', false);
             }
             emailElement?.focus();
             return;
@@ -3805,11 +3800,7 @@ window.movePokemonToTeam = function(boxIndex) {
 
         if (password.length < 6) {
             if (typeof showCustomPopup === 'function') {
-                showCustomPopup(
-                    'Erro de acesso',
-                    'A senha deve possuir pelo menos 6 caracteres.',
-                    false
-                );
+                showCustomPopup('Erro de acesso', 'A senha deve possuir pelo menos 6 caracteres.', false);
             }
             passwordElement?.focus();
             return;
@@ -3819,17 +3810,10 @@ window.movePokemonToTeam = function(boxIndex) {
             currentAuthenticatedAccount = email;
         }
 
-        const sent = emitSocket('login_request', {
-            email,
-            password
-        });
-
+        const sent = emitSocket('login_request', { email, password });
         if (!sent) return;
 
-        const button = document.querySelector(
-            '#auth-container button[onclick*="handleAccountLoginOrRegister"]'
-        );
-
+        const button = document.querySelector('#auth-container button[onclick*="handleAccountLoginOrRegister"]');
         if (button) {
             button.disabled = true;
             button.dataset.originalText = button.innerHTML;
@@ -3839,31 +3823,23 @@ window.movePokemonToTeam = function(boxIndex) {
         setTimeout(() => {
             if (button && button.disabled) {
                 button.disabled = false;
-                button.innerHTML =
-                    button.dataset.originalText || 'Entrar na Conta';
+                button.innerHTML = button.dataset.originalText || 'Entrar na Conta';
             }
         }, 10000);
     };
 
     function handleLoginResponse(response) {
-        const loginButton = document.querySelector(
-            '#auth-container button[onclick*="handleAccountLoginOrRegister"]'
-        );
-
+        const loginButton = document.querySelector('#auth-container button[onclick*="handleAccountLoginOrRegister"]');
         if (loginButton) {
             loginButton.disabled = false;
-            loginButton.innerHTML =
-                loginButton.dataset.originalText || 'Entrar na Conta';
+            loginButton.innerHTML = loginButton.dataset.originalText || 'Entrar na Conta';
         }
 
         if (!response || response.success !== true) {
             if (typeof showCustomPopup === 'function') {
                 showCustomPopup(
                     'Erro de autenticação',
-                    escapeAccountHtml(
-                        response?.message ||
-                            'Não foi possível entrar na conta.'
-                    ),
+                    escapeAccountHtml(response?.message || 'Não foi possível entrar na conta.'),
                     false
                 );
             }
@@ -3872,93 +3848,51 @@ window.movePokemonToTeam = function(boxIndex) {
 
         const accountData = getAccountData(response);
 
-        if (
-            typeof currentAuthenticatedAccount !== 'undefined' &&
-            (!currentAuthenticatedAccount || response.email)
-        ) {
+        if (typeof currentAuthenticatedAccount !== 'undefined' && (!currentAuthenticatedAccount || response.email)) {
             currentAuthenticatedAccount = normalizeEmail(
-                response.email ||
-                    accountData.email ||
-                    currentAuthenticatedAccount
+                response.email || accountData.email || currentAuthenticatedAccount
             );
         }
 
         if (response.isNew || response.newAccount || response.created) {
             const authContainer = document.getElementById('auth-container');
-            const characterCreation = document.getElementById(
-                'character-creation-container'
-            );
+            const characterCreation = document.getElementById('character-creation-container');
 
-            if (authContainer) {
-                authContainer.classList.add('hidden');
-            }
-
-            if (characterCreation) {
-                characterCreation.classList.remove('hidden');
-            }
+            if (authContainer) authContainer.classList.add('hidden');
+            if (characterCreation) characterCreation.classList.remove('hidden');
 
             if (typeof showCustomPopup === 'function') {
-                showCustomPopup(
-                    'Conta criada',
-                    'A conta foi autenticada. Agora configure o seu treinador.',
-                    true
-                );
+                showCustomPopup('Conta criada', 'A conta foi autenticada. Agora configure o seu treinador.', true);
             }
-
             return;
         }
 
-        const remoteGameState =
-            accountData.gameState ||
-            accountData.game_state ||
-            response.gameState ||
-            response.game_state;
+        const remoteGameState = accountData.gameState || accountData.game_state || response.gameState || response.game_state;
+        const remoteBoard = accountData.boardPokemonCards || accountData.board_pokemon_cards || response.boardPokemonCards || response.board_pokemon_cards;
 
-        const remoteBoard =
-            accountData.boardPokemonCards ||
-            accountData.board_pokemon_cards ||
-            response.boardPokemonCards ||
-            response.board_pokemon_cards;
-
-        if (
-            remoteGameState &&
-            typeof remoteGameState === 'object' &&
-            Array.isArray(remoteGameState.players)
-        ) {
+        if (remoteGameState && typeof remoteGameState === 'object' && Array.isArray(remoteGameState.players)) {
             if (typeof gameState !== 'undefined') {
                 gameState = remoteGameState;
             }
         } else if (typeof gameState !== 'undefined') {
-            const trainerName =
-                accountData.trainerName ||
-                accountData.trainer_name ||
-                accountData.name ||
-                'Treinador';
-
-            gameState.players = [
-                {
-                    name: trainerName,
-                    avatarId: Number(accountData.avatarId) || 1,
-                    currentZone: 5,
-                    level: 1,
-                    gold: Number(accountData.gold) || 350,
-                    badges: [],
-                    activeTeam: [],
-                    pcBox: [],
-                    inventory: [],
-                    equipmentSlots: [null, null]
-                }
-            ];
-
+            const trainerName = accountData.trainerName || accountData.trainer_name || accountData.name || 'Treinador';
+            gameState.players = [{
+                name: trainerName,
+                avatarId: Number(accountData.avatarId) || 1,
+                currentZone: 5,
+                level: 1,
+                gold: Number(accountData.gold) || 350,
+                badges: [],
+                activeTeam: [],
+                pcBox: [],
+                inventory: [],
+                equipmentSlots: [null, null]
+            }];
             gameState.currentPlayerIndex = 0;
             gameState.turn = 1;
         }
 
-        if (
-            typeof boardPokemonCards !== 'undefined' &&
-            remoteBoard &&
-            typeof remoteBoard === 'object'
-        ) {
+        if (typeof boardPokemonCards !== 'undefined' && remoteBoard && typeof remoteBoard === 'object') {
             boardPokemonCards = remoteBoard;
         }
 
@@ -3966,7 +3900,6 @@ window.movePokemonToTeam = function(boxIndex) {
             ensureValidGameState();
         }
 
-        // --- ATUALIZAÇÃO DO HUB DO TREINADOR COM DADOS REAIS ---
         const cp = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[0] || {});
         const profileData = accountData.profile_data || accountData.profileData || {};
         
@@ -4042,6 +3975,8 @@ window.movePokemonToTeam = function(boxIndex) {
         }
     };
 
+    // --- PAINEL PÓS-LOGIN ---
+
     window.showPostLoginDashboard = function () {
         if (typeof ensureValidGameState === 'function') {
             ensureValidGameState();
@@ -4061,6 +3996,7 @@ window.movePokemonToTeam = function(boxIndex) {
     };
 
     // --- LOBBY ONLINE ---
+
     window.createOnlineRoom = function () {
         const roomName = window.prompt('Insira o nome da sala online:', 'Sala de Kanto');
         if (!roomName || !roomName.trim()) return;
@@ -4101,6 +4037,44 @@ window.movePokemonToTeam = function(boxIndex) {
         input.value = '';
     };
 
+    if (typeof window.sendChatMessage !== 'function') {
+        window.sendChatMessage = function () {
+            const chatInput = document.getElementById('chat-input-field') || document.getElementById('map-chat-input');
+            if (!chatInput || !chatInput.value.trim()) return;
+
+            const message = chatInput.value.trim();
+            const sender = typeof currentAuthenticatedAccount !== 'undefined' && currentAuthenticatedAccount ? currentAuthenticatedAccount : getCurrentPlayer()?.name || 'Treinador';
+
+            if (!Array.isArray(gameState.chatMessages)) {
+                gameState.chatMessages = [];
+            }
+
+            gameState.chatMessages.push({ sender, text: message });
+            if (gameState.chatMessages.length > 100) {
+                gameState.chatMessages = gameState.chatMessages.slice(-100);
+            }
+
+            if (typeof renderChatMessages === 'function') {
+                renderChatMessages();
+            }
+
+            emitSocket('room_chat_message', {
+                roomId: currentJoinedOnlineRoomId,
+                sender,
+                message,
+                text: message
+            });
+
+            chatInput.value = '';
+        };
+    }
+
+    if (typeof window.sendMessage !== 'function') {
+        window.sendMessage = function () {
+            window.sendChatMessage();
+        };
+    }
+
     let currentJoinedOnlineRoomId = null;
     let onlineRoomStarted = false;
     let onlineBoardReady = false;
@@ -4111,6 +4085,188 @@ window.movePokemonToTeam = function(boxIndex) {
             return player ? { ...player, accountEmail: typeof currentAuthenticatedAccount !== 'undefined' ? currentAuthenticatedAccount : null } : null;
         } catch (error) {
             return null;
+        }
+    }
+
+    function extractOnlineGameState(data) {
+        if (!data || typeof data !== 'object') return null;
+        const possibleStates = [
+            data.gameState, data.game_state, data.roomState?.gameState,
+            data.roomState?.game_state, data.room?.gameState, data.room?.game_state,
+            data.state?.gameState, data.state?.game_state, data.state
+        ];
+
+        for (const candidate of possibleStates) {
+            if (candidate && typeof candidate === 'object' && Array.isArray(candidate.players)) {
+                return candidate;
+            }
+        }
+
+        if (Array.isArray(data.players)) {
+            return {
+                ...(typeof gameState !== 'undefined' && gameState ? gameState : {}),
+                players: data.players,
+                currentPlayerIndex: Number(data.currentPlayerIndex) || 0,
+                turn: Number(data.turn) || 1
+            };
+        }
+        return null;
+    }
+
+    function extractOnlineBoard(data) {
+        if (!data || typeof data !== 'object') return null;
+        const possibleBoards = [
+            data.boardPokemonCards, data.board_pokemon_cards,
+            data.roomState?.boardPokemonCards, data.roomState?.board_pokemon_cards,
+            data.room?.boardPokemonCards, data.room?.board_pokemon_cards,
+            data.state?.boardPokemonCards, data.state?.board_pokemon_cards
+        ];
+
+        for (const candidate of possibleBoards) {
+            if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    function applyOnlineRoomState(data) {
+        const sharedState = extractOnlineGameState(data);
+        const sharedBoard = extractOnlineBoard(data);
+
+        if (!sharedState || !Array.isArray(sharedState.players)) return false;
+
+        gameState = {
+            ...sharedState,
+            setupDone: true,
+            online: true,
+            onlineRoomId: currentJoinedOnlineRoomId,
+            currentPlayerIndex: Number.isInteger(Number(sharedState.currentPlayerIndex)) ? Number(sharedState.currentPlayerIndex) : 0,
+            turn: Math.max(1, Number(sharedState.turn) || 1),
+            players: sharedState.players.map(player => ({
+                ...player,
+                activeTeam: Array.isArray(player?.activeTeam) ? player.activeTeam : [],
+                pcBox: Array.isArray(player?.pcBox) ? player.pcBox : [],
+                inventory: Array.isArray(player?.inventory) ? player.inventory : [],
+                badges: Array.isArray(player?.badges) ? player.badges : [],
+                equipmentSlots: Array.isArray(player?.equipmentSlots) ? player.equipmentSlots : [null, null]
+            }))
+        };
+
+        if (sharedBoard) {
+            boardPokemonCards = sharedBoard;
+            onlineBoardReady = true;
+        }
+
+        if (typeof ensureValidGameState === 'function') {
+            ensureValidGameState();
+        }
+
+        return true;
+    }
+
+    function refreshOnlineGameInterface() {
+        if (typeof ensureValidGameState === 'function') ensureValidGameState();
+        if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+        if (typeof renderEquipmentSlots === 'function') renderEquipmentSlots();
+        if (typeof renderBottomPanel === 'function') renderBottomPanel();
+        if (typeof renderChatMessages === 'function') renderChatMessages();
+        if (typeof updatePlayerUI === 'function') updatePlayerUI();
+        if (typeof renderBoardMap === 'function') renderBoardMap();
+    }
+
+    function showOnlineGameLayout() {
+        const setupScreen = document.getElementById('setup-screen');
+        const mainLayout = document.getElementById('main-game-layout');
+        const authContainer = document.getElementById('auth-container');
+        const onlineLobby = document.getElementById('online-lobby-container');
+        const trainerMenu = document.getElementById('trainer-main-menu');
+        const characterCreation = document.getElementById('character-creation-container');
+        const dashboard = document.getElementById('post-login-dashboard');
+
+        setupScreen?.classList.add('hidden');
+        authContainer?.classList.add('hidden');
+        onlineLobby?.classList.add('hidden');
+        trainerMenu?.classList.add('hidden');
+        characterCreation?.classList.add('hidden');
+        dashboard?.classList.add('hidden');
+        mainLayout?.classList.remove('hidden');
+
+        refreshOnlineGameInterface();
+
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup('Partida Online', 'Todos os jogadores estão conectados ao mesmo estado de partida.', true);
+        }
+    }
+
+    function syncOnlineGameState(changeType = 'state_update') {
+        if (!onlineRoomStarted || !currentJoinedOnlineRoomId) return false;
+        const socketInstance = typeof getSocket === 'function' ? getSocket() : null;
+        if (!socketInstance || typeof socketInstance.emit !== 'function') return false;
+
+        socketInstance.emit('update_game_state', {
+            roomId: currentJoinedOnlineRoomId,
+            type: changeType,
+            gameState,
+            boardPokemonCards: onlineBoardReady ? boardPokemonCards : {}
+        });
+        return true;
+    }
+
+    function handleSharedOnlineGameState(data) {
+        if (!data || typeof data !== 'object') return;
+        const receivedRoomId = data.roomId || data.room_id || data.room?.id || data.roomState?.roomId;
+
+        if (receivedRoomId && currentJoinedOnlineRoomId && String(receivedRoomId) !== String(currentJoinedOnlineRoomId)) {
+            return;
+        }
+
+        if (receivedRoomId && !currentJoinedOnlineRoomId) {
+            currentJoinedOnlineRoomId = receivedRoomId;
+        }
+
+        if (!applyOnlineRoomState(data)) return;
+
+        onlineRoomStarted = true;
+        showOnlineGameLayout();
+    }
+
+    function installOnlineSocketPatch(socketInstance) {
+        if (!socketInstance || socketInstance.__hexOnlineEmitPatched) return;
+        const originalEmit = socketInstance.emit.bind(socketInstance);
+
+        socketInstance.emit = function (eventName, payload, ...args) {
+            if (eventName === 'update_game_state' && payload && typeof payload === 'object' && currentJoinedOnlineRoomId) {
+                payload = {
+                    ...payload,
+                    roomId: payload.roomId || currentJoinedOnlineRoomId,
+                    boardPokemonCards: payload.boardPokemonCards || (onlineBoardReady ? boardPokemonCards : {})
+                };
+            }
+            return originalEmit(eventName, payload, ...args);
+        };
+        socketInstance.__hexOnlineEmitPatched = true;
+    }
+
+    function installOnlineTurnSynchronization() {
+        if (!window.__hexPassTurnWrapped && typeof window.passTurnToNextPlayer === 'function') {
+            const originalPassTurn = window.passTurnToNextPlayer;
+            window.passTurnToNextPlayer = function (...args) {
+                const result = originalPassTurn.apply(this, args);
+                syncOnlineGameState('turn_passed');
+                return result;
+            };
+            window.__hexPassTurnWrapped = true;
+        }
+
+        if (!window.__hexSaveGameWrapped && typeof window.saveGameProgress === 'function') {
+            const originalSaveGame = window.saveGameProgress;
+            window.saveGameProgress = function (...args) {
+                const result = originalSaveGame.apply(this, args);
+                syncOnlineGameState('manual_save');
+                return result;
+            };
+            window.__hexSaveGameWrapped = true;
         }
     }
 
@@ -4132,7 +4288,137 @@ window.movePokemonToTeam = function(boxIndex) {
         });
     };
 
-    // --- CRIAÇÃO DE PERSONAGEM & NOVA PARTIDA UNIFICADA ---
+    function renderRoomsList(rooms) {
+        const container = document.getElementById('rooms-list-box') || document.getElementById('online-rooms-list-container');
+        if (!container) return;
+
+        if (!Array.isArray(rooms) || rooms.length === 0) {
+            container.innerHTML = `<p class="text-[10px] text-slate-500 text-center py-6">Nenhuma sala encontrada. Crie uma sala para começar.</p>`;
+            return;
+        }
+
+        container.innerHTML = rooms.map((room, index) => {
+            const roomId = escapeAccountHtml(room?.id || room?.roomId || `room-${index}`);
+            const roomName = escapeAccountHtml(room?.name || room?.roomName || 'Sala sem nome');
+            const host = escapeAccountHtml(room?.host || 'Treinador');
+            const playerCount = Number(room?.playerCount ?? room?.players?.length ?? 0);
+            const maxPlayers = Number(room?.maxPlayers) || 4;
+
+            return `
+                <div class="flex justify-between items-center gap-2 bg-black/60 p-2.5 rounded-xl border border-amber-600/50 text-white text-[10px] my-1">
+                    <div class="min-w-0">
+                        <p class="font-bold text-amber-300 truncate">${roomName}</p>
+                        <p class="text-slate-400 truncate">Host: ${host} · ${playerCount}/${maxPlayers}</p>
+                    </div>
+                    <button type="button" data-room-id="${roomId}" class="join-online-room-button bg-amber-600 hover:bg-amber-500 text-black font-bold px-3 py-1 rounded cursor-pointer whitespace-nowrap">Entrar</button>
+                </div>
+            `;
+        }).join('');
+
+        container.querySelectorAll('.join-online-room-button').forEach(button => {
+            button.addEventListener('click', () => {
+                const roomId = button.getAttribute('data-room-id');
+                if (roomId) {
+                    currentJoinedOnlineRoomId = roomId;
+                    onlineRoomStarted = false;
+                    onlineBoardReady = false;
+                    boardPokemonCards = {};
+
+                    const joinPayload = {
+                        roomId,
+                        player: getOnlinePlayerPayload(),
+                        accountEmail: typeof currentAuthenticatedAccount !== 'undefined' ? currentAuthenticatedAccount : null
+                    };
+
+                    const socketInstance = typeof getSocket === 'function' ? getSocket() : null;
+                    if (socketInstance && typeof socketInstance.emit === 'function') {
+                        socketInstance.emit('join_room', joinPayload);
+                    }
+                }
+            });
+        });
+    }
+
+    const currentSocketInstance = typeof getSocket === 'function' ? getSocket() : null;
+    if (currentSocketInstance && typeof currentSocketInstance.on === 'function') {
+        currentSocketInstance.on('rooms_list_response', renderRoomsList);
+        currentSocketInstance.on('rooms_list', renderRoomsList);
+        currentSocketInstance.on('login_response', handleLoginResponse);
+
+        installOnlineSocketPatch(currentSocketInstance);
+        installOnlineTurnSynchronization();
+
+        if (typeof currentSocketInstance.off === 'function') {
+            currentSocketInstance.off('sync_game_state');
+            currentSocketInstance.off('room_state');
+            currentSocketInstance.off('room_game_state');
+            currentSocketInstance.off('room_chat_broadcast');
+        }
+
+        currentSocketInstance.on('sync_game_state', handleSharedOnlineGameState);
+        currentSocketInstance.on('room_state', handleSharedOnlineGameState);
+        currentSocketInstance.on('room_game_state', handleSharedOnlineGameState);
+
+        currentSocketInstance.on('room_chat_broadcast', data => {
+            if (!data || typeof data !== 'object') return;
+            const sender = data.sender || data.email || 'Treinador';
+            const message = data.text || data.message || '';
+            if (!message) return;
+
+            if (!Array.isArray(gameState.chatMessages)) gameState.chatMessages = [];
+            gameState.chatMessages.push({ sender, text: message });
+            if (gameState.chatMessages.length > 100) gameState.chatMessages = gameState.chatMessages.slice(-100);
+
+            if (typeof renderChatMessages === 'function') renderChatMessages();
+        });
+
+        currentSocketInstance.on('room_created', () => {
+            if (typeof refreshRoomsList === 'function') refreshRoomsList();
+        });
+
+        currentSocketInstance.on('room_joined', roomData => {
+            if (roomData?.roomId) currentJoinedOnlineRoomId = roomData.roomId;
+            const stateApplied = applyOnlineRoomState(roomData);
+            if (stateApplied && roomData?.started) {
+                onlineRoomStarted = true;
+                showOnlineGameLayout();
+            }
+        });
+
+        currentSocketInstance.on('room_game_started', data => {
+            const roomId = data?.roomId || data?.room_id || data?.room?.id || currentJoinedOnlineRoomId;
+            if (roomId) currentJoinedOnlineRoomId = roomId;
+            onlineRoomStarted = true;
+
+            const receivedBoard = extractOnlineBoard(data);
+            if (!receivedBoard || Object.keys(receivedBoard).length === 0) {
+                if (typeof initializeBoardPokemonCards === 'function' && (!boardPokemonCards || Object.keys(boardPokemonCards).length === 0)) {
+                    initializeBoardPokemonCards();
+                }
+                onlineBoardReady = true;
+            } else {
+                boardPokemonCards = receivedBoard;
+                onlineBoardReady = true;
+            }
+
+            const stateApplied = applyOnlineRoomState(data);
+            if (!stateApplied) {
+                currentSocketInstance.emit('request_room_state', { roomId: currentJoinedOnlineRoomId });
+                return;
+            }
+
+            showOnlineGameLayout();
+            syncOnlineGameState('room_started');
+        });
+
+        currentSocketInstance.on('lobby_error', message => {
+            if (typeof showCustomPopup === 'function') {
+                showCustomPopup('Erro no lobby', escapeAccountHtml(message || 'Erro na sala.'), false);
+            }
+        });
+    }
+
+    // --- CRIAÇÃO DE PERSONAGEM & INICIALIZAÇÃO UNIFICADA ---
 
     window.openCharacterCreationMode = function (isNewGameWithProfile = false) {
         const authContainer = document.getElementById('auth-container');
@@ -4180,58 +4466,38 @@ window.movePokemonToTeam = function(boxIndex) {
         
         const preservedGold = existingPlayer && existingPlayer.gold !== undefined ? existingPlayer.gold : 350;
         const preservedPcBox = existingPlayer && Array.isArray(existingPlayer.pcBox) ? existingPlayer.pcBox : [];
-        const preservedInventory = existingPlayer && Array.isArray(existingPlayer.inventory) ? existingPlayer.inventory : [
-            { id: 'poke_ball', name: 'Poké Ball', type: 'sphere', value: 0, icon: '🔴', image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`, count: 5, cost: 50, desc: 'Esfera clássica.' },
-            { id: 'ball_great', name: 'Great Ball', type: 'sphere', value: 1, icon: '🔵', image: `${SUPABASE_STORAGE_URL}items/great_ball.png`, count: 3, cost: 100, desc: 'Adiciona +1 na captura.' },
-            { id: 'ball_ultra', name: 'Ultra Ball', type: 'sphere', value: 2, icon: '🟡', image: `${SUPABASE_STORAGE_URL}items/ultra_ball.png`, count: 2, cost: 200, desc: 'Adiciona +2 na captura.' },
-            { id: 'item_rarecandy', name: 'Rare Candy', type: 'rarecandy', value: 100, icon: '🍬', image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`, count: 2, cost: 300, desc: 'Dá 100 XP imediato.' },
-            { id: 'evolution_stone', name: 'Evolution Stone', type: 'evolution', value: 1, icon: '💎', image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`, count: 1, cost: 500, desc: 'Evolve um Anima compatível.' },
-            { id: 'item_vitamin', name: 'Vitamin', type: 'battle', value: 2, icon: '🧪', image: `${SUPABASE_STORAGE_URL}items/vitamin.png`, count: 2, cost: 150, desc: 'Aumenta o STR em +2.' },
-            { id: 'item_potion', name: 'Potion', type: 'heal', value: 20, icon: '💊', image: `${SUPABASE_STORAGE_URL}items/potion.png`, count: 3, cost: 50, desc: 'Restaura 20 HP.' },
-            { id: 'item_revive', name: 'Revive', type: 'revive', value: 50, icon: '🌟', image: `${SUPABASE_STORAGE_URL}items/revive.png`, count: 1, cost: 250, desc: 'Revive um Anima.' }
-        ];
+        const preservedInventory = existingPlayer && Array.isArray(existingPlayer.inventory) ? existingPlayer.inventory : [];
 
         const starterKey = (window.selectedStarterPokemon || 'bulbasaur').toLowerCase();
         const starterMap = {
-            'bulbasaur': { id: 'bulbasaur', name: 'Bulbasaur', dexNumber: '001', level: 5, type: 'Grama', str: 4, hp: 20 },
-            'charmander': { id: 'charmander', name: 'Charmander', dexNumber: '004', level: 5, type: 'Fogo', str: 4, hp: 20 },
-            'squirtle': { id: 'squirtle', name: 'Squirtle', dexNumber: '007', level: 5, type: 'Água', str: 4, hp: 20 },
-            'pikachu': { id: 'pikachu', name: 'Pikachu', dexNumber: '025', level: 5, type: 'Elétrico', str: 4, hp: 20 },
-            'chikorita': { id: 'chikorita', name: 'Chikorita', dexNumber: '152', level: 5, type: 'Grama', str: 4, hp: 20 },
-            'cyndaquil': { id: 'cyndaquil', name: 'Cyndaquil', dexNumber: '155', level: 5, type: 'Fogo', str: 4, hp: 20 },
-            'totodile': { id: 'totodile', name: 'Totodile', dexNumber: '158', level: 5, type: 'Água', str: 4, hp: 20 },
-            'eevee': { id: 'eevee', name: 'Eevee', dexNumber: '133', level: 5, type: 'Normal', str: 4, hp: 20 }
+            'bulbasaur': { id: 'bulbasaur', name: 'Bulbasaur', dexNumber: '001', level: 5 },
+            'charmander': { id: 'charmander', name: 'Charmander', dexNumber: '004', level: 5 },
+            'squirtle': { id: 'squirtle', name: 'Squirtle', dexNumber: '007', level: 5 },
+            'pikachu': { id: 'pikachu', name: 'Pikachu', dexNumber: '025', level: 5 },
+            'chikorita': { id: 'chikorita', name: 'Chikorita', dexNumber: '152', level: 5 },
+            'cyndaquil': { id: 'cyndaquil', name: 'Cyndaquil', dexNumber: '155', level: 5 },
+            'totodile': { id: 'totodile', name: 'Totodile', dexNumber: '158', level: 5 },
+            'eevee': { id: 'eevee', name: 'Eevee', dexNumber: '133', level: 5 }
         };
 
-        const baseStarter = starterMap[starterKey] || starterMap['bulbasaur'];
-        const chosenStarter = {
-            ...baseStarter,
-            xp: 0,
-            tier: 1,
-            currentHp: baseStarter.hp,
-            maxHp: baseStarter.hp,
-            uniqueId: 'mon_' + Date.now(),
-            isShiny: false,
-            image: `${SUPABASE_STORAGE_URL}monsters/${baseStarter.dexNumber}.png`
-        };
+        const chosenStarter = starterMap[starterKey] || starterMap['bulbasaur'];
+        chosenStarter.image = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/${chosenStarter.dexNumber}.png`;
 
         if (typeof gameState !== 'undefined') {
             gameState.turn = 1;
             gameState.currentPlayerIndex = 0;
-            gameState.players = [
-                {
-                    name: trainerName,
-                    avatarId: window.selectedAvatarId || 1,
-                    currentZone: 5,
-                    level: 1,
-                    gold: preservedGold,
-                    badges: [],
-                    activeTeam: [chosenStarter],
-                    pcBox: preservedPcBox,
-                    inventory: preservedInventory,
-                    equipmentSlots: [null, null]
-                }
-            ];
+            gameState.players = [{
+                name: trainerName,
+                avatarId: window.selectedAvatarId || 1,
+                currentZone: 5,
+                level: 1,
+                gold: preservedGold,
+                badges: [],
+                activeTeam: [chosenStarter],
+                pcBox: preservedPcBox,
+                inventory: preservedInventory,
+                equipmentSlots: [null, null]
+            }];
         }
 
         if (typeof ensureValidGameState === 'function') {
@@ -4250,7 +4516,6 @@ window.movePokemonToTeam = function(boxIndex) {
         if (setupScreen) setupScreen.classList.add('hidden');
         if (mainLayout) mainLayout.classList.remove('hidden');
 
-        // Inicializa o motor do jogo, tabuleiro e UI imediatamente para evitar telas vazias
         if (typeof initGameEngine === 'function') {
             initGameEngine();
         }
@@ -4262,11 +4527,7 @@ window.movePokemonToTeam = function(boxIndex) {
         }
 
         if (typeof showCustomPopup === 'function') {
-            showCustomPopup(
-                'Nova Jornada Iniciada',
-                `Boa sorte, ${trainerName}! Você começou sua jornada com ${chosenStarter.name}.`,
-                true
-            );
+            showCustomPopup('Nova Jornada Iniciada', `Boa sorte, ${trainerName}! Você começou sua jornada com ${chosenStarter.name}.`, true);
         }
     };
 
@@ -4282,12 +4543,15 @@ window.movePokemonToTeam = function(boxIndex) {
         if (mainMenu) mainMenu.classList.remove('hidden');
     };
 
-    // --- PAINEL ADMINISTRATIVO ---
+    // --- PAINEL ADMINISTRATIVO COMPLETO ---
+
     let adminUsersListenerRegistered = false;
 
     function handleAdminUsersList(users) {
         const modal = document.getElementById('admin-panel-modal');
-        if (modal) renderAdminDashboard(modal, users);
+        if (modal) {
+            renderAdminDashboard(modal, users);
+        }
     }
 
     window.openAdminPanelModal = function () {
@@ -4321,6 +4585,124 @@ window.movePokemonToTeam = function(boxIndex) {
 
         emitSocket('admin_get_users');
         adminModal.classList.remove('hidden');
+    };
+
+    function renderAdminDashboard(modalElement, users) {
+        const safeUsers = Array.isArray(users) ? users : [];
+
+        const rowsHtml = safeUsers.length === 0
+            ? `<tr><td colspan="5" class="text-center py-4 text-slate-400">Nenhuma conta encontrada.</td></tr>`
+            : safeUsers.map(user => {
+                const email = escapeAccountHtml(user?.email || '');
+                const trainerName = escapeAccountHtml(user?.trainerName || user?.trainer_name || user?.name || 'N/D');
+                const lastLogin = user?.lastLogin ? escapeAccountHtml(new Date(user.lastLogin).toLocaleString('pt-BR')) : 'Nunca';
+                const gold = Number(user?.gold || user?.profile_data?.gold || 0);
+
+                return `
+                    <tr class="border-b border-red-900/40 text-[10px] hover:bg-red-950/20">
+                        <td class="p-2 font-bold text-amber-300">${email}</td>
+                        <td class="p-2 text-slate-300">${trainerName}</td>
+                        <td class="p-2 text-slate-400">${lastLogin}</td>
+                        <td class="p-2 text-yellow-400 font-bold">${gold} 🪙</td>
+                        <td class="p-2">
+                            <div class="flex gap-1 justify-end flex-wrap">
+                                <button type="button" data-admin-action="gold" data-admin-email="${email}" class="bg-amber-600 hover:bg-amber-500 text-black px-2 py-1 rounded font-bold cursor-pointer">🪙 Ouro</button>
+                                <button type="button" data-admin-action="pokemon" data-admin-email="${email}" class="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded font-bold cursor-pointer">👾 Pokémon</button>
+                                <button type="button" data-admin-action="item" data-admin-email="${email}" class="bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded font-bold cursor-pointer">🎒 Item</button>
+                                <button type="button" data-admin-action="password" data-admin-email="${email}" class="bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded font-bold cursor-pointer">🔑 Senha</button>
+                                <button type="button" data-admin-action="delete" data-admin-email="${email}" class="bg-red-700 hover:bg-red-600 text-white px-2 py-1 rounded font-bold cursor-pointer">🗑️ Apagar</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+        modalElement.innerHTML = `
+            <div class="trainer-card max-w-5xl w-full p-6 space-y-4 border-4 border-red-600 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
+                <div class="flex justify-between items-center border-b border-red-900 pb-2">
+                    <span class="text-xs font-black text-red-400 font-cinzel">🛡 PAINEL DO ADMINISTRADOR COMPLETO</span>
+                    <button type="button" id="close-admin-panel-button" class="text-red-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-red-800">✕ Fechar</button>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-bold text-slate-300">Total de contas: <span class="text-amber-400">${safeUsers.length}</span></span>
+                    <button type="button" id="refresh-admin-users-button" class="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-1 rounded border border-red-700 cursor-pointer">🔄 Atualizar</button>
+                </div>
+                <div class="max-h-80 overflow-y-auto border border-red-900/60 rounded-xl bg-black/60 p-2">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-red-900 text-[10px] text-red-300 uppercase">
+                                <th class="p-2">E-mail</th>
+                                <th class="p-2">Treinador</th>
+                                <th class="p-2">Último Login</th>
+                                <th class="p-2">Ouro</th>
+                                <th class="p-2 text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+
+        modalElement.classList.remove('hidden');
+
+        document.getElementById('close-admin-panel-button')?.addEventListener('click', () => {
+            closeModalById('admin-panel-modal');
+        });
+
+        document.getElementById('refresh-admin-users-button')?.addEventListener('click', () => {
+            emitSocket('admin_get_users');
+        });
+
+        modalElement.querySelectorAll('[data-admin-action]').forEach(button => {
+            button.addEventListener('click', () => {
+                const action = button.dataset.adminAction;
+                const email = button.dataset.adminEmail;
+
+                if (action === 'gold') window.adminGiveGold(email);
+                else if (action === 'pokemon') window.adminGivePokemon(email);
+                else if (action === 'item') window.adminGiveItem(email);
+                else if (action === 'password') window.adminResetPassword(email);
+                else if (action === 'delete') window.adminDeleteAccount(email);
+            });
+        });
+    }
+
+    window.adminGiveGold = function (email) {
+        const amountText = window.prompt(`Quantas moedas deseja adicionar à conta ${email}?`, '1000');
+        const amount = Math.floor(Number(amountText) || 0);
+        if (amount <= 0) return;
+
+        emitSocket('admin_action', { action: 'give_gold', email, amount });
+        setTimeout(() => { emitSocket('admin_get_users'); }, 500);
+    };
+
+    window.adminGivePokemon = function(email) {
+        const monId = window.prompt(`Insira o ID do Pokémon para ${email}:`, 'charizard');
+        if (!monId) return;
+        emitSocket('admin_action', { action: 'give_pokemon', email, pokemonId: monId.trim().toLowerCase() });
+        showCustomPopup("Enviado", `Pokémon enviado para ${email}!`, true);
+    };
+
+    window.adminGiveItem = function(email) {
+        const itemId = window.prompt(`Insira o ID do item para ${email}:`, 'ball_ultra');
+        if (!itemId) return;
+        const qtyText = window.prompt(`Quantidade:`, '5');
+        emitSocket('admin_action', { action: 'give_item', email, itemId: itemId.trim().toLowerCase(), quantity: Number(qtyText) || 1 });
+        showCustomPopup("Enviado", `Item enviado para ${email}!`, true);
+    };
+
+    window.adminResetPassword = function (email) {
+        const newPassword = window.prompt(`Nova senha temporária para ${email}:`, '');
+        if (!newPassword || newPassword.length < 6) return;
+        emitSocket('admin_action', { action: 'reset_password', email, newPass: newPassword, newPassword });
+        showCustomPopup("Sucesso", `Senha redefinida para ${email}.`, true);
+    };
+
+    window.adminDeleteAccount = function (email) {
+        if (!window.confirm(`Tem certeza de que deseja apagar ${email}?`)) return;
+        emitSocket('admin_action', { action: 'delete_account', email });
+        setTimeout(() => { emitSocket('admin_get_users'); }, 500);
     };
 
     window.resumeSavedGame = function () {
