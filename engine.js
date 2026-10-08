@@ -2997,26 +2997,26 @@ window.openVaultModal = function() {
     }
 
     let listHtml = '';
-    if (vault.length === 0) {
-        listHtml = `<p class="text-xs text-slate-400 text-center col-span-full py-8">O cofre está vazio. Jogue, evolua e guarde os seus melhores Pokémon!</p>`;
-    } else {
-        vault.forEach((mon, index) => {
-            const isShiny = mon.isShiny;
-            const img = (isShiny && mon.shinyImage) ? mon.shinyImage : mon.image;
-            listHtml += `
-                <div class="bg-black/60 border-2 ${isShiny ? 'border-amber-400' : 'border-amber-700'} rounded-2xl p-3 flex flex-col justify-between items-center text-white space-y-2">
-                    <span class="text-[10px] font-bold text-amber-300">${mon.name}${isShiny ? '✨' : ''}</span>
-                    <img src="${img}" class="w-12 h-12 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
-                    <div class="text-[9px] text-center text-slate-300">
-                        Nv.${mon.level \vert{}\vert{} 1} \vert{} STR:${mon.str || 4}
-                    </div>
-                    <button onclick="withdrawMonsterFromVault(${index})" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-1 rounded text-[9px] uppercase shadow cursor-pointer">
-                        Resgatar
-                    </button>
+if (vault.length === 0) {
+    listHtml = `<p class="text-xs text-slate-400 text-center col-span-full py-8">O cofre está vazio. Jogue, evolua e guarde os seus melhores Pokémon!</p>`;
+} else {
+    vault.forEach((mon, index) => {
+        const isShiny = mon.isShiny;
+        const img = (isShiny && mon.shinyImage) ? mon.shinyImage : mon.image;
+        listHtml += `
+            <div class="bg-black/60 border-2 ${isShiny ? 'border-amber-400' : 'border-amber-700'} rounded-2xl p-3 flex flex-col justify-between items-center text-white space-y-2">
+                <span class="text-[10px] font-bold text-amber-300">${mon.name}${isShiny ? '✨' : ''}</span>
+                <img src="${img}" class="w-12 h-12 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                <div class="text-[9px] text-center text-slate-300">
+                    Nv.${mon.level || 1} | STR:${mon.str || 4}
                 </div>
-            `;
-        });
-    }
+                <button onclick="withdrawMonsterFromVault(${index})" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-1 rounded text-[9px] uppercase shadow cursor-pointer">
+                    Resgatar
+                </button>
+            </div>
+        `;
+    });
+}
 
     vaultModal.innerHTML = `
         <div class="trainer-card max-w-2xl w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
