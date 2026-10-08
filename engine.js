@@ -1411,7 +1411,7 @@ window.changeMartQuantity = function(itemId, amount) {
 };
 
 window.buyItemFromMart = function(itemId, cost, requestedQuantity = 1) {
-        const cp = getCurrentPlayer();
+    const cp = getCurrentPlayer();
 
     if (!cp) {
         showCustomPopup(
@@ -1443,17 +1443,14 @@ window.buyItemFromMart = function(itemId, cost, requestedQuantity = 1) {
         return;
     }
 
-   if (Number(cp.gold) < totalCost) {
+    if (Number(cp.gold) < totalCost) {
         showCustomPopup(
             "Sem Ouro",
-            `❌ Ouro insuficiente para comprar ${quantity} unidade(s).
-Necessário: ${totalCost} 🪙
-Disponível: ${Number(cp.gold) || 0} 🪙`,
+            `❌ Ouro insuficiente para comprar ${quantity} unidade(s).\nNecessário: ${totalCost} 🪙\nDisponível: ${Number(cp.gold) || 0} 🪙`,
             false
         );
         return;
     }
-    // A validação de treinador, quantidade e ouro já foi feita acima.
 
     if (!Array.isArray(cp.inventory)) {
         cp.inventory = [];
