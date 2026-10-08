@@ -3780,7 +3780,7 @@ window.movePokemonToTeam = function(boxIndex) {
         tradeModal.classList.remove('hidden');
     };
 
-   (function(window) {
+  
     // --- LOGIN E REGISTRO ---
 
     window.handleAccountLoginOrRegister = function () {
