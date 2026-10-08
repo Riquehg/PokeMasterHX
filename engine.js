@@ -1453,46 +1453,7 @@ Disponível: ${Number(cp.gold) || 0} 🪙`,
         );
         return;
     }
-    const cp = getCurrentPlayer();
-
-    const quantity = Math.max(
-        1,
-        Math.min(999, Math.floor(Number(requestedQuantity) || 1))
-    );
-
-    const unitCost = Math.max(
-        0,
-        Math.floor(Number(cost) || 0)
-    );
-
-    const totalCost = unitCost * quantity;
-
-    if (!Number.isSafeInteger(totalCost)) {
-        showCustomPopup(
-            "Compra inválida",
-            "❌ A quantidade informada é muito alta.",
-            false
-        );
-        return;
-    }
-
-    if (!cp) {
-        showCustomPopup(
-            "Erro",
-            "❌ Não foi possível identificar o treinador atual.",
-            false
-        );
-        return;
-    }
-
-    if (Number(cp.gold) < totalCost) {
-        showCustomPopup(
-            "Sem Ouro",
-            `❌ Ouro insuficiente para comprar ${quantity} unidade(s).\n\nNecessário: ${totalCost} 🪙\nDisponível: ${Number(cp.gold) || 0} 🪙`,
-            false
-        );
-        return;
-    }
+    // A validação de treinador, quantidade e ouro já foi feita acima.
 
     if (!Array.isArray(cp.inventory)) {
         cp.inventory = [];
