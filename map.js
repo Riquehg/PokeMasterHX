@@ -1,5 +1,5 @@
 // --- MÓDULO DO MAPA E CAMINHOS (MAP.JS) ---
-// Modo completo: Exibe os pontos de movimento, os balões de Pokémon enfraquecidos, mini-ícones de ginásio e os peões de TODOS os jogadores.
+// Modo completo: Exibe os pontos de movimento, balões de Pokémon enfraquecidos, mini-ícones de ginásio, peões dos jogadores, Pokémon do Dia em destaque e chat interativo.
 
 if (typeof SUPABASE_STORAGE_URL === 'undefined') {
     var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
@@ -193,8 +193,8 @@ function getValidDestinations(startWaypointId, steps) {
             }
 
             const isIndigoPlateauOrEnd = neighborWp.name.toLowerCase().includes("indigo plateau") || 
-                                       neighborWp.name.toLowerCase().includes("liga pokémon") || 
-                                       neighborWp.name.toLowerCase().includes("arena final");
+                                     neighborWp.name.toLowerCase().includes("liga pokémon") || 
+                                     neighborWp.name.toLowerCase().includes("arena final");
             if (isIndigoPlateauOrEnd && playerBadges < 6) return;
 
             let nextVisited = new Set(current.visitedInPath);
@@ -302,8 +302,15 @@ function handleWaypointArrival(waypointId) {
         }
     } else if (waypoint.type === 'pokemon') {
         if (typeof boardPokemonCards !== 'undefined' && boardPokemonCards[waypointId]) {
+            const poke = boardPokemonCards[waypointId];
+            // Bónus especial se for o Pokémon do Dia
+            if (typeof dailyFeaturedPokemonConfig !== 'undefined' && poke.id === dailyFeaturedPokemonConfig.pokemonId) {
+                if (typeof showCustomPopup === 'function') {
+                    showCustomPopup("⭐ POKÉMON DO DIA ENCONTRADO!", `Este é o Anima em destaque de hoje (${dailyFeaturedPokemonConfig.pokemonName})! Ao capturá-lo, receberá o item bónus (${dailyFeaturedPokemonConfig.bonusItemName})!`, true);
+                }
+            }
             if (typeof openEncounterModalWithPokemon === 'function') {
-                openEncounterModalWithPokemon(boardPokemonCards[waypointId]);
+                openEncounterModalWithPokemon(poke);
             }
         }
     }
@@ -333,7 +340,6 @@ function renderBoardMap(highlightIds = []) {
 
     let mapOverlayHtml = '';
 
-    // PROTEÇÃO: Garante que gameState e os jogadores existem antes de ler propriedades
     const playersList = (typeof gameState !== 'undefined' && gameState && Array.isArray(gameState.players)) ? gameState.players : ((typeof gameState !== 'undefined' && gameState && gameState.player) ? [gameState.player] : []);
     const activePlayerIndex = (typeof gameState !== 'undefined' && gameState && gameState.currentPlayerIndex !== undefined) ? gameState.currentPlayerIndex : 0;
     
@@ -366,28 +372,34 @@ function renderBoardMap(highlightIds = []) {
     if (typeof boardPokemonCards !== 'undefined') {
         Object.keys(boardPokemonCards).forEach(wpId => {
             const pokeCard = boardPokemonCards[wpId];
-            if (pokeCard && pokeCard.weakened) {
+            if (pokeCard) {
                 const wpInfo = BOARD_WAYPOINTS.find(w => w.id == wpId);
                 if (wpInfo) {
-                    let pokeImg = pokeCard.image || '';
-                    if (pokeCard.dexNumber) {
-                        const paddedDex = String(pokeCard.dexNumber).padStart(3, '0');
-                        pokeImg = pokeCard.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${paddedDex}.png` : `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
-                    } else if (pokeCard.isShiny && pokeCard.shinyImage) {
-                        pokeImg = pokeCard.shinyImage;
-                    }
+                    const isFeaturedDaily = (typeof dailyFeaturedPokemonConfig !== 'undefined' && pokeCard.id === dailyFeaturedPokemonConfig.pokemonId);
+                    
+                    if (pokeCard.weakened || isFeaturedDaily) {
+                        let pokeImg = pokeCard.image || '';
+                        if (pokeCard.dexNumber) {
+                            const paddedDex = String(pokeCard.dexNumber).padStart(3, '0');
+                            pokeImg = pokeCard.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${paddedDex}.png` : `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
+                        } else if (pokeCard.isShiny && pokeCard.shinyImage) {
+                            pokeImg = pokeCard.shinyImage;
+                        }
 
-                    mapOverlayHtml += `
-                        <div onclick="tryInteractWithWeakenedPokemon(${wpInfo.id})" class="absolute -translate-x-1/2 -translate-y-1/2 z-30 cursor-pointer group" style="top: ${wpInfo.top - 3}%; left: ${wpInfo.left}%;" title="${pokeCard.name}">
-                            <div class="bg-red-950/90 border-2 border-amber-400 rounded-lg p-1.5 shadow-2xl flex items-center gap-1.5 animate-pulse hover:scale-110 transition-transform">
-                                <img src="${pokeImg}" class="w-7 h-7 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
-                                <div class="text-left">
-                                    <p class="text-[9px] font-black text-white leading-none">${pokeCard.name}</p>
-                                    <span class="text-[8px] font-bold text-amber-300">🩹 Nv.${pokeCard.level}</span>
+                        const featuredClass = isFeaturedDaily ? 'border-amber-400 animate-bounce bg-amber-950/90 shiny-card-glow shadow-[0_0_15px_rgba(255,215,0,0.8)]' : 'border-amber-400 bg-red-950/90 animate-pulse';
+
+                        mapOverlayHtml += `
+                            <div onclick="tryInteractWithWeakenedPokemon(${wpInfo.id})" class="absolute -translate-x-1/2 -translate-y-1/2 z-30 cursor-pointer group" style="top: ${wpInfo.top - 3}%; left: ${wpInfo.left}%;" title="${pokeCard.name} ${isFeaturedDaily ? '(Pokémon do Dia ⭐)' : ''}">
+                                <div class="${featuredClass} border-2 rounded-lg p-1.5 shadow-2xl flex items-center gap-1.5 hover:scale-110 transition-transform">
+                                    <img src="${pokeImg}" class="w-7 h-7 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                                    <div class="text-left">
+                                        <p class="text-[9px] font-black text-white leading-none">${pokeCard.name}</p>
+                                        <span class="text-[8px] font-bold text-amber-300">${isFeaturedDaily ? '⭐ DIA' : '🩹 Nv.' + pokeCard.level}</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    `;
+                        `;
+                    }
                 }
             }
         });
@@ -432,11 +444,56 @@ function renderBoardMap(highlightIds = []) {
 
     container.innerHTML = `
         <div class="w-full h-full overflow-auto flex justify-center items-center py-4 bg-black/90 relative">
+            <!-- BANNER DE NOTIFICAÇÃO GLOBAL DE CAPTURAS NO MAPA -->
+            <div id="global-map-notification-banner" class="absolute top-3 left-1/2 -translate-x-1/2 z-[60] bg-gradient-to-r from-amber-600/90 to-yellow-600/90 text-black px-4 py-1.5 rounded-full font-black text-[10px] shadow-2xl border border-amber-300 hidden animate-bounce">
+                📢 <span id="global-map-notification-text">Alerta Global de Captura</span>
+            </div>
+
             <div class="map-container relative" style="background-image: url('${FULL_MAP_IMAGE}');">
                 ${mapOverlayHtml}
             </div>
         </div>
     `;
+
+    // Vincular ou sincronizar eventos de chat se existirem elementos no DOM
+    setupMapChatListeners();
+}
+
+// --- CONFIGURAÇÃO E CORREÇÃO DO CHAT NO MAPA ---
+function setupMapChatListeners() {
+    const sendBtn = document.getElementById('send-chat-btn') || document.getElementById('map-send-chat-btn');
+    const chatInput = document.getElementById('chat-input-field') || document.getElementById('map-chat-input');
+
+    if (sendBtn && chatInput && !sendBtn.dataset.listenerAttached) {
+        sendBtn.dataset.listenerAttached = "true";
+        sendBtn.onclick = () => {
+            const text = chatInput.value.trim();
+            if (!text) return;
+            
+            const cp = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : { name: "Treinador" };
+            
+            if (typeof gameState !== 'undefined' && gameState) {
+                if (!Array.isArray(gameState.chatMessages)) gameState.chatMessages = [];
+                gameState.chatMessages.push({ sender: cp.name, text: text });
+                if (gameState.chatMessages.length > 50) gameState.chatMessages.shift();
+            }
+
+            if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function') {
+                socket.emit('lobby_chat_message', { sender: cp.name, message: text });
+            }
+
+            chatInput.value = '';
+            if (typeof renderChatMessages === 'function') {
+                renderChatMessages();
+            }
+        };
+
+        chatInput.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                sendBtn.click();
+            }
+        };
+    }
 }
 
 function renderBoardMapWithHighlights(validNextSteps) {
