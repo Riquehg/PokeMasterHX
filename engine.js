@@ -3896,27 +3896,27 @@ function withdrawMonsterFromVault(vaultIndex) {
         }
 
         // --- ATUALIZAÇÃO DO HUB DO TREINADOR COM DADOS REAIS ---
-        const cp = getCurrentPlayer();
+        const cp = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[0] || {});
         const profileData = accountData.profile_data || accountData.profileData || {};
         
         const finalTrainerName = cp.name || accountData.trainerName || profileData.trainerName || 'Treinador';
         const finalGold = cp.gold !== undefined ? cp.gold : (accountData.gold || profileData.gold || 350);
-        const finalAvatarId = cp.avatarId || accountData.avatarId || profileData.avatarId || 1;
+        const finalAvatarId = String(cp.avatarId || accountData.avatarId || profileData.avatarId || '01').padStart(2, '0');
         const finalLevel = cp.level || profileData.level || 1;
 
-        // Atualiza elementos visuais do HUB do Treinador (Print)
-        const nameDisplay = document.querySelector('.hub-trainer-name, #trainer-card-name-display');
+        // Atualiza elementos visuais do HUB do Treinador usando os IDs corretos do index.html
+        const nameDisplay = document.getElementById('hub-trainer-name');
         if (nameDisplay) nameDisplay.textContent = finalTrainerName;
 
-        const goldDisplay = document.querySelector('.hub-trainer-gold, #gold-counter');
+        const goldDisplay = document.getElementById('hub-gold-display');
         if (goldDisplay) goldDisplay.textContent = `${finalGold} G`;
 
-        const levelDisplay = document.querySelector('.hub-trainer-level');
+        const levelDisplay = document.getElementById('hub-level-display');
         if (levelDisplay) levelDisplay.textContent = `Nv. ${finalLevel}`;
 
-        const avatarImg = document.querySelector('.hub-trainer-avatar, #trainer-avatar-img');
+        const avatarImg = document.getElementById('hub-avatar-img');
         if (avatarImg) {
-            avatarImg.src = `${SUPABASE_STORAGE_URL}player_0${finalAvatarId}.png`;
+            avatarImg.src = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_${finalAvatarId}.png`;
         }
 
         if (typeof showPostLoginDashboard === 'function') {
