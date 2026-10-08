@@ -4538,9 +4538,7 @@ function withdrawMonsterFromVault(vaultIndex) {
     window.showOnlineLobbyView = function () {
         const authContainer = document.getElementById('auth-container');
         const mainMenu = document.getElementById('trainer-main-menu');
-        const onlineLobby = document.getElementById(
-            'online-lobby-container'
-        );
+        const onlineLobby = document.getElementById('online-lobby-container');
 
         authContainer?.classList.add('hidden');
         mainMenu?.classList.add('hidden');
@@ -4550,14 +4548,8 @@ function withdrawMonsterFromVault(vaultIndex) {
     };
 
     window.backToMainMenu = function () {
-        const characterCreation = document.getElementById(
-            'character-creation-container'
-        );
-
-        const onlineLobby = document.getElementById(
-            'online-lobby-container'
-        );
-
+        const characterCreation = document.getElementById('character-creation-container');
+        const onlineLobby = document.getElementById('online-lobby-container');
         const mainMenu = document.getElementById('trainer-main-menu');
         const authContainer = document.getElementById('auth-container');
 
@@ -4566,4 +4558,5 @@ function withdrawMonsterFromVault(vaultIndex) {
         authContainer?.classList.add('hidden');
         mainMenu?.classList.remove('hidden');
     };
-})();
+
+})(window);
