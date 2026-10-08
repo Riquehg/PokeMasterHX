@@ -5383,16 +5383,99 @@ window.selectAvatar = function(id) {
 };
 
 window.selectStarter = function(starterName) {
-    window.selectedStarterPokemon = starterName;
+    window.selectedStarterPokemon = starterName.toLowerCase();
     document.querySelectorAll('.starter-option').forEach(el => {
         el.classList.remove('border-amber-400', 'bg-amber-950/60');
         el.classList.add('border-blue-900', 'bg-black/40');
     });
-    const selectedEl = document.getElementById(`starter-${starterName}`);
+    const selectedEl = document.getElementById(`starter-${starterName.toLowerCase()}`);
     if (selectedEl) {
         selectedEl.classList.remove('border-blue-900', 'bg-black/40');
         selectedEl.classList.add('border-amber-400', 'bg-amber-950/60');
     }
+};
+
+window.finalizeCharacterCreation = function () {
+    const nameInput = document.getElementById('setup-trainer-name');
+    const trainerName = nameInput && nameInput.value.trim() ? nameInput.value.trim() : 'Treinador';
+
+    const existingPlayer = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : null;
+    
+    const preservedGold = existingPlayer && existingPlayer.gold !== undefined ? existingPlayer.gold : 350;
+    const preservedPcBox = existingPlayer && Array.isArray(existingPlayer.pcBox) ? existingPlayer.pcBox : [];
+    const preservedInventory = existingPlayer && Array.isArray(existingPlayer.inventory) ? existingPlayer.inventory : [];
+
+    // Mapeamento correto do Pokémon inicial escolhido pelo jogador
+    const starterKey = (window.selectedStarterPokemon || 'bulbasaur').toLowerCase();
+    const starterMap = {
+        'bulbasaur': { id: 'bulbasaur', name: 'Bulbasaur', dexNumber: '001', level: 5 },
+        'charmander': { id: 'charmander', name: 'Charmander', dexNumber: '004', level: 5 },
+        'squirtle': { id: 'squirtle', name: 'Squirtle', dexNumber: '007', level: 5 },
+        'pikachu': { id: 'pikachu', name: 'Pikachu', dexNumber: '025', level: 5 },
+        'chikorita': { id: 'chikorita', name: 'Chikorita', dexNumber: '152', level: 5 },
+        'cyndaquil': { id: 'cyndaquil', name: 'Cyndaquil', dexNumber: '155', level: 5 },
+        'totodile': { id: 'totodile', name: 'Totodile', dexNumber: '158', level: 5 },
+        'eevee': { id: 'eevee', name: 'Eevee', dexNumber: '133', level: 5 }
+    };
+
+    const chosenStarter = starterMap[starterKey] || starterMap['bulbasaur'];
+    chosenStarter.image = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/${chosenStarter.dexNumber}.png`;
+
+    if (typeof gameState !== 'undefined') {
+        gameState.turn = 1;
+        gameState.currentPlayerIndex = 0;
+        gameState.players = [
+            {
+                name: trainerName,
+                avatarId: window.selectedAvatarId || 1,
+                currentZone: 5,
+                level: 1,
+                gold: preservedGold,
+                badges: [],
+                activeTeam: [chosenStarter], // Adiciona o inicial correto na equipe ativa
+                pcBox: preservedPcBox,
+                inventory: preservedInventory,
+                equipmentSlots: [null, null]
+            }
+        ];
+    }
+
+    if (typeof ensureValidGameState === 'function') {
+        ensureValidGameState();
+    }
+
+    if (typeof saveGameProgress === 'function') {
+        saveGameProgress();
+    }
+
+    // Oculta a tela de criação de personagem para evitar que fique travada na tela
+    const characterCreation = document.getElementById('character-creation-container');
+    if (characterCreation) characterCreation.classList.add('hidden');
+
+    const setupScreen = document.getElementById('setup-screen');
+    const mainLayout = document.getElementById('main-game-layout');
+    if (setupScreen) setupScreen.classList.add('hidden');
+    if (mainLayout) mainLayout.classList.remove('hidden');
+
+    if (typeof showCustomPopup === 'function') {
+        showCustomPopup(
+            'Nova Jornada Iniciada',
+            `Boa sorte, ${trainerName}! Você começou sua jornada com ${chosenStarter.name}.`,
+            true
+        );
+    }
+};
+
+window.backToMainMenu = function () {
+    const characterCreation = document.getElementById('character-creation-container');
+    const onlineLobby = document.getElementById('online-lobby-container');
+    const mainMenu = document.getElementById('trainer-main-menu');
+    const authContainer = document.getElementById('auth-container');
+
+    if (characterCreation) characterCreation.classList.add('hidden');
+    if (onlineLobby) onlineLobby.classList.add('hidden');
+    if (authContainer) authContainer.classList.add('hidden');
+    if (mainMenu) mainMenu.classList.remove('hidden');
 };
 
 })(window);
