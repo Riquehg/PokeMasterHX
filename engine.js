@@ -4258,15 +4258,20 @@ if (
     });
 
     // Ouvinte adicionado para garantir que a partida inicie quando o servidor confirmar
-    currentSocketInstance.on('game_started', () => {
-        const setupScreen = document.getElementById('setup-screen');
-        const mainLayout = document.getElementById('main-game-layout');
-        if (setupScreen) setupScreen.classList.add('hidden');
-        if (mainLayout) mainLayout.classList.remove('hidden');
-        if (typeof showCustomPopup === 'function') {
-            showCustomPopup('Partida Iniciada', 'A batalha multijogador começou!', true);
-        }
-    });
+    currentSocketInstance.on('room_game_started', (data) => {
+    console.log('Partida online iniciada na sala:', data.roomId);
+    
+    // Oculta a tela de login/lobby e exibe o tabuleiro principal do jogo
+    const setupScreen = document.getElementById('setup-screen');
+    const mainLayout = document.getElementById('main-game-layout');
+    
+    if (setupScreen) setupScreen.classList.add('hidden');
+    if (mainLayout) mainLayout.classList.remove('hidden');
+
+    if (typeof showCustomPopup === 'function') {
+        showCustomPopup('Partida Iniciada', 'A batalha multijogador começou!', true);
+    }
+});
 
     currentSocketInstance.on('lobby_error', message => {
         if (typeof showCustomPopup === 'function') {
