@@ -2,7 +2,7 @@
 // Gestão de Conexão Socket.io, Autenticação Remota e Sincronização Online
 
 import { gameState, ensureValidGameState } from './state.js';
-import { saveGameProgress } from './core/storage.js';
+import { saveGameProgress } from './storage.js';
 
 export let socket = null;
 export let currentAuthenticatedAccount = null;
@@ -10,7 +10,6 @@ export let currentAuthenticatedAccount = null;
 export function initializeSocketConnection() {
     try {
         if (typeof io !== 'undefined') {
-            // Conecta ao servidor Socket.io alojado no Render (ou URL atual)
             socket = io('https://pokemasterhx.onrender.com', {
                 transports: ['websocket', 'polling']
             });
@@ -29,21 +28,18 @@ export function initializeSocketConnection() {
                 }
             });
 
-            // Ouve a resposta de autenticação/login da conta
             socket.on('login_response', (response) => {
                 if (typeof window.handleLoginResponse === 'function') {
                     window.handleLoginResponse(response);
                 }
             });
 
-            // Ouve atualizações de salas online e lobby
             socket.on('rooms_list_update', (rooms) => {
                 if (typeof window.renderRoomsList === 'function') {
                     window.renderRoomsList(rooms);
                 }
             });
 
-            // Ouve a sincronização em tempo real das trocas de Pokémon entre treinadores
             socket.on('trade_synchronized', (data) => {
                 if (data && data.gameState) {
                     if (typeof gameState !== 'undefined') {
@@ -85,7 +81,6 @@ export function emitSocket(eventName, payload) {
     return true;
 }
 
-// Expor globalmente para uso nos outros módulos
 window.socket = socket;
 window.initializeSocketConnection = initializeSocketConnection;
 window.emitSocket = emitSocket;
