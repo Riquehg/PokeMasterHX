@@ -12,6 +12,8 @@ if (typeof window.boardPokemonCards === 'undefined') {
     window.boardPokemonCards = {};
 }
 const boardPokemonCards = window.boardPokemonCards;
+
+export const BOARD_WAYPOINTS = [
     // --- HEXÁGONO A ---
     { id: 5, name: "Inicio Pallet", hexagon: "A", top: 61.2, left: 6.7, type: "city", color: "rosa", requiredType: "", connections: [6] },
     { id: 6, name: "casa_6", hexagon: "A", top: 72.2, left: 7.7, type: "pokemon", color: "rosa", requiredType: "", connections: [7] },
