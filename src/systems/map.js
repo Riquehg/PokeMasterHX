@@ -192,8 +192,8 @@ export function getValidDestinations(startWaypointId, steps) {
             }
 
             const isIndigoPlateauOrEnd = neighborWp.name.toLowerCase().includes("indigo plateau") || 
-                                     neighborWp.name.toLowerCase().includes("liga pokémon") || 
-                                     neighborWp.name.toLowerCase().includes("arena final");
+                                       neighborWp.name.toLowerCase().includes("liga pokémon") || 
+                                       neighborWp.name.toLowerCase().includes("arena final");
             if (isIndigoPlateauOrEnd && playerBadges < 6) return;
 
             let nextVisited = new Set(current.visitedInPath);
