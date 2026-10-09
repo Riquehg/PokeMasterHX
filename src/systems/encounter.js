@@ -5,6 +5,7 @@ import { gameState, getCurrentPlayer } from '../core/state.js';
 import { renderTeamCardSlots, renderBottomPanel } from './pcbox.js';
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 import { MONSTER_CATALOG } from '../config/cards-data.js';
+import { getItemDetails } from '../data/items.js';
 import { saveGameProgress } from '../core/storage.js';
 import { emitSocket } from '../core/socket.js';
 
@@ -41,7 +42,6 @@ function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
     const attackerTypes = parseTypes(attackerType);
     const defenderTypes = parseTypes(defenderType);
     
-    // Tabela oficial/estendida de vantagens de Kanto/Geração clássica
     const advantages = {
         'fire': ['grass', 'bug', 'ice', 'steel'],
         'water': ['fire', 'ground', 'rock'],
@@ -62,7 +62,7 @@ function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
     for (let a of attackerTypes) {
         for (let d of defenderTypes) {
             if (advantages[a] && advantages[a].includes(d)) {
-                return 1.5; // Vantagem detetada!
+                return 1.5;
             }
         }
     }
@@ -92,7 +92,7 @@ export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa
     else if (tier === 5) { minLevel = 40; maxLevel = 50; }
 
     const level = Math.floor(Math.random() * (maxLevel - minLevel + 1)) + minLevel;
-    const isShiny = Math.random() < 0.06; // 6% de chance
+    const isShiny = Math.random() < 0.06;
     
     const maxHp = 20 + (level * 4);
     const calculatedStr = 5 + Math.floor(level * 0.9);
@@ -165,8 +165,8 @@ export function openEncounterModalWithPokemon(pokemon) {
                 <button id="btn-action-attack" onclick="resolveBattleAttempt()" class="bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 text-white font-black px-6 py-2.5 rounded-xl text-xs uppercase shadow-lg cursor-pointer flex items-center gap-2 border border-blue-400 transition-all">
                     <span>⚔️</span> Atacar (Rolar Dado)
                 </button>
-                <button id="btn-action-capture" onclick="resolveCaptureAttempt()" class="bg-gradient-to-r from-emerald-600 to-green-700 hover:from-emerald-500 hover:to-green-600 text-white font-black px-6 py-2.5 rounded-xl text-xs uppercase shadow-lg cursor-pointer flex items-center gap-2 border border-emerald-400 transition-all ${currentEncounterState.wildDefeated ? '' : 'opacity-40 cursor-not-allowed'}">
-                    <span>🔴</span> Tentar Capturar ${currentEncounterState.wildDefeated ? '(Disponível)' : '(Derrote o Selvagem Primeiro)'}
+                <button id="btn-action-capture" onclick="resolveCaptureAttempt()" class="bg-gradient-to-r from-emerald-600 to-green-700 hover:from-emerald-500 hover:to-green-600 text-white font-black px-6 py-2.5 rounded-xl text-xs uppercase shadow-lg cursor-pointer flex items-center gap-2 border border-emerald-400 transition-all">
+                    <span>🔴</span> Tentar Capturar (Disponível)
                 </button>
                 <button onclick="fleeEncounter()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-5 py-2.5 rounded-xl text-xs cursor-pointer border border-slate-600 transition-all">
                     <span>🏃‍♂️</span> Fugir
@@ -188,7 +188,6 @@ export function updateEncounterUIInfo() {
     const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex] || cp.activeTeam[0];
     if (!wild || !activeMon) return;
 
-    // Correção automática de segurança para status antigos desatualizados
     if (activeMon.level && (!activeMon.str || activeMon.str < (4 + activeMon.level))) {
         activeMon.str = 5 + Math.floor(activeMon.level * 0.9);
     }
@@ -198,7 +197,6 @@ export function updateEncounterUIInfo() {
     const wildHp = wild.currentHp !== undefined ? wild.currentHp : (wild.maxHp || 20);
     const wildMaxHp = wild.maxHp || wild.hp || 20;
 
-    // Garante leitura correta dos tipos do jogador e do selvagem (seja string ou array)
     const pType = activeMon.types || activeMon.type;
     const wType = wild.types || wild.type;
 
@@ -214,7 +212,7 @@ export function updateEncounterUIInfo() {
     const estimatedPlayerPower = Math.round(baseStr * typeMult); 
     
     const isLegendary = (wild.tier === 5) || (wild.color && wild.color.toLowerCase() === 'amarelo');
-    const weakenedBonus = 2;
+    const weakenedBonus = currentEncounterState.wildDefeated ? 2 : 0;
     const totalCaptureBonusSoFar = currentEncounterState.itemBonus + weakenedBonus;
 
     let displayTarget = 4;
@@ -259,10 +257,10 @@ export function updateEncounterUIInfo() {
     const encVisual = document.getElementById('enc-card-visual');
     if (encVisual) {
         const wildTypeDisplay = Array.isArray(wild.types) ? wild.types.join('/') : (wild.type || 'Normal');
-        encVisual.className = `relative flex flex-col justify-between p-4 rounded-3xl border-4 ${enemyCardBg} shadow-2xl w-72 h-[420px] text-white ${wild.isShiny ? 'shiny-card-glow' : ''}`;
+        encVisual.className = `relative flex flex-col justify-between p-4 rounded-3xl border-4 ${enemyCardBg} shadow-2xl w-72 h-[420px] text-white ${wild.isShiny ? 'shiny-card-glow' : ''} ${wild.visualClass || wild.aura || ''}`;
         const statusBadge = currentEncounterState.wildDefeated 
-            ? `<span class="bg-emerald-600 text-white text-[9px] px-2 py-0.5 rounded-md font-bold shadow animate-bounce">🏆 DERROTADO (Pronto a Capturar!)</span>`
-            : `<span class="bg-red-600 text-white text-[9px] px-2 py-0.5 rounded-md font-bold shadow">⚔️ Em Combate</span>`;
+            ? `<span class="bg-emerald-600 text-white text-[9px] px-2 py-0.5 rounded-md font-bold shadow animate-bounce">🏆 ENFRAQUECIDO (Bónus +2 Ativo!)</span>`
+            : `<span class="bg-blue-600 text-white text-[9px] px-2 py-0.5 rounded-md font-bold shadow">🔴 Pronto para Captura Direta</span>`;
         const shinyWildBadge = wild.isShiny ? `<span class="bg-amber-400 text-black text-[9px] px-2 py-0.5 rounded-md font-black shadow animate-bounce">✨ SHINY</span>` : '';
         
         encVisual.innerHTML = `
@@ -293,13 +291,8 @@ export function updateEncounterUIInfo() {
 
     const btnCapture = document.getElementById('btn-action-capture');
     if (btnCapture) {
-        if (currentEncounterState.wildDefeated) {
-            btnCapture.className = "bg-gradient-to-r from-emerald-600 to-green-700 hover:from-emerald-500 hover:to-green-600 text-white font-black px-6 py-2.5 rounded-xl text-xs uppercase shadow-lg cursor-pointer flex items-center gap-2 border border-emerald-400 transition-all animate-pulse";
-            btnCapture.innerHTML = `<span>🔴</span> Tentar Capturar (Disponível!)`;
-        } else {
-            btnCapture.className = "bg-gradient-to-r from-emerald-600 to-green-700 text-white font-black px-6 py-2.5 rounded-xl text-xs uppercase shadow-lg opacity-40 cursor-not-allowed flex items-center gap-2 border border-emerald-400 transition-all";
-            btnCapture.innerHTML = `<span>🔴</span> Tentar Capturar (Derrote o Selvagem Primeiro)`;
-        }
+        btnCapture.className = "bg-gradient-to-r from-emerald-600 to-green-700 hover:from-emerald-500 hover:to-green-600 text-white font-black px-6 py-2.5 rounded-xl text-xs uppercase shadow-lg cursor-pointer flex items-center gap-2 border border-emerald-400 transition-all animate-pulse";
+        btnCapture.innerHTML = `<span>🔴</span> Tentar Capturar (Disponível!)`;
     }
 }
 
@@ -323,8 +316,6 @@ export function cyclePlayerEncounterPokemon() {
     currentEncounterState.selectedTeamMemberIndex = nextIndex;
     const switchedMon = cp.activeTeam[nextIndex];
     showCustomPopup("Troca de Anima", `🔄 Enviaste para a frente de batalha o ${switchedMon.name}!`, true);
-    
-    // Força a atualização imediata da HUD de combate
     updateEncounterUIInfo();
 }
 
@@ -358,9 +349,9 @@ export function selectCaptureBall(item) {
         showCustomPopup("Sem Esferas", "Não tens unidades suficientes desta Poké Ball!", false);
         return;
     }
-    currentEncounterState.itemBonus = Number(item.value) || 1;
+    currentEncounterState.itemBonus = Number(item.value) || 0;
     currentEncounterState.selectedCaptureBallId = item.id;
-    showCustomPopup("Esfera Selecionada", `🔴 Selecionaste ${item.name} (+${item.value} Bónus de Captura). Poca agora em 'Tentar Capturar'!`, true);
+    showCustomPopup("Esfera Selecionada", `🔴 Selecionaste ${item.name} (+${item.value} Bónus de Captura). Clica agora em 'Tentar Capturar'!`, true);
     renderEncounterItemsList();
     updateEncounterUIInfo();
 }
@@ -507,7 +498,7 @@ export function resolveBattleAttempt() {
             if (wild.currentHp <= 0) {
                 currentEncounterState.wildDefeated = true;
                 addExperienceAndCheckEvolution(activeMon, 85);
-                showCustomPopup("🏆 VITÓRIA NO COMBATE TCG!", `O teu ${activeMon.name} (Soma: ${playerPower} | Dado: ${playerDice}) derrotou o ${wild.name} (Soma: ${wildPower})!\n\n✨ Ganhou XP e o selvagem ficou enfraquecido!\n\n🔴 Podes agora clicar em 'Tentar Capturar'!`, true);
+                showCustomPopup("🏆 VITÓRIA NO COMBATE TCG!", `O teu ${activeMon.name} (Soma: ${playerPower} | Dado: ${playerDice}) derrotou o ${wild.name} (Soma: ${wildPower})!\n\n✨ Ganhou XP e o selvagem ficou enfraquecido (+2 Bónus de Captura)!\n\n🔴 Podes agora clicar em 'Tentar Capturar'!`, true);
             } else {
                 showCustomPopup("⚔️ ATAQUE EFICAZ!", `O teu ${activeMon.name} (Dado: ${playerDice}) causou ${damageToWild} de dano!\n\n(Ataque: ${playerPower} vs Defesa: ${wildPower})\nHP do Selvagem: ${wild.currentHp}/${wild.maxHp}`, true);
             }
@@ -539,11 +530,6 @@ export function resolveCaptureAttempt() {
     const wild = currentEncounterState.wildPokemon;
     if (!wild) return;
 
-    if (!currentEncounterState.wildDefeated) {
-        showCustomPopup("Ação Bloqueada", "⚠ Tens de derrotar (fazer o HP chegar a 0) o Pokémon selvagem em combate antes de o poderes capturar!", false);
-        return;
-    }
-
     if (!currentEncounterState.selectedCaptureBallId) {
         showCustomPopup("Esfera Necessária", "⚠ Deves selecionar primeiro uma Poké Ball na tua mochila de combate em baixo para tentar capturar!", false);
         return;
@@ -568,7 +554,7 @@ export function resolveCaptureAttempt() {
         if (isLegendary) requiredTarget = 7;
         if (wild.isShiny) requiredTarget++;
 
-        const weakenedBonus = 2;
+        const weakenedBonus = currentEncounterState.wildDefeated ? 2 : 0;
         const captureBonus = Number(currentEncounterState.itemBonus) || 0;
         const totalCaptureValue = roll + captureBonus + weakenedBonus;
 
@@ -585,12 +571,16 @@ export function resolveCaptureAttempt() {
                 true
             );
 
+            const itemDetails = getItemDetails(currentEncounterState.selectedCaptureBallId);
+            const auraEffect = itemDetails?.visualClass || itemDetails?.aura || wild.visualClass || '';
+
             const caughtMonster = {
                 ...wild,
                 uniqueId: 'mon_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
                 catalogId: wild.id,
                 currentHp: wild.maxHp || 20,
-                exp: 0
+                exp: 0,
+                auraEffect: auraEffect
             };
 
             if (!Array.isArray(cp.activeTeam)) cp.activeTeam = [];
@@ -600,14 +590,14 @@ export function resolveCaptureAttempt() {
                 cp.activeTeam.push(caughtMonster);
             } else {
                 cp.pcBox.push(caughtMonster);
-                showCustomPopup("PC Box", `📦 Equipa cheia! O ${wild.name} foi enviado para a PC Box.`, true);
+                showCustomPopup("PC Box", `📦 Equipa cheia! O ${wild.name} foi enviado para a PC Box.`, t => true);
             }
 
             if (!Array.isArray(cp.pokedex)) cp.pokedex = [];
             if (!cp.pokedex.includes(wild.id)) cp.pokedex.push(wild.id);
 
             if (wild.waypointId && typeof boardPokemonCards !== 'undefined') {
-                dispatchDeleteBoardCard(wild.waypointId);
+                delete boardPokemonCards[wild.waypointId];
             }
 
             closeEncounterModalUI();
@@ -650,7 +640,6 @@ function showCustomPopup(title, message, isSuccess) {
     }
 }
 
-// Exposição global das funções para interações no HTML e troca de Pokémon
 window.openEncounterModalWithPokemon = openEncounterModalWithPokemon;
 window.fleeEncounter = fleeEncounter;
 window.resolveCaptureAttempt = resolveCaptureAttempt;
