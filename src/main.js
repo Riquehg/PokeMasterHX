@@ -7,7 +7,7 @@ import { renderBoardMap, tryInteractWithCity, onHexClick } from './systems/map.j
 import { setupDiceListeners } from './systems/dice.js';
 import { MONSTER_CATALOG } from './config/cards-data.js';
 
-// Importação dos Módulos da Parte 1 e Parte 2
+// Importação dos Módulos dos Sistemas
 import './systems/city.js';
 import './systems/trainer.js';
 import './systems/battle.js';
@@ -18,6 +18,7 @@ import { initiateGymSequence, GYM_LEADERS_CATALOG } from './systems/gym.js';
 import { openEncounterModalWithPokemon, fleeEncounter } from './systems/encounter.js';
 import { renderTeamCardSlots, renderBottomPanel, changePcBoxPage } from './systems/pcbox.js';
 import { openPokedexModal, openPokedexDetailCard } from './systems/pokedex.js';
+import { openVaultModal } from './systems/vault.js';
 
 // ==========================================
 // EXPOSIÇÃO GLOBAL PARA O HTML (Evita erros de onclick)
@@ -38,10 +39,11 @@ window.renderBottomPanel = renderBottomPanel;
 window.changePcBoxPage = changePcBoxPage;
 window.openPokedexModal = openPokedexModal;
 window.openPokedexDetailCard = openPokedexDetailCard;
+window.openVaultModal = openVaultModal;
 
 // Executado assim que o DOM estiver totalmente carregado
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("🚀 Inicializando o Motor Modular do Jogo (Partes 1 & 2)...");
+    console.log("🚀 Inicializando o Motor Modular do Jogo (Partes 1, 2 & 3)...");
 
     // 1. Tenta carregar um save existente ou inicializa um estado padrão
     const loaded = loadGameProgress();
@@ -105,6 +107,13 @@ function setupAuthenticationListeners() {
             document.getElementById('main-game-layout').classList.remove('hidden');
             renderTeamCardSlots();
             renderBottomPanel();
+        };
+    }
+
+    const vaultBtn = document.getElementById('hub-vault-btn');
+    if (vaultBtn) {
+        vaultBtn.onclick = () => {
+            openVaultModal();
         };
     }
 
