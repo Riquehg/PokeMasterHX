@@ -92,8 +92,8 @@ function setupAuthenticationListeners() {
 
             console.log("🔐 A enviar credenciais para o servidor:", email);
             
-            // Envia o pedido de login/registo real via Socket.io para o Render/Supabase
-            emitSocket('player_login', { email, password });
+            // CORREÇÃO: O servidor escuta estritamente por 'login_request'
+            emitSocket('login_request', { email, password });
         };
     }
 
