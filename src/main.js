@@ -5,12 +5,14 @@ import { gameState, setupConfig, ensureValidGameState, getCurrentPlayer } from '
 import { loadGameProgress, saveGameProgress } from './core/storage.js';
 import { renderBoardMap, tryInteractWithCity } from './systems/map.js';
 import { setupDiceListeners } from './systems/dice.js';
-import { openSpecificTrainerCardModal, showCustomPopup } from './ui/modals.js';
-import { openPokemartModal } from './systems/inventory.js';
 import { MONSTER_CATALOG } from './config/cards-data.js';
+
+// Importação dos Módulos da Parte 1
 import './systems/city.js';
 import './systems/trainer.js';
 import './systems/battle.js';
+import { openPokemartModal, useInventoryItem } from './systems/inventory.js';
+import { openSpecificTrainerCardModal } from './systems/trainer.js';
 
 // ==========================================
 // EXPOSIÇÃO GLOBAL PARA O HTML (Evita erros de onclick)
@@ -18,6 +20,7 @@ import './systems/battle.js';
 window.openSpecificTrainerCardModal = openSpecificTrainerCardModal;
 window.openTrainerCardModal = function() { openSpecificTrainerCardModal(gameState.currentPlayerIndex || 0); };
 window.openPokemartModal = openPokemartModal;
+window.useInventoryItem = useInventoryItem;
 window.tryInteractWithCity = tryInteractWithCity;
 window.saveGameProgress = saveGameProgress;
 
@@ -65,11 +68,9 @@ function setupAuthenticationListeners() {
 
             console.log("🔐 Autenticando treinador:", email);
 
-            // Em vez de entrar direto no tabuleiro, exibe o Hub do Treinador (Menu Inicial completo)
             if (authContainer) authContainer.classList.add('hidden');
             if (trainerMainMenu) trainerMainMenu.classList.remove('hidden');
 
-            // Atualiza os dados do jogador no estado global
             const player = getCurrentPlayer();
             if (player) {
                 player.email = email;
@@ -78,7 +79,6 @@ function setupAuthenticationListeners() {
         };
     }
 
-    // Configuração dos botões do Hub do Treinador (Continuar, Nova Partida, Online, etc.)
     const resumeBtn = document.getElementById('hub-resume-btn');
     if (resumeBtn) {
         resumeBtn.onclick = () => {
