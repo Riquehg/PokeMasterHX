@@ -4,6 +4,7 @@
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 import { gameState, getCurrentPlayer } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
+import { ITEM_CATALOG } from '../data/items.js';
 
 // ------------------------------------------------------------
 // HUB DA CIDADE
@@ -134,7 +135,7 @@ export function openPokemonCenterModal(cityName = '') {
 }
 
 // ------------------------------------------------------------
-// POKÉ MART (LOJA DE ITENS COM QUANTIDADE)
+// --- POKÉ MART (LOJA DE ITENS COM QUANTIDADE) ---
 // ------------------------------------------------------------
 
 export function openPokemartModal(cityName = '') {
@@ -152,16 +153,10 @@ export function openPokemartModal(cityName = '') {
 
 function renderMartContent(modalEl, cityName = '') {
     const cp = getCurrentPlayer();
-    let itemsForSale = [
-        { id: 'poke_ball', name: 'Poké Ball', type: 'sphere', value: 0, cost: 50, icon: '🔴', image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`, desc: 'Esfera clássica.' },
-        { id: 'ball_great', name: 'Great Ball', type: 'sphere', value: 1, cost: 100, icon: '🔵', image: `${SUPABASE_STORAGE_URL}items/great_ball.png`, desc: '+1 na captura.' },
-        { id: 'ball_ultra', name: 'Ultra Ball', type: 'sphere', value: 2, cost: 200, icon: '🟡', image: `${SUPABASE_STORAGE_URL}items/ultra_ball.png`, desc: '+2 na captura.' },
-        { id: 'item_rarecandy', name: 'Rare Candy', type: 'rarecandy', value: 100, cost: 300, icon: '🍬', image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`, desc: 'Dá 100 XP (Sobe de Nível).' },
-        { id: 'evolution_stone', name: 'Evolution Stone', type: 'evolution', value: 1, cost: 500, icon: '💎', image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`, desc: 'Evolve um Anima compatível.' },
-        { id: 'item_potion', name: 'Potion', type: 'heal', value: 20, cost: 50, icon: '💊', image: `${SUPABASE_STORAGE_URL}items/potion.png`, desc: 'Restaura 20 HP.' },
-        { id: 'item_revive', name: 'Revive', type: 'revive', value: 50, cost: 250, icon: '🌟', image: `${SUPABASE_STORAGE_URL}items/revive.png`, desc: 'Revive um Anima desmaiado.' },
-        { id: 'item_vitamin', name: 'Vitamin', type: 'battle', value: 2, cost: 150, icon: '🧪', image: `${SUPABASE_STORAGE_URL}items/vitamin.png`, desc: '+2 STR na batalha.' }
-    ];
+    
+    // Puxa diretamente do catálogo oficial de itens garantindo as sprites corretas do Supabase
+    const sellableIds = ['poke_ball', 'ball_great', 'ball_ultra', 'item_rarecandy', 'evolution_stone', 'item_potion', 'item_revive', 'item_vitamin'];
+    let itemsForSale = ITEM_CATALOG.filter(item => sellableIds.includes(item.id));
 
     let shopHTML = `
         <div class="trainer-card max-w-md w-full p-6 space-y-4 border-4 border-blue-500 rounded-2xl bg-gradient-to-b from-[#0f172a] to-[#020617] shadow-2xl text-white">
@@ -174,7 +169,7 @@ function renderMartContent(modalEl, cityName = '') {
 
     itemsForSale.forEach(item => {
         const itemImg = item.image
-            ? `<img src="${item.image}" class="w-8 h-8 object-contain">`
+            ? `<img src="${item.image}" class="w-8 h-8 object-contain" onerror="this.style.display='none'">`
             : `<span class="text-xl">${item.icon}</span>`;
 
         shopHTML += `
@@ -184,7 +179,7 @@ function renderMartContent(modalEl, cityName = '') {
                     <div class="min-w-0">
                         <p class="text-xs font-bold text-white truncate">${item.name}</p>
                         <p class="text-[9px] text-slate-400">${item.desc}</p>
-                        <p class="text-[10px] font-black text-amber-400 mt-0.5">${item.cost} 🪙 por unidade</p>
+                        <p class="text-[10px] font-black text-amber-400 mt-0.5">${item.cost || 50} 🪙 por unidade</p>
                     </div>
                 </div>
 
@@ -195,7 +190,7 @@ function renderMartContent(modalEl, cityName = '') {
                         <button type="button" onclick="window.changeMartQuantity('${item.id}', 1)" class="px-2 py-1.5 text-blue-300 hover:bg-blue-900 hover:text-white font-black">+</button>
                     </div>
 
-                    <button type="button" onclick="window.buyItemFromMart('${item.id}', ${item.cost}, document.getElementById('mart-quantity-${item.id}').value, '${cityName}')" class="bg-blue-600 hover:bg-blue-500 text-white font-black px-2.5 py-1.5 rounded-lg text-[10px] shadow cursor-pointer whitespace-nowrap">
+                    <button type="button" onclick="window.buyItemFromMart('${item.id}', ${item.cost || 50}, document.getElementById('mart-quantity-${item.id}').value, '${cityName}')" class="bg-blue-600 hover:bg-blue-500 text-white font-black px-2.5 py-1.5 rounded-lg text-[10px] shadow cursor-pointer whitespace-nowrap">
                         Comprar
                     </button>
                 </div>
@@ -211,7 +206,6 @@ function renderMartContent(modalEl, cityName = '') {
     `;
     modalEl.innerHTML = shopHTML;
 }
-
 // ------------------------------------------------------------
 // EXPOSIÇÃO GLOBAL E FUNÇÕES DE QUANTIDADE DA LOJA
 // ------------------------------------------------------------
