@@ -155,6 +155,19 @@ export function setCurrentPlayerWaypointId(newWaypointId) {
 }
 
 // ------------------------------------------------------------
+// RESETAR O ESTADO DO DADO (Ao passar o turno)
+// ------------------------------------------------------------
+
+export function resetTurnDiceState() {
+    if (typeof movementState !== 'undefined') {
+        movementState.hasRolledThisTurn = false;
+        movementState.isMoving = false;
+        movementState.validDestinations = [];
+        movementState.diceRolledValue = 0;
+    }
+}
+
+// ------------------------------------------------------------
 // ROLAGEM DO DADO COM ANIMAÇÃO GRÁFICA CENTRAL
 // ------------------------------------------------------------
 
@@ -191,7 +204,6 @@ export function rollDiceForMovement() {
         startDirectMovementSession(normalizedResult);
     };
 
-    // Animação gráfica épica do dado no centro da tela
     let diceOverlay = document.getElementById('epic-dice-overlay');
     if (!diceOverlay) {
         diceOverlay = document.createElement('div');
@@ -441,26 +453,41 @@ export function triggerWaypointEvent(waypointId) {
             window.boardPokemonCards = {};
         }
 
-        // Gera automaticamente um Pokémon selvagem se a casa estiver vazia
+        // Se ainda não houver Pokémon gerado nesta casa, cria um oculto (não revelado)
         if (!boardPokemonCards[waypointId]) {
             const catalog = typeof MONSTER_CATALOG !== 'undefined' ? MONSTER_CATALOG : [];
             if (catalog.length > 0) {
                 const randomMon = catalog[Math.floor(Math.random() * catalog.length)];
+                const tier = randomMon.tier || 1;
+                const minLvl = tier === 1 ? 3 : tier === 2 ? 8 : tier === 3 ? 15 : 25;
+                const level = Math.floor(Math.random() * 4) + minLvl;
+                const isShiny = Math.random() < 0.06;
+
                 boardPokemonCards[waypointId] = {
                     ...randomMon,
-                    level: Math.floor(Math.random() * 5) + 3,
-                    currentHp: 20,
-                    maxHp: 20,
+                    level: level,
+                    tier: tier,
+                    currentHp: 20 + (level * 2),
+                    maxHp: 20 + (level * 2),
+                    isShiny: isShiny,
                     waypointId: waypointId,
-                    weakened: true
+                    revealed: false, // Oculto inicialmente até interagir/falhar
+                    weakened: false
                 };
             }
         }
 
         const wildPokemon = boardPokemonCards[waypointId];
-        if (wildPokemon && typeof openEncounterModalWithPokemon === 'function') {
-            wildPokemon.revealed = true;
-            openEncounterModalWithPokemon(wildPokemon);
+        if (wildPokemon) {
+            wildPokemon.revealed = true; // Revela apenas ao pisar na casa
+            if (typeof dailyFeaturedPokemonConfig !== 'undefined' && wildPokemon.id === dailyFeaturedPokemonConfig.pokemonId) {
+                if (typeof showCustomPopup === 'function') {
+                    showCustomPopup("⭐ POKÉMON DO DIA ENCONTRADO!", `Este é o Anima em destaque de hoje (${dailyFeaturedPokemonConfig.pokemonName})! Ao capturá-lo, receberás o item bónus (${dailyFeaturedPokemonConfig.bonusItemName})!`, true);
+                }
+            }
+            if (typeof openEncounterModalWithPokemon === 'function') {
+                openEncounterModalWithPokemon(wildPokemon);
+            }
         }
         return;
     }
@@ -555,3 +582,6 @@ export function triggerRandomBoardEvent(waypointName) {
         showCustomPopup(title, message, isPositive);
     }
 }
+
+// Expõe globalmente a função de reset do turno se necessário pelo gestor de turnos
+window.resetTurnDiceState = resetTurnDiceState;
