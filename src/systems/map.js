@@ -6,6 +6,7 @@ import { gameState, getCurrentPlayer, movementState, ensureValidGameState } from
 import { saveGameProgress } from '../core/storage.js';
 import { openEncounterModalWithPokemon } from './encounter.js';
 import { MONSTER_CATALOG } from '../config/cards-data.js';
+import { initiateGymSequence, GYM_LEADERS_CATALOG } from './gym.js'; // <-- ADIÇÃO CRUCIAL: Importa o módulo de ginásios
 
 // ADIÇÃO CRUCIAL: Garantir que o gestor global dos Pokémon do tabuleiro existe
 if (typeof window.boardPokemonCards === 'undefined') {
@@ -200,8 +201,8 @@ export function getValidDestinations(startWaypointId, steps) {
             }
 
             const isIndigoPlateauOrEnd = neighborWp.name.toLowerCase().includes("indigo plateau") || 
-                                       neighborWp.name.toLowerCase().includes("liga pokémon") || 
-                                       neighborWp.name.toLowerCase().includes("arena final");
+                                     neighborWp.name.toLowerCase().includes("liga pokémon") || 
+                                     neighborWp.name.toLowerCase().includes("arena final");
             if (isIndigoPlateauOrEnd && playerBadges < 6) return;
 
             let nextVisited = new Set(current.visitedInPath);
@@ -285,6 +286,13 @@ export function tryInteractWithCity(waypointId, cityName) {
     const currentZoneId = cp ? (cp.currentZone || 5) : 5;
 
     if (currentZoneId === waypointId) {
+        // CORREÇÃO CRUCIAL: Se a cidade tiver um ginásio oficial no catálogo, dispara a sequência do ginásio diretamente!
+        const hasGym = GYM_LEADERS_CATALOG.some(g => g.city.toLowerCase() === cityName.toLowerCase());
+        if (hasGym && typeof initiateGymSequence === 'function') {
+            initiateGymSequence(cityName);
+            return;
+        }
+
         if (typeof openCityModal === 'function') {
             openCityModal(cityName);
         }
@@ -313,7 +321,6 @@ export function tryInteractWithWeakenedPokemon(waypointId) {
     }
 }
 
-// CORREÇÃO PRINCIPAL: Garante a geração imediata e abertura automática do modal do Pokémon selvagem ao chegar na casa
 export function handleWaypointArrival(waypointId) {
     const waypoint = BOARD_WAYPOINTS.find(w => w.id === waypointId);
     if (!waypoint) return;
@@ -339,7 +346,11 @@ export function handleWaypointArrival(waypointId) {
     }
 
     if (waypoint.type === 'city') {
-        if (typeof openCityModal === 'function') {
+        // CORREÇÃO CRUCIAL AO CHEGAR À CIDADE: Abre o ginásio se existir para esta cidade, caso contrário abre a modal da cidade
+        const hasGym = GYM_LEADERS_CATALOG.some(g => g.city.toLowerCase() === waypoint.name.toLowerCase());
+        if (hasGym && typeof initiateGymSequence === 'function') {
+            initiateGymSequence(waypoint.name);
+        } else if (typeof openCityModal === 'function') {
             openCityModal(waypoint.name);
         }
     } else if (waypoint.type === 'pokemon') {
