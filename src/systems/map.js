@@ -602,7 +602,6 @@ function animateTokenMovement(newPositionIndex) {
     renderBoardMap();
 }
 
-// Função exportada exigida pelo módulo do dado (dice.js)
 export function moveTokenToWaypoint(waypointId) {
     renderBoardMap();
 }
