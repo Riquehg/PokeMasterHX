@@ -1,11 +1,12 @@
 // --- src/systems/encounter.js ---
-// Subsistema Unificado de Batalhas TCG Selvagens, Captura, XP e Evolução
+// Subsistema Unificado de Batalhas TCG Selvagens, Captura, XP, Evolução e Sincronização Cloud
 
 import { gameState, getCurrentPlayer } from '../core/state.js';
 import { renderTeamCardSlots, renderBottomPanel } from './pcbox.js';
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 import { MONSTER_CATALOG } from '../config/cards-data.js';
 import { saveGameProgress } from '../core/storage.js';
+import { emitSocket } from '../core/socket.js';
 
 export let currentEncounterState = {
     wildPokemon: null,
@@ -71,7 +72,6 @@ export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa
     const level = Math.floor(Math.random() * (maxLevel - minLevel + 1)) + minLevel;
     const isShiny = Math.random() < 0.06;
     
-    // Status escalonados corretamente pelo Nível
     const maxHp = 15 + (level * 5);
     const calculatedStr = 3 + Math.floor(level * 0.8);
 
@@ -183,7 +183,7 @@ export function updateEncounterUIInfo() {
     const estimatedPlayerPower = Math.round(baseStr * typeMult); 
     
     const isLegendary = (wild.tier === 5) || (wild.color && wild.color.toLowerCase() === 'amarelo');
-    const weakenedBonus = 2; // Bónus extra por ter derrotado o selvagem
+    const weakenedBonus = 2;
     const totalCaptureBonusSoFar = currentEncounterState.itemBonus + weakenedBonus;
 
     let displayTarget = 4;
@@ -201,7 +201,7 @@ export function updateEncounterUIInfo() {
         playerVisual.className = `relative flex flex-col justify-between p-4 rounded-3xl border-4 ${playerCardBg} shadow-2xl w-72 h-[420px] text-white`;
         playerVisual.innerHTML = `
             <div class="flex justify-between items-center font-black text-xs border-b-2 border-amber-400 pb-2">
-                <span class="text-amber-300 font-bold uppercase">NV. ${activeMon.level || 1}</span>
+                <span class="text-amber-300 font-bold uppercase">NV. ${activeMon.level || 1} (EXP: ${activeMon.exp || 0})</span>
                 ${advantageBadgeHtml}
                 <span class="text-amber-900 bg-amber-200 px-2 py-0.5 rounded font-bold uppercase text-[10px] border border-amber-400">${activeMon.type || 'Normal'}</span>
             </div>
@@ -248,7 +248,7 @@ export function updateEncounterUIInfo() {
 
             <div class="w-full bg-black/90 text-red-300 rounded-2xl p-3 text-center space-y-1.5 shadow-md border border-red-600/40">
                 <p class="text-xs font-bold tracking-wide">HP: ${wildHp} / ${wildMaxHp} &nbsp;|&nbsp; STR: ${wild.str || 3}</p>
-                <p class="text-[11px] font-black text-amber-300 bg-amber-950/90 rounded-xl px-2.5 py-1 border border-amber-600">🎯 Alvo Cap.: ${displayTarget}+ (Bónus: +${totalCaptureBonusSoFar})</p>
+                <p class="text-[11px] font-black text-amber-300 bg-amber-950/90 rounded-xl px-2.5 py-1 border border-emerald-600">🎯 Alvo Cap.: ${displayTarget}+ (Bónus: +${totalCaptureBonusSoFar})</p>
                 ${statusBadge}
             </div>
 
@@ -258,7 +258,6 @@ export function updateEncounterUIInfo() {
         `;
     }
 
-    // Atualiza estado visual do botão de captura
     const btnCapture = document.getElementById('btn-action-capture');
     if (btnCapture) {
         if (currentEncounterState.wildDefeated) {
@@ -304,7 +303,7 @@ export function renderEncounterItemsList() {
         cp.inventory.forEach((item) => {
             const count = item.count !== undefined ? item.count : (item.quantity || 0);
             if (!item || count <= 0) return;
-            const isSphere = item.type === 'sphere' || item.category === 'capture' || item.id.includes('ball');
+            const isSphere = item.type === 'sphere' || item.category === 'capture' || item.id.includes('ball') || item.type === 'evolution_stone';
             if (!isSphere) return;
 
             const btn = document.createElement('button');
@@ -331,7 +330,6 @@ export function selectCaptureBall(item) {
     updateEncounterUIInfo();
 }
 
-// ANIMAÇÃO VISUAL DO DADO A ROLAR NO CENTRO DA TELA
 function playDiceRollingAnimationOverlay(onComplete) {
     let overlay = document.getElementById('dice-roll-visual-overlay');
     if (!overlay) {
@@ -374,6 +372,18 @@ function playAttackAnimation() {
     }
 }
 
+// SINCRONIZAÇÃO COM O SERVIDOR CLOUD
+function syncGameStateToCloud() {
+    saveGameProgress();
+    if (typeof emitSocket === 'function') {
+        emitSocket('save_game_state', {
+            gameState: gameState,
+            trainerName: getCurrentPlayer()?.name || 'Treinador'
+        });
+    }
+}
+
+// SISTEMA CORRIGIDO DE EVOLUÇÃO E XP
 function addExperienceAndCheckEvolution(monster, expGain) {
     if (!monster) return;
     monster.exp = (monster.exp || 0) + expGain;
@@ -388,19 +398,47 @@ function addExperienceAndCheckEvolution(monster, expGain) {
 
         showCustomPopup("✨ SUBIDA DE NÍVEL!", `O teu ${monster.name} subiu para o Nível ${monster.level}!\nOs seus atributos melhoraram!`, true);
 
-        const baseCatalogItem = MONSTER_CATALOG.find(m => m.id === monster.id || m.name.toLowerCase() === monster.name.toLowerCase());
+        // Procura no catálogo usando o ID base ou nome correspondente
+        const baseCatalogItem = MONSTER_CATALOG.find(m => m.id === monster.catalogId || m.id === monster.id || m.name.toLowerCase() === monster.name.toLowerCase());
+        
         if (baseCatalogItem && baseCatalogItem.evolvesTo && monster.level >= (baseCatalogItem.evolveLevel || 16)) {
             const evolvedData = MONSTER_CATALOG.find(m => m.id === baseCatalogItem.evolvesTo);
             if (evolvedData) {
                 const oldName = monster.name;
                 monster.name = evolvedData.name;
                 monster.id = evolvedData.id;
+                monster.catalogId = evolvedData.id;
                 if (evolvedData.image) monster.image = evolvedData.image;
                 if (evolvedData.types) monster.types = evolvedData.types;
-                showCustomPopup("🧬 EVOLUÇÃO!", `Incrível! O teu ${oldName} evoluiu para ${monster.name}!`, true);
+                showCustomPopup("🧬 EVOLUÇÃO POR NÍVEL!", `Incrível! O teu ${oldName} evoluiu para ${monster.name}!`, true);
             }
         }
     }
+    syncGameStateToCloud();
+}
+
+// Função opcional para evolução por Pedra/Item
+export function evolveMonsterWithStone(monster, stoneItemId) {
+    if (!monster) return false;
+    const baseCatalogItem = MONSTER_CATALOG.find(m => m.id === monster.catalogId || m.id === monster.id);
+    if (!baseCatalogItem || !baseCatalogItem.evolvesTo) {
+        showCustomPopup("Evolução Impossível", "Este Pokémon já está na sua forma final ou não possui evolução configurada.", false);
+        return false;
+    }
+
+    const evolvedData = MONSTER_CATALOG.find(m => m.id === baseCatalogItem.evolvesTo);
+    if (evolvedData) {
+        const oldName = monster.name;
+        monster.name = evolvedData.name;
+        monster.id = evolvedData.id;
+        monster.catalogId = evolvedData.id;
+        if (evolvedData.image) monster.image = evolvedData.image;
+        if (evolvedData.types) monster.types = evolvedData.types;
+        showCustomPopup("🧬 EVOLUÇÃO POR ITEM!", `A pedra reage! O teu ${oldName} evoluiu para ${monster.name}!`, true);
+        syncGameStateToCloud();
+        return true;
+    }
+    return false;
 }
 
 export function resolveBattleAttempt() {
@@ -419,7 +457,6 @@ export function resolveBattleAttempt() {
         return;
     }
 
-    // Animação visual de dado a rolar no centro da tela antes de aplicar o resultado
     playDiceRollingAnimationOverlay((playerDice) => {
         playAttackAnimation();
 
@@ -447,7 +484,6 @@ export function resolveBattleAttempt() {
             if (activeMon.currentHp <= 0) {
                 showCustomPopup("💀 O TEU POKÉMON DESMAIOU", `O ${wild.name} contra-atacou com força (Soma: ${wildPower} vs ${playerPower})!\n\n💔 ${activeMon.name} desmaiou. Troca para outro Pokémon na equipa se tiveres disponíveis.`, false);
                 
-                // Verifica se restam Pokémon saudáveis na equipa
                 const healthyRemaining = cp.activeTeam.some(m => (m.currentHp !== undefined ? m.currentHp : m.maxHp) > 0);
                 if (!healthyRemaining) {
                     showCustomPopup("Derrota Total", "⚠ Toda a tua equipa ativa desmaiou!", false);
@@ -459,6 +495,7 @@ export function resolveBattleAttempt() {
             renderTeamCardSlots();
             updateEncounterUIInfo();
         }
+        syncGameStateToCloud();
     });
 }
 
@@ -486,7 +523,6 @@ export function resolveCaptureAttempt() {
     if (sphereItem.count !== undefined) sphereItem.count--;
     else if (sphereItem.quantity !== undefined) sphereItem.quantity--;
 
-    // Animação de dado para a captura
     playDiceRollingAnimationOverlay((roll) => {
         let requiredTarget = 4;
         const tier = wild.tier || 1;
@@ -497,7 +533,7 @@ export function resolveCaptureAttempt() {
         if (isLegendary) requiredTarget = 7;
         if (wild.isShiny) requiredTarget++;
 
-        const weakenedBonus = 2; // Bónus fixo por estar derrotado
+        const weakenedBonus = 2;
         const captureBonus = Number(currentEncounterState.itemBonus) || 0;
         const totalCaptureValue = roll + captureBonus + weakenedBonus;
 
@@ -517,7 +553,9 @@ export function resolveCaptureAttempt() {
             const caughtMonster = {
                 ...wild,
                 uniqueId: 'mon_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-                currentHp: wild.maxHp || 20
+                catalogId: wild.id,
+                currentHp: wild.maxHp || 20,
+                exp: 0
             };
 
             if (!Array.isArray(cp.activeTeam)) cp.activeTeam = [];
@@ -533,7 +571,6 @@ export function resolveCaptureAttempt() {
             if (!Array.isArray(cp.pokedex)) cp.pokedex = [];
             if (!cp.pokedex.includes(wild.id)) cp.pokedex.push(wild.id);
 
-            // REMOVE DEFINITIVAMENTE DO MAPA
             if (wild.waypointId && typeof boardPokemonCards !== 'undefined') {
                 delete boardPokemonCards[wild.waypointId];
             }
@@ -542,7 +579,7 @@ export function resolveCaptureAttempt() {
             if (typeof renderBoardMap === 'function') renderBoardMap();
             if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
             if (typeof renderBottomPanel === 'function') renderBottomPanel();
-            saveGameProgress();
+            syncGameStateToCloud();
         } else {
             showCustomPopup(
                 "❌ FALHA NA CAPTURA",
@@ -551,6 +588,7 @@ export function resolveCaptureAttempt() {
             );
             renderEncounterItemsList();
             updateEncounterUIInfo();
+            syncGameStateToCloud();
         }
     });
 }
