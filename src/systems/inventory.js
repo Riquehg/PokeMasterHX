@@ -297,19 +297,53 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
         return;
     }
 
-    // 6. Evolution Stone / Outros itens de utilidade
+    // 6. Evolution Stone / Itens de Evolução
     if (itemInfo.type === 'evolution' || item.id.includes('evolution')) {
-        if (typeof showCustomPopup === 'function') {
-            showCustomPopup('Evolution Stone', `💎 ${itemInfo.name} está pronto a ser usado! Abre a ficha do teu Pokémon para selecionar a evolução.`, true);
+        const team = cp.activeTeam || [];
+        if (team.length === 0) {
+            if (typeof showCustomPopup === 'function') {
+                showCustomPopup('Aviso', 'Não tens nenhum Pokémon na equipa ativa para evoluir.', false);
+            }
+            return;
         }
+
+        let evoModal = document.getElementById('evolution-select-modal');
+        if (!evoModal) {
+            evoModal = document.createElement('div');
+            evoModal.id = 'evolution-select-modal';
+            evoModal.className = 'fixed inset-0 bg-black/90 z-[600] flex items-center justify-center p-4 backdrop-blur-md';
+            document.body.appendChild(evoModal);
+        }
+
+        let teamHtml = '';
+        team.forEach((mon, tIndex) => {
+            teamHtml += `
+                <div onclick="window.confirmPokemonEvolution(${itemIndex}, ${tIndex})" class="bg-black/60 border border-amber-600/60 p-2.5 rounded-xl flex items-center gap-3 cursor-pointer hover:border-amber-400 transition-all text-white">
+                    <img src="${mon.image || 'https://api.iconify.design/noto:video-game.svg'}" class="w-10 h-10 object-contain">
+                    <div>
+                        <p class="text-xs font-black text-amber-300">${mon.name} <span class="text-[9px] text-slate-400">(Nv.${mon.level || 1})</span></p>
+                        <p class="text-[9px] text-slate-300">Clica para tentar evoluir</p>
+                    </div>
+                </div>
+            `;
+        });
+
+        evoModal.innerHTML = `
+            <div class="trainer-card max-w-sm w-full p-5 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
+                <div class="flex justify-between items-center border-b border-amber-900/60 pb-2">
+                    <h3 class="text-xs font-black text-amber-400 font-cinzel">💎 USAR EVOLUTION STONE</h3>
+                    <button onclick="document.getElementById('evolution-select-modal').remove()" class="text-amber-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-amber-800 cursor-pointer">✕</button>
+                </div>
+                <p class="text-[10px] text-slate-300 text-center">Seleciona o Pokémon da equipa ativa que irá receber a Evolution Stone:</p>
+                <div class="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    ${teamHtml}
+                </div>
+                <button onclick="document.getElementById('evolution-select-modal').remove()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs cursor-pointer">Cancelar</button>
+            </div>
+        `;
+        evoModal.classList.remove('hidden');
         return;
     }
-
-    // Genérico para itens comuns/rápidos
-    if (typeof showCustomPopup === 'function') {
-        showCustomPopup('Item Utilizado', `🎒 Usaste o item ${itemInfo.name} com sucesso.`, true);
-    }
-}
 
 // ------------------------------------------------------------
 // EXPOSIÇÃO GLOBAL OBRIGATÓRIA
