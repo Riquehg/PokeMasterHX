@@ -69,6 +69,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setupGlobalInterfaceListeners();
     setupAuthenticationListeners();
     loadDailyPokemonPreview();
+
+    // Vinculação do Botão de Administrador do index.html
     const adminBtn = document.getElementById('open-admin-btn');
     if (adminBtn) {
         adminBtn.onclick = () => {
@@ -102,7 +104,7 @@ function setupAuthenticationListeners() {
 
             console.log("🔐 A enviar credenciais para o servidor:", email);
             
-            // CORREÇÃO: O servidor escuta estritamente por 'login_request'
+            // Envia o pedido de login real para o servidor através de 'login_request'
             emitSocket('login_request', { email, password });
         };
     }
@@ -170,6 +172,77 @@ window.handleLoginResponse = function(response) {
         Object.assign(player, response.profileData);
         saveGameProgress();
     }
+};
+
+// Abre o modo de criação de personagem gerando os 8 avatares e 8 iniciais dinamicamente
+window.openCharacterCreationMode = function () {
+    document.getElementById('auth-container')?.classList.add('hidden');
+    document.getElementById('trainer-main-menu')?.classList.add('hidden');
+    document.getElementById('character-creation-container')?.classList.remove('hidden');
+
+    // Renderiza os 8 Avatares
+    const avatarGrid = document.getElementById('avatar-selection-grid');
+    if (avatarGrid && avatarGrid.children.length === 0) {
+        let avatarsHtml = '';
+        for (let i = 1; i <= 8; i++) {
+            const avatarId = i < 10 ? `0${i}` : `${i}`;
+            const url = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_${avatarId}.png`;
+            avatarsHtml += `
+                <div onclick="selectAvatar(${i})" data-avatar="${i}" class="avatar-option w-14 h-16 bg-black/60 border-2 ${i === 1 ? 'border-amber-400' : 'border-blue-900'} rounded-xl p-1 flex items-center justify-center cursor-pointer hover:border-amber-400 transition-all">
+                    <img src="${url}" class="w-full h-full object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                </div>
+            `;
+        }
+        avatarGrid.innerHTML = avatarsHtml;
+        window.selectedAvatarId = 1;
+    }
+
+    // Renderiza os 8 Pokémon Iniciais com sprites
+    const starterGrid = document.getElementById('starter-selection-grid');
+    if (starterGrid && starterGrid.children.length === 0) {
+        const starters = [
+            { id: 'bulbasaur', name: 'Bulbasaur', dex: '001' },
+            { id: 'charmander', name: 'Charmander', dex: '004' },
+            { id: 'squirtle', name: 'Squirtle', dex: '007' },
+            { id: 'pikachu', name: 'Pikachu', dex: '025' },
+            { id: 'eevee', name: 'Eevee', dex: '133' },
+            { id: 'machop', name: 'Machop', dex: '066' },
+            { id: 'gastly', name: 'Gastly', dex: '092' },
+            { id: 'cubone', name: 'Cubone', dex: '104' }
+        ];
+
+        let startersHtml = '';
+        starters.forEach((mon, index) => {
+            const url = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/${mon.dex}.png`;
+            const isSelected = index === 0;
+            startersHtml += `
+                <div id="starter-${mon.id}" onclick="selectStarter('${mon.id}')" class="starter-option w-16 h-20 bg-black/40 border-2 ${isSelected ? 'border-amber-400 bg-amber-950/60' : 'border-blue-900'} rounded-xl p-1 flex flex-col items-center justify-between cursor-pointer hover:border-amber-400 transition-all">
+                    <img src="${url}" class="w-10 h-10 object-contain drop-shadow" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                    <span class="text-[8px] text-white font-bold truncate">${mon.name}</span>
+                </div>
+            `;
+        });
+        starterGrid.innerHTML = startersHtml;
+        window.selectedStarterPokemon = 'bulbasaur';
+    }
+};
+
+window.selectAvatar = function(id) {
+    window.selectedAvatarId = id;
+    document.querySelectorAll('.avatar-option').forEach(el => {
+        el.classList.remove('border-amber-400');
+        el.classList.add('border-blue-900');
+    });
+    document.querySelector(`[data-avatar="${id}"]`)?.classList.replace('border-blue-900', 'border-amber-400');
+};
+
+window.selectStarter = function(starterName) {
+    window.selectedStarterPokemon = starterName.toLowerCase();
+    document.querySelectorAll('.starter-option').forEach(el => {
+        el.classList.remove('border-amber-400', 'bg-amber-950/60');
+        el.classList.add('border-blue-900', 'bg-black/40');
+    });
+    document.getElementById(`starter-${starterName.toLowerCase()}`)?.classList.replace('border-blue-900', 'border-amber-400');
 };
 
 // Carrega o Pokémon do dia de forma aleatória para o banner inicial
