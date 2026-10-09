@@ -6,13 +6,31 @@ export let gameState = {
     currentPlayerIndex: 0,
     turnCounter: 1,
     players: [],
-    player: null // Fallback para modo solo
+    player: null, // Fallback para modo solo
+    setupDone: false,
+    turn: 1,
+    currentEncounter: null,
+    chatMessages: [
+        { sender: "Sistema", text: "Bem-vindo ao Pokémon Master Trainer HEX Edition!" }
+    ],
+    currentBottomView: 'inventory',
+    pcBoxCurrentPage: 0
 };
 
 export let setupConfig = {
+    mode: 'solo',
+    playersCount: 1,
+    avatarId: 1,
+    starterId: 'bulbasaur',
+    playersData: [],
     selectedAvatar: 1,
     selectedStarter: 'bulbasaur',
     trainerName: 'Ash Ketchum'
+};
+
+export let setupWizardState = {
+    currentConfiguringIndex: 0,
+    collectedPlayers: []
 };
 
 export let movementState = {
@@ -23,8 +41,25 @@ export let movementState = {
 };
 
 export let boardPokemonCards = {};
-export let currentEncounterState = null;
+export let currentEncounterState = {
+    wildPokemon: null,
+    selectedTeamMemberIndex: 0,
+    itemBonus: 0,
+    battlePowerBonus: 0,
+    hasAttemptedCapture: false,
+    selectedCaptureBallId: null
+};
+
 export let selectedBallAura = null;
+export let currentAuthenticatedAccount = null;
+
+export let dailyFeaturedPokemonConfig = {
+    pokemonId: 'pikachu',
+    pokemonName: 'Pikachu',
+    bonusItem: 'item_rarecandy',
+    bonusItemName: 'Rare Candy',
+    activeDate: new Date().toDateString()
+};
 
 // Atalho seguro para obter o jogador da vez
 export function getCurrentPlayer() {
@@ -43,14 +78,16 @@ export function ensureValidGameState() {
     if (!gameState.players) gameState.players = [];
     if (gameState.players.length === 0) {
         gameState.players = [{
-            name: setupConfig.trainerName || 'Treinador',
-            avatarId: setupConfig.selectedAvatar || 1,
+            name: setupConfig.trainerName || 'Ash Ketchum',
+            avatarId: setupConfig.selectedAvatar || setupConfig.avatarId || 1,
             gold: 350,
             badges: [],
             currentZone: 5,
+            level: 1,
             activeTeam: [],
             pcBox: [],
-            inventory: []
+            inventory: [],
+            equipmentSlots: [null, null]
         }];
     }
     gameState.currentPlayerIndex = gameState.currentPlayerIndex || 0;
