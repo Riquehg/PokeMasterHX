@@ -262,6 +262,15 @@ export function onHexClick(waypointId, hexName) {
         return;
     }
 
+    // Se o jogador clicar diretamente na sua casa atual, interage com o evento/Pokémon/cidade dela
+    const cp = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : (gameState.players ? gameState.players[gameState.currentPlayerIndex || 0] : null);
+    const currentZoneId = cp ? (cp.currentZone || 5) : 5;
+
+    if (currentZoneId === waypointId) {
+        handleWaypointArrival(waypointId);
+        return;
+    }
+
     if (waypoint.type === 'city') {
         tryInteractWithCity(waypointId, waypoint.name);
         return;
@@ -306,6 +315,7 @@ export function handleWaypointArrival(waypointId) {
         checkPlayerCellCollision(waypointId, gameState.currentPlayerIndex || 0);
     }
 
+    // Processamento correto baseado no tipo da casa
     if (waypoint.type === 'city') {
         if (typeof openCityModal === 'function') {
             openCityModal(waypoint.name);
@@ -315,7 +325,6 @@ export function handleWaypointArrival(waypointId) {
             window.boardPokemonCards = {};
         }
 
-        // Se a casa não tiver um Pokémon gerado, cria um agora de forma oculta/não revelada até interagir
         if (!boardPokemonCards[waypointId]) {
             const catalog = Array.isArray(MONSTER_CATALOG) ? MONSTER_CATALOG : [];
             if (catalog.length > 0) {
@@ -323,6 +332,7 @@ export function handleWaypointArrival(waypointId) {
                 const tier = randomMon.tier || 1;
                 const minLvl = tier === 1 ? 3 : tier === 2 ? 8 : tier === 3 ? 15 : 25;
                 const level = Math.floor(Math.random() * 4) + minLvl;
+                const isShiny = Math.random() < 0.06;
 
                 boardPokemonCards[waypointId] = {
                     ...randomMon,
@@ -330,8 +340,9 @@ export function handleWaypointArrival(waypointId) {
                     tier: tier,
                     currentHp: 20 + (level * 2),
                     maxHp: 20 + (level * 2),
+                    isShiny: isShiny,
                     waypointId: waypointId,
-                    revealed: false, // Inicia oculto no mapa
+                    revealed: true,
                     weakened: false
                 };
             }
@@ -339,7 +350,7 @@ export function handleWaypointArrival(waypointId) {
 
         const poke = boardPokemonCards[waypointId];
         if (poke) {
-            poke.revealed = true; // Revela ao pisar na casa
+            poke.revealed = true;
             if (typeof dailyFeaturedPokemonConfig !== 'undefined' && poke.id === dailyFeaturedPokemonConfig.pokemonId) {
                 if (typeof showCustomPopup === 'function') {
                     showCustomPopup("⭐ POKÉMON DO DIA ENCONTRADO!", `Este é o Anima em destaque de hoje (${dailyFeaturedPokemonConfig.pokemonName})! Ao capturá-lo, receberás o item bónus (${dailyFeaturedPokemonConfig.bonusItemName})!`, true);
@@ -348,6 +359,12 @@ export function handleWaypointArrival(waypointId) {
             if (typeof openEncounterModalWithPokemon === 'function') {
                 openEncounterModalWithPokemon(poke);
             }
+        }
+    } else if (waypoint.type === 'event') {
+        if (typeof triggerRandomBoardEvent === 'function') {
+            triggerRandomBoardEvent(waypoint.name);
+        } else if (typeof showCustomPopup === 'function') {
+            showCustomPopup("Carta de Evento", `Chegaste a ${waypoint.name}. Um evento aleatório ocorreu na rota!`, true);
         }
     }
 }
@@ -411,7 +428,6 @@ export function renderBoardMap(highlightIds = []) {
         `;
     });
 
-    // Renderiza casas de Pokémon de forma oculta (mostrando apenas o ícone de Pokébola misteriosa) a menos que já tenham sido reveladas (após falha/fuga)
     BOARD_WAYPOINTS.forEach(wp => {
         if (wp.type === 'pokemon') {
             const pokeCard = boardPokemonCards[wp.id];
@@ -440,7 +456,6 @@ export function renderBoardMap(highlightIds = []) {
                     </div>
                 `;
             } else {
-                // Pokébola misteriosa indicando que a rota tem um Pokémon escondido
                 mapOverlayHtml += `
                     <div onclick="tryInteractWithWeakenedPokemon(${wp.id})" class="absolute -translate-x-1/2 -translate-y-1/2 z-30 cursor-pointer group" style="top: ${wp.top - 3}%; left: ${wp.left}%;" title="Rota Selvagem Desconhecida">
                         <div class="bg-black/80 border-2 border-red-500 rounded-full w-6 h-6 flex items-center justify-center shadow-lg hover:scale-125 transition-transform animate-pulse">
