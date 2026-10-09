@@ -165,7 +165,6 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
 
     normalizePlayerInventory(cp);
 
-    // Permite buscar por índice ou por id do item
     let itemIndex = -1;
     if (typeof itemUniqueIdOrIndex === 'number') {
         itemIndex = itemUniqueIdOrIndex;
@@ -180,16 +179,84 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
 
     if (!itemInfo) return;
 
+    // 1. Poké Balls / Esferas de Captura
+    if (itemInfo.type === 'sphere') {
+        const wild = typeof currentEncounterState !== 'undefined' ? currentEncounterState.wildPokemon : null;
+        if (!wild) {
+            if (typeof showCustomPopup === 'function') {
+                showCustomPopup('Nenhum Pokémon em combate', 'Abra um encontro com um Pokémon selvagem antes de usar uma Poké Ball.', false);
+            }
+            return;
+        }
+        if (typeof triggerCaptureFlow === 'function') {
+            triggerCaptureFlow(wild);
+        }
+        return;
+    }
+
+    // 2. Rare Candy (Concede nível ao primeiro Pokémon ativo)
+    if (item.id === 'item_rarecandy' || item.id === 'rare_candy' || itemInfo.type === 'rarecandy') {
+        const targetMon = cp.activeTeam?.[0] || cp.team?.[0];
+        if (!targetMon) {
+            if (typeof showCustomPopup === 'function') {
+                showCustomPopup('Aviso', 'Não tens nenhum Pokémon na equipa ativa para receber o Rare Candy.', false);
+            }
+            return;
+        }
+        targetMon.level = (Number(targetMon.level) || 1) + 1;
+        targetMon.maxHp = (Number(targetMon.maxHp) || 20) + 5;
+        targetMon.currentHp = targetMon.maxHp;
+        targetMon.str = (Number(targetMon.str) || 4) + 2;
+
+        item.count = (Number(item.count) || 1) - 1;
+        if (item.count <= 0) cp.inventory.splice(itemIndex, 1);
+
+        normalizePlayerInventory(cp);
+        saveGameProgress();
+
+        if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+        if (typeof renderBottomPanel === 'function') renderBottomPanel();
+
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup('🌟 Rare Candy Usado!', `${targetMon.name} subiu para o Nv.${targetMon.level}!\nOs seus atributos melhoraram.`, true);
+        }
+        return;
+    }
+
+    // 3. Vitamin / X Attack (Bónus de Combate)
+    if (itemInfo.type === 'battle' || item.id.includes('vitamin') || item.id.includes('attack')) {
+        item.count = (Number(item.count) || 1) - 1;
+        if (item.count <= 0) cp.inventory.splice(itemIndex, 1);
+
+        normalizePlayerInventory(cp);
+        saveGameProgress();
+
+        if (typeof renderBottomPanel === 'function') renderBottomPanel();
+
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup('🧪 Item Aplicado!', `${itemInfo.name} aplicado com sucesso! Bónus de força garantido.`, true);
+        }
+        return;
+    }
+
+    // 4. Poção / Cura
     if (itemInfo.type === 'heal' || item.id.includes('potion')) {
         if (!cp.activeTeam || cp.activeTeam.length === 0) {
-            alert("Não tens nenhum Anima na equipa ativa para curar!");
+            alert("Não tens nenhum Pokémon na equipa ativa para curar!");
             return;
         }
 
         const targetMon = cp.activeTeam.find(m => m && (m.currentHp !== undefined ? m.currentHp : m.maxHp) < m.maxHp) || cp.activeTeam[0];
-        const healAmount = itemInfo.value || (item.id.includes('super') ? 50 : 20);
+        const healAmount = itemInfo.value || 20;
 
         const maxHp = targetMon.maxHp || targetMon.hp || 20;
+        if (targetMon.currentHp >= maxHp) {
+            if (typeof showCustomPopup === 'function') {
+                showCustomPopup('Aviso', 'O Pokémon ativo já está com HP máximo.', false);
+            }
+            return;
+        }
+
         targetMon.currentHp = Math.min(maxHp, (targetMon.currentHp !== undefined ? targetMon.currentHp : maxHp) + healAmount);
 
         item.count = (Number(item.count) || 1) - 1;
@@ -204,12 +271,38 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
         if (typeof renderBottomPanel === 'function') renderBottomPanel();
 
         if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Item Utilizado", `✨ Usaste ${itemInfo.name} em ${targetMon.name}! HP recuperado.`, true);
+            showCustomPopup("Item Utilizado", `✨ Usaste ${itemInfo.name} em ${targetMon.name}! HP recuperado para ${targetMon.currentHp}/${maxHp}.`, true);
         }
-    } else {
+        return;
+    }
+
+    // 5. Revive
+    if (itemInfo.type === 'revive' || item.id.includes('revive')) {
+        const faintedMon = cp.activeTeam?.find(m => m && (m.currentHp !== undefined ? m.currentHp : m.maxHp) <= 0);
+        if (!faintedMon) {
+            if (typeof showCustomPopup === 'function') {
+                showCustomPopup('Aviso', 'Não há nenhum Pokémon desmaiado na equipa ativa.', false);
+            }
+            return;
+        }
+        faintedMon.currentHp = Math.floor((faintedMon.maxHp || 20) / 2);
+        item.count = (Number(item.count) || 1) - 1;
+        if (item.count <= 0) cp.inventory.splice(itemIndex, 1);
+
+        normalizePlayerInventory(cp);
+        saveGameProgress();
+
+        if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+        if (typeof renderBottomPanel === 'function') renderBottomPanel();
+
         if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Informação", `ℹ️ O item ${itemInfo.name} deve ser utilizado no contexto adequado (batalha ou captura).`, true);
+            showCustomPopup('🌟 Revive Usado!', `${faintedMon.name} foi revivido com ${faintedMon.currentHp} HP.`, true);
         }
+        return;
+    }
+
+    if (typeof showCustomPopup === 'function') {
+        showCustomPopup("Informação", `ℹ️ O item ${itemInfo.name} deve ser utilizado no contexto adequado.`, true);
     }
 }
 
