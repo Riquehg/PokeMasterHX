@@ -345,6 +345,73 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
         return;
     }
 
+    // Genérico para outros itens
+    if (typeof showCustomPopup === 'function') {
+        showCustomPopup('Item Utilizado', `🎒 Usaste o item ${itemInfo.name} com sucesso.`, true);
+    }
+}
+
+// ------------------------------------------------------------
+// CONFIRMAÇÃO DE EVOLUÇÃO POR PEDRA
+// ------------------------------------------------------------
+window.confirmPokemonEvolution = function(itemIndex, teamIndex) {
+    const cp = getCurrentPlayer();
+    if (!cp || !cp.activeTeam || !cp.activeTeam[teamIndex]) return;
+
+    const targetMon = cp.activeTeam[teamIndex];
+    
+    // Procura no catálogo se este Pokémon tem evolução definida
+    const catalogItem = MONSTER_CATALOG.find(m => m.id === (targetMon.catalogId || targetMon.id) || m.name.toLowerCase() === targetMon.name.toLowerCase());
+    
+    if (!catalogItem || !catalogItem.evolvesTo) {
+        document.getElementById('evolution-select-modal')?.remove();
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup('Evolution Stone', `❌ ${targetMon.name} não pode evoluir com esta pedra ou já está na sua forma final!`, false);
+        }
+        return;
+    }
+
+    const evolvedData = MONSTER_CATALOG.find(m => m.id === catalogItem.evolvesTo);
+    if (!evolvedData) {
+        document.getElementById('evolution-select-modal')?.remove();
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup('Erro', 'Dados de evolução não encontrados no catálogo.', false);
+        }
+        return;
+    }
+
+    // Aplica a evolução ao Pokémon
+    const oldName = targetMon.name;
+    targetMon.name = evolvedData.name;
+    targetMon.id = evolvedData.id;
+    targetMon.catalogId = evolvedData.id;
+    if (evolvedData.image) targetMon.image = evolvedData.image;
+    if (evolvedData.types) targetMon.types = evolvedData.types;
+    targetMon.maxHp = (Number(targetMon.maxHp) || 20) + 15;
+    targetMon.currentHp = targetMon.maxHp;
+    targetMon.str = (Number(targetMon.str) || 4) + 4;
+
+    // Consome o item da mochila
+    const item = cp.inventory[itemIndex];
+    if (item) {
+        item.count = (Number(item.count) || 1) - 1;
+        if (item.count <= 0) cp.inventory.splice(itemIndex, 1);
+    }
+
+    normalizePlayerInventory(cp);
+    saveGameProgress();
+
+    // Atualiza a interface
+    if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+    if (typeof renderBottomPanel === 'function') renderBottomPanel();
+
+    document.getElementById('evolution-select-modal')?.remove();
+
+    if (typeof showCustomPopup === 'function') {
+        showCustomPopup('✨ EVOLUÇÃO BEM-SUCEDIDA!', `Parabéns! O teu ${oldName} evoluiu para **${evolvedData.name}**!\nOs seus atributos dispararam!`, true);
+    }
+};
+
 // ------------------------------------------------------------
 // EXPOSIÇÃO GLOBAL OBRIGATÓRIA
 // ------------------------------------------------------------
