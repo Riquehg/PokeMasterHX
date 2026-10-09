@@ -46,8 +46,26 @@ window.openPokedexModal = openPokedexModal;
 window.openPokedexDetailCard = openPokedexDetailCard;
 window.openVaultModal = openVaultModal;
 
+// Função global de animação de dado caso o módulo externo não a possua
+window.rollDiceWithAnimation = function(callback) {
+    const diceBtn = document.getElementById('roll-dice-btn');
+    if (diceBtn) {
+        diceBtn.classList.add('animate-spin');
+    }
+    setTimeout(() => {
+        if (diceBtn) {
+            diceBtn.classList.remove('animate-spin');
+        }
+        const result = Math.floor(Math.random() * 6) + 1;
+        alert(`🎲 Resultado do Dado: ${result}`);
+        if (typeof callback === 'function') {
+            callback(result);
+        }
+    }, 800);
+};
+
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("🚀 Inicializando o Motor Modular do Jogo (Partes 1, 2 & 3)...");
+    console.log("🚀 Inicializando o Motor Modular do Jogo...");
 
     initializeSocketConnection();
 
@@ -78,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // Botão Gravar e Iniciar Nova Partida (Corrigido para popular estado, equipa, pokémon e pokedex)
+    // Botão Gravar e Iniciar Nova Partida
     const finalizeBtn = document.getElementById('finalize-creation-btn');
     if (finalizeBtn) {
         finalizeBtn.onclick = () => {
@@ -87,7 +105,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const avatarId = window.selectedAvatarId || 1;
             const starterKey = window.selectedStarterPokemon || 'bulbasaur';
 
-            // Encontra dados detalhados do monstro inicial no catálogo
             const monData = MONSTER_CATALOG.find(m => m.id === starterKey) || {
                 id: starterKey,
                 name: starterKey.charAt(0).toUpperCase() + starterKey.slice(1),
@@ -106,7 +123,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 types: monData.types || ['Normal']
             };
 
-            // Atualiza o estado global com os dados corretos do jogador
             if (!gameState.players || gameState.players.length === 0) {
                 ensureValidGameState();
             }
@@ -118,25 +134,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 player.team = [starterInstance];
                 player.pcBox = [starterInstance];
                 player.pokedex = [starterKey];
-                player.inventory = [{ id: 'ball_poke', name: 'Poké Ball', count: 5 }];
+                // Força o item com a imagem correta do Supabase para evitar ícone genérico
+                player.inventory = [{ 
+                    id: 'ball_poke', 
+                    name: 'Poké Ball', 
+                    count: 5, 
+                    image: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/items/poke_ball.png' 
+                }];
             }
 
             saveGameProgress();
 
-            // Envia para o Supabase via socket
             emitSocket('save_game_state', {
                 gameState: gameState,
                 profileData: { trainerName, avatarId, gold: 350 },
                 trainerName: trainerName
             });
 
-            // Transiciona para o ecrã do jogo
             document.getElementById('setup-screen').classList.add('hidden');
             document.getElementById('main-game-layout').classList.remove('hidden');
 
-            // Atualiza a sprite do treinador no HUD e no mapa
             updateTrainerVisuals(trainerName, avatarId);
-
+            renderBoardMap(); // Atualiza imediatamente o mapa com a sprite correta do jogador
             renderTeamCardSlots();
             renderBottomPanel();
         };
@@ -189,6 +208,7 @@ function setupAuthenticationListeners() {
             if (player) {
                 updateTrainerVisuals(player.name || 'Ash', player.avatarId || 1);
             }
+            renderBoardMap();
             renderTeamCardSlots();
             renderBottomPanel();
         };
@@ -237,6 +257,7 @@ window.handleLoginResponse = function(response) {
     if (player && response.profileData) {
         Object.assign(player, response.profileData);
         updateTrainerVisuals(player.name, player.avatarId || 1);
+        renderBoardMap();
         saveGameProgress();
     }
 };
@@ -330,7 +351,7 @@ function loadDailyPokemonPreview() {
     }
 }
 
-// Vinculação de todos os botões de controlo do HUD superior (Salvar, Exportar, Sair, Passar Turno)
+// Vinculação de todos os botões de controlo do HUD superior
 function setupGlobalInterfaceListeners() {
     const trainerCardBtn = document.getElementById('open-trainer-card-btn') || document.getElementById('trainer-badge-btn');
     if (trainerCardBtn) {
@@ -342,6 +363,16 @@ function setupGlobalInterfaceListeners() {
     const pokedexBtn = document.getElementById('open-pokedex-btn');
     if (pokedexBtn) {
         pokedexBtn.onclick = () => openPokedexModal();
+    }
+
+    // Vinculação do botão da PC Box
+    const pcBoxBtn = document.getElementById('open-pc-box-btn') || document.querySelector('[onclick*="pcBox"]');
+    if (pcBoxBtn) {
+        pcBoxBtn.onclick = () => {
+            if (typeof window.openVaultModal === 'function') {
+                window.openVaultModal();
+            }
+        };
     }
 
     const saveGameBtn = document.getElementById('save-game-btn');
@@ -378,8 +409,16 @@ function setupGlobalInterfaceListeners() {
     if (passTurnBtn) {
         passTurnBtn.onclick = () => {
             gameState.currentPlayerIndex = ((gameState.currentPlayerIndex || 0) + 1) % (gameState.players?.length || 1);
-            alert(`🔄 Turno passado para o próximo jogador!`);
+            
+            // Reseta o estado de movimento para permitir rolar o dado novamente no novo turno
+            if (typeof movementState !== 'undefined') {
+                movementState.hasRolledThisTurn = false;
+                movementState.isMoving = false;
+            }
+
+            alert(`🔄 Turno passado com sucesso! Agora é a vez do próximo jogador.`);
             renderTeamCardSlots();
+            renderBoardMap();
         };
     }
 }
