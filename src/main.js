@@ -13,8 +13,10 @@ import { MONSTER_CATALOG } from './config/cards-data.js';
 // EXPOSIÇÃO GLOBAL PARA O HTML (Evita erros de onclick)
 // ==========================================
 window.openSpecificTrainerCardModal = openSpecificTrainerCardModal;
+window.openTrainerCardModal = function() { openSpecificTrainerCardModal(gameState.currentPlayerIndex || 0); };
 window.openPokemartModal = openPokemartModal;
 window.tryInteractWithCity = tryInteractWithCity;
+window.saveGameProgress = saveGameProgress;
 
 // Executado assim que o DOM estiver totalmente carregado
 document.addEventListener('DOMContentLoaded', () => {
