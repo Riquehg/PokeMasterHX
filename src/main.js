@@ -51,6 +51,57 @@ window.openPokedexModal = openPokedexModal;
 window.openPokedexDetailCard = openPokedexDetailCard;
 window.openVaultModal = openVaultModal;
 
+// Função de Sincronização Global do HUD do Treinador (Menu Inicial e HUD Superior)
+export function updateTrainerVisualsAndHud(trainerName, avatarId) {
+    const cp = getCurrentPlayer();
+    const name = trainerName || cp?.name || 'Ash Ketchum';
+    const avId = avatarId || cp?.avatarId || 1;
+    const avatarIdStr = avId < 10 ? `0${avId}` : `${avId}`;
+    const avatarUrl = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_${avatarIdStr}.png`;
+
+    // 1. Elementos do HUD Superior
+    const hudAvatar = document.getElementById('hud-trainer-avatar');
+    if (hudAvatar) hudAvatar.src = avatarUrl;
+
+    const hudName = document.getElementById('hud-trainer-name');
+    if (hudName) hudName.textContent = name;
+
+    // 2. Elementos do Hub / Menu Inicial
+    const hubAvatarImg = document.getElementById('hub-avatar-img');
+    if (hubAvatarImg) hubAvatarImg.src = avatarUrl;
+
+    const hubNameDisplay = document.getElementById('hub-trainer-name');
+    if (hubNameDisplay) hubNameDisplay.textContent = name;
+
+    const goldDisplay = document.getElementById('gold-counter');
+    const hubGoldDisplay = document.getElementById('hub-gold-display');
+    const goldVal = cp?.gold || 350;
+    if (goldDisplay) goldDisplay.textContent = goldVal;
+    if (hubGoldDisplay) hubGoldDisplay.textContent = `${goldVal} G`;
+
+    const badgesCounter = document.getElementById('badges-counter');
+    const badgesVal = Array.isArray(cp?.badges) ? cp.badges.length : 0;
+    if (badgesCounter) badgesCounter.textContent = `${badgesVal} / 6`;
+}
+window.updateTrainerVisualsAndHud = updateTrainerVisualsAndHud;
+
+// Controlo visual do botão do dado (Preto e Branco / Cinzento após uso, acende ao passar o turno)
+export function setDiceButtonState(hasRolled) {
+    const diceBtn = document.getElementById('roll-dice-btn');
+    if (!diceBtn) return;
+
+    if (hasRolled) {
+        diceBtn.classList.add('grayscale', 'opacity-50', 'cursor-not-allowed');
+        diceBtn.classList.remove('animate-pulse', 'hover:scale-105');
+        diceBtn.disabled = true;
+    } else {
+        diceBtn.classList.remove('grayscale', 'opacity-50', 'cursor-not-allowed');
+        diceBtn.classList.add('animate-pulse');
+        diceBtn.disabled = false;
+    }
+}
+window.setDiceButtonState = setDiceButtonState;
+
 // Função de Nova Partida / Reset Inteligente do Tabuleiro
 window.resetGameProgressKeepCollection = function() {
     const cp = getCurrentPlayer();
@@ -70,6 +121,7 @@ window.resetGameProgressKeepCollection = function() {
         movementState.hasRolledThisTurn = false;
         movementState.isMoving = false;
         movementState.currentPosition = 0;
+        setDiceButtonState(false);
     }
 
     saveGameProgress();
@@ -84,6 +136,7 @@ window.resetGameProgressKeepCollection = function() {
         true
     );
 
+    updateTrainerVisualsAndHud();
     if (typeof renderBoardMap === 'function') renderBoardMap();
     if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
     if (typeof renderBottomPanel === 'function') renderBottomPanel();
@@ -101,6 +154,7 @@ window.rollDiceWithAnimation = function(callback) {
             diceBtn.classList.remove('animate-spin');
         }
         const result = Math.floor(Math.random() * 6) + 1;
+        setDiceButtonState(true);
         if (typeof callback === 'function') {
             callback(result);
         }
@@ -170,6 +224,7 @@ window.triggerRandomBoardEvent = function(eventName) {
         }, 5000);
     }
 
+    updateTrainerVisualsAndHud();
     if (typeof renderBoardMap === 'function') renderBoardMap();
     if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
     if (typeof renderBottomPanel === 'function') renderBottomPanel();
@@ -184,6 +239,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!loaded) {
         ensureValidGameState();
         saveGameProgress();
+    } else {
+        const cp = getCurrentPlayer();
+        if (cp) {
+            updateTrainerVisualsAndHud(cp.name, cp.avatarId);
+        }
     }
 
     renderBoardMap();
@@ -267,7 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('setup-screen').classList.add('hidden');
             document.getElementById('main-game-layout').classList.remove('hidden');
 
-            updateTrainerVisuals(trainerName, avatarId);
+            updateTrainerVisualsAndHud(trainerName, avatarId);
             renderBoardMap();
             renderTeamCardSlots();
             renderBottomPanel();
@@ -276,23 +336,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     console.log("✅ Jogo inicializado com sucesso!");
 });
-
-function updateTrainerVisuals(trainerName, avatarId) {
-    const hudAvatar = document.getElementById('hud-trainer-avatar');
-    if (hudAvatar) {
-        const avatarIdStr = avatarId < 10 ? `0${avatarId}` : `${avatarId}`;
-        hudAvatar.src = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_${avatarIdStr}.png`;
-    }
-
-    const hubAvatarImg = document.getElementById('hub-avatar-img');
-    if (hubAvatarImg) {
-        const avatarIdStr = avatarId < 10 ? `0${avatarId}` : `${avatarId}`;
-        hubAvatarImg.src = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_${avatarIdStr}.png`;
-    }
-
-    const hudName = document.getElementById('hud-trainer-name');
-    if (hudName) hudName.textContent = trainerName;
-}
 
 function setupAuthenticationListeners() {
     const submitBtn = document.getElementById('auth-submit-btn');
@@ -319,7 +362,7 @@ function setupAuthenticationListeners() {
             document.getElementById('main-game-layout').classList.remove('hidden');
             const player = getCurrentPlayer();
             if (player) {
-                updateTrainerVisuals(player.name || 'Ash', player.avatarId || 1);
+                updateTrainerVisualsAndHud(player.name || 'Ash', player.avatarId || 1);
             }
             renderBoardMap();
             renderTeamCardSlots();
@@ -369,7 +412,7 @@ window.handleLoginResponse = function(response) {
     const player = getCurrentPlayer();
     if (player && response.profileData) {
         Object.assign(player, response.profileData);
-        updateTrainerVisuals(player.name, player.avatarId || 1);
+        updateTrainerVisualsAndHud(player.name, player.avatarId || 1);
         renderBoardMap();
         saveGameProgress();
     }
@@ -517,7 +560,9 @@ function setupGlobalInterfaceListeners() {
                 movementState.isMoving = false;
             }
 
+            setDiceButtonState(false);
             alert(`🔄 Turno passado com sucesso! Agora é a vez do próximo jogador.`);
+            updateTrainerVisualsAndHud();
             renderTeamCardSlots();
             renderBoardMap();
         };
