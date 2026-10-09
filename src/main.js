@@ -48,8 +48,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Inicializa o Socket.io
     initializeSocketConnection();
 
-    });
-
     // 1. Tenta carregar um save existente ou inicializa um estado padrão
     const loaded = loadGameProgress();
     if (!loaded) {
