@@ -131,10 +131,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 player.name = trainerName;
                 player.avatarId = avatarId;
                 player.gold = 350;
+                
+                // Define em ambas as propriedades para garantir compatibilidade com todos os módulos (PC Box, Equipa e Batalha)
                 player.team = [starterInstance];
+                player.activeTeam = [starterInstance];
                 player.pcBox = [starterInstance];
+                
                 player.pokedex = [starterKey];
-                // Força o item com a imagem correta do Supabase para evitar ícone genérico
                 player.inventory = [{ 
                     id: 'ball_poke', 
                     name: 'Poké Ball', 
