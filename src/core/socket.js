@@ -42,6 +42,24 @@ export function initializeSocketConnection() {
                     window.renderRoomsList(rooms);
                 }
             });
+
+            // Ouve a sincronização em tempo real das trocas de Pokémon entre treinadores
+            socket.on('trade_synchronized', (data) => {
+                if (data && data.gameState) {
+                    if (typeof gameState !== 'undefined') {
+                        Object.assign(gameState, data.gameState);
+                    }
+                    if (typeof refreshGameInterface === 'function') {
+                        refreshGameInterface();
+                    } else {
+                        if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+                        if (typeof renderBottomPanel === 'function') renderBottomPanel();
+                    }
+                    if (typeof showCustomPopup === 'function') {
+                        showCustomPopup('🌐 Sincronização Online', 'Uma troca foi efetuada na sua sala e o estado foi atualizado!', true);
+                    }
+                }
+            });
         } else {
             console.warn("⚠️ Biblioteca Socket.io não encontrada no escopo global.");
         }
