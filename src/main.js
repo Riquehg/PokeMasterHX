@@ -285,9 +285,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 uniqueId: 'mon_' + Date.now(),
                 id: monData.id,
                 name: monData.name,
-                level: 5,
-                currentHp: 25,
-                maxHp: 25,
+                level: 1,
+                currentHp: 20,
+                maxHp: 20,
                 image: monData.image,
                 types: monData.types || ['Normal']
             };
