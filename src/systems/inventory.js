@@ -127,7 +127,7 @@ window.buyItemFromPokemart = function(itemId, unitPrice, requestedQuantity = 1, 
 
     if (existingItem) {
         existingItem.count = (Number(existingItem.count) || Number(existingItem.quantity) || 1) + quantity;
-        if (existingItem.quantity) delete existingItem.quantity; // padroniza para 'count'
+        if (existingItem.quantity) delete existingItem.quantity;
     } else {
         cp.inventory.push({
             ...itemTemplate,
@@ -138,7 +138,6 @@ window.buyItemFromPokemart = function(itemId, unitPrice, requestedQuantity = 1, 
     normalizePlayerInventory(cp);
     saveGameProgress();
 
-    // Atualiza o saldo exibido no modal
     const goldSpan = document.getElementById('mart-player-gold');
     if (goldSpan) goldSpan.innerText = cp.gold;
 
@@ -309,7 +308,10 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
     if (typeof showCustomPopup === 'function') {
         showCustomPopup('Item Utilizado', `🎒 Usaste o item ${itemInfo.name} com sucesso.`, true);
     }
+}
 
-// Expõe as funções principais globalmente
+// ------------------------------------------------------------
+// EXPOSIÇÃO GLOBAL OBRIGATÓRIA
+// ------------------------------------------------------------
 window.openPokemartModal = openPokemartModal;
 window.useInventoryItem = useInventoryItem;
