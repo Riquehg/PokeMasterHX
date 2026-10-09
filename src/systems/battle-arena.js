@@ -154,7 +154,8 @@ function openBattleArena(config = {}) {
             isGymLeader: true,
             badgeKey: gym.badgeKey || gym.badgeName || '',
             rewardGold: Number(gym.prize || gym.rewardGold) || 300,
-            team: gymTeam
+            team: gymTeam,
+            cityKey: gym.city || gym.leader
         };
     } else if (requestedMode === 'wild') {
         const wildPokemon = config.opponent;
@@ -388,12 +389,6 @@ function confirmArenaTeamAndStart(indexes) {
     currentBattleSession.combatBonus = 0;
     currentBattleSession.lastAction = 'A batalha começou.';
 
-    if (currentBattleSession.mode === 'gym' && typeof gymAttemptedThisTurn !== 'undefined') {
-        const city = currentBattleSession.defender.name || 'Ginásio';
-        const attemptKey = `${gameState.currentPlayerIndex || 0}_${city}`;
-        gymAttemptedThisTurn[attemptKey] = true;
-    }
-
     openPreBattlePhaseModal();
 }
 
@@ -554,7 +549,7 @@ function renderArenaCombatUI(modalEl) {
             ${gymNoticeHtml}
             <p class="text-xs text-slate-300">Turno ${currentBattleSession.turnNumber}</p>
             <p class="text-[10px] text-amber-300">${arenaSafeText(currentBattleSession.lastAction)}</p>
-            <button onclick="executeArenaTurn()" ${currentBattleSession.turnBusy ? 'disabled' : ''} class="bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-black px-8 py-3 rounded-2xl text-xs uppercase tracking-wider shadow-2xl transition-all transform hover:scale-105 cursor-pointer">
+            <button id="arena-attack-btn" onclick="executeArenaTurn()" ${currentBattleSession.turnBusy ? 'disabled' : ''} class="bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-black px-8 py-3 rounded-2xl text-xs uppercase tracking-wider shadow-2xl transition-all transform hover:scale-105 cursor-pointer">
                 ⚔️ Atacar / Rolar Dado
             </button>
             <div class="bg-black/60 border border-blue-700/60 rounded-xl p-2 space-y-2">
@@ -652,7 +647,15 @@ function arenaResolveEnemyResponse() {
         }
     }
 
-    rollDiceWithAnimation((playerRoll, enemyRoll) => {
+    // Animação de dado rolando (igual rollDiceWithAnimation)
+    const attackBtn = document.getElementById('arena-attack-btn');
+    if (attackBtn) attackBtn.classList.add('animate-spin');
+
+    setTimeout(() => {
+        if (attackBtn) attackBtn.classList.remove('animate-spin');
+        const playerRoll = Math.floor(Math.random() * 6) + 1;
+        const enemyRoll = Math.floor(Math.random() * 6) + 1;
+
         const typeMultiplier = arenaTypeMultiplier(eMon, pMon);
         const playerPower = (Number(pMon.str) || 4) + Number(currentBattleSession.combatBonus) + Number(playerRoll || 0);
         const enemyPower = Math.round(((Number(eMon.str) || 5) + Number(enemyRoll || 0)) * typeMultiplier);
@@ -660,11 +663,11 @@ function arenaResolveEnemyResponse() {
         const damage = enemyWon ? Math.max(6, enemyPower - playerPower + 8) : Math.max(4, Math.floor((enemyPower - playerPower + 8) / 2));
 
         pMon.currentHp = Math.max(0, arenaHp(pMon) - damage);
-        currentBattleSession.lastAction = enemyWon ? `${eMon.name} atacou ${pMon.name} e causou ${damage} de dano.` : `${pMon.name} resistiu ao ataque de ${eMon.name}.`;
+        currentBattleSession.lastAction = enemyWon ? `${eMon.name} atacou ${pMon.name} e causou ${damage} de dano (Dado: ${enemyRoll} vs ${playerRoll}).` : `${pMon.name} resistiu ao ataque de ${eMon.name} (Dado: ${playerRoll} vs ${enemyRoll}).`;
 
         showCustomPopup(
             enemyWon ? "Contra-ataque do Adversário!" : "Defesa Bem-Sucedida!",
-            enemyWon ? `${eMon.name} respondeu à ação!\n\n💥 ${pMon.name} sofreu ${damage} de dano.\n\nHP: ${pMon.currentHp}/${pMon.maxHp}` : `${pMon.name} resistiu ao ataque de ${eMon.name}.\n\nDano reduzido: ${damage}\n\nHP: ${pMon.currentHp}/${pMon.maxHp}`,
+            enemyWon ? `${eMon.name} respondeu!\n🎲 [Tu: ${playerRoll} | Adv: ${enemyRoll}]\n\n💥 ${pMon.name} sofreu ${damage} de dano.\n\nHP: ${pMon.currentHp}/${pMon.maxHp}` : `${pMon.name} resistiu!\n🎲 [Tu: ${playerRoll} | Adv: ${enemyRoll}]\n\nDano reduzido: ${damage}\n\nHP: ${pMon.currentHp}/${pMon.maxHp}`,
             !enemyWon
         );
 
@@ -672,7 +675,7 @@ function arenaResolveEnemyResponse() {
             if (!arenaForcePlayerReplacement()) return;
         }
         arenaFinishTurn();
-    });
+    }, 800);
 }
 
 function switchArenaPlayerPokemon(index) {
@@ -764,7 +767,15 @@ function executeArenaTurn() {
     if (!pMon || !eMon || !arenaIsHealthy(pMon) || !arenaIsHealthy(eMon)) return;
     currentBattleSession.turnBusy = true;
 
-    rollDiceWithAnimation((playerRoll, enemyRoll) => {
+    // Animação de dado rolando no botão de ataque
+    const attackBtn = document.getElementById('arena-attack-btn');
+    if (attackBtn) attackBtn.classList.add('animate-spin');
+
+    setTimeout(() => {
+        if (attackBtn) attackBtn.classList.remove('animate-spin');
+        const playerRoll = Math.floor(Math.random() * 6) + 1;
+        const enemyRoll = Math.floor(Math.random() * 6) + 1;
+
         const typeMult = typeof calculateTypeAdvantageMultiplier === 'function' ? calculateTypeAdvantageMultiplier(pMon.type, eMon.type) : 1;
         const playerPower = Math.round(((Number(pMon.str) || 4) + Number(currentBattleSession.combatBonus) + Number(playerRoll || 0)) * typeMult);
         const enemyPower = (Number(eMon.str) || 5) + Number(enemyRoll || 0);
@@ -772,8 +783,8 @@ function executeArenaTurn() {
         if (playerPower >= enemyPower) {
             const damage = Math.max(8, playerPower - enemyPower + 10);
             eMon.currentHp = Math.max(0, arenaHp(eMon) - damage);
-            currentBattleSession.lastAction = `${pMon.name} causou ${damage} de dano em ${eMon.name}.`;
-            showCustomPopup("Ataque Bem-Sucedido!", `⚔️ ${pMon.name} venceu!\n\n💥 ${eMon.name} sofreu ${damage} de dano.\n\nHP adversário: ${eMon.currentHp}/${eMon.maxHp}`, true);
+            currentBattleSession.lastAction = `${pMon.name} causou ${damage} de dano em ${eMon.name} (Dado: ${playerRoll} vs ${enemyRoll}).`;
+            showCustomPopup("Ataque Bem-Sucedido!", `⚔️ ${pMon.name} venceu!\n🎲 [Tu: ${playerRoll} | Adv: ${enemyRoll}]\n\n💥 ${eMon.name} sofreu ${damage} de dano.\n\nHP adversário: ${eMon.currentHp}/${eMon.maxHp}`, true);
 
             if (!arenaIsHealthy(eMon)) {
                 if (!arenaSwitchEnemyAfterFaint()) return;
@@ -781,15 +792,15 @@ function executeArenaTurn() {
         } else {
             const damage = Math.max(8, enemyPower - playerPower + 8);
             pMon.currentHp = Math.max(0, arenaHp(pMon) - damage);
-            currentBattleSession.lastAction = `${eMon.name} causou ${damage} de dano em ${pMon.name}.`;
-            showCustomPopup("Contra-ataque do Adversário!", `💥 ${eMon.name} venceu!\n\n💔 ${pMon.name} sofreu ${damage} de dano.\n\nHP: ${pMon.currentHp}/${pMon.maxHp}`, false);
+            currentBattleSession.lastAction = `${eMon.name} causou ${damage} de dano em ${pMon.name} (Dado: ${playerRoll} vs ${enemyRoll}).`;
+            showCustomPopup("Contra-ataque do Adversário!", `💥 ${eMon.name} venceu!\n🎲 [Tu: ${playerRoll} | Adv: ${enemyRoll}]\n\n💔 ${pMon.name} sofreu ${damage} de dano.\n\nHP: ${pMon.currentHp}/${pMon.maxHp}`, false);
 
             if (!arenaIsHealthy(pMon)) {
                 if (!arenaForcePlayerReplacement()) return;
             }
         }
         arenaFinishTurn();
-    });
+    }, 800);
 }
 
 function concludeArenaBattle(isVictory) {
@@ -809,6 +820,13 @@ function concludeArenaBattle(isVictory) {
             if (!Array.isArray(cp.badges)) cp.badges = [];
             if (def.badgeKey && !cp.badges.includes(def.badgeKey)) cp.badges.push(def.badgeKey);
             cp.gold = (Number(cp.gold) || 0) + (Number(def.rewardGold) || 300);
+
+            // Marca o ginásio como vencido/tentado neste turno para o jogador atual
+            if (typeof gymAttemptedThisTurn !== 'undefined' && def.cityKey) {
+                const attemptKey = `${gameState.currentPlayerIndex || 0}_${def.cityKey}`;
+                gymAttemptedThisTurn[attemptKey] = true;
+            }
+
             showCustomPopup("🏆 VITÓRIA ÉPICA NO GINÁSIO!", `Derrotaste toda a equipa do Líder!\n\n✨ Ganhaste a Insígnia!\n💰 Ouro: +${Number(def.rewardGold) || 300}`, true);
         } else if (currentBattleSession.mode === 'wild') {
             const defeatedMon = currentBattleSession.enemyTeam[0];
