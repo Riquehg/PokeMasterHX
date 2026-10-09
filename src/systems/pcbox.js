@@ -3,10 +3,11 @@
 
 import { gameState, getCurrentPlayer } from '../core/state.js';
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
+import { MONSTER_CATALOG } from '../config/cards-data.js';
 
-const MONSTER_CATALOG_REF = typeof MONSTER_CATALOG !== 'undefined' ? MONSTER_CATALOG : [];
+const MONSTER_CATALOG_REF = Array.isArray(MONSTER_CATALOG) ? MONSTER_CATALOG : [];
 
-export function getTierColorClass(tier) {
+export function getTierColorClass(tier) {        
     switch (tier) {
         case 2: return 'bg-gradient-to-b from-green-950 to-black border-green-600 ';
         case 3: return 'bg-gradient-to-b from-blue-950 to-black border-blue-600 ';
@@ -291,6 +292,12 @@ function showCustomPopup(title, message, isSuccess) {
     }
 }
 
+export function switchBottomView(viewName) {
+    if (!gameState) return;
+    gameState.currentBottomView = viewName; // 'inventory' ou 'pcbox'
+    renderBottomPanel();
+}
+
 // Expor funções globais essenciais para drag-and-drop e eventos inline do HTML
 window.handleDragStart = handleDragStart;
 window.handleDragOver = handleDragOver;
@@ -298,3 +305,4 @@ window.handleDrop = handleDrop;
 window.renderTeamCardSlots = renderTeamCardSlots;
 window.renderBottomPanel = renderBottomPanel;
 window.changePcBoxPage = changePcBoxPage;
+window.switchBottomView = switchBottomView;
