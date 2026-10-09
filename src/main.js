@@ -51,6 +51,45 @@ window.openPokedexModal = openPokedexModal;
 window.openPokedexDetailCard = openPokedexDetailCard;
 window.openVaultModal = openVaultModal;
 
+// Função de Nova Partida / Reset Inteligente do Tabuleiro
+window.resetGameProgressKeepCollection = function() {
+    const cp = getCurrentPlayer();
+    if (!cp) {
+        alert("Nenhum treinador ativo encontrado.");
+        return;
+    }
+
+    if (!confirm("Desejas iniciar uma Nova Partida no tabuleiro?\n\n(Aviso: As tuas insígnias e a tua posição no mapa serão redefinidas, mas os teus Pokémon, PC Box e itens da mochila serão mantidos intactos!)")) {
+        return;
+    }
+
+    cp.badges = [];
+    cp.position = 0;
+    
+    if (typeof movementState !== 'undefined') {
+        movementState.hasRolledThisTurn = false;
+        movementState.isMoving = false;
+        movementState.currentPosition = 0;
+    }
+
+    saveGameProgress();
+    emitSocket('save_game_state', {
+        gameState: gameState,
+        trainerName: cp.name
+    });
+
+    window.showCustomPopup(
+        "🔄 Nova Partida Iniciada!",
+        "O tabuleiro e as insígnias foram reiniciados com sucesso.\nA tua coleção de Animas e itens foi preservada!",
+        true
+    );
+
+    if (typeof renderBoardMap === 'function') renderBoardMap();
+    if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+    if (typeof renderBottomPanel === 'function') renderBottomPanel();
+};
+window.resetGameProgressKeepCollection = resetGameProgressKeepCollection;
+
 // Função global de animação de dado
 window.rollDiceWithAnimation = function(callback) {
     const diceBtn = document.getElementById('roll-dice-btn');
