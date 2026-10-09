@@ -47,7 +47,7 @@ window.openVaultModal = openVaultModal;
 document.addEventListener('DOMContentLoaded', () => {
     console.log("🚀 Inicializando o Motor Modular do Jogo (Partes 1, 2 & 3)...");
 
-    // Inicializa o Socket.io[cite: 10]
+    // Inicializa o Socket.io
     initializeSocketConnection();
 
     // 1. Tenta carregar um save existente ou inicializa um estado padrão
@@ -82,6 +82,62 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
+    // Vinculação do botão de Gravar e Iniciar Nova Partida
+    const finalizeBtn = document.getElementById('finalize-creation-btn');
+    if (finalizeBtn) {
+        finalizeBtn.onclick = () => {
+            const nameInput = document.getElementById('setup-trainer-name');
+            const trainerName = nameInput ? nameInput.value.trim() : 'Ash Ketchum';
+            const avatarId = window.selectedAvatarId || 1;
+            const starter = window.selectedStarterPokemon || 'bulbasaur';
+
+            console.log("✨ A gravar novo personagem:", { trainerName, avatarId, starter });
+
+            const initialGameState = {
+                gold: 350,
+                players: [{
+                    name: trainerName,
+                    avatarId: avatarId,
+                    gold: 350,
+                    pokedex: [starter],
+                    pcBox: [{ id: starter, name: starter, level: 5, currentHp: 20, maxHp: 20 }],
+                    inventory: [{ id: 'ball_poke', name: 'Poké Ball', count: 5 }]
+                }]
+            };
+
+            const profileData = {
+                trainerName: trainerName,
+                avatarId: avatarId,
+                gold: 350,
+                statistics: { captures: 1, shinyCaptures: 0, legendaryCaptures: 0, battlesWon: 0 }
+            };
+
+            // Envia para o servidor guardar na tabela accounts do Supabase
+            emitSocket('save_game_state', {
+                gameState: initialGameState,
+                profileData: profileData,
+                trainerName: trainerName
+            });
+
+            // Oculta a tela de registo e abre o layout principal do mapa
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('main-game-layout').classList.remove('hidden');
+
+            // Atualiza as sprites nos elementos do HUD do mapa
+            const hudAvatar = document.getElementById('hud-trainer-avatar');
+            if (hudAvatar) {
+                const avatarIdStr = avatarId < 10 ? `0${avatarId}` : `${avatarId}`;
+                hudAvatar.src = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_${avatarIdStr}.png`;
+            }
+
+            const hudName = document.getElementById('hud-trainer-name');
+            if (hudName) hudName.textContent = trainerName;
+
+            if (typeof window.renderTeamCardSlots === 'function') window.renderTeamCardSlots();
+            if (typeof window.renderBottomPanel === 'function') window.renderBottomPanel();
+        };
+    }
+
     console.log("✅ Jogo inicializado com sucesso!");
 });
 
@@ -103,8 +159,6 @@ function setupAuthenticationListeners() {
             }
 
             console.log("🔐 A enviar credenciais para o servidor:", email);
-            
-            // Envia o pedido de login real para o servidor através de 'login_request'
             emitSocket('login_request', { email, password });
         };
     }
@@ -154,7 +208,6 @@ window.handleLoginResponse = function(response) {
 
     console.log("✅ Resposta de login recebida com sucesso:", response);
 
-    // Se for uma conta nova registada, esconde o ecrã de auth e abre a criação de personagem[cite: 9]
     if (response.isNew || response.newAccount) {
         document.getElementById('auth-container')?.classList.add('hidden');
         if (typeof window.openCharacterCreationMode === 'function') {
@@ -163,7 +216,6 @@ window.handleLoginResponse = function(response) {
         return;
     }
 
-    // Se já tiver dados na base de dados, entra direto no menu principal do treinador
     document.getElementById('auth-container')?.classList.add('hidden');
     document.getElementById('trainer-main-menu')?.classList.remove('hidden');
 
@@ -254,61 +306,35 @@ window.selectStarter = function(starterName) {
     document.getElementById(`starter-${starterName.toLowerCase()}`)?.classList.replace('border-blue-900', 'border-amber-400');
 };
 
-// Vinculação do botão de Gravar e Iniciar Nova Partida
-document.addEventListener('DOMContentLoaded', () => {
-    const finalizeBtn = document.getElementById('finalize-creation-btn');
-    if (finalizeBtn) {
-        finalizeBtn.onclick = () => {
-            const nameInput = document.getElementById('setup-trainer-name');
-            const trainerName = nameInput ? nameInput.value.trim() : 'Ash Ketchum';
-            const avatarId = window.selectedAvatarId || 1;
-            const starter = window.selectedStarterPokemon || 'bulbasaur';
+// Carrega o Pokémon do dia de forma aleatória para o banner inicial
+function loadDailyPokemonPreview() {
+    const nameEl = document.getElementById('daily-pokemon-name');
+    const spriteEl = document.getElementById('daily-pokemon-sprite');
 
-            console.log("✨ A gravar novo personagem:", { trainerName, avatarId, starter });
+    if (MONSTER_CATALOG && MONSTER_CATALOG.length > 0) {
+        const randomIndex = Math.floor(Math.random() * MONSTER_CATALOG.length);
+        const dailyMon = MONSTER_CATALOG[randomIndex];
 
-            // Monta o estado inicial do jogador com o starter escolhido
-            const initialGameState = {
-                gold: 350,
-                players: [{
-                    name: trainerName,
-                    avatarId: avatarId,
-                    gold: 350,
-                    pokedex: [starter],
-                    pcBox: [{ id: starter, name: starter, level: 5, currentHp: 20, maxHp: 20 }],
-                    inventory: [{ id: 'ball_poke', name: 'Poké Ball', count: 5 }]
-                }]
-            };
+        if (nameEl) nameEl.textContent = dailyMon.name;
+        if (spriteEl && dailyMon.image) {
+            spriteEl.src = dailyMon.image;
+        }
+    }
+}
 
-            const profileData = {
-                trainerName: trainerName,
-                avatarId: avatarId,
-                gold: 350,
-                statistics: { captures: 1, shinyCaptures: 0, legendaryCaptures: 0, battlesWon: 0 }
-            };
-
-            // Envia o estado completo para o servidor guardar na tabela accounts do Supabase
-            emitSocket('save_game_state', {
-                gameState: initialGameState,
-                profileData: profileData,
-                trainerName: trainerName
-            });
-
-            // Oculta a tela de registo e abre o layout principal do mapa
-            document.getElementById('setup-screen').classList.add('hidden');
-            document.getElementById('main-game-layout').classList.remove('hidden');
-
-            // Atualiza as sprites nos elementos do HUD do mapa (garantindo que reflete o novo avatar)
-            const hudAvatar = document.getElementById('hud-trainer-avatar');
-            if (hudAvatar) {
-                const avatarIdStr = avatarId < 10 ? `0${avatarId}` : `${avatarId}`;
-                hudAvatar.src = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_${avatarIdStr}.png`;
-            }
-
-            const hudName = document.getElementById('hud-trainer-name');
-            if (hudName) hudName.textContent = trainerName;
-
-            if (typeof window.renderTeamCardSlots === 'function') window.renderTeamCardSlots();
-            if (typeof window.renderBottomPanel === 'function') window.renderBottomPanel();
+// Vincula atalhos e botões globais da HUD
+function setupGlobalInterfaceListeners() {
+    const trainerCardBtn = document.getElementById('open-trainer-card-btn') || document.getElementById('trainer-badge-btn');
+    if (trainerCardBtn) {
+        trainerCardBtn.onclick = () => {
+            openSpecificTrainerCardModal(gameState.currentPlayerIndex || 0);
         };
     }
-});
+
+    const pokedexBtn = document.getElementById('open-pokedex-btn');
+    if (pokedexBtn) {
+        pokedexBtn.onclick = () => {
+            openPokedexModal();
+        };
+    }
+}
