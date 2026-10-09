@@ -105,11 +105,14 @@ export function openEncounterModalWithPokemon(pokemon) {
                     <img src="${pokemon.image}" class="w-20 h-20 object-contain mx-auto my-2" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                     <p class="text-[9px] text-slate-300">HP: ${pokemon.currentHp}/${pokemon.maxHp}</p>
                 </div>
-                <div class="bg-black/40 border border-blue-600/40 p-3 rounded-2xl">
+                <div class="bg-black/40 border border-blue-600/40 p-3 rounded-2xl relative">
                     <p class="text-[10px] text-blue-300 font-bold uppercase">Teu Anima Ativo</p>
                     <h4 id="enc-active-mon-name" class="text-sm font-black text-white"></h4>
                     <img id="enc-active-mon-img" src="" class="w-20 h-20 object-contain mx-auto my-2">
                     <p id="enc-active-mon-hp" class="text-[9px] text-slate-300"></p>
+                    <button onclick="cyclePlayerEncounterPokemon()" class="mt-2 bg-amber-600 hover:bg-amber-500 text-black font-black text-[9px] px-2.5 py-1 rounded-full shadow border border-amber-300 uppercase tracking-wider cursor-pointer">
+                        Trocar Anima
+                    </button>
                 </div>
             </div>
 
@@ -148,6 +151,24 @@ export function updateEncounterUIInfo() {
     if (nameEl) nameEl.textContent = activeMon.name;
     if (imgEl) imgEl.src = activeMon.image || '';
     if (hpEl) hpEl.textContent = `HP: ${activeMon.currentHp}/${activeMon.maxHp || activeMon.hp || 20}`;
+}
+
+export function cyclePlayerEncounterPokemon() {
+    const cp = getCurrentPlayer();
+    if (!cp || !Array.isArray(cp.activeTeam) || cp.activeTeam.length <= 1) return;
+    
+    let startIndex = currentEncounterState.selectedTeamMemberIndex;
+    let nextIndex = (startIndex + 1) % cp.activeTeam.length;
+    
+    while (nextIndex !== startIndex) {
+        let mon = cp.activeTeam[nextIndex];
+        let hp = mon.currentHp !== undefined ? mon.currentHp : (mon.maxHp || 20);
+        if (hp > 0) break;
+        nextIndex = (nextIndex + 1) % cp.activeTeam.length;
+    }
+
+    currentEncounterState.selectedTeamMemberIndex = nextIndex;
+    updateEncounterUIInfo();
 }
 
 export function renderEncounterItemsList() {
