@@ -145,7 +145,7 @@ export const BOARD_WAYPOINTS = [
     { id: 124, name: "Arena Final", hexagon: "H", top: 28.8, left: 92.1, type: "city", color: "amarelo", requiredType: "", connections: [114, 122] }
 ];
 
-// --- BFS OTIMIZADO ---
+// --- BFS OTIMIZADO (Verificação correta de Tipagem Requerida) ---
 export function getValidDestinations(startWaypointId, steps) {
     let validIds = new Set();
     const activePlayer = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : (gameState.players ? gameState.players[gameState.currentPlayerIndex || 0] : null);
@@ -183,11 +183,14 @@ export function getValidDestinations(startWaypointId, steps) {
             let neighborWp = BOARD_WAYPOINTS.find(w => w.id === neighborId);
             if (!neighborWp) return;
 
+            // Validação de tipo obrigatório para casas bloqueadas (ex: Rock, Fire, Grass, etc.)
             if (neighborWp.requiredType && neighborWp.requiredType.trim() !== "") {
                 const required = neighborWp.requiredType.toLowerCase();
-                const hasRequiredType = activePlayer && activePlayer.activeTeam.some(mon => {
-                    if (!mon.type) return false;
-                    return mon.type.toLowerCase().includes(required);
+                const team = activePlayer && (activePlayer.activeTeam || activePlayer.team) ? (activePlayer.activeTeam || activePlayer.team) : [];
+                const hasRequiredType = team.some(mon => {
+                    if (!mon || !mon.type) return false;
+                    const monTypes = Array.isArray(mon.type) ? mon.type.join(' ').toLowerCase() : String(mon.type).toLowerCase();
+                    return monTypes.includes(required);
                 });
                 if (!hasRequiredType) return;
             }
@@ -308,11 +311,38 @@ export function handleWaypointArrival(waypointId) {
             openCityModal(waypoint.name);
         }
     } else if (waypoint.type === 'pokemon') {
-        if (typeof boardPokemonCards !== 'undefined' && boardPokemonCards[waypointId]) {
-            const poke = boardPokemonCards[waypointId];
+        if (typeof boardPokemonCards === 'undefined') {
+            window.boardPokemonCards = {};
+        }
+
+        // Se a casa não tiver um Pokémon gerado, cria um agora de forma oculta/não revelada até interagir
+        if (!boardPokemonCards[waypointId]) {
+            const catalog = Array.isArray(MONSTER_CATALOG) ? MONSTER_CATALOG : [];
+            if (catalog.length > 0) {
+                const randomMon = catalog[Math.floor(Math.random() * catalog.length)];
+                const tier = randomMon.tier || 1;
+                const minLvl = tier === 1 ? 3 : tier === 2 ? 8 : tier === 3 ? 15 : 25;
+                const level = Math.floor(Math.random() * 4) + minLvl;
+
+                boardPokemonCards[waypointId] = {
+                    ...randomMon,
+                    level: level,
+                    tier: tier,
+                    currentHp: 20 + (level * 2),
+                    maxHp: 20 + (level * 2),
+                    waypointId: waypointId,
+                    revealed: false, // Inicia oculto no mapa
+                    weakened: false
+                };
+            }
+        }
+
+        const poke = boardPokemonCards[waypointId];
+        if (poke) {
+            poke.revealed = true; // Revela ao pisar na casa
             if (typeof dailyFeaturedPokemonConfig !== 'undefined' && poke.id === dailyFeaturedPokemonConfig.pokemonId) {
                 if (typeof showCustomPopup === 'function') {
-                    showCustomPopup("⭐ POKÉMON DO DIA ENCONTRADO!", `Este é o Anima em destaque de hoje (${dailyFeaturedPokemonConfig.pokemonName})! Ao capturá-lo, receberá o item bónus (${dailyFeaturedPokemonConfig.bonusItemName})!`, true);
+                    showCustomPopup("⭐ POKÉMON DO DIA ENCONTRADO!", `Este é o Anima em destaque de hoje (${dailyFeaturedPokemonConfig.pokemonName})! Ao capturá-lo, receberás o item bónus (${dailyFeaturedPokemonConfig.bonusItemName})!`, true);
                 }
             }
             if (typeof openEncounterModalWithPokemon === 'function') {
@@ -334,8 +364,10 @@ export function tryInteractWithWeakenedPokemon(waypointId) {
     }
 
     if (typeof boardPokemonCards !== 'undefined' && boardPokemonCards[waypointId]) {
+        const poke = boardPokemonCards[waypointId];
+        poke.revealed = true;
         if (typeof openEncounterModalWithPokemon === 'function') {
-            openEncounterModalWithPokemon(boardPokemonCards[waypointId]);
+            openEncounterModalWithPokemon(poke);
         }
     }
 }
@@ -344,24 +376,8 @@ export function renderBoardMap(highlightIds = []) {
     const container = document.getElementById('board-path');
     if (!container) return;
 
-    // Inicializa o dicionário global de cartas de Pokémon no tabuleiro se estiver vazio
     if (typeof boardPokemonCards === 'undefined') {
         window.boardPokemonCards = {};
-    }
-    if (Object.keys(boardPokemonCards).length === 0 && Array.isArray(MONSTER_CATALOG) && MONSTER_CATALOG.length > 0) {
-        BOARD_WAYPOINTS.forEach(wp => {
-            if (wp.type === 'pokemon') {
-                const randomMon = MONSTER_CATALOG[Math.floor(Math.random() * MONSTER_CATALOG.length)];
-                boardPokemonCards[wp.id] = {
-                    ...randomMon,
-                    level: Math.floor(Math.random() * 5) + 3,
-                    currentHp: 20,
-                    maxHp: 20,
-                    waypointId: wp.id,
-                    weakened: true
-                };
-            }
-        });
     }
 
     let mapOverlayHtml = '';
@@ -395,41 +411,46 @@ export function renderBoardMap(highlightIds = []) {
         `;
     });
 
-    if (typeof boardPokemonCards !== 'undefined') {
-        Object.keys(boardPokemonCards).forEach(wpId => {
-            const pokeCard = boardPokemonCards[wpId];
-            if (pokeCard) {
-                const wpInfo = BOARD_WAYPOINTS.find(w => w.id == wpId);
-                if (wpInfo) {
-                    const isFeaturedDaily = (typeof dailyFeaturedPokemonConfig !== 'undefined' && pokeCard.id === dailyFeaturedPokemonConfig.pokemonId);
-                    
-                    if (pokeCard.weakened || isFeaturedDaily) {
-                        let pokeImg = pokeCard.image || '';
-                        if (pokeCard.dexNumber) {
-                            const paddedDex = String(pokeCard.dexNumber).padStart(3, '0');
-                            pokeImg = pokeCard.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${paddedDex}.png` : `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
-                        } else if (pokeCard.isShiny && pokeCard.shinyImage) {
-                            pokeImg = pokeCard.shinyImage;
-                        }
+    // Renderiza casas de Pokémon de forma oculta (mostrando apenas o ícone de Pokébola misteriosa) a menos que já tenham sido reveladas (após falha/fuga)
+    BOARD_WAYPOINTS.forEach(wp => {
+        if (wp.type === 'pokemon') {
+            const pokeCard = boardPokemonCards[wp.id];
+            const isFeaturedDaily = pokeCard && (typeof dailyFeaturedPokemonConfig !== 'undefined' && pokeCard.id === dailyFeaturedPokemonConfig.pokemonId);
 
-                        const featuredClass = isFeaturedDaily ? 'border-amber-400 animate-bounce bg-amber-950/90 shiny-card-glow shadow-[0_0_15px_rgba(255,215,0,0.8)]' : 'border-amber-400 bg-red-950/90 animate-pulse';
-
-                        mapOverlayHtml += `
-                            <div onclick="tryInteractWithWeakenedPokemon(${wpInfo.id})" class="absolute -translate-x-1/2 -translate-y-1/2 z-30 cursor-pointer group" style="top: ${wpInfo.top - 3}%; left: ${wpInfo.left}%;" title="${pokeCard.name} ${isFeaturedDaily ? '(Pokémon do Dia ⭐)' : ''}">
-                                <div class="${featuredClass} border-2 rounded-lg p-1.5 shadow-2xl flex items-center gap-1.5 hover:scale-110 transition-transform">
-                                    <img src="${pokeImg}" class="w-7 h-7 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
-                                    <div class="text-left">
-                                        <p class="text-[9px] font-black text-white leading-none">${pokeCard.name}</p>
-                                        <span class="text-[8px] font-bold text-amber-300">${isFeaturedDaily ? '⭐ DIA' : '🩹 Nv.' + pokeCard.level}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                    }
+            if (pokeCard && (pokeCard.revealed || pokeCard.weakened || isFeaturedDaily)) {
+                let pokeImg = pokeCard.image || '';
+                if (pokeCard.dexNumber) {
+                    const paddedDex = String(pokeCard.dexNumber).padStart(3, '0');
+                    pokeImg = pokeCard.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${paddedDex}.png` : `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
+                } else if (pokeCard.isShiny && pokeCard.shinyImage) {
+                    pokeImg = pokeCard.shinyImage;
                 }
+
+                const featuredClass = isFeaturedDaily ? 'border-amber-400 animate-bounce bg-amber-950/90 shiny-card-glow shadow-[0_0_15px_rgba(255,215,0,0.8)]' : 'border-amber-400 bg-red-950/90 animate-pulse';
+
+                mapOverlayHtml += `
+                    <div onclick="tryInteractWithWeakenedPokemon(${wp.id})" class="absolute -translate-x-1/2 -translate-y-1/2 z-30 cursor-pointer group" style="top: ${wp.top - 3}%; left: ${wp.left}%;" title="${pokeCard.name} ${isFeaturedDaily ? '(Pokémon do Dia ⭐)' : ''}">
+                        <div class="${featuredClass} border-2 rounded-lg p-1.5 shadow-2xl flex items-center gap-1.5 hover:scale-110 transition-transform">
+                            <img src="${pokeImg}" class="w-7 h-7 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                            <div class="text-left">
+                                <p class="text-[9px] font-black text-white leading-none">${pokeCard.name}</p>
+                                <span class="text-[8px] font-bold text-amber-300">${isFeaturedDaily ? '⭐ DIA' : '🩹 Nv.' + pokeCard.level}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Pokébola misteriosa indicando que a rota tem um Pokémon escondido
+                mapOverlayHtml += `
+                    <div onclick="tryInteractWithWeakenedPokemon(${wp.id})" class="absolute -translate-x-1/2 -translate-y-1/2 z-30 cursor-pointer group" style="top: ${wp.top - 3}%; left: ${wp.left}%;" title="Rota Selvagem Desconhecida">
+                        <div class="bg-black/80 border-2 border-red-500 rounded-full w-6 h-6 flex items-center justify-center shadow-lg hover:scale-125 transition-transform animate-pulse">
+                            <span class="text-[10px]">🔴</span>
+                        </div>
+                    </div>
+                `;
             }
-        });
-    }
+        }
+    });
 
     BOARD_WAYPOINTS.forEach(wp => {
         const isHighlighted = highlightIds.includes(wp.id);
