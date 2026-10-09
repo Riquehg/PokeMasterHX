@@ -155,7 +155,7 @@ export function setCurrentPlayerWaypointId(newWaypointId) {
 }
 
 // ------------------------------------------------------------
-// ROLAGEM DO DADO
+// ROLAGEM DO DADO COM ANIMAÇÃO GRÁFICA CENTRAL
 // ------------------------------------------------------------
 
 export function rollDiceForMovement() {
@@ -181,16 +181,7 @@ export function rollDiceForMovement() {
         return;
     }
 
-    const diceIcon = document.getElementById('dice-icon');
-    if (diceIcon) {
-        diceIcon.classList.add('fa-spin');
-    }
-
     const finishRoll = result => {
-        if (diceIcon) {
-            diceIcon.classList.remove('fa-spin');
-        }
-
         const normalizedResult = Math.max(
             1,
             Math.min(6, Number(result) || 1)
@@ -200,13 +191,45 @@ export function rollDiceForMovement() {
         startDirectMovementSession(normalizedResult);
     };
 
-    if (typeof rollDiceWithAnimation === 'function') {
-        rollDiceWithAnimation(finishRoll);
-        return;
+    // Animação gráfica épica do dado no centro da tela
+    let diceOverlay = document.getElementById('epic-dice-overlay');
+    if (!diceOverlay) {
+        diceOverlay = document.createElement('div');
+        diceOverlay.id = 'epic-dice-overlay';
+        diceOverlay.className = 'fixed inset-0 bg-black/80 z-[600] flex flex-col items-center justify-center backdrop-blur-sm text-white';
+        document.body.appendChild(diceOverlay);
     }
 
-    const fallbackResult = Math.floor(Math.random() * 6) + 1;
-    finishRoll(fallbackResult);
+    diceOverlay.innerHTML = `
+        <div class="trainer-card p-8 border-4 border-amber-400 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] text-center space-y-6 shadow-2xl animate-pulse">
+            <h2 class="text-xl font-black text-amber-400 font-cinzel">🎲 A ROLAR O DADO...</h2>
+            <div id="dice-cube-display" class="w-24 h-24 mx-auto bg-amber-500 rounded-2xl flex items-center justify-center text-black text-4xl font-black shadow-[0_0_25px_rgba(255,215,0,0.8)] animate-spin">
+                🎲
+            </div>
+            <p class="text-xs text-slate-300">A sortear o valor do movimento...</p>
+        </div>
+    `;
+    diceOverlay.classList.remove('hidden');
+
+    let counter = 0;
+    const interval = setInterval(() => {
+        const tempVal = Math.floor(Math.random() * 6) + 1;
+        const cube = document.getElementById('dice-cube-display');
+        if (cube) cube.textContent = tempVal;
+        counter++;
+        if (counter > 8) {
+            clearInterval(interval);
+            const finalResult = Math.floor(Math.random() * 6) + 1;
+            if (cube) {
+                cube.classList.remove('animate-spin');
+                cube.textContent = finalResult;
+            }
+            setTimeout(() => {
+                diceOverlay.remove();
+                finishRoll(finalResult);
+            }, 600);
+        }
+    }, 100);
 }
 
 export function rollDice() {
@@ -392,7 +415,7 @@ function updatePlayerLocationUI(waypointId) {
 }
 
 // ------------------------------------------------------------
-// EVENTOS DA CASA DE DESTINO
+// EVENTOS DA CASA DE DESTINO E POKÉMON SELVAGENS
 // ------------------------------------------------------------
 
 export function triggerWaypointEvent(waypointId) {
@@ -414,11 +437,27 @@ export function triggerWaypointEvent(waypointId) {
     }
 
     if (waypoint.type === 'pokemon') {
-        const wildPokemon =
-            typeof boardPokemonCards !== 'undefined' && boardPokemonCards
-                ? boardPokemonCards[waypoint.id]
-                : null;
+        if (typeof boardPokemonCards === 'undefined') {
+            window.boardPokemonCards = {};
+        }
 
+        // Gera automaticamente um Pokémon selvagem se a casa estiver vazia
+        if (!boardPokemonCards[waypointId]) {
+            const catalog = typeof MONSTER_CATALOG !== 'undefined' ? MONSTER_CATALOG : [];
+            if (catalog.length > 0) {
+                const randomMon = catalog[Math.floor(Math.random() * catalog.length)];
+                boardPokemonCards[waypointId] = {
+                    ...randomMon,
+                    level: Math.floor(Math.random() * 5) + 3,
+                    currentHp: 20,
+                    maxHp: 20,
+                    waypointId: waypointId,
+                    weakened: true
+                };
+            }
+        }
+
+        const wildPokemon = boardPokemonCards[waypointId];
         if (wildPokemon && typeof openEncounterModalWithPokemon === 'function') {
             wildPokemon.revealed = true;
             openEncounterModalWithPokemon(wildPokemon);
