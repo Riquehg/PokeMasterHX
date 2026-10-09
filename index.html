@@ -191,7 +191,6 @@
                 </div>
                 
                 <div class="flex items-center gap-1.5">
-                    <button id="open-pokemart-btn" class="bg-blue-700 hover:bg-blue-600 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-bold shadow cursor-pointer">🏪 Poké Mart</button>
                     <button id="save-game-btn" class="bg-emerald-700 hover:bg-emerald-600 text-white px-2 py-1.5 rounded-lg text-[10px] font-bold shadow cursor-pointer" title="Salvar Jogo">💾 Salvar</button>
                     <button id="export-save-btn" class="bg-blue-700 hover:bg-blue-600 text-white px-2 py-1.5 rounded-lg text-[10px] font-bold shadow cursor-pointer" title="Baixar Save (.json)">📥 Exportar</button>
                     <button id="open-pokedex-btn" class="bg-amber-600 hover:bg-amber-500 text-black px-2.5 py-1.5 rounded-lg text-[10px] font-black shadow flex items-center gap-1 cursor-pointer" title="Abrir Pokédex">
@@ -256,22 +255,27 @@
                     </div>
                 </div>
 
-                <!-- EQUIPA ATIVA (SLOTS DE POKÉMON) -->
+                <!-- EQUIPA ATIVA (SLOTS DE POKÉMON FIXOS) -->
                 <div class="bg-[#16110d] border-2 border-amber-900/70 p-3 rounded-xl space-y-2">
                     <div class="flex justify-between items-center text-xs border-b border-amber-900/40 pb-1">
                         <span class="text-amber-300 font-bold">🛡️ Equipa Ativa (Anima)</span>
                         <span class="text-[10px] text-slate-400">Até 6 Pokémon</span>
                     </div>
-                    <!-- Contenedor onde o renderTeamCardSlots() injeta os Pokémon ativos -->
+                    <!-- Contenedor estruturado com os 6 slots fixos estáticos pré-definidos -->
                     <div id="team-card-slots-container" class="grid grid-cols-3 gap-2">
-                        <!-- Slots gerados dinamicamente pelos módulos -->
+                        <div id="trainer-card-slot-0" class="h-20"></div>
+                        <div id="trainer-card-slot-1" class="h-20"></div>
+                        <div id="trainer-card-slot-2" class="h-20"></div>
+                        <div id="trainer-card-slot-3" class="h-20"></div>
+                        <div id="trainer-card-slot-4" class="h-20"></div>
+                        <div id="trainer-card-slot-5" class="h-20"></div>
                     </div>
                 </div>
 
                 <!-- PAINEL DINÂMICO INFERIOR (Mochila / Itens / PC Box) -->
                 <div class="bg-[#16110d] border-2 border-amber-900/70 p-3 rounded-xl space-y-2">
                     <div class="flex justify-between items-center text-xs border-b border-amber-900/40 pb-1">
-                        <span class="text-amber-300 font-bold">🎒 Mochila & Inventário</span>
+                        <span id="bottom-panel-title" class="text-amber-300 font-bold">🎒 Mochila & Inventário</span>
                         <div class="flex gap-1 text-[9px]">
                             <button onclick="window.currentBottomView='inventory'; if(typeof renderBottomPanel==='function') renderBottomPanel();" class="bg-amber-600 text-black px-2 py-0.5 rounded font-bold cursor-pointer">Mochila</button>
                             <button onclick="window.currentBottomView='pcbox'; if(typeof renderBottomPanel==='function') renderBottomPanel();" class="bg-slate-800 text-white px-2 py-0.5 rounded font-bold cursor-pointer">PC Box</button>
