@@ -29,13 +29,14 @@ function getTierColorClass(tier) {
     }
 }
 
-// Detetora robusta para vantagem de tipagem mesmo em tipos compostos
+// Detetora ultra-robusta para vantagem de tipagem em tipos compostos (ex: Fogo/Lutador)
 function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
     if (!attackerType || !defenderType) return 1.0;
     
     const parseTypes = (t) => {
-        if (Array.isArray(t)) return t.map(x => String(x).toLowerCase());
-        return String(t).toLowerCase().split(/[\/\s,]+/);
+        if (Array.isArray(t)) return t.map(x => String(x).toLowerCase().trim());
+        // Trata separação por barra /, vírgula , ou espaços
+        return String(t).toLowerCase().split(/[\/\s,]+/).filter(Boolean);
     };
 
     const attackerTypes = parseTypes(attackerType);
@@ -53,7 +54,7 @@ function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
     for (let a of attackerTypes) {
         for (let d of defenderTypes) {
             if (advantages[a] && advantages[a].includes(d)) {
-                return 1.5;
+                return 1.5; // Vantagem detetada com sucesso!
             }
         }
     }
@@ -85,7 +86,6 @@ export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa
     const level = Math.floor(Math.random() * (maxLevel - minLevel + 1)) + minLevel;
     const isShiny = Math.random() < 0.06; // 6% de chance
     
-    // Fórmulas de balanceamento competitivo ajustadas para dar bons status iniciais
     const maxHp = 20 + (level * 4);
     const calculatedStr = 5 + Math.floor(level * 0.9);
 
@@ -180,6 +180,11 @@ export function updateEncounterUIInfo() {
     const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex] || cp.activeTeam[0];
     if (!wild || !activeMon) return;
 
+    // Correção automática de segurança para status antigos desatualizados
+    if (activeMon.level && (!activeMon.str || activeMon.str < (4 + activeMon.level))) {
+        activeMon.str = 5 + Math.floor(activeMon.level * 0.9);
+    }
+
     const activeHp = activeMon.currentHp !== undefined ? activeMon.currentHp : (activeMon.maxHp || 20);
     const activeMaxHp = activeMon.maxHp || activeMon.hp || 20;
     const wildHp = wild.currentHp !== undefined ? wild.currentHp : (wild.maxHp || 20);
@@ -193,7 +198,7 @@ export function updateEncounterUIInfo() {
         advantageBadgeHtml = `<span class="bg-red-700 text-white text-[9px] px-2 py-0.5 rounded font-black uppercase">⚠️ Desvantagem</span>`;
     }
 
-    const baseStr = (activeMon.str || (4 + activeMon.level)) + currentEncounterState.battlePowerBonus;
+    const baseStr = (activeMon.str || (5 + (activeMon.level * 0.9))) + currentEncounterState.battlePowerBonus;
     const estimatedPlayerPower = Math.round(baseStr * typeMult); 
     
     const isLegendary = (wild.tier === 5) || (wild.color && wild.color.toLowerCase() === 'amarelo');
@@ -229,7 +234,7 @@ export function updateEncounterUIInfo() {
             </div>
 
             <div class="w-full bg-black/90 text-amber-300 rounded-2xl p-3 text-center space-y-1.5 shadow-md border border-amber-500/40">
-                <p class="text-xs font-bold tracking-wide">HP: ${activeHp} / ${activeMaxHp} &nbsp;|&nbsp; STR: ${activeMon.str || (4 + activeMon.level)}</p>
+                <p class="text-xs font-bold tracking-wide">HP: ${activeHp} / ${activeMaxHp} &nbsp;|&nbsp; STR: ${activeMon.str || 5}</p>
                 <p class="text-[11px] font-black text-emerald-400 bg-emerald-950/90 rounded-xl px-2.5 py-1 border border-emerald-600">🎲 Soma Base: ~${estimatedPlayerPower} + [Dado]</p>
             </div>
             
@@ -398,7 +403,6 @@ function syncGameStateToCloud() {
     }
 }
 
-// Subida de nível equilibrada e competitiva (Ganha HP e STR consistentes)
 function addExperienceAndCheckEvolution(monster, expGain) {
     if (!monster) return;
     monster.exp = (monster.exp || 0) + expGain;
@@ -408,10 +412,9 @@ function addExperienceAndCheckEvolution(monster, expGain) {
         monster.level = (monster.level || 1) + 1;
         monster.exp -= nextLevelExp;
         
-        // Atributos ajustados para subida de nível mais competitiva
         monster.maxHp = (monster.maxHp || 20) + 5;
         monster.currentHp = monster.maxHp;
-        monster.str = (monster.str || 5) + 2; // Garante +2 de STR por nível para escalar perfeitamente
+        monster.str = (monster.str || 5) + 2;
 
         showCustomPopup("✨ SUBIDA DE NÍVEL!", `O teu ${monster.name} subiu para o Nível ${monster.level}!\nOs seus atributos melhoraram (STR +2, HP +5)!`, true);
 
