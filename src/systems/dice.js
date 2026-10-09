@@ -19,6 +19,24 @@ export function setupDiceListeners() {
             rollDiceForMovement();
         };
     }
+
+    const passTurnBtn = document.getElementById('pass-turn-btn');
+    if (passTurnBtn && !passTurnBtn.dataset.listenerAttached) {
+        passTurnBtn.dataset.listenerAttached = "true";
+        passTurnBtn.onclick = () => {
+            resetTurnDiceState();
+            // Avança o índice do jogador atual se houver multiplayer local ou IA
+            if (typeof gameState !== 'undefined' && gameState.players && Array.isArray(gameState.players)) {
+                gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
+            }
+            if (typeof showCustomPopup === 'function') {
+                showCustomPopup("Passagem de Turno", "🔄 O turno foi passado. O dado foi liberado para rolar novamente!", true);
+            }
+            if (typeof renderBoardMap === 'function') {
+                renderBoardMap();
+            }
+        };
+    }
 }
 
 // ------------------------------------------------------------
@@ -453,7 +471,7 @@ export function triggerWaypointEvent(waypointId) {
             window.boardPokemonCards = {};
         }
 
-        // Se ainda não houver Pokémon gerado nesta casa, cria um oculto (não revelado)
+        // Se ainda não houver Pokémon gerado nesta casa, gera um aleatório oculto
         if (!boardPokemonCards[waypointId]) {
             const catalog = typeof MONSTER_CATALOG !== 'undefined' ? MONSTER_CATALOG : [];
             if (catalog.length > 0) {
@@ -471,7 +489,7 @@ export function triggerWaypointEvent(waypointId) {
                     maxHp: 20 + (level * 2),
                     isShiny: isShiny,
                     waypointId: waypointId,
-                    revealed: false, // Oculto inicialmente até interagir/falhar
+                    revealed: true,
                     weakened: false
                 };
             }
@@ -479,7 +497,7 @@ export function triggerWaypointEvent(waypointId) {
 
         const wildPokemon = boardPokemonCards[waypointId];
         if (wildPokemon) {
-            wildPokemon.revealed = true; // Revela apenas ao pisar na casa
+            wildPokemon.revealed = true;
             if (typeof dailyFeaturedPokemonConfig !== 'undefined' && wildPokemon.id === dailyFeaturedPokemonConfig.pokemonId) {
                 if (typeof showCustomPopup === 'function') {
                     showCustomPopup("⭐ POKÉMON DO DIA ENCONTRADO!", `Este é o Anima em destaque de hoje (${dailyFeaturedPokemonConfig.pokemonName})! Ao capturá-lo, receberás o item bónus (${dailyFeaturedPokemonConfig.bonusItemName})!`, true);
@@ -503,6 +521,7 @@ export function triggerWaypointEvent(waypointId) {
         if (typeof triggerRandomBoardEvent === 'function') {
             triggerRandomBoardEvent(waypoint.name);
         }
+        return;
     }
 }
 
@@ -583,5 +602,8 @@ export function triggerRandomBoardEvent(waypointName) {
     }
 }
 
-// Expõe globalmente a função de reset do turno se necessário pelo gestor de turnos
+// Exposição Global Essencial para o HTML e outros scripts
+window.rollDiceForMovement = rollDiceForMovement;
+window.rollDice = rollDice;
+window.handleWaypointClick = handleWaypointClick;
 window.resetTurnDiceState = resetTurnDiceState;
