@@ -1,13 +1,30 @@
 // --- src/systems/pokedex.js ---
-// Pokédex Regional de Kanto (Fiel aos Jogos Clássicos & Calculadora de Tipos)
+// Pokédex Regional de Kanto (Estilo Moderno / Fiel às Referências)
 
-import { getCurrentPlayer } from '../core/state.js';
+import { gameState, getCurrentPlayer } from '../core/state.js';
+import { MONSTER_CATALOG } from '../config/cards-data.js';
 
-const MONSTER_CATALOG_REF = typeof MONSTER_CATALOG !== 'undefined' ? MONSTER_CATALOG : [];
+// Cores de fundo baseadas no tipo principal para dar o asseio visual da referência
+function getTypeCardColor(typeString) {
+    if (!typeString) return 'from-slate-800 to-slate-950 border-slate-700';
+    const primary = typeString.split('/')[0].trim().toLowerCase();
+    
+    switch (primary) {
+        case 'grama': return 'from-emerald-800/90 via-emerald-950 to-black border-emerald-500';
+        case 'fogo': return 'from-red-800/90 via-red-950 to-black border-red-500';
+        case 'água': return 'from-blue-800/90 via-blue-950 to-black border-blue-500';
+        case 'elétrico': return 'from-amber-700/90 via-yellow-950 to-black border-yellow-400';
+        case 'psíquico': return 'from-pink-800/90 via-purple-950 to-black border-pink-500';
+        case 'gelo': return 'from-cyan-800/90 via-sky-950 to-black border-cyan-400';
+        case 'veneno': return 'from-purple-800/90 via-purple-950 to-black border-purple-500';
+        case 'pedra': case 'terra': return 'from-stone-700/90 via-stone-900 to-black border-stone-500';
+        case 'inseto': return 'from-lime-800/90 via-lime-950 to-black border-lime-500';
+        default: return 'from-slate-800 to-black border-slate-600';
+    }
+}
 
 export function getTypeEffectivenessInfo(typeString) {
     if (!typeString) return { strong: 'Nenhum', weak: 'Nenhum' };
-    
     const primaryType = typeString.split('/')[0].trim().toLowerCase();
     
     const typeChart = {
@@ -54,28 +71,33 @@ export function openPokedexModal() {
 
     let gridHtml = '';
     let totalCapturedCount = 0;
-    const totalCatalogSize = MONSTER_CATALOG_REF.length;
+    const catalogList = MONSTER_CATALOG || [];
+    const totalCatalogSize = catalogList.length;
 
-    if (MONSTER_CATALOG_REF.length > 0) {
-        MONSTER_CATALOG_REF.forEach((mon, index) => {
+    if (totalCatalogSize > 0) {
+        catalogList.forEach((mon, index) => {
             const isCaptured = capturedIds.has(mon.id.toLowerCase()) || capturedIds.has(mon.name.toLowerCase());
             if (isCaptured) totalCapturedCount++;
             
             const dexNum = String(index + 1).padStart(3, '0');
+            const cardBgGradient = isCaptured ? getTypeCardColor(mon.type) : 'from-slate-900/80 via-black to-slate-950 border-slate-800';
             
             if (isCaptured) {
                 gridHtml += `
-                    <div onclick="openPokedexDetailCard('${mon.id}')" class="bg-gradient-to-b from-red-950/90 to-black border-2 border-red-500 rounded-2xl p-2.5 flex flex-col items-center justify-between cursor-pointer hover:scale-105 transition-all shadow-lg text-white group h-28">
-                        <span class="text-[9px] font-bold text-red-400 font-mono">Nº ${dexNum}</span>
-                        <img src="${mon.image}" class="w-12 h-12 object-contain drop-shadow group-hover:scale-110 transition-transform" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
-                        <span class="text-[10px] font-black truncate w-full text-center text-amber-300">${mon.name}</span>
+                    <div onclick="openPokedexDetailCard('${mon.id}')" class="bg-gradient-to-b ${cardBgGradient} border-2 rounded-2xl p-3 flex flex-col items-center justify-between cursor-pointer hover:scale-105 transition-all shadow-xl text-white group h-32 relative overflow-hidden">
+                        <div class="flex justify-between w-full items-center">
+                            <span class="text-[9px] font-black text-white/70 font-mono">#${dexNum}</span>
+                            ${mon.isShiny ? '<span class="text-[9px] bg-amber-400 text-black px-1 rounded font-bold animate-pulse">✨</span>' : ''}
+                        </div>
+                        <img src="${mon.image}" class="w-14 h-14 object-contain drop-shadow-[0_5px_5px_rgba(0,0,0,0.8)] group-hover:scale-110 transition-transform my-auto" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                        <span class="text-[11px] font-black uppercase tracking-wider truncate w-full text-center text-amber-300 drop-shadow">${mon.name}</span>
                     </div>
                 `;
             } else {
                 gridHtml += `
-                    <div class="bg-black/65 border-2 border-slate-800 rounded-2xl p-2.5 flex flex-col items-center justify-between opacity-60 text-slate-600 h-28">
-                        <span class="text-[9px] font-bold font-mono text-slate-500">Nº ${dexNum}</span>
-                        <div class="w-12 h-12 flex items-center justify-center text-xl text-slate-500 font-bold bg-slate-950/50 rounded-xl border border-slate-800">❓</div>
+                    <div class="bg-black/80 border-2 border-slate-800/80 rounded-2xl p-3 flex flex-col items-center justify-between opacity-50 h-32">
+                        <span class="text-[9px] font-bold font-mono text-slate-500">#${dexNum}</span>
+                        <div class="w-12 h-12 flex items-center justify-center text-lg text-slate-600 font-bold bg-slate-900/60 rounded-xl border border-slate-800">❓</div>
                         <span class="text-[10px] font-bold truncate w-full text-center text-slate-600">--------</span>
                     </div>
                 `;
@@ -89,7 +111,7 @@ export function openPokedexModal() {
         <div class="trainer-card max-w-3xl w-full p-6 space-y-4 border-4 border-red-600 rounded-3xl bg-gradient-to-b from-[#1c0f0f] to-[#070404] shadow-2xl text-white">
             <div class="flex justify-between items-center border-b border-red-900/60 pb-3">
                 <div class="flex items-center gap-2">
-                    <div class="w-4 h-4 rounded-full bg-blue-500 border-2 border-white shadow-inner animate-pulse"></div>
+                    <div class="w-4 h-4 rounded-full bg-red-500 border-2 border-white shadow-inner animate-pulse"></div>
                     <span class="text-xs font-black text-red-400 font-cinzel tracking-wider">POKÉDEX REGIONAL (KANTO)</span>
                 </div>
                 <div class="text-[10px] bg-black/60 px-3 py-1 rounded-full border border-red-900 font-mono text-amber-300">
@@ -97,7 +119,7 @@ export function openPokedexModal() {
                 </div>
                 <button onclick="document.getElementById('pokedex-modal').remove()" class="text-red-400 hover:text-white font-bold text-sm px-2.5 py-0.5 bg-black/60 rounded border border-red-800 cursor-pointer">✕ Fechar</button>
             </div>
-            <div class="grid grid-cols-4 sm:grid-cols-6 gap-3 max-h-[420px] overflow-y-auto p-1 pr-2">
+            <div class="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[440px] overflow-y-auto p-1 pr-2">
                 ${gridHtml}
             </div>
         </div>
@@ -106,8 +128,8 @@ export function openPokedexModal() {
 }
 
 export function openPokedexDetailCard(monsterId) {
-    if (MONSTER_CATALOG_REF.length === 0) return;
-    const baseMon = MONSTER_CATALOG_REF.find(m => m.id === monsterId);
+    if (!MONSTER_CATALOG || MONSTER_CATALOG.length === 0) return;
+    const baseMon = MONSTER_CATALOG.find(m => m.id === monsterId);
     if (!baseMon) return;
 
     const cp = getCurrentPlayer();
@@ -117,11 +139,12 @@ export function openPokedexDetailCard(monsterId) {
 
     const isShiny = ownedMon ? ownedMon.isShiny : false;
     const currentLevel = ownedMon ? (ownedMon.level || baseMon.level || 1) : (baseMon.level || 1);
-    const currentHp = ownedMon ? (ownedMon.maxHp || baseMon.hp || 20) : (baseMon.hp || 20);
-    const currentStr = ownedMon ? (ownedMon.str || baseMon.str || 4) : (baseMon.str || 4);
+    const currentHp = ownedMon ? (ownedMon.maxHp || baseMon.hp || 25) : (baseMon.hp || 25);
+    const currentStr = ownedMon ? (ownedMon.str || baseMon.str || 5) : (baseMon.str || 5);
     const monImage = (isShiny && baseMon.shinyImage) ? baseMon.shinyImage : baseMon.image;
     
     const typeInfo = getTypeEffectivenessInfo(baseMon.type);
+    const typesArray = baseMon.type ? baseMon.type.split('/').map(t => t.trim()) : ['Normal'];
 
     let detailModal = document.getElementById('pokedex-detail-modal');
     if (!detailModal) {
@@ -131,45 +154,79 @@ export function openPokedexDetailCard(monsterId) {
         document.body.appendChild(detailModal);
     }
 
-    const dexIndex = MONSTER_CATALOG_REF.findIndex(m => m.id === monsterId);
+    const dexIndex = MONSTER_CATALOG.findIndex(m => m.id === monsterId);
     const dexNumStr = String(baseMon.dexNumber || (dexIndex !== -1 ? dexIndex + 1 : 1)).padStart(3, '0');
 
+    // Cálculo das barras de estatísticas estilo a referência visual
+    const maxStat = 150;
+    const hpPercent = Math.min(100, Math.round((currentHp / maxStat) * 100));
+    const strPercent = Math.min(100, Math.round((currentStr * 10 / maxStat) * 100));
+
+    let typesBadgesHtml = '';
+    typesArray.forEach(t => {
+        typesBadgesHtml += `<span class="bg-black/40 border border-white/20 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider text-amber-200">${t}</span>`;
+    });
+
     detailModal.innerHTML = `
-        <div class="trainer-card max-w-md w-full p-6 space-y-4 border-4 ${isShiny ? 'border-yellow-400 bg-gradient-to-b from-yellow-950/90 to-[#0a0705]' : 'border-red-600 bg-gradient-to-b from-[#1c0f0f] to-[#070404]'} shadow-2xl text-white relative">
-            <div class="flex justify-between items-center border-b border-red-900/60 pb-2">
-                <span class="text-xs font-black text-red-400 font-cinzel">📖 Nº ${dexNumStr} - ${baseMon.name}${isShiny ? ' ✨ [SHINY]' : ''}</span>
-                <button onclick="document.getElementById('pokedex-detail-modal').remove()" class="text-red-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-red-800 cursor-pointer">✕</button>
+        <div class="trainer-card max-w-sm w-full p-0 overflow-hidden border-4 border-red-500 rounded-3xl bg-gradient-to-b from-[#16110d] to-black shadow-2xl text-white relative">
+            <!-- Cabeçalho colorido estilo app de pokedex -->
+            <div class="bg-gradient-to-r from-red-600 to-amber-600 p-5 flex flex-col items-center relative shadow-lg">
+                <button onclick="document.getElementById('pokedex-detail-modal').remove()" class="absolute top-3 right-3 text-white font-bold bg-black/40 hover:bg-black/70 px-2.5 py-1 rounded-full text-xs cursor-pointer">✕</button>
+                <span class="absolute top-3 left-3 text-xs font-black font-mono text-amber-200">#${dexNumStr}</span>
+                
+                <div class="w-32 h-32 bg-black/30 rounded-full border-4 border-white/30 flex items-center justify-center p-2 shadow-inner my-2 relative">
+                    <img src="${monImage}" class="w-28 h-28 object-contain drop-shadow-[0_8px_10px_rgba(0,0,0,0.9)]" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                    ${isShiny ? '<span class="absolute bottom-0 right-0 text-xs bg-amber-400 text-black px-1.5 rounded-full font-bold">✨</span>' : ''}
+                </div>
+                
+                <h2 class="text-xl font-black uppercase tracking-widest text-white drop-shadow">${baseMon.name}</h2>
+                <div class="flex gap-2 mt-2">
+                    ${typesBadgesHtml}
+                </div>
             </div>
 
-            <div class="flex flex-col items-center space-y-3">
-                <div class="w-32 h-32 bg-black/70 border-2 ${isShiny ? 'border-yellow-400 shadow-[0_0_20px_rgba(255,215,0,0.6)]' : 'border-red-500'} rounded-2xl flex items-center justify-center p-2 relative shadow-inner">
-                    <img src="${monImage}" class="w-28 h-28 object-contain drop-shadow-2xl" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
-                    ${isShiny ? '<span class="absolute top-1 right-1 text-sm bg-black/50 px-1 rounded">✨</span>' : ''}
-                </div>
-
-                <div class="text-center">
-                    <h3 class="text-base font-black text-amber-300">${baseMon.name}</h3>
-                    <p class="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Tipo: <span class="text-white">${baseMon.type}</span> | Estágio: <span class="text-white">${baseMon.stage || 'N/A'}</span></p>
-                </div>
-
-                <div class="grid grid-cols-2 gap-2 w-full bg-black/50 p-3 rounded-xl border border-red-900/50 text-xs shadow-inner">
-                    <div>❤ HP Base/Máx: <span class="font-bold text-emerald-400">${currentHp}</span></div>
-                    <div>⚔ Força (STR): <span class="font-bold text-amber-400">${currentStr}</span></div>
-                    <div>⭐ Raridade Tier: <span class="font-bold text-purple-400">${baseMon.rarity || 'Normal'}</span></div>
-                    <div>📈 Nível Registo: <span class="font-bold text-blue-400">Nv.${currentLevel}</span></div>
-                </div>
-
-                <div class="w-full bg-black/60 p-3 rounded-xl border border-red-900/50 space-y-1.5 text-[10px]">
-                    <div class="text-amber-400 font-bold border-b border-red-900/40 pb-1 flex items-center gap-1">
-                        <i class="fa-solid fa-bolt"></i> Vantagens & Fraquezas de Tipo:
+            <!-- Corpo dos Detalhes / Base Stats -->
+            <div class="p-5 space-y-4">
+                <div class="grid grid-cols-2 gap-2 bg-black/60 p-3 rounded-2xl border border-red-900/50 text-center text-xs">
+                    <div>
+                        <span class="text-[9px] text-slate-400 block font-bold">NÍVEL REGISTO</span>
+                        <span class="font-black text-blue-400 text-sm">Nv. ${currentLevel}</span>
                     </div>
-                    <div>🟢 <span class="text-emerald-400 font-bold">Super Efetivo contra:</span> ${typeInfo.strong}</div>
-                    <div>🔴 <span class="text-red-400 font-bold">Fraco contra:</span> ${typeInfo.weak}</div>
+                    <div>
+                        <span class="text-[9px] text-slate-400 block font-bold">RARIDADE TIER</span>
+                        <span class="font-black text-purple-400 text-sm">Tier ${baseMon.tier || 1}</span>
+                    </div>
                 </div>
 
-                <div class="w-full text-center bg-red-950/40 p-2.5 rounded-xl border border-red-800/50 text-[10px] text-amber-200 shadow">
-                    ${baseMon.evolvesTo ? `🔄 Evolui para: <span class="font-bold uppercase text-white">${baseMon.evolvesTo}</span> (A partir do Nível ${baseMon.evolutionLevel || 16})` : '✨ Forma final de evolução detetada!'}
+                <div class="space-y-2 bg-black/40 p-3.5 rounded-2xl border border-red-900/40">
+                    <h4 class="text-[10px] font-black text-amber-400 uppercase tracking-wider text-center border-b border-red-900/50 pb-1">Base Stats</h4>
+                    
+                    <div class="space-y-1.5 text-[10px]">
+                        <div>
+                            <div class="flex justify-between font-bold mb-0.5"><span>HP</span><span>${currentHp} / 150</span></div>
+                            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden border border-slate-700">
+                                <div class="bg-red-500 h-full rounded-full" style="width: ${hpPercent}%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between font-bold mb-0.5"><span>ATK (STR)</span><span>${currentStr * 10} / 150</span></div>
+                            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden border border-slate-700">
+                                <div class="bg-amber-400 h-full rounded-full" style="width: ${strPercent}%"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+
+                <div class="bg-red-950/40 border border-red-800/40 p-3 rounded-2xl text-[10px] space-y-1 text-center">
+                    <div class="text-emerald-400 font-bold">🟢 Vantagem: ${typeInfo.strong}</div>
+                    <div class="text-red-400 font-bold">🔴 Fraqueza: ${typeInfo.weak}</div>
+                </div>
+
+                ${baseMon.evolvesTo ? `
+                    <div class="text-center text-[10px] text-amber-300 font-bold bg-black/60 p-2.5 rounded-xl border border-amber-500/30">
+                        🔄 Evolui para <span class="uppercase text-white">${baseMon.evolvesTo}</span> no Nv.${baseMon.evolutionLevel || 16}
+                    </div>
+                ` : ''}
             </div>
         </div>
     `;
