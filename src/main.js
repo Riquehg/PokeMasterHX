@@ -21,7 +21,7 @@ import { openEncounterModalWithPokemon, fleeEncounter } from './systems/encounte
 import { renderTeamCardSlots, renderBottomPanel, changePcBoxPage } from './systems/pcbox.js';
 import { openPokedexModal, openPokedexDetailCard } from './systems/pokedex.js';
 import { openVaultModal } from './systems/vault.js';
-import { initializeSocketConnection } from './core/socket.js';
+import { initializeSocketConnection, emitSocket } from './core/socket.js';
 
 // ==========================================
 // EXPOSIÇÃO GLOBAL PARA O HTML (Evita erros de onclick)
@@ -47,7 +47,7 @@ window.openVaultModal = openVaultModal;
 document.addEventListener('DOMContentLoaded', () => {
     console.log("🚀 Inicializando o Motor Modular do Jogo (Partes 1, 2 & 3)...");
 
-    // Inicializa o Socket.io
+    // Inicializa o Socket.io[cite: 10]
     initializeSocketConnection();
 
     // 1. Tenta carregar um save existente ou inicializa um estado padrão
@@ -73,11 +73,9 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log("✅ Jogo inicializado com sucesso!");
 });
 
-// Configura o fluxo de autenticação e transição controlada para o menu/jogo
+// Configura o fluxo de autenticação e comunicação com o servidor online
 function setupAuthenticationListeners() {
     const submitBtn = document.getElementById('auth-submit-btn');
-    const trainerMainMenu = document.getElementById('trainer-main-menu');
-    const authContainer = document.getElementById('auth-container');
 
     if (submitBtn) {
         submitBtn.onclick = () => {
@@ -92,16 +90,10 @@ function setupAuthenticationListeners() {
                 return;
             }
 
-            console.log("🔐 Autenticando treinador:", email);
-
-            if (authContainer) authContainer.classList.add('hidden');
-            if (trainerMainMenu) trainerMainMenu.classList.remove('hidden');
-
-            const player = getCurrentPlayer();
-            if (player) {
-                player.email = email;
-            }
-            saveGameProgress();
+            console.log("🔐 A enviar credenciais para o servidor:", email);
+            
+            // Envia o pedido de login/registo real via Socket.io para o Render/Supabase
+            emitSocket('player_login', { email, password });
         };
     }
 
@@ -124,7 +116,8 @@ function setupAuthenticationListeners() {
 
     const onlineBtn = document.getElementById('hub-online-btn');
     const onlineLobby = document.getElementById('online-lobby-container');
-    if (onlineBtn && onlineLobby) {
+    const trainerMainMenu = document.getElementById('trainer-main-menu');
+    if (onlineBtn && onlineLobby && trainerMainMenu) {
         onlineBtn.onclick = () => {
             trainerMainMenu.classList.add('hidden');
             onlineLobby.classList.remove('hidden');
@@ -132,13 +125,42 @@ function setupAuthenticationListeners() {
     }
 
     const lobbyBackBtn = document.getElementById('lobby-back-btn');
-    if (lobbyBackBtn && onlineLobby) {
+    if (lobbyBackBtn && onlineLobby && trainerMainMenu) {
         lobbyBackBtn.onclick = () => {
             onlineLobby.classList.add('hidden');
             trainerMainMenu.classList.remove('hidden');
         };
     }
 }
+
+// Gestor global da resposta de autenticação recebida do servidor
+window.handleLoginResponse = function(response) {
+    if (!response || response.success !== true) {
+        alert(response?.message || 'Erro ao autenticar no servidor.');
+        return;
+    }
+
+    console.log("✅ Resposta de login recebida com sucesso:", response);
+
+    // Se for uma conta nova registada, esconde o ecrã de auth e abre a criação de personagem[cite: 9]
+    if (response.isNew || response.newAccount) {
+        document.getElementById('auth-container')?.classList.add('hidden');
+        if (typeof window.openCharacterCreationMode === 'function') {
+            window.openCharacterCreationMode();
+        }
+        return;
+    }
+
+    // Se já tiver dados na base de dados, entra direto no menu principal do treinador
+    document.getElementById('auth-container')?.classList.add('hidden');
+    document.getElementById('trainer-main-menu')?.classList.remove('hidden');
+
+    const player = getCurrentPlayer();
+    if (player && response.profileData) {
+        Object.assign(player, response.profileData);
+        saveGameProgress();
+    }
+};
 
 // Carrega o Pokémon do dia de forma aleatória para o banner inicial
 function loadDailyPokemonPreview() {
