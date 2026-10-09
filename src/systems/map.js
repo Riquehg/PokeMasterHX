@@ -618,6 +618,10 @@ function animateTokenMovement(newPositionIndex) {
     }
     renderBoardMap();
 }
+// Função de atalho para o módulo do dado (evita erros de importação)
+export function moveTokenToWaypoint(waypointId) {
+    renderBoardMap();
+}
 
 // ==========================================
 // EXPOSIÇÃO GLOBAL PARA O HTML
@@ -626,3 +630,4 @@ window.onHexClick = onHexClick;
 window.tryInteractWithCity = tryInteractWithCity;
 window.tryInteractWithWeakenedPokemon = tryInteractWithWeakenedPokemon;
 window.renderBoardMap = renderBoardMap;
+
