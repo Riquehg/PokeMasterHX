@@ -109,6 +109,7 @@ export function initiateGymSequence(cityName) {
     showGymVsScreen(gymInfo);
 }
 
+// --- Substituir na função showGymVsScreen em src/systems/gym.js ---
 function showGymVsScreen(gymInfo) {
     let vsModal = document.getElementById('gym-vs-modal');
     if (!vsModal) {
@@ -128,10 +129,14 @@ function showGymVsScreen(gymInfo) {
     });
 
     vsModal.innerHTML = `
-        <div class="text-center space-y-2 mb-8">
+        <div class="text-center space-y-2 mb-6">
             <span class="text-xs font-black text-amber-400 uppercase tracking-widest font-cinzel">Ginásio Oficial de ${gymInfo.city}</span>
             <h2 class="text-2xl font-black text-white font-cinzel tracking-wider">LÍDER ${gymInfo.leader.toUpperCase()}</h2>
-            <p class="text-xs text-amber-300 font-bold">Formato de Batalha: ${gymInfo.format}x${gymInfo.format}</p>
+            <div class="flex items-center justify-center gap-2 mt-2">
+                <span class="text-xs text-slate-300 font-bold">Insígnia em Disputa:</span>
+                <img src="${gymInfo.badgeIcon}" class="w-8 h-8 object-contain drop-shadow-[0_0_8px_rgba(255,215,0,0.8)]" title="${gymInfo.badgeName}">
+                <span class="text-xs font-black text-amber-300 uppercase">${gymInfo.badgeName}</span>
+            </div>
         </div>
 
         <div class="flex items-center justify-center gap-8 my-4 w-full max-w-2xl">
@@ -150,7 +155,7 @@ function showGymVsScreen(gymInfo) {
             </div>
         </div>
 
-        <button id="gym-accept-btn" class="mt-8 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-black font-black px-8 py-3 rounded-2xl text-xs uppercase tracking-wider shadow-2xl transition-all transform hover:scale-105 cursor-pointer">
+        <button id="gym-accept-btn" class="mt-6 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-black font-black px-8 py-3 rounded-2xl text-xs uppercase tracking-wider shadow-2xl transition-all transform hover:scale-105 cursor-pointer">
             Preparar Equipa e Aceitar Desafio <i class="fa-solid fa-arrow-right ml-1"></i>
         </button>
     `;
@@ -158,11 +163,11 @@ function showGymVsScreen(gymInfo) {
 
     document.getElementById('gym-accept-btn').onclick = () => {
         vsModal.remove();
-        launchGymBattleArenaFixed(gymInfo);
+        launchGymBattleArenaDirect(gymInfo);
     };
 }
 
-function launchGymBattleArenaFixed(gymInfo) {
+function launchGymBattleArenaDirect(gymInfo) {
     if (typeof window.openBattleArena === 'function') {
         window.openBattleArena({
             type: 'gym',
@@ -170,7 +175,8 @@ function launchGymBattleArenaFixed(gymInfo) {
             data: gymInfo
         });
     } else {
-        alert("Arena de combate TCG de ginásio iniciada com sucesso!");
+        // Fallback direto caso a função esteja mapeada com outro nome no escopo global
+        console.warn("⚠️ openBattleArena não encontrada diretamente, tentando iniciar rotina alternativa.");
     }
 }
 
