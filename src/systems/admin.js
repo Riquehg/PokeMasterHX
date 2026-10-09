@@ -1,16 +1,18 @@
 // --- src/systems/admin.js ---
-// Painel Administrativo, Controlo de Contas e Configuração Inicial
+// Painel Administrativo Completo, Controlo de Contas e Configuração do Pokémon do Dia
 
 import { gameState, ensureValidGameState, getCurrentPlayer } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
 import { emitSocket } from '../core/socket.js';
 
 let adminUsersListenerRegistered = false;
+
 export const dailyFeaturedPokemonConfig = {
     pokemonId: 'charizard',
     pokemonName: 'Charizard',
     bonusItem: 'ball_ultra',
-    bonusItemName: 'ULTRA BALL'
+    bonusItemName: 'ULTRA BALL',
+    goldBonus: 500
 };
 
 export function handleAdminUsersList(users) {
@@ -46,10 +48,13 @@ export function openAdminPanelModal() {
     const sock = typeof window.socket !== 'undefined' ? window.socket : null;
     if (sock && typeof sock.on === 'function' && !adminUsersListenerRegistered) {
         sock.on('admin_users_list', handleAdminUsersList);
+        sock.on('admin_error', (err) => {
+            alert(err?.message || 'Erro no painel administrativo.');
+        });
         adminUsersListenerRegistered = true;
     }
 
-    emitSocket('admin_get_users');
+    emitSocket('admin_get_users', { adminToken: password });
     adminModal.classList.remove('hidden');
 }
 
@@ -61,11 +66,11 @@ export function renderAdminDashboard(modalElement, users) {
     ` : safeUsers.map(user => {
         const email = user?.email || '';
         const trainerName = user?.trainerName || user?.trainer_name || user?.name || 'N/D';
-        const lastLogin = user?.lastLogin ? new Date(user.lastLogin).toLocaleString('pt-BR') : 'Nunca';
+        const lastLogin = user?.lastLogin ? new Date(user.lastLogin).toLocaleString('pt-BR') : 'Ativo';
         const gold = Number(user?.gold || user?.profile_data?.gold || 0);
 
         return `
-            <tr class="border-b border-red-900/40 text-[10px] hover:bg-red-950/20">
+            <tr class="border-b border-red-900/40 text-[11px] hover:bg-red-950/20">
                 <td class="p-2 font-bold text-amber-300">${email}</td>
                 <td class="p-2 text-slate-300">${trainerName}</td>
                 <td class="p-2 text-slate-400">${lastLogin}</td>
@@ -87,13 +92,23 @@ export function renderAdminDashboard(modalElement, users) {
         <div class="trainer-card max-w-5xl w-full p-6 space-y-4 border-4 border-red-600 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
             <div class="flex justify-between items-center border-b border-red-900 pb-2">
                 <span class="text-xs font-black text-red-400 font-cinzel"><i class="fa-solid fa-shield-halved"></i> PAINEL DO ADMINISTRADOR COMPLETO</span>
-                <button type="button" id="close-admin-panel-button" class="text-red-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-red-800">✕ Fechar</button>
+                <button type="button" id="close-admin-panel-button" class="text-red-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-red-800 cursor-pointer">✕ Fechar</button>
             </div>
+            
+            <!-- Configuração do Pokémon do Dia / Bônus -->
+            <div class="bg-black/60 p-3 rounded-xl border border-red-900/60 flex items-center justify-between">
+                <div>
+                    <span class="text-[10px] text-amber-400 font-bold block">🌟 Pokémon de Destaque Atual (Bônus de Captura)</span>
+                    <span class="text-xs font-black text-white" id="admin-current-daily-label">${dailyFeaturedPokemonConfig.pokemonName} (Bônus: ${dailyFeaturedPokemonConfig.bonusItemName})</span>
+                </div>
+                <button type="button" id="configure-daily-pokemon-btn" class="bg-amber-600 hover:bg-amber-500 text-black px-3 py-1.5 rounded-lg text-xs font-black cursor-pointer">⚙️ Configurar Destaque</button>
+            </div>
+
             <div class="flex justify-between items-center">
-                <span class="text-xs font-bold text-slate-300">Total de contas cadastradas: <span class="text-amber-400">${safeUsers.length}</span></span>
+                <span class="text-xs font-bold text-slate-300">Total de contas cadastradas na nuvem: <span class="text-amber-400">${safeUsers.length}</span></span>
                 <button type="button" id="refresh-admin-users-button" class="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-1 rounded border border-red-700 cursor-pointer">🔄 Atualizar Lista</button>
             </div>
-            <div class="max-h-80 overflow-y-auto border border-red-900/60 rounded-xl bg-black/60 p-2">
+            <div class="max-h-72 overflow-y-auto border border-red-900/60 rounded-xl bg-black/60 p-2">
                 <table class="w-full text-left border-collapse">
                     <thead>
                         <tr class="border-b border-red-900 text-[10px] text-red-300 uppercase">
@@ -120,6 +135,15 @@ export function renderAdminDashboard(modalElement, users) {
         emitSocket('admin_get_users');
     });
 
+    document.getElementById('configure-daily-pokemon-btn')?.addEventListener('click', () => {
+        const newMon = window.prompt('Insira o nome ou ID do novo Pokémon de Destaque do Dia:', dailyFeaturedPokemonConfig.pokemonId);
+        if (!newMon) return;
+        dailyFeaturedPokemonConfig.pokemonId = newMon.trim().toLowerCase();
+        dailyFeaturedPokemonConfig.pokemonName = newMon.charAt(0).toUpperCase() + newMon.slice(1);
+        alert(`✅ Pokémon de Destaque alterado para ${dailyFeaturedPokemonConfig.pokemonName}!`);
+        document.getElementById('admin-current-daily-label').textContent = `${dailyFeaturedPokemonConfig.pokemonName} (Bônus ativo)`;
+    });
+
     modalElement.querySelectorAll('[data-admin-action]').forEach(button => {
         button.addEventListener('click', () => {
             const action = button.dataset.adminAction;
@@ -140,112 +164,40 @@ export function adminGiveGold(email) {
     if (amount <= 0) return;
 
     emitSocket('admin_action', { action: 'give_gold', email, amount });
-    setTimeout(() => emitSocket('admin_get_users'), 500);
+    setTimeout(() => emitSocket('admin_get_users'), 600);
 }
 
 export function adminGivePokemon(email) {
-    const monId = window.prompt(`Insira o ID ou número do Pokémon para enviar ao treinador ${email}:`, 'charizard');
+    const monId = window.prompt(`Insira o ID do Pokémon (ex: charizard, mewtwo, pikachu) para ${email}:`, 'charizard');
     if (!monId) return;
-    emitSocket('admin_action', { action: 'give_pokemon', email, pokemonId: monId.trim().toLowerCase() });
+    emitSocket('admin_action', { 
+        action: 'give_pokemon', 
+        email, 
+        pokemon: { id: monId.trim().toLowerCase(), name: monId.charAt(0).toUpperCase() + monId.slice(1), level: 5 } 
+    });
+    alert(`👾 Pedido para enviar Pokémon enviado para ${email}`);
 }
 
 export function adminGiveItem(email) {
-    const itemId = window.prompt(`Insira o ID do item para enviar ao treinador ${email}:`, 'ball_ultra');
+    const itemId = window.prompt(`Insira o ID do item (ex: ball_ultra, potion, rare_candy) para ${email}:`, 'ball_ultra');
     if (!itemId) return;
     const qtyText = window.prompt(`Insira a quantidade:`, '5');
-    const quantity = Math.max(1, Number(qtyText) || 1);
-    emitSocket('admin_action', { action: 'give_item', email, itemId: itemId.trim().toLowerCase(), quantity });
+    const count = Math.max(1, Number(qtyText) || 1);
+    emitSocket('admin_action', { action: 'give_item', email, itemId: itemId.trim().toLowerCase(), count });
+    alert(`🎒 Pedido para enviar itens enviado para ${email}`);
 }
 
 export function adminResetPassword(email) {
     const newPassword = window.prompt(`Insira a nova senha temporária para ${email}:`, '');
-    if (!newPassword || newPassword.length < 6) return;
-    emitSocket('admin_action', { action: 'reset_password', email, newPassword });
+    if (!newPassword || newPassword.length < 4) return;
+    emitSocket('admin_action', { action: 'reset_password', email, newPass: newPassword });
+    alert(`🔑 Senha alterada com sucesso para ${email}`);
 }
 
 export function adminDeleteAccount(email) {
     if (!window.confirm(`⚠️ Tem certeza absoluta de que deseja apagar a conta ${email}?`)) return;
     emitSocket('admin_action', { action: 'delete_account', email });
-    setTimeout(() => emitSocket('admin_get_users'), 500);
+    setTimeout(() => emitSocket('admin_get_users'), 600);
 }
 
 window.openAdminPanelModal = openAdminPanelModal;
-window.openCharacterCreationMode = function () {
-    document.getElementById('auth-container')?.classList.add('hidden');
-    document.getElementById('trainer-main-menu')?.classList.add('hidden');
-    document.getElementById('character-creation-container')?.classList.remove('hidden');
-};
-
-window.selectAvatar = function(id) {
-    window.selectedAvatarId = id;
-    document.querySelectorAll('.avatar-option').forEach(el => {
-        el.classList.remove('border-amber-400');
-        el.classList.add('border-blue-900');
-    });
-    document.querySelector(`[data-avatar="${id}"]`)?.classList.replace('border-blue-900', 'border-amber-400');
-};
-
-window.selectStarter = function(starterName) {
-    window.selectedStarterPokemon = starterName.toLowerCase();
-    document.querySelectorAll('.starter-option').forEach(el => {
-        el.classList.remove('border-amber-400', 'bg-amber-950/60');
-        el.classList.add('border-blue-900', 'bg-black/40');
-    });
-    document.getElementById(`starter-${starterName.toLowerCase()}`)?.classList.replace('border-blue-900', 'border-amber-400');
-};
-
-window.finalizeCharacterCreation = function () {
-    const nameInput = document.getElementById('setup-trainer-name');
-    const trainerName = nameInput && nameInput.value.trim() ? nameInput.value.trim() : 'Treinador';
-
-    const existingPlayer = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : null;
-    const preservedGold = existingPlayer && existingPlayer.gold !== undefined ? existingPlayer.gold : 350;
-    const preservedPcBox = existingPlayer && Array.isArray(existingPlayer.pcBox) ? existingPlayer.pcBox : [];
-    const preservedInventory = existingPlayer && Array.isArray(existingPlayer.inventory) ? existingPlayer.inventory : [];
-
-    const starterKey = (window.selectedStarterPokemon || 'bulbasaur').toLowerCase();
-    const starterMap = {
-        'bulbasaur': { id: 'bulbasaur', name: 'Bulbasaur', dexNumber: '001', level: 5 },
-        'charmander': { id: 'charmander', name: 'Charmander', dexNumber: '004', level: 5 },
-        'squirtle': { id: 'squirtle', name: 'Squirtle', dexNumber: '007', level: 5 },
-        'pikachu': { id: 'pikachu', name: 'Pikachu', dexNumber: '025', level: 5 }
-    };
-
-    const chosenStarter = starterMap[starterKey] || starterMap['bulbasaur'];
-    chosenStarter.image = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/${chosenStarter.dexNumber}.png`;
-
-    if (typeof gameState !== 'undefined') {
-        gameState.turn = 1;
-        gameState.currentPlayerIndex = 0;
-        gameState.players = [{
-            name: trainerName,
-            avatarId: window.selectedAvatarId || 1,
-            currentZone: 5,
-            level: 1,
-            gold: preservedGold,
-            badges: [],
-            activeTeam: [chosenStarter],
-            pcBox: preservedPcBox,
-            inventory: preservedInventory,
-            equipmentSlots: [null, null]
-        }];
-    }
-
-    ensureValidGameState();
-    saveGameProgress();
-
-    document.getElementById('character-creation-container')?.classList.add('hidden');
-    document.getElementById('setup-screen')?.classList.add('hidden');
-    document.getElementById('main-game-layout')?.classList.remove('hidden');
-
-    if (typeof showCustomPopup === 'function') {
-        showCustomPopup('Nova Jornada Iniciada', `Boa sorte, ${trainerName}! Começou com ${chosenStarter.name}.`, true);
-    }
-};
-
-window.backToMainMenu = function () {
-    document.getElementById('character-creation-container')?.classList.add('hidden');
-    document.getElementById('online-lobby-container')?.classList.add('hidden');
-    document.getElementById('auth-container')?.classList.add('hidden');
-    document.getElementById('trainer-main-menu')?.classList.remove('hidden');
-};
