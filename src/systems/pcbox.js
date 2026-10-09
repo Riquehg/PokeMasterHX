@@ -2,7 +2,7 @@
 // Subsistema de Gestão de Equipa, PC Box, Paginação, Drag-and-Drop, XP e Evoluções
 
 import { gameState, getCurrentPlayer } from '../core/state.js';
-import { SUPABASE_STORAGE_URL } from '../config/supabase-config.js';
+import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 
 // Catálogo básico de monstros para referência de evolução (caso não esteja global)
 const MONSTER_CATALOG_REF = typeof MONSTER_CATALOG !== 'undefined' ? MONSTER_CATALOG : [];
