@@ -17,6 +17,30 @@ export function getTierColorClass(tier) {
     }
 }
 
+// Função auxiliar unificada para obter o sprite correto do Pokémon (com suporte a Shiny, dex e catálogo)
+function getMonsterSprite(monster) {
+    if (!monster) return '';
+    if (monster.isShiny && monster.shinyImage) return monster.shinyImage;
+    if (monster.image) return monster.image;
+    
+    const catalogMatch = MONSTER_CATALOG_REF.find(m => m.id === (monster.catalogId || monster.id) || m.name.toLowerCase() === monster.name.toLowerCase());
+    if (catalogMatch) {
+        if (monster.isShiny && catalogMatch.shinyImage) return catalogMatch.shinyImage;
+        if (catalogMatch.image) return catalogMatch.image;
+        if (catalogMatch.dexNumber) {
+            const dex = String(catalogMatch.dexNumber).padStart(3, '0');
+            return monster.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${dex}.png` : `${SUPABASE_STORAGE_URL}monsters/${dex}.png`;
+        }
+    }
+    
+    if (monster.dexNumber) {
+        const dex = String(monster.dexNumber).padStart(3, '0');
+        return monster.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${dex}.png` : `${SUPABASE_STORAGE_URL}monsters/${dex}.png`;
+    }
+
+    return '';
+}
+
 export function handleDragStart(e, sourceArea, index) {
     e.dataTransfer.setData('text/plain', JSON.stringify({ sourceArea, index }));
 }
@@ -77,9 +101,9 @@ export function renderTeamCardSlots() {
 
         const monster = cp.activeTeam ? cp.activeTeam[i] : null;
         if (monster) {
-            const activeImg = monster.isShiny && monster.shinyImage ? monster.shinyImage : monster.image;
+            const activeImg = getMonsterSprite(monster);
             const visualContent = activeImg 
-                ? `<img src="${activeImg}" alt="${monster.name}" class="w-full h-12 object-contain ${monster.currentHp <= 0 ? 'grayscale opacity-50' : ''}">`
+                ? `<img src="${activeImg}" alt="${monster.name}" class="w-full h-12 object-contain ${monster.currentHp <= 0 ? 'grayscale opacity-50' : ''}" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">`
                 : `<span class="text-xl">👾</span>`;
 
             const curHp = monster.currentHp !== undefined ? monster.currentHp : (monster.maxHp || 20);
@@ -87,9 +111,10 @@ export function renderTeamCardSlots() {
             const isFainted = curHp <= 0;
             const shinyMarker = monster.isShiny ? '<span class="absolute top-0.5 right-0.5 text-[7px] font-black bg-amber-400 text-black px-1 rounded animate-pulse">✨SHINY</span>' : '';
             const tierCardBg = getTierColorClass(monster.tier || 1);
+            const auraClass = monster.auraEffect || monster.visualClass || '';
 
             slotContainer.innerHTML = `
-                <div draggable="true" ondragstart="handleDragStart(event, 'team', ${i})" ondragover="handleDragOver(event)" ondrop="handleDrop(event, 'team', ${i})" onclick="event.stopPropagation(); if(typeof openPokemonDetailModal==='function') openPokemonDetailModal('${monster.uniqueId || monster.id}', 'team')" class="${tierCardBg}${isFainted ? 'from-red-950 to-red-900 border-red-600 text-red-200' : ''} ${monster.isShiny ? 'border-amber-400' : 'border-amber-600'} border rounded p-1 flex flex-col justify-between h-20 shadow cursor-pointer hover:brightness-105 transition-all relative text-white">
+                <div draggable="true" ondragstart="handleDragStart(event, 'team', ${i})" ondragover="handleDragOver(event)" ondrop="handleDrop(event, 'team', ${i})" onclick="event.stopPropagation(); if(typeof openPokemonDetailModal==='function') openPokemonDetailModal('${monster.uniqueId || monster.id}', 'team')" class="${tierCardBg} ${auraClass} ${isFainted ? 'from-red-950 to-red-900 border-red-600 text-red-200' : ''} ${monster.isShiny ? 'border-amber-400' : 'border-amber-600'} border rounded p-1 flex flex-col justify-between h-20 shadow cursor-pointer hover:brightness-105 transition-all relative text-white">
                     ${shinyMarker}
                     <div class="flex justify-between items-center text-[8px] font-bold">
                         <span class="truncate">${monster.name}</span>
@@ -188,17 +213,24 @@ export function renderBottomPanel() {
                 slot.onclick = () => {
                     if (typeof openPokemonDetailModal === 'function') openPokemonDetailModal(monster.uniqueId || monster.id, 'pcbox');
                 };
-                slot.className = "flex flex-col justify-between p-1 bg-slate-900 border border-sky-600 rounded h-20 cursor-pointer hover:brightness-110 shadow text-white";
+                
+                const auraClass = monster.auraEffect || monster.visualClass || '';
+                slot.className = `flex flex-col justify-between p-1 bg-slate-900 border border-sky-600 rounded h-20 cursor-pointer hover:brightness-110 shadow text-white relative ${auraClass}`;
                 
                 const curHp = monster.currentHp !== undefined ? monster.currentHp : monster.maxHp;
                 const maxHp = monster.maxHp || monster.hp || 20;
+                const monsterImg = getMonsterSprite(monster);
+                const shinyMarker = monster.isShiny ? '<span class="absolute top-0.5 right-0.5 text-[6px] font-black bg-amber-400 text-black px-1 rounded animate-pulse">✨</span>' : '';
 
                 slot.innerHTML = `
+                    ${shinyMarker}
                     <div class="text-[8px] text-sky-400 font-bold flex justify-between">
-                        <span>${monster.name}</span>
+                        <span class="truncate">${monster.name}</span>
                         <span>Nv.${monster.level || 1}</span>
                     </div>
-                    <div class="text-center my-auto text-xs">👾</div>
+                    <div class="text-center my-auto flex items-center justify-center h-8">
+                        <img src="${monsterImg}" class="max-h-7 object-contain drop-shadow" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                    </div>
                     <div class="text-[7px] text-slate-300 text-center">HP: ${curHp}/${maxHp}</div>
                 `;
             } else {
@@ -222,9 +254,6 @@ export function changePcBoxPage(direction) {
     renderBottomPanel();
 }
 
-// ==========================================
-// MODAL DE FICHA TÉCNICA DO ANIMA (Corrigido com XP, Nível e Stats Reais)
-// ==========================================
 window.openPokemonDetailModal = function(identifier, sourceArea) {
     const cp = getCurrentPlayer();
     if (!cp) return;
@@ -253,15 +282,15 @@ window.openPokemonDetailModal = function(identifier, sourceArea) {
     const maxExp = (monster.level || 1) * 100;
     const expPercent = Math.min(100, Math.max(0, Math.round((currentExp / maxExp) * 100)));
 
-    // Verifica no catálogo se tem evolução por nível para mostrar na ficha
     const catalogItem = MONSTER_CATALOG_REF.find(m => m.id === (monster.catalogId || monster.id) || m.name.toLowerCase() === monster.name.toLowerCase());
     const hasEvolution = catalogItem && catalogItem.evolvesTo;
     const evolveLevelInfo = hasEvolution ? `Evolui no Nv. ${catalogItem.evolveLevel || 16}` : 'Forma Final';
 
-    const monsterImg = monster.isShiny && monster.shinyImage ? monster.shinyImage : monster.image;
+    const monsterImg = getMonsterSprite(monster);
+    const auraClass = monster.auraEffect || monster.visualClass || '';
 
     modal.innerHTML = `
-        <div class="trainer-card max-w-lg w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white relative">
+        <div class="trainer-card max-w-lg w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white relative ${auraClass}">
             <div class="flex justify-between items-center border-b border-amber-900/60 pb-2">
                 <h3 class="text-xs font-black text-amber-400 font-cinzel">FICHA TÉCNICA DO ANIMA</h3>
                 <button onclick="document.getElementById('monster-detail-modal').remove()" class="text-amber-400 hover:text-white font-bold text-sm px-2.5 py-0.5 bg-black/60 rounded border border-amber-800 cursor-pointer">✕</button>
@@ -308,7 +337,6 @@ export function switchBottomView(viewName) {
     renderBottomPanel();
 }
 
-// Expor funções globais essenciais para drag-and-drop e eventos inline do HTML
 window.handleDragStart = handleDragStart;
 window.handleDragOver = handleDragOver;
 window.handleDrop = handleDrop;
