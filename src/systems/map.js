@@ -1,10 +1,10 @@
 // --- src/systems/map.js ---
-// Módulo do Tabuleiro, Caminhos e Multiplayer Sincronizado
+// Módulo do Tabuleiro, Caminhos e Multiplayer Sincronizado (Versão Integrada e Funcional)
 
 import { SUPABASE_STORAGE_URL, FULL_MAP_IMAGE } from '../config/constants.js';
 import { gameState, getCurrentPlayer, movementState, ensureValidGameState } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
-import { openEncounterModalWithPokemon, generateWildPokemonForWaypoint } from './encounter.js';
+import { openEncounterModalWithPokemon } from './encounter.js';
 import { MONSTER_CATALOG } from '../config/cards-data.js';
 
 export const BOARD_WAYPOINTS = [
@@ -321,12 +321,36 @@ export function handleWaypointArrival(waypointId) {
             window.boardPokemonCards = {};
         }
 
+        // Se a casa ainda não tiver um Pokémon gerado, gera respeitando a cor/tier da casa
         if (!boardPokemonCards[waypointId]) {
-            // Gera o Pokémon selvagem respeitando estritamente a cor da casa (tier correspondente)
-            const wildMon = generateWildPokemonForWaypoint(waypointId, waypoint.color);
-            if (wildMon) {
-                boardPokemonCards[waypointId] = wildMon;
-            }
+            let targetTier = 1;
+            const color = String(waypoint.color || 'rosa').toLowerCase();
+            if (color === 'verde') targetTier = 2;
+            else if (color === 'azul') targetTier = 3;
+            else if (color === 'vermelho') targetTier = 4;
+            else if (color === 'amarelo') targetTier = 5;
+
+            let tierFiltered = MONSTER_CATALOG.filter(m => Number(m.tier || 1) === targetTier);
+            if (tierFiltered.length === 0) tierFiltered = MONSTER_CATALOG;
+
+            const randomMon = tierFiltered[Math.floor(Math.random() * tierFiltered.length)];
+            const isShiny = Math.random() < 0.06;
+            const minLvl = targetTier === 1 ? 3 : targetTier === 2 ? 8 : targetTier === 3 ? 15 : targetTier === 4 ? 25 : 40;
+            const level = Math.floor(Math.random() * 4) + minLvl;
+            const maxHp = 20 + (level * 3);
+
+            boardPokemonCards[waypointId] = {
+                ...randomMon,
+                uniqueId: 'wild_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                level: level,
+                tier: targetTier,
+                currentHp: maxHp,
+                maxHp: maxHp,
+                isShiny: isShiny,
+                waypointId: waypointId,
+                revealed: true,
+                weakened: false
+            };
         }
 
         const poke = boardPokemonCards[waypointId];
@@ -342,10 +366,8 @@ export function handleWaypointArrival(waypointId) {
             }
         }
     } else if (waypoint.type === 'event') {
-        // Dispara o evento e exibe o banner visual animado no topo do mapa com o resultado exato
-        if (typeof triggerRandomBoardEvent === 'function') {
-            triggerRandomBoardEvent(waypoint.name);
-        }
+        // Dispara o evento aleatório com banner e popup estruturado
+        triggerRandomBoardEvent(waypoint.name);
     }
 }
 
@@ -366,6 +388,45 @@ export function tryInteractWithWeakenedPokemon(waypointId) {
         if (typeof openEncounterModalWithPokemon === 'function') {
             openEncounterModalWithPokemon(poke);
         }
+    }
+}
+
+// Função de eventos aleatórios nas casas do tipo 'event'
+function triggerRandomBoardEvent(eventName) {
+    const cp = getCurrentPlayer();
+    if (!cp) return;
+
+    const eventsList = [
+        { title: "🎁 Tesouro na Rota!", text: `Encontraste uma algibeira perdida em ${eventName}!\nGanhaste +150 Ouro.`, apply: () => { cp.gold = (cp.gold || 0) + 150; }, success: true },
+        { title: "💊 Suprimentos Encontrados!", text: `Um viajante ofereceu-te itens úteis em ${eventName}!\nGanhaste +2 Poções e +1 Poké Ball.`, apply: () => { 
+            if (!Array.isArray(cp.inventory)) cp.inventory = [];
+            cp.inventory.push({ id: 'potion', name: 'Poção', count: 2, type: 'heal', value: 20 });
+            cp.inventory.push({ id: 'ball_poke', name: 'Poké Ball', count: 1, type: 'sphere', value: 1 });
+        }, success: true },
+        { title: "⚡ Surpresa na Rota!", text: `Uma tempestade inesperada abrandou a tua marcha em ${eventName}.\nOs teus Pokémon descansaram um pouco.`, apply: () => {}, success: false },
+        { title: "🍃 Clareza Natural", text: `Recuperaste energias junto à natureza em ${eventName}.\nOs teus Pokémon recuperaram HP.`, apply: () => {
+            if (Array.isArray(cp.activeTeam)) {
+                cp.activeTeam.forEach(m => {
+                    if (m && m.currentHp < m.maxHp) m.currentHp = Math.min(m.maxHp, m.currentHp + 10);
+                });
+            }
+        }, success: true }
+    ];
+
+    const randomEvt = eventsList[Math.floor(Math.random() * eventsList.length)];
+    randomEvt.apply();
+    saveGameProgress();
+
+    if (typeof showCustomPopup === 'function') {
+        showCustomPopup(randomEvt.title, randomEvt.text, randomEvt.success);
+    }
+
+    const banner = document.getElementById('global-map-notification-banner');
+    const bannerText = document.getElementById('global-map-notification-text');
+    if (banner && bannerText) {
+        bannerText.textContent = `${eventName}: ${randomEvt.title}`;
+        banner.classList.remove('hidden');
+        setTimeout(() => { banner.classList.add('hidden'); }, 5000);
     }
 }
 
@@ -408,7 +469,6 @@ export function renderBoardMap(highlightIds = []) {
         `;
     });
 
-    // Renderiza apenas os Pokémon revelados nas casas, mantendo a interface limpa
     BOARD_WAYPOINTS.forEach(wp => {
         if (wp.type === 'pokemon') {
             const pokeCard = boardPokemonCards[wp.id];
@@ -492,7 +552,7 @@ export function renderBoardMap(highlightIds = []) {
     setupMapChatListeners();
 }
 
-export function setupMapChatListeners() {
+function setupMapChatListeners() {
     const sendBtn = document.getElementById('send-chat-btn') || document.getElementById('map-send-chat-btn');
     const chatInput = document.getElementById('chat-input-field') || document.getElementById('map-chat-input');
 
@@ -543,15 +603,15 @@ if (typeof socket !== 'undefined' && socket) {
     });
 }
 
-export function renderBoardMapWithHighlights(validNextSteps) {
+function renderBoardMapWithHighlights(validNextSteps) {
     renderBoardMap(validNextSteps);
 }
 
-export function moveTokenToWaypoint(waypointId) {
+function moveTokenToWaypoint(waypointId) {
     renderBoardMap();
 }
 
-export function animateTokenMovement(newPositionIndex) {
+function animateTokenMovement(newPositionIndex) {
     const cp = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : gameState.player;
     if (cp) {
         cp.currentZone = newPositionIndex;
