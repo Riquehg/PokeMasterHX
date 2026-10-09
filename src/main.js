@@ -19,6 +19,7 @@ import { openEncounterModalWithPokemon, fleeEncounter } from './systems/encounte
 import { renderTeamCardSlots, renderBottomPanel, changePcBoxPage } from './systems/pcbox.js';
 import { openPokedexModal, openPokedexDetailCard } from './systems/pokedex.js';
 import { openVaultModal } from './systems/vault.js';
+import { initializeSocketConnection } from './core/socket.js';
 
 // ==========================================
 // EXPOSIÇÃO GLOBAL PARA O HTML (Evita erros de onclick)
@@ -41,9 +42,13 @@ window.openPokedexModal = openPokedexModal;
 window.openPokedexDetailCard = openPokedexDetailCard;
 window.openVaultModal = openVaultModal;
 
-// Executado assim que o DOM estiver totalmente carregado
 document.addEventListener('DOMContentLoaded', () => {
     console.log("🚀 Inicializando o Motor Modular do Jogo (Partes 1, 2 & 3)...");
+
+    // Inicializa o Socket.io
+    initializeSocketConnection();
+
+    });
 
     // 1. Tenta carregar um save existente ou inicializa um estado padrão
     const loaded = loadGameProgress();
