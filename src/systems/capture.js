@@ -1,7 +1,8 @@
 // --- src/systems/capture.js ---
-import { gameState, getCurrentPlayer, ensureValidGameState } from '../core/state.js';
+import { currentEncounterState } from './encounter.js';
+import { gameState, getCurrentPlayer } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
-import { currentEncountersState } from './battle.js';
+import { renderTeamCardSlots, renderBottomPanel } from './pcbox.js';
 
 // Dispara o fluxo de escolha de Poké Balls para captura
 export function triggerCaptureFlow(wildPokemon) {
