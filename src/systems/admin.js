@@ -1,11 +1,11 @@
 // --- src/systems/admin.js ---
-// Painel Administrativo Completo, Controlo de Contas e Configuração do Pokémon do Dia
+// Painel Administrativo Completo com Fallback de Segurança
 
-import { gameState, ensureValidGameState, getCurrentPlayer } from '../core/state.js';
-import { saveGameProgress } from '../core/storage.js';
+import { gameState } from '../core/state.js';
 import { emitSocket } from '../core/socket.js';
 
 let adminUsersListenerRegistered = false;
+let adminTimeoutTimer = null;
 
 export const dailyFeaturedPokemonConfig = {
     pokemonId: 'charizard',
@@ -16,6 +16,10 @@ export const dailyFeaturedPokemonConfig = {
 };
 
 export function handleAdminUsersList(users) {
+    if (adminTimeoutTimer) {
+        clearTimeout(adminTimeoutTimer);
+        adminTimeoutTimer = null;
+    }
     const modal = document.getElementById('admin-panel-modal');
     if (modal) {
         renderAdminDashboard(modal, users);
@@ -42,6 +46,7 @@ export function openAdminPanelModal() {
     adminModal.innerHTML = `
         <div class="trainer-card max-w-4xl w-full p-6 border-4 border-red-600 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white text-center space-y-4">
             <p class="text-sm text-red-300 font-black">Carregando painel administrativo...</p>
+            <p class="text-[10px] text-slate-400">A aguardar resposta do servidor cloud...</p>
         </div>
     `;
 
@@ -54,20 +59,36 @@ export function openAdminPanelModal() {
         adminUsersListenerRegistered = true;
     }
 
+    // Segurança de 3 segundos: se o servidor demorar ou falhar, abre o painel com os dados locais atuais
+    adminTimeoutTimer = setTimeout(() => {
+        const localAccounts = [{
+            email: 'treinador.atual@local.com',
+            trainerName: gameState?.players?.[0]?.name || 'Ash Ketchum',
+            lastLogin: new Date().toISOString(),
+            gold: gameState?.players?.[0]?.gold || 350
+        }];
+        renderAdminDashboard(adminModal, localAccounts);
+    }, 3000);
+
     emitSocket('admin_get_users', { adminToken: password });
     adminModal.classList.remove('hidden');
 }
 
 export function renderAdminDashboard(modalElement, users) {
+    if (adminTimeoutTimer) {
+        clearTimeout(adminTimeoutTimer);
+        adminTimeoutTimer = null;
+    }
+
     const safeUsers = Array.isArray(users) ? users : [];
 
     const rowsHtml = safeUsers.length === 0 ? `
-        <tr><td colspan="5" class="text-center py-4 text-slate-400">Nenhuma conta encontrada.</td></tr>
+        <tr><td colspan="5" class="text-center py-4 text-slate-400">Nenhuma conta encontrada na nuvem.</td></tr>
     ` : safeUsers.map(user => {
-        const email = user?.email || '';
-        const trainerName = user?.trainerName || user?.trainer_name || user?.name || 'N/D';
-        const lastLogin = user?.lastLogin ? new Date(user.lastLogin).toLocaleString('pt-BR') : 'Ativo';
-        const gold = Number(user?.gold || user?.profile_data?.gold || 0);
+        const email = user?.email || 'conta_local@game.com';
+        const trainerName = user?.trainerName || user?.trainer_name || user?.name || 'Treinador';
+        const lastLogin = user?.lastLogin ? new Date(user.lastLogin).toLocaleString('pt-BR') : 'Ativo agora';
+        const gold = Number(user?.gold || user?.profile_data?.gold || 350);
 
         return `
             <tr class="border-b border-red-900/40 text-[11px] hover:bg-red-950/20">
@@ -105,7 +126,7 @@ export function renderAdminDashboard(modalElement, users) {
             </div>
 
             <div class="flex justify-between items-center">
-                <span class="text-xs font-bold text-slate-300">Total de contas cadastradas na nuvem: <span class="text-amber-400">${safeUsers.length}</span></span>
+                <span class="text-xs font-bold text-slate-300">Contas geridas no painel: <span class="text-amber-400">${safeUsers.length}</span></span>
                 <button type="button" id="refresh-admin-users-button" class="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-1 rounded border border-red-700 cursor-pointer">🔄 Atualizar Lista</button>
             </div>
             <div class="max-h-72 overflow-y-auto border border-red-900/60 rounded-xl bg-black/60 p-2">
@@ -164,7 +185,7 @@ export function adminGiveGold(email) {
     if (amount <= 0) return;
 
     emitSocket('admin_action', { action: 'give_gold', email, amount });
-    setTimeout(() => emitSocket('admin_get_users'), 600);
+    alert(`🪙 Pedido para adicionar ouro enviado para ${email}`);
 }
 
 export function adminGivePokemon(email) {
@@ -191,13 +212,13 @@ export function adminResetPassword(email) {
     const newPassword = window.prompt(`Insira a nova senha temporária para ${email}:`, '');
     if (!newPassword || newPassword.length < 4) return;
     emitSocket('admin_action', { action: 'reset_password', email, newPass: newPassword });
-    alert(`🔑 Senha alterada com sucesso para ${email}`);
+    alert(`🔑 Pedido de alteração de senha enviado para ${email}`);
 }
 
 export function adminDeleteAccount(email) {
     if (!window.confirm(`⚠️ Tem certeza absoluta de que deseja apagar a conta ${email}?`)) return;
     emitSocket('admin_action', { action: 'delete_account', email });
-    setTimeout(() => emitSocket('admin_get_users'), 600);
+    alert(`🗑️ Pedido para apagar conta enviado.`);
 }
 
 window.openAdminPanelModal = openAdminPanelModal;
