@@ -158,141 +158,16 @@ function showGymVsScreen(gymInfo) {
 
     document.getElementById('gym-accept-btn').onclick = () => {
         vsModal.remove();
-        openTeamSelectionModalForGym();
+        launchGymBattleArenaFixed(gymInfo);
     };
 }
 
-function openTeamSelectionModalForGym() {
-    const cp = getCurrentPlayer();
-    const formatLimit = currentGymBattleSession ? currentGymBattleSession.format : 1;
-    let selectedIndices = [];
-
-    let selModal = document.getElementById('team-selection-modal');
-    if (!selModal) {
-        selModal = document.createElement('div');
-        selModal.id = 'team-selection-modal';
-        selModal.className = 'fixed inset-0 bg-black/90 z-[400] flex items-center justify-center p-4 backdrop-blur-sm';
-        document.body.appendChild(selModal);
-    }
-
-    function renderSelectionGrid() {
-        let teamGridHtml = '';
-        if (cp.activeTeam) {
-            cp.activeTeam.forEach((mon, idx) => {
-                const isFainted = (mon.currentHp !== undefined ? mon.currentHp : mon.maxHp) <= 0;
-                const isSelected = selectedIndices.includes(idx);
-                const monImgSrc = mon.isShiny && mon.shinyImage ? mon.shinyImage : (mon.image || '');
-
-                teamGridHtml += `
-                    <div data-index="${idx}" class="gym-select-card p-3 rounded-2xl border-2 ${isSelected ? 'border-amber-400 bg-amber-950/80 scale-105' : 'border-amber-900/60'} ${isFainted ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-amber-500'} flex flex-col justify-between h-36 transition-all text-white">
-                        <div class="flex justify-between items-center text-[10px] font-bold text-amber-300">
-                            <span>${mon.name}</span>
-                            <span>Nv.${mon.level || 1}</span>
-                        </div>
-                        <div class="my-auto flex justify-center bg-black/40 rounded p-1">
-                            <img src="${monImgSrc}" class="w-14 h-14 object-contain">
-                        </div>
-                        <div class="text-[9px] text-center font-bold ${isFainted ? 'text-red-400' : 'text-emerald-400'}">
-                            ${isFainted ? 'DESMAIADO' : `HP: ${mon.currentHp !== undefined ? mon.currentHp : mon.maxHp}/${mon.maxHp}`}
-                        </div>
-                    </div>
-                `;
-            });
-        }
-
-        const canConfirm = selectedIndices.length === formatLimit;
-
-        selModal.innerHTML = `
-            <div class="trainer-card max-w-2xl w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
-                <div class="flex justify-between items-center border-b border-amber-900/60 pb-2">
-                    <span class="text-xs font-black text-amber-400 font-cinzel">🛡 SELEÇÃO DE EQUIPA (${selectedIndices.length}/${formatLimit})</span>
-                    <button id="gym-sel-close" class="text-amber-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-amber-800">✕ Cancelar</button>
-                </div>
-                <div class="grid grid-cols-3 gap-3 max-h-72 overflow-y-auto p-1" id="gym-team-grid-box">
-                    ${teamGridHtml}
-                </div>
-                <div class="flex gap-2">
-                    <button id="gym-sel-back" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer">
-                        Voltar / Desistir
-                    </button>
-                    <button id="gym-sel-confirm" ${canConfirm ? '' : 'disabled'} class="flex-2 ${canConfirm ? 'bg-amber-500 hover:bg-amber-400 text-black cursor-pointer shadow-lg' : 'bg-slate-800 text-slate-500 cursor-not-allowed'} font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-all">
-                        Confirmar e Iniciar Batalha de Ginásio
-                    </button>
-                </div>
-            </div>
-        `;
-
-        selModal.querySelectorAll('.gym-select-card').forEach(el => {
-            el.onclick = () => {
-                const idx = Number(el.getAttribute('data-index'));
-                const mon = cp.activeTeam[idx];
-                const isFainted = (mon.currentHp !== undefined ? mon.currentHp : mon.maxHp) <= 0;
-                if (isFainted) return;
-
-                const exists = selectedIndices.indexOf(idx);
-                if (exists > -1) {
-                    selectedIndices.splice(exists, 1);
-                } else {
-                    if (selectedIndices.length < formatLimit) {
-                        selectedIndices.push(idx);
-                    }
-                }
-                renderSelectionGrid();
-            };
-        });
-
-        document.getElementById('gym-sel-close').onclick = () => selModal.remove();
-        document.getElementById('gym-sel-back').onclick = () => selModal.remove();
-        const confirmBtn = document.getElementById('gym-sel-confirm');
-        if (confirmBtn && canConfirm) {
-            confirmBtn.onclick = () => {
-                selModal.remove();
-                if (currentGymBattleSession) {
-                    currentGymBattleSession.challengerTeam = selectedIndices;
-                    launchGymBattleArena(currentGymBattleSession);
-                }
-            };
-        }
-    }
-
-    renderSelectionGrid();
-    selModal.classList.remove('hidden');
-}
-
-function launchGymBattleArena(session) {
+function launchGymBattleArenaFixed(gymInfo) {
     if (typeof window.openBattleArena === 'function') {
         window.openBattleArena({
             type: 'gym',
-            gymSession: session,
-            onVictory: () => {
-                const cp = getCurrentPlayer();
-                if (!Array.isArray(cp.badges)) cp.badges = [];
-                
-                const badgeIdentifier = session.gym.badgeKey;
-                if (!cp.badges.includes(badgeIdentifier)) {
-                    cp.badges.push(badgeIdentifier);
-                }
-
-                cp.gold = (cp.gold || 0) + session.gym.rewardGold;
-                
-                if (typeof window.showCustomPopup === 'function') {
-                    window.showCustomPopup(
-                        "🏆 VITÓRIA NO GINÁSIO!",
-                        `Conquistaste a ${session.gym.badgeName} e ${session.gym.rewardGold} G do Líder ${session.gym.leader}!`,
-                        true
-                    );
-                }
-                
-                saveGameProgress();
-                if (typeof emitSocket === 'function') {
-                    emitSocket('save_game_state', { gameState, trainerName: cp.name });
-                }
-            },
-            onDefeat: () => {
-                if (typeof window.showCustomPopup === 'function') {
-                    window.showCustomPopup("Derrota", "Os teus Pokémon foram derrotados pelo Líder de Ginásio!", false);
-                }
-            }
+            format: gymInfo.format || 1,
+            data: gymInfo
         });
     } else {
         alert("Arena de combate TCG de ginásio iniciada com sucesso!");
