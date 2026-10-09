@@ -3,7 +3,7 @@
 
 import { gameState, getCurrentPlayer } from '../core/state.js';
 import { renderTeamCardSlots, renderBottomPanel } from './pcbox.js'; // Ajuste se necessário conforme sua estrutura
-import { SUPABASE_STORAGE_URL } from '../config/supabase-config.js';
+import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 
 export let currentEncounterState = {
     wildPokemon: null,
