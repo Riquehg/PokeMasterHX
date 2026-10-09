@@ -80,7 +80,7 @@ export const GYM_LEADERS_CATALOG = [
 ];
 
 export function initiateGymSequence(cityName) {
-    const gymInfo = GYM_LEADERS_CATALOG.find(g => g.city.toLowerCase() === cityName.toLowerCase()) || GYM_LEADERS_CATALOG[1];
+    const gymInfo = GYM_LEADERS_CATALOG.find(g => g.city.toLowerCase() === cityName.toLowerCase()) || GYM_LEADERS_CATALOG[0];
     showGymVsScreen(gymInfo);
 }
 
@@ -153,10 +153,9 @@ function launchGymBattleArenaDirect(gymInfo) {
             format: gymInfo.format || 1,
             data: gymInfo
         });
-    } else if (typeof window.openEncounterModalWithPokemon === 'function' && gymInfo.pokemons && gymInfo.pokemons.length > 0) {
-        window.openEncounterModalWithPokemon(gymInfo.pokemons[0]);
     } else {
-        alert(`Batalha de Ginásio contra ${gymInfo.leader} iniciada! (Modo Arena em preparação)`);
+        console.error("ERRO CRÍtICO: window.openBattleArena não está definida!");
+        alert(`Erro: O sistema de arena de batalha TCG não foi carregado corretamente.`);
     }
 }
 
