@@ -2,8 +2,9 @@
 // Subsistema de Batalhas TCG Selvagens, Captura e Gestão de Itens em Combate
 
 import { gameState, getCurrentPlayer } from '../core/state.js';
-import { renderTeamCardSlots, renderBottomPanel } from './pcbox.js'; // Ajuste se necessário conforme sua estrutura
+import { renderTeamCardSlots, renderBottomPanel } from './pcbox.js';
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
+import { MONSTER_CATALOG } from '../config/cards-data.js';
 
 export let currentEncounterState = {
     wildPokemon: null,
@@ -15,6 +16,40 @@ export let currentEncounterState = {
 };
 
 let selectedBallAura = null;
+
+// Função auxiliar para gerar Pokémon selvagem com níveis por Tier e taxa de Shiny rara
+export function generateWildPokemonForWaypoint(waypointId) {
+    if (!Array.isArray(MONSTER_CATALOG) || MONSTER_CATALOG.length === 0) return null;
+
+    const baseMon = MONSTER_CATALOG[Math.floor(Math.random() * MONSTER_CATALOG.length)];
+    const tier = baseMon.tier || 1;
+
+    // Define os níveis de acordo com o Tier do monstro
+    let minLevel = 3, maxLevel = 6;
+    if (tier === 2) { minLevel = 8; maxLevel = 12; }
+    else if (tier === 3) { minLevel = 15; maxLevel = 22; }
+    else if (tier === 4) { minLevel = 25; maxLevel = 35; }
+    else if (tier === 5) { minLevel = 40; maxLevel = 50; }
+
+    const level = Math.floor(Math.random() * (maxLevel - minLevel + 1)) + minLevel;
+    
+    // Taxa de Shiny reduzida e rara (~6% de chance)
+    const isShiny = Math.random() < 0.06;
+
+    const maxHp = 20 + (level * 3);
+
+    return {
+        ...baseMon,
+        uniqueId: 'wild_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+        level: level,
+        tier: tier,
+        currentHp: maxHp,
+        maxHp: maxHp,
+        isShiny: isShiny,
+        waypointId: waypointId,
+        weakened: true
+    };
+}
 
 export function openEncounterModalWithPokemon(pokemon) {
     const cp = getCurrentPlayer();
@@ -253,9 +288,7 @@ export function closeEncounterModalUI() {
     }
 }
 
-function updateEncounterUIInfo() {
-    // Atualiza elementos visuais do modal de encontro se necessário
-}
+function updateEncounterUIInfo() {}
 
 function rollDiceWithAnimation(callback) {
     const finalPlayerRoll = Math.floor(Math.random() * 6) + 1;
@@ -270,3 +303,7 @@ function showCustomPopup(title, message, isSuccess) {
         alert(`${title}: ${message}`);
     }
 }
+
+window.openEncounterModalWithPokemon = openEncounterModalWithPokemon;
+window.fleeEncounter = fleeEncounter;
+window.cyclePlayerEncounterPokemon = cyclePlayerEncounterPokemon;
