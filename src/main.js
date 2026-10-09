@@ -8,6 +8,7 @@ import { setupDiceListeners } from './systems/dice.js';
 import { openSpecificTrainerCardModal, showCustomPopup } from './ui/modals.js';
 import { openPokemartModal } from './systems/inventory.js';
 import { MONSTER_CATALOG } from './config/cards-data.js';
+import './systems/city.js';
 
 // ==========================================
 // EXPOSIÇÃO GLOBAL PARA O HTML (Evita erros de onclick)
