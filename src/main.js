@@ -5,10 +5,10 @@ import { renderBoardMap, tryInteractWithCity, onHexClick } from './systems/map.j
 import { setupDiceListeners, rollDiceForMovement, handleWaypointClick, resetTurnDiceState } from './systems/dice.js';
 import { MONSTER_CATALOG } from './config/cards-data.js';
 
-// Importação dos Módulos dos Sistemas
+// Importação dos Módulos dos Sistemas (battle.js desativado para priorizar o encounter.js TCG)
 import './systems/city.js';
 import './systems/trainer.js';
-import './systems/battle.js';
+// import './systems/battle.js'; 
 import './systems/vault.js';
 import './systems/lobby.js';
 import './systems/admin.js';
@@ -119,10 +119,8 @@ window.triggerRandomBoardEvent = function(eventName) {
     randomEvt.apply();
     saveGameProgress();
 
-    // Mostra o popup detalhado do evento
     window.showCustomPopup(randomEvt.title, randomEvt.text, randomEvt.success);
 
-    // Atualiza o Banner visual animado no topo do mapa se existir
     const banner = document.getElementById('global-map-notification-banner');
     const bannerText = document.getElementById('global-map-notification-text');
     if (banner && bannerText) {
@@ -158,7 +156,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setupAuthenticationListeners();
     loadDailyPokemonPreview();
 
-    // Botão Admin
     const adminBtn = document.getElementById('open-admin-btn');
     if (adminBtn) {
         adminBtn.onclick = () => {
@@ -170,7 +167,6 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // Botão Gravar e Iniciar Nova Partida
     const finalizeBtn = document.getElementById('finalize-creation-btn');
     if (finalizeBtn) {
         finalizeBtn.onclick = () => {
@@ -429,7 +425,6 @@ function loadDailyPokemonPreview() {
     }
 }
 
-// Vinculação de todos os botões de controlo do HUD superior
 function setupGlobalInterfaceListeners() {
     const trainerCardBtn = document.getElementById('open-trainer-card-btn') || document.getElementById('trainer-badge-btn');
     if (trainerCardBtn) {
