@@ -369,7 +369,7 @@ export function renderInventoryUI(player) {
                 <img src="${itemInfo.image}" alt="${itemInfo.name}" class="w-10 h-10 object-contain drop-shadow" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                 <span class="text-[9px] font-bold text-amber-300 truncate w-full">${itemInfo.name} (${itemEntry.count})</span>
                 <span class="text-[8px] text-slate-400 leading-tight">${itemInfo.desc}</span>
-                <button type="button" onclick="window.usePlayerItem('${itemInfo.id}', ${index})" class="mt-1 bg-amber-600 hover:bg-amber-500 text-black px-2 py-0.5 rounded text-[8px] font-black w-full shadow cursor-pointer">
+                <button type="button" onclick="window.useInventoryItem(${index})" class="mt-1 bg-amber-600 hover:bg-amber-500 text-black px-2 py-0.5 rounded text-[8px] font-black w-full shadow cursor-pointer">
                     ${isCaptureItem ? 'Usar na Captura' : 'Usar'}
                 </button>
             </div>
