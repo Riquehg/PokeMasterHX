@@ -9,6 +9,7 @@ export const GYM_LEADERS_CATALOG = [
         city: 'Pewter City',
         leader: 'Brock',
         badgeName: 'Boulder',
+        badgeKey: 'boulder',
         badgeIcon: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/badges/boulder.png',
         prize: 300,
         format: 1,
@@ -20,6 +21,7 @@ export const GYM_LEADERS_CATALOG = [
         city: 'Cerulean City',
         leader: 'Misty',
         badgeName: 'Cascade',
+        badgeKey: 'cascade',
         badgeIcon: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/badges/cascade.png',
         prize: 400,
         format: 1,
@@ -31,6 +33,7 @@ export const GYM_LEADERS_CATALOG = [
         city: 'Vermilion City',
         leader: 'Lt. Surge',
         badgeName: 'Thunder',
+        badgeKey: 'thunder',
         badgeIcon: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/badges/thunder.png',
         prize: 500,
         format: 1,
@@ -42,6 +45,7 @@ export const GYM_LEADERS_CATALOG = [
         city: 'Celadon City',
         leader: 'Erika',
         badgeName: 'Rainbow',
+        badgeKey: 'rainbow',
         badgeIcon: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/badges/rainbow.png',
         prize: 600,
         format: 1,
@@ -53,6 +57,7 @@ export const GYM_LEADERS_CATALOG = [
         city: 'Fuchsia City',
         leader: 'Koga',
         badgeName: 'Soul',
+        badgeKey: 'soul',
         badgeIcon: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/badges/soul.png',
         prize: 700,
         format: 1,
@@ -64,6 +69,7 @@ export const GYM_LEADERS_CATALOG = [
         city: 'Cinnabar Island',
         leader: 'Blaine',
         badgeName: 'Volcano',
+        badgeKey: 'volcano',
         badgeIcon: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/badges/volcano.png',
         prize: 800,
         format: 1,
@@ -148,7 +154,6 @@ function launchGymBattleArenaDirect(gymInfo) {
             data: gymInfo
         });
     } else if (typeof window.openEncounterModalWithPokemon === 'function' && gymInfo.pokemons && gymInfo.pokemons.length > 0) {
-        // Redirecionamento seguro para a arena de combate se openBattleArena não estiver carregada
         window.openEncounterModalWithPokemon(gymInfo.pokemons[0]);
     } else {
         alert(`Batalha de Ginásio contra ${gymInfo.leader} iniciada! (Modo Arena em preparação)`);
