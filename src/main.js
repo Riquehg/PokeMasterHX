@@ -13,6 +13,7 @@ import './systems/lobby.js';
 import './systems/admin.js';
 import './systems/capture.js';
 import './systems/encounter.js';
+import './systems/battle-arena.js';
 import { openPokemartModal, useInventoryItem } from './systems/inventory.js';
 import { openSpecificTrainerCardModal } from './systems/trainer.js';
 import { initiateGymSequence, GYM_LEADERS_CATALOG } from './systems/gym.js';
