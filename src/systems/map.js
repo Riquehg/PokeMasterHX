@@ -370,21 +370,19 @@ export function handleWaypointArrival(waypointId) {
 }
 
 export function tryInteractWithWeakenedPokemon(waypointId) {
-    const cp = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : gameState.player;
-    const currentZoneId = cp.currentZone || 5;
-    
-    if (currentZoneId !== waypointId) {
-        if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Fora de Alcance", "❌ Tens de estar na mesma casa deste Pokémon para poderes interagir!", false);
-        }
-        return;
-    }
-
     if (typeof boardPokemonCards !== 'undefined' && boardPokemonCards[waypointId]) {
         const poke = boardPokemonCards[waypointId];
         poke.revealed = true;
         if (typeof openEncounterModalWithPokemon === 'function') {
             openEncounterModalWithPokemon(poke);
+        } else {
+            console.error("openEncounterModalWithPokemon não está definida ou não foi importada!");
+        }
+    } else {
+        // Se por acaso a casa ainda não tiver Pokémon gerado, gera um na hora para não falhar
+        const waypoint = BOARD_WAYPOINTS.find(w => w.id === waypointId);
+        if (waypoint && waypoint.type === 'pokemon') {
+            handleWaypointArrival(waypointId);
         }
     }
 }
