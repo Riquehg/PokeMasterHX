@@ -71,15 +71,15 @@ export function handleDrop(e, targetArea, targetIndex) {
 export function renderTeamCardSlots() {
     const cp = getCurrentPlayer();
     for (let i = 0; i < 6; i++) {
-        const slotContainer = document.getElementById(`trainer-card-slot-${i}`) || document.getElementById(`team-slot-${i}`);
+        const slotContainer = document.getElementById(`trainer-card-slot-${i}`) || document.getElementById(`team-slot-${i}`) || document.getElementById(`team-card-slot-${i}`);
         if (!slotContainer) continue;
 
         const monster = cp.activeTeam ? cp.activeTeam[i] : null;
         if (monster) {
             const activeImg = monster.isShiny && monster.shinyImage ? monster.shinyImage : monster.image;
             const visualContent = activeImg 
-                ? `<img src="${activeImg}" alt="${monster.name}" class="w-full h-14 object-contain ${monster.currentHp <= 0 ? 'grayscale opacity-50' : ''}">`
-                : `<span class="text-2xl">👾</span>`;
+                ? `<img src="${activeImg}" alt="${monster.name}" class="w-full h-12 object-contain ${monster.currentHp <= 0 ? 'grayscale opacity-50' : ''}">`
+                : `<span class="text-xl">👾</span>`;
 
             const curHp = monster.currentHp !== undefined ? monster.currentHp : (monster.maxHp || 20);
             const maxHp = monster.maxHp || monster.hp || 20;
@@ -88,14 +88,14 @@ export function renderTeamCardSlots() {
             const tierCardBg = getTierColorClass(monster.tier || 1);
 
             slotContainer.innerHTML = `
-                <div draggable="true" ondragstart="handleDragStart(event, 'team', ${i})" ondragover="handleDragOver(event)" ondrop="handleDrop(event, 'team', ${i})" onclick="event.stopPropagation(); if(typeof openPokemonDetailModal==='function') openPokemonDetailModal('${monster.uniqueId || monster.id}', 'team')" class="${tierCardBg}${isFainted ? 'from-red-950 to-red-900 border-red-600 text-red-200' : ''} ${monster.isShiny ? 'border-amber-400' : 'border-amber-600'} border rounded p-1 flex flex-col justify-between h-full shadow cursor-pointer hover:brightness-105 transition-all relative text-white">
+                <div draggable="true" ondragstart="handleDragStart(event, 'team', ${i})" ondragover="handleDragOver(event)" ondrop="handleDrop(event, 'team', ${i})" onclick="event.stopPropagation(); if(typeof openPokemonDetailModal==='function') openPokemonDetailModal('${monster.uniqueId || monster.id}', 'team')" class="${tierCardBg}${isFainted ? 'from-red-950 to-red-900 border-red-600 text-red-200' : ''} ${monster.isShiny ? 'border-amber-400' : 'border-amber-600'} border rounded p-1 flex flex-col justify-between h-20 shadow cursor-pointer hover:brightness-105 transition-all relative text-white">
                     ${shinyMarker}
                     <div class="flex justify-between items-center text-[8px] font-bold">
                         <span class="truncate">${monster.name}</span>
                         <span>Nv.${monster.level || 1}</span>
                     </div>
-                    <div class="my-auto bg-black/40 rounded border border-amber-400/50 flex items-center justify-center p-0.5 h-12 relative">
-                        ${visualContent}${isFainted ? '<span class="absolute text-[8px] font-black bg-red-600 text-white px-1 rounded">DESMAIADO</span>' : ''}
+                    <div class="my-auto bg-black/40 rounded border border-amber-400/50 flex items-center justify-center p-0.5 h-10 relative">
+                        ${visualContent}${isFainted ? '<span class="absolute text-[7px] font-black bg-red-600 text-white px-1 rounded">DESMAIADO</span>' : ''}
                     </div>
                     <div class="text-[7px] text-center font-bold text-amber-300">
                         HP: ${curHp}/${maxHp} | STR:${monster.str || 4}
@@ -104,8 +104,8 @@ export function renderTeamCardSlots() {
             `;
         } else {
             slotContainer.innerHTML = `
-                <div ondragover="handleDragOver(event)" ondrop="handleDrop(event, 'team', ${i})" class="border border-dashed border-amber-500/40 rounded bg-black/20 flex items-center justify-center text-[9px] text-amber-500/50 h-full">
-                    Vazio
+                <div ondragover="handleDragOver(event)" ondrop="handleDrop(event, 'team', ${i})" class="border border-dashed border-amber-500/40 rounded bg-black/20 flex items-center justify-center text-[9px] text-amber-500/50 h-20">
+                    Slot ${i + 1} (Vazio)
                 </div>
             `;
         }
