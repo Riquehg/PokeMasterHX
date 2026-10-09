@@ -600,7 +600,7 @@ if (typeof socket !== 'undefined' && socket) {
     });
 }
 
-function renderBoardMapWithHighlights(validNextSteps) {
+export function renderBoardMapWithHighlights(validNextSteps) {
     renderBoardMap(validNextSteps);
 }
 
