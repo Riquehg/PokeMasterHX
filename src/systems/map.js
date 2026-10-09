@@ -323,7 +323,7 @@ export function handleWaypointArrival(waypointId) {
             openCityModal(waypoint.name);
         }
     } else if (waypoint.type === 'pokemon') {
-        if (typeof boardPokemonCards === 'undefined') {
+        if (typeof window.boardPokemonCards === 'undefined') {
             window.boardPokemonCards = {};
         }
 
@@ -356,6 +356,11 @@ export function handleWaypointArrival(waypointId) {
                 revealed: true,
                 weakened: false
             };
+
+            // ADIÇÃO: Força o salvamento imediato do jogo para guardar o Pokémon gerado
+            if (typeof saveGameProgress === 'function') {
+                saveGameProgress();
+            }
         }
 
         const poke = boardPokemonCards[waypointId];
@@ -372,24 +377,6 @@ export function handleWaypointArrival(waypointId) {
         }
     } else if (waypoint.type === 'event') {
         triggerRandomBoardEvent(waypoint.name);
-    }
-}
-
-export function tryInteractWithWeakenedPokemon(waypointId) {
-    if (typeof boardPokemonCards !== 'undefined' && boardPokemonCards[waypointId]) {
-        const poke = boardPokemonCards[waypointId];
-        poke.revealed = true;
-        if (typeof openEncounterModalWithPokemon === 'function') {
-            openEncounterModalWithPokemon(poke);
-        } else {
-            console.error("openEncounterModalWithPokemon não está definida ou não foi importada!");
-        }
-    } else {
-        // Se por acaso a casa ainda não tiver Pokémon gerado, gera um na hora para não falhar
-        const waypoint = BOARD_WAYPOINTS.find(w => w.id === waypointId);
-        if (waypoint && waypoint.type === 'pokemon') {
-            handleWaypointArrival(waypointId);
-        }
     }
 }
 
