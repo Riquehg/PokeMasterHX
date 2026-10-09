@@ -29,32 +29,40 @@ function getTierColorClass(tier) {
     }
 }
 
-// Detetora ultra-robusta para vantagem de tipagem em tipos compostos (ex: Fogo/Lutador)
+// Detetora ultra-robusta e flexível para vantagem de tipagem em tipos compostos, strings ou arrays
 function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
     if (!attackerType || !defenderType) return 1.0;
     
     const parseTypes = (t) => {
-        if (Array.isArray(t)) return t.map(x => String(x).toLowerCase().trim());
-        // Trata separação por barra /, vírgula , ou espaços
+        if (Array.isArray(t)) return t.flatMap(x => String(x).toLowerCase().split(/[\/\s,]+/)).filter(Boolean);
         return String(t).toLowerCase().split(/[\/\s,]+/).filter(Boolean);
     };
 
     const attackerTypes = parseTypes(attackerType);
     const defenderTypes = parseTypes(defenderType);
     
+    // Tabela oficial/estendida de vantagens de Kanto/Geração clássica
     const advantages = {
         'fire': ['grass', 'bug', 'ice', 'steel'],
         'water': ['fire', 'ground', 'rock'],
         'grass': ['water', 'ground', 'rock'],
         'electric': ['water', 'flying'],
         'psychic': ['fighting', 'poison'],
-        'fighting': ['normal', 'ice', 'rock', 'dark', 'steel']
+        'fighting': ['normal', 'ice', 'rock', 'dark', 'steel'],
+        'ice': ['grass', 'ground', 'flying', 'dragon'],
+        'ground': ['fire', 'electric', 'poison', 'rock', 'steel'],
+        'rock': ['fire', 'ice', 'flying', 'bug'],
+        'flying': ['grass', 'fighting', 'bug'],
+        'bug': ['grass', 'psychic', 'dark'],
+        'poison': ['grass', 'fairy'],
+        'ghost': ['psychic', 'ghost'],
+        'dragon': ['dragon']
     };
 
     for (let a of attackerTypes) {
         for (let d of defenderTypes) {
             if (advantages[a] && advantages[a].includes(d)) {
-                return 1.5; // Vantagem detetada com sucesso!
+                return 1.5; // Vantagem detetada!
             }
         }
     }
@@ -190,7 +198,11 @@ export function updateEncounterUIInfo() {
     const wildHp = wild.currentHp !== undefined ? wild.currentHp : (wild.maxHp || 20);
     const wildMaxHp = wild.maxHp || wild.hp || 20;
 
-    const typeMult = calculateTypeAdvantageMultiplier(activeMon.type || activeMon.types, wild.type || wild.types);
+    // Garante leitura correta dos tipos do jogador e do selvagem (seja string ou array)
+    const pType = activeMon.types || activeMon.type;
+    const wType = wild.types || wild.type;
+
+    const typeMult = calculateTypeAdvantageMultiplier(pType, wType);
     let advantageBadgeHtml = '';
     if (typeMult > 1.0) {
         advantageBadgeHtml = `<span class="bg-emerald-500 text-black text-[9px] px-2 py-0.5 rounded font-black uppercase">⚡ Vantagem (1.5x)</span>`;
@@ -311,6 +323,8 @@ export function cyclePlayerEncounterPokemon() {
     currentEncounterState.selectedTeamMemberIndex = nextIndex;
     const switchedMon = cp.activeTeam[nextIndex];
     showCustomPopup("Troca de Anima", `🔄 Enviaste para a frente de batalha o ${switchedMon.name}!`, true);
+    
+    // Força a atualização imediata da HUD de combate
     updateEncounterUIInfo();
 }
 
@@ -479,7 +493,10 @@ export function resolveBattleAttempt() {
         playAttackAnimation();
 
         const wildDice = Math.floor(Math.random() * 6) + 1;
-        const typeMult = calculateTypeAdvantageMultiplier(activeMon.type || activeMon.types, wild.type || wild.types);
+        const pType = activeMon.types || activeMon.type;
+        const wType = wild.types || wild.type;
+        const typeMult = calculateTypeAdvantageMultiplier(pType, wType);
+
         const playerPower = Math.round(((activeMon.str || (5 + (activeMon.level * 0.9))) + currentEncounterState.battlePowerBonus + playerDice) * typeMult);
         const wildPower = (wild.str || 4) + wildDice;
 
@@ -590,7 +607,7 @@ export function resolveCaptureAttempt() {
             if (!cp.pokedex.includes(wild.id)) cp.pokedex.push(wild.id);
 
             if (wild.waypointId && typeof boardPokemonCards !== 'undefined') {
-                delete boardPokemonCards[wild.waypointId];
+                dispatchDeleteBoardCard(wild.waypointId);
             }
 
             closeEncounterModalUI();
@@ -633,6 +650,7 @@ function showCustomPopup(title, message, isSuccess) {
     }
 }
 
+// Exposição global das funções para interações no HTML e troca de Pokémon
 window.openEncounterModalWithPokemon = openEncounterModalWithPokemon;
 window.fleeEncounter = fleeEncounter;
 window.resolveCaptureAttempt = resolveCaptureAttempt;
