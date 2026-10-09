@@ -1,460 +1,532 @@
-// --- src/systems/encounter.js ---
-// Subsistema completo de Batalhas TCG Selvagens, Captura e Gestão de Animas em Combate
-
-import { gameState, getCurrentPlayer } from '../core/state.js';
-import { renderTeamCardSlots, renderBottomPanel } from './pcbox.js';
-import { SUPABASE_STORAGE_URL } from '../config/constants.js';
-import { MONSTER_CATALOG } from '../config/cards-data.js';
-import { saveGameProgress } from '../core/storage.js';
-
-export let currentEncounterState = {
-    wildPokemon: null,
-    itemBonus: 0,
-    battlePowerBonus: 0,
-    selectedTeamMemberIndex: 0,
-    selectedCaptureBallId: null,
-    hasAttemptedCapture: false
-};
-
-// Mapeamento de cores de tiers para classes visuais
-function getTierColorClass(tier) {
-    switch (Number(tier)) {
-        case 1: return 'from-stone-800 via-stone-900 to-black border-stone-600';
-        case 2: return 'from-emerald-950 via-stone-900 to-black border-emerald-600';
-        case 3: return 'from-blue-950 via-stone-900 to-black border-blue-600';
-        case 4: return 'from-purple-950 via-stone-900 to-black border-purple-600';
-        case 5: return 'from-amber-950 via-yellow-950 to-black border-amber-500';
-        default: return 'from-slate-900 to-black border-slate-700';
-    }
-}
-
-// Cálculo de vantagem de tipos elemental básica
-function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
-    if (!attackerType || !defenderType) return 1.0;
-    const a = attackerType.toLowerCase();
-    const d = defenderType.toLowerCase();
-    
-    const advantages = {
-        'fire': ['grass', 'bug', 'ice', 'steel'],
-        'water': ['fire', 'ground', 'rock'],
-        'grass': ['water', 'ground', 'rock'],
-        'electric': ['water', 'flying'],
-        'psychic': ['fighting', 'poison'],
-        'fighting': ['normal', 'ice', 'rock', 'dark', 'steel']
-    };
-
-    if (advantages[a] && advantages[a].includes(d)) return 1.5;
-    return 1.0;
-}
-
-// Geração de Pokémon Selvagem com base no Waypoint
-export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa') {
-    if (!Array.isArray(MONSTER_CATALOG) || MONSTER_CATALOG.length === 0) return null;
-
-    let targetTier = 1;
-    const color = String(waypointColor).toLowerCase();
-    if (color === 'verde') targetTier = 2;
-    else if (color === 'azul') targetTier = 3;
-    else if (color === 'vermelho') targetTier = 4;
-    else if (color === 'amarelo') targetTier = 5;
-
-    let tierFiltered = MONSTER_CATALOG.filter(m => Number(m.tier || 1) === targetTier);
-    if (tierFiltered.length === 0) tierFiltered = MONSTER_CATALOG;
-
-    const baseMon = tierFiltered[Math.floor(Math.random() * tierFiltered.length)];
-    const tier = baseMon.tier || targetTier;
-
-    let minLevel = 3, maxLevel = 6;
-    if (tier === 2) { minLevel = 8; maxLevel = 12; }
-    else if (tier === 3) { minLevel = 15; maxLevel = 22; }
-    else if (tier === 4) { minLevel = 25; maxLevel = 35; }
-    else if (tier === 5) { minLevel = 40; maxLevel = 50; }
-
-    const level = Math.floor(Math.random() * (maxLevel - minLevel + 1)) + minLevel;
-    const isShiny = Math.random() < 0.06;
-    const maxHp = 20 + (level * 3);
-
-    return {
-        ...baseMon,
-        uniqueId: 'wild_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-        level: level,
-        tier: tier,
-        currentHp: maxHp,
-        maxHp: maxHp,
-        isShiny: isShiny,
-        waypointId: waypointId,
-        weakened: false
-    };
-}
-
-export function openEncounterModalWithPokemon(pokemon) {
-    const cp = getCurrentPlayer();
-    
-    let modal = document.getElementById('wild-encounter-modal') || document.getElementById('encounter-modal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'wild-encounter-modal';
-        modal.className = 'fixed inset-0 bg-black/90 z-[500] flex items-center justify-center p-4 backdrop-blur-md hidden';
-        document.body.appendChild(modal);
-    }
-
-    if (!cp.activeTeam || cp.activeTeam.length === 0) {
-        showCustomPopup("Aviso", "🚫 Precisas de pelo menos um Pokémon na Equipa Ativa!", false);
-        return;
-    }
-
-    let validIndex = cp.activeTeam.findIndex(m => (m.currentHp !== undefined ? m.currentHp : m.maxHp) > 0);
-    if (validIndex === -1) {
-        showCustomPopup("Equipa Desmaiada!", "⚠ Todos os Pokémon da tua Equipa Ativa estão desmaiados (HP 0)!", false);
-        return;
-    }
-
-    currentEncounterState.wildPokemon = pokemon;
-    currentEncounterState.itemBonus = 0;
-    currentEncounterState.battlePowerBonus = 0;
-    currentEncounterState.selectedTeamMemberIndex = validIndex;
-    currentEncounterState.selectedCaptureBallId = null;
-    currentEncounterState.hasAttemptedCapture = false;
-
-    // Renderiza o layout estruturado TCG para o Combate e Captura
-    modal.innerHTML = `
-        <div class="trainer-card max-w-4xl w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
-            <div class="flex justify-between items-center border-b border-amber-900/60 pb-2">
-                <h2 class="text-xs font-black text-amber-400 font-cinzel tracking-wider">⚔ COMBATE TCG & CAPTURA HEX</h2>
-                <button onclick="fleeEncounter()" class="text-amber-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-amber-800 cursor-pointer">✕</button>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 justify-items-center">
-                <div id="player-card-visual" class="w-72 h-[420px] bg-gradient-to-b from-amber-100 via-amber-50 to-amber-200 border-4 border-amber-600 rounded-3xl p-4 flex flex-col justify-between text-black shadow-2xl relative"></div>
-                <div id="enc-card-visual" class="w-72 h-[420px] bg-gradient-to-b from-red-950 via-stone-900 to-black border-4 border-red-600 rounded-3xl p-4 flex flex-col justify-between text-white shadow-2xl relative"></div>
-            </div>
-
-            <div class="border-t border-amber-900/60 pt-3">
-                <p class="text-[10px] text-amber-300 font-bold mb-2">🎒 Mochila / Itens e Ações em Combate:</p>
-                <div id="encounter-items-container" class="flex flex-wrap gap-2 max-h-28 overflow-y-auto p-1"></div>
-            </div>
-
-            <div class="flex justify-center gap-3 pt-2">
-                <button onclick="resolveBattleAttempt()" class="bg-blue-700 hover:bg-blue-600 text-white font-black px-5 py-2.5 rounded-xl text-xs uppercase shadow cursor-pointer">
-                    ⚔ Atacar (Rolar Dado)
-                </button>
-                <button onclick="resolveCaptureAttempt()" class="bg-emerald-700 hover:bg-emerald-600 text-white font-black px-5 py-2.5 rounded-xl text-xs uppercase shadow cursor-pointer">
-                    🔴 Tentar Capturar
-                </button>
-                <button onclick="fleeEncounter()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-5 py-2.5 rounded-xl text-xs cursor-pointer">
-                    🏃‍♂️ Fugir
-                </button>
-            </div>
-        </div>
-    `;
-
-    updateEncounterUIInfo();
-    renderEncounterItemsList();
-
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-}
-
-export function updateEncounterUIInfo() {
-    const cp = getCurrentPlayer();
-    const wild = currentEncounterState.wildPokemon;
-    const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex] || cp.activeTeam[0];
-    if (!wild || !activeMon) return;
-
-    const activeHp = activeMon.currentHp !== undefined ? activeMon.currentHp : (activeMon.maxHp || 20);
-    const activeMaxHp = activeMon.maxHp || activeMon.hp || 20;
-
-    const typeMult = calculateTypeAdvantageMultiplier(activeMon.type, wild.type);
-    const baseStr = (activeMon.str || 4) + currentEncounterState.battlePowerBonus;
-    const estimatedPlayerPower = Math.round(baseStr * typeMult); 
-    
-    const isLegendary = (wild.tier === 5) || (wild.color && wild.color.toLowerCase() === 'amarelo');
-    const weakenedBonus = (wild.weakened && !isLegendary) ? 1 : 0;
-    const totalCaptureBonusSoFar = currentEncounterState.itemBonus + weakenedBonus;
-
-    let displayTarget = 4;
-    const tier = wild.tier || 1;
-    if (tier === 2) displayTarget = 5;
-    else if (tier === 3 || tier === 4) displayTarget = 6;
-    else if (isLegendary) displayTarget = 7;
-    if (wild.isShiny) displayTarget += 1;
-
-    const playerCardBg = getTierColorClass(activeMon.tier || 1);
-    const enemyCardBg = getTierColorClass(wild.tier || 1);
-    const auraEncPlayerClass = activeMon.auraEffect || '';
-
-    const playerVisual = document.getElementById('player-card-visual');
-    if (playerVisual) {
-        playerVisual.className = `relative flex flex-col justify-between p-4 rounded-3xl border-4 ${playerCardBg} ${auraEncPlayerClass} shadow-2xl w-72 h-[420px] text-white`;
-        playerVisual.innerHTML = `
-            <div class="flex justify-between items-center font-black text-xs border-b-2 border-amber-400 pb-2">
-                <span class="text-amber-300 font-bold uppercase">NV. ${activeMon.level || 1}</span>
-                <span class="text-amber-900 bg-amber-200 px-2 py-0.5 rounded font-bold uppercase text-[10px] border border-amber-400">${activeMon.type || 'Normal'}</span>
-            </div>
-            
-            <div class="flex flex-col items-center justify-center my-auto space-y-3">
-                <h3 class="text-base font-black text-white text-center truncate w-full">${activeMon.name}</h3>
-                <div class="flex items-center justify-center bg-black/60 w-36 h-36 rounded-2xl border-2 border-amber-400 shadow-inner p-3 relative">
-                    <img src="${activeMon.isShiny && activeMon.shinyImage ? activeMon.shinyImage : (activeMon.image || '')}" alt="${activeMon.name}" class="max-h-32 max-w-full object-contain drop-shadow-md" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
-                </div>
-            </div>
-
-            <div class="w-full bg-black/90 text-amber-300 rounded-2xl p-3 text-center space-y-1.5 shadow-md">
-                <p class="text-xs font-bold tracking-wide">HP: ${activeHp} / ${activeMaxHp} &nbsp;|&nbsp; STR: ${activeMon.str || 4}</p>
-                <p class="text-[11px] font-black text-emerald-400 bg-emerald-950/90 rounded-xl px-2.5 py-1 border border-emerald-600">⚡ Pré-Soma: ~${estimatedPlayerPower} + [🎲 1-6]</p>
-            </div>
-            
-            <button onclick="cyclePlayerEncounterPokemon()" class="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-amber-600 hover:bg-amber-500 text-black font-black text-[10px] px-3 py-1 rounded-full shadow border border-amber-300 uppercase tracking-wider cursor-pointer">
-                🔄 Trocar Anima
-            </button>
-        `;
-    }
-
-    const encVisual = document.getElementById('enc-card-visual');
-    if (encVisual) {
-        encVisual.className = `relative flex flex-col justify-between p-4 rounded-3xl border-4 ${enemyCardBg} shadow-2xl w-72 h-[420px] text-white ${wild.isShiny ? 'shiny-card-glow' : ''}`;
-        const weakenedBadge = wild.weakened ? `<span class="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-md font-bold shadow">🩹 Enfraquecido (+1 Cap.)</span>` : '';
-        const shinyWildBadge = wild.isShiny ? `<span class="bg-amber-400 text-black text-[10px] px-2 py-0.5 rounded-md font-black shadow animate-pulse">✨ SHINY SELVAGEM</span>` : '';
-        
-        encVisual.innerHTML = `
-            <div class="flex justify-between items-center font-black text-xs border-b-2 border-red-900 pb-2">
-                <span class="text-red-400 font-bold uppercase">NV. ${wild.level || 1}</span>
-                ${shinyWildBadge}
-                <span class="text-red-300 bg-red-950 px-2 py-0.5 rounded font-bold uppercase text-[10px] border border-red-800">${wild.type || 'Normal'}</span>
-            </div>
-
-            <div class="flex flex-col items-center justify-center my-auto space-y-3">
-                <h3 class="text-base font-black text-white text-center truncate w-full">${wild.name}</h3>
-                <div class="flex items-center justify-center bg-black/60 w-36 h-36 rounded-2xl border-2 ${wild.isShiny ? 'border-amber-400 shiny-card-glow' : 'border-red-800'} shadow-inner p-3 relative">
-                    <img src="${wild.isShiny && wild.shinyImage ? wild.shinyImage : (wild.image || '')}" alt="${wild.name}" class="max-h-32 max-w-full object-contain drop-shadow-md" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
-                    ${wild.weakened ? '<span class="absolute top-2 right-2 bg-red-500 text-xs px-2 py-0.5 rounded-md shadow">🩹</span>' : ''}
-                </div>
-            </div>
-
-            <div class="w-full bg-black/90 text-red-300 rounded-2xl p-3 text-center space-y-1.5 shadow-md">
-                <p class="text-xs font-bold tracking-wide">HP: ${wild.currentHp || wild.hp || 15} &nbsp;|&nbsp; STR: ${wild.str || 3}</p>
-                <p class="text-[11px] font-black text-amber-300 bg-amber-950/90 rounded-xl px-2.5 py-1 border border-amber-600">🎯 Alvo p/ Capturar: ${displayTarget}+ (Bónus: +${totalCaptureBonusSoFar})</p>
-                ${weakenedBadge}
-            </div>
-
-            <div class="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-red-800 text-white font-black text-[10px] px-3 py-1 rounded-full shadow border border-red-600 uppercase tracking-wider pointer-events-none">
-                Inimigo Selvagem
-            </div>
-        `;
-    }
-}
-
-export function cyclePlayerEncounterPokemon() {
-    const cp = getCurrentPlayer();
-    if (!cp || !Array.isArray(cp.activeTeam) || cp.activeTeam.length <= 1) return;
-    
-    let startIndex = currentEncounterState.selectedTeamMemberIndex;
-    let nextIndex = (startIndex + 1) % cp.activeTeam.length;
-    
-    while (nextIndex !== startIndex) {
-        let mon = cp.activeTeam[nextIndex];
-        let hp = mon.currentHp !== undefined ? mon.currentHp : (mon.maxHp || 20);
-        if (hp > 0) break;
-        nextIndex = (nextIndex + 1) % cp.activeTeam.length;
-    }
-
-    currentEncounterState.selectedTeamMemberIndex = nextIndex;
-    updateEncounterUIInfo();
-}
-
-export function renderEncounterItemsList() {
-    const cp = getCurrentPlayer();
-    const container = document.getElementById('encounter-items-container');
-    if (!container) return;
-    container.innerHTML = '';
-
-    if (cp.inventory) {
-        cp.inventory.forEach((item, index) => {
-            const count = item.count !== undefined ? item.count : (item.quantity || 0);
-            if (!item || count <= 0) return;
-            const btn = document.createElement('button');
-            btn.className = "bg-blue-900/60 hover:bg-blue-800 text-blue-200 px-2.5 py-1.5 rounded-lg border border-blue-600 text-[10px] flex items-center gap-1.5 shadow cursor-pointer";
-            const itemImg = item.image ? `<img src="${item.image}" class="w-4 h-4 object-contain">` : `<span>${item.icon || '🎒'}</span>`;
-            btn.innerHTML = `${itemImg} <span>${item.name} (${count})</span>`;
-            btn.onclick = () => useItemInEncounter(item, index);
-            container.appendChild(btn);
-        });
-    }
-}
-
-export function useItemInEncounter(item, itemIndex) {
-    const cp = getCurrentPlayer();
-    const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex];
-    const itemCount = item.count !== undefined ? item.count : (item.quantity || 0);
-
-    if (!activeMon || !item || itemCount <= 0) return;
-
-    if (item.type === 'sphere' || item.category === 'capture' || item.id.includes('ball')) {
-        if (item.count !== undefined) item.count--;
-        else if (item.quantity !== undefined) item.quantity--;
-
-        currentEncounterState.itemBonus = Number(item.value) || 1;
-        currentEncounterState.selectedCaptureBallId = item.id;
-        currentEncounterState.hasAttemptedCapture = true;
-
-        showCustomPopup("Esfera Selecionada", `🔴 Usaste ${item.name}! Bónus de captura aplicado.`, true);
-        renderEncounterItemsList();
-        resolveCaptureAttempt();
-        return;
-    }
-
-    if (item.type === 'heal') {
-        if (activeMon.currentHp >= (activeMon.maxHp || activeMon.hp || 20)) {
-            showCustomPopup("Aviso", `${activeMon.name} já está com HP máximo!`, false);
-            return;
-        }
-        if (item.count !== undefined) item.count--;
-        else if (item.quantity !== undefined) item.quantity--;
-
-        activeMon.currentHp = Math.min(activeMon.maxHp || activeMon.hp || 20, activeMon.currentHp + (Number(item.value) || 20));
-        showCustomPopup("Item Usado", `💊 ${item.name} usada em ${activeMon.name}!`, true);
-        renderEncounterItemsList();
-        updateEncounterUIInfo();
-        if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
-        return;
-    }
-}
-
-window.resolveBattleAttempt = function() {
-    const cp = getCurrentPlayer();
-    const wild = currentEncounterState.wildPokemon;
-    const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex];
-    if (!wild || !activeMon) return;
-
-    if ((activeMon.currentHp !== undefined ? activeMon.currentHp : activeMon.maxHp) <= 0) {
-        showCustomPopup("Pokémon Desmaiado", "⚠ O teu Anima atual está com 0 de HP e não pode lutar! Troca de Anima ou usa um Revive.", false);
-        return;
-    }
-
-    if (typeof window.rollDiceWithAnimation === 'function') {
-        window.rollDiceWithAnimation((playerDice) => {
-            const wildDice = Math.floor(Math.random() * 6) + 1;
-            const typeMult = calculateTypeAdvantageMultiplier(activeMon.type, wild.type);
-            const playerPower = Math.round(((activeMon.str || 4) + currentEncounterState.battlePowerBonus + playerDice) * typeMult);
-            const wildPower = (wild.str || 3) + wildDice;
-
-            if (playerPower >= wildPower) {
-                const damageToWild = Math.max(10, playerPower - wildPower + 10);
-                wild.currentHp = Math.max(0, (wild.currentHp !== undefined ? wild.currentHp : wild.maxHp) - damageToWild);
-
-                if (wild.currentHp <= 0) {
-                    showCustomPopup("🏆 POKÉMON SELVAGEM DERROTADO!", `O teu ${activeMon.name} venceu e desmaiou o ${wild.name} selvagem!\n\nPodes agora tentar capturá-lo.`, true);
-                    wild.weakened = true;
-                } else {
-                    showCustomPopup("⚔️ ATAQUE BEM-SUCEDIDO!", `O teu ${activeMon.name} causou ${damageToWild} de dano ao ${wild.name}!\n\nHP Restante do Selvagem: ${wild.currentHp}/${wild.maxHp || wild.hp}`, true);
-                }
-                updateEncounterUIInfo();
-            } else {
-                const damageToPlayer = 15;
-                activeMon.currentHp = Math.max(0, (activeMon.currentHp || activeMon.maxHp) - damageToPlayer);
-                
-                if (activeMon.currentHp <= 0) {
-                    showCustomPopup("💀 O TEU POKÉMON DESMAIOU", `O ${wild.name} selvagem desferiu um golpe crítico!\n\n💔 O teu ${activeMon.name} desmaiou (HP 0). A batalha contra este selvagem está encerrada para este Anima. Deves fugir ou trocar!`, false);
-                    closeEncounterModalUI();
-                } else {
-                    showCustomPopup("💥 CONTRA-ATAQUE SOFRIDO", `O ${wild.name} selvagem foi mais forte nesta ronda!\n\n💔 ${activeMon.name} sofreu ${damageToPlayer} de dano.`, false);
-                }
-                renderTeamCardSlots();
-                updateEncounterUIInfo();
-            }
-        });
-    }
-};
-
-export function resolveCaptureAttempt() {
-    const cp = getCurrentPlayer();
-    const wild = currentEncounterState.wildPokemon;
-    if (!wild) return;
-
-    let requiredTarget = 4;
-    const tier = wild.tier || 1;
-    const isLegendary = tier === 5 || String(wild.color || '').toLowerCase() === 'amarelo';
-
-    if (tier === 2) requiredTarget = 5;
-    if (tier === 3 || tier === 4) requiredTarget = 6;
-    if (isLegendary) requiredTarget = 7;
-    if (wild.isShiny) requiredTarget++;
-
-    const weakenedBonus = wild.weakened ? 1 : 0;
-    const captureBonus = Number(currentEncounterState.itemBonus) || 0;
-
-    const roll = Math.floor(Math.random() * 6) + 1;
-    const totalCaptureValue = roll + captureBonus + weakenedBonus;
-
-    if (totalCaptureValue >= requiredTarget || currentEncounterState.selectedCaptureBallId?.includes('master')) {
-        showCustomPopup(
-            "🎉 CAPTURA BEM-SUCEDIDA!",
-            `Capturaste o ${wild.name} (Nv.${wild.level || 1})!\nDado: ${roll} + Bónus: ${captureBonus + weakenedBonus} = ${totalCaptureValue} (Alvo: ${requiredTarget}+)`,
-            true
-        );
-
-        const caughtMonster = {
-            ...wild,
-            uniqueId: 'mon_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-            currentHp: wild.maxHp || wild.hp || 20
-        };
-
-        if (!Array.isArray(cp.activeTeam)) cp.activeTeam = [];
-        if (!Array.isArray(cp.pcBox)) cp.pcBox = [];
-
-        if (cp.activeTeam.length < 6) {
-            cp.activeTeam.push(caughtMonster);
-        } else {
-            cp.pcBox.push(caughtMonster);
-            showCustomPopup("PC Box", `📦 Equipa cheia! O ${wild.name} foi enviado para a PC Box.`, true);
-        }
-
-        if (!Array.isArray(cp.pokedex)) cp.pokedex = [];
-        if (!cp.pokedex.includes(wild.id)) cp.pokedex.push(wild.id);
-
-        closeEncounterModalUI();
-        if (typeof renderBoardMap === 'function') renderBoardMap();
-        if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
-        if (typeof renderBottomPanel === 'function') renderBottomPanel();
-        saveGameProgress();
-    } else {
-        wild.weakened = true; 
-        showCustomPopup(
-            "❌ FALHA NA CAPTURA",
-            `O ${wild.name} escapou! (Dado: ${roll} + Bónus: ${captureBonus + weakenedBonus} = ${totalCaptureValue} / Alvo: ${requiredTarget}+).\nO Pokémon ficou enfraquecido.`,
-            false
-        );
-        updateEncounterUIInfo();
-    }
-
-    currentEncounterState.itemBonus = 0;
-    currentEncounterState.selectedCaptureBallId = null;
-}
-
-export function fleeEncounter() {
-    showCustomPopup("Fuga", "🏃‍♂️ Afastaste-te do Pokémon com segurança!", true);
-    closeEncounterModalUI();
-    if (typeof renderBoardMap === 'function') renderBoardMap();
-}
-
-export function closeEncounterModalUI() {
-    const modal = document.getElementById('wild-encounter-modal') || document.getElementById('encounter-modal');
-    if (modal) {
-        modal.classList.remove('flex');
-        modal.classList.add('hidden');
-    }
-}
-
-function showCustomPopup(title, message, isSuccess) {
-    if (typeof window.showCustomPopup === 'function') {
-        window.showCustomPopup(title, message, isSuccess);
-    } else {
-        alert(`${title}: ${message}`);
-    }
-}
-
+// --- src/main.js ---
+import { gameState, setupConfig, ensureValidGameState, getCurrentPlayer, movementState } from './core/state.js';
+import { loadGameProgress, saveGameProgress } from './core/storage.js';
+import { renderBoardMap, tryInteractWithCity, onHexClick } from './systems/map.js';
+import { setupDiceListeners, rollDiceForMovement, handleWaypointClick, resetTurnDiceState } from './systems/dice.js';
+import { MONSTER_CATALOG } from './config/cards-data.js';
+
+// Importação dos Módulos dos Sistemas
+import './systems/city.js';
+import './systems/trainer.js';
+import './systems/battle.js';
+import './systems/vault.js';
+import './systems/lobby.js';
+import './systems/admin.js';
+import './systems/capture.js';
+import './systems/encounter.js';
+import { openPokemartModal, useInventoryItem } from './systems/inventory.js';
+import { openSpecificTrainerCardModal } from './systems/trainer.js';
+import { initiateGymSequence, GYM_LEADERS_CATALOG } from './systems/gym.js';
+import { openEncounterModalWithPokemon, fleeEncounter, cyclePlayerEncounterPokemon, resolveCaptureAttempt } from './systems/encounter.js';
+import { renderTeamCardSlots, renderBottomPanel, changePcBoxPage, switchBottomView } from './systems/pcbox.js';
+import { openPokedexModal, openPokedexDetailCard } from './systems/pokedex.js';
+import { openVaultModal } from './systems/vault.js';
+import { initializeSocketConnection, emitSocket } from './core/socket.js';
+
+// ==========================================
+// EXPOSIÇÃO GLOBAL PARA O HTML (Evita erros de onclick)
+// ==========================================
+window.onHexClick = onHexClick;
+window.rollDiceForMovement = rollDiceForMovement;
+window.rollDice = rollDiceForMovement;
+window.handleWaypointClick = handleWaypointClick;
+window.resetTurnDiceState = resetTurnDiceState;
+window.openSpecificTrainerCardModal = openSpecificTrainerCardModal;
+window.openTrainerCardModal = function() { openSpecificTrainerCardModal(gameState.currentPlayerIndex || 0); };
+window.openPokemartModal = openPokemartModal;
+window.useInventoryItem = useInventoryItem;
+window.tryInteractWithCity = tryInteractWithCity;
+window.saveGameProgress = saveGameProgress;
+window.initiateGymSequence = initiateGymSequence;
+window.GYM_LEADERS_CATALOG = GYM_LEADERS_CATALOG;
 window.openEncounterModalWithPokemon = openEncounterModalWithPokemon;
 window.fleeEncounter = fleeEncounter;
-window.resolveCaptureAttempt = resolveCaptureAttempt;
 window.cyclePlayerEncounterPokemon = cyclePlayerEncounterPokemon;
-window.useItemInEncounter = useItemInEncounter;
+window.resolveCaptureAttempt = resolveCaptureAttempt;
+window.renderTeamCardSlots = renderTeamCardSlots;
+window.renderBottomPanel = renderBottomPanel;
+window.changePcBoxPage = changePcBoxPage;
+window.switchBottomView = switchBottomView;
+window.openPokedexModal = openPokedexModal;
+window.openPokedexDetailCard = openPokedexDetailCard;
+window.openVaultModal = openVaultModal;
+
+// Função global de animação de dado caso o módulo externo não a possua
+window.rollDiceWithAnimation = function(callback) {
+    const diceBtn = document.getElementById('roll-dice-btn');
+    if (diceBtn) {
+        diceBtn.classList.add('animate-spin');
+    }
+    setTimeout(() => {
+        if (diceBtn) {
+            diceBtn.classList.remove('animate-spin');
+        }
+        const result = Math.floor(Math.random() * 6) + 1;
+        if (typeof callback === 'function') {
+            callback(result);
+        }
+    }, 800);
+};
+
+// Exposição do Popup Global de Alerta/Notificação para os eventos do mapa e capturas
+window.showCustomPopup = function(title, message, isSuccess) {
+    let popup = document.getElementById('global-custom-popup');
+    if (!popup) {
+        popup = document.createElement('div');
+        popup.id = 'global-custom-popup';
+        popup.className = 'fixed inset-0 bg-black/80 z-[700] flex items-center justify-center p-4 backdrop-blur-sm';
+        document.body.appendChild(popup);
+    }
+
+    const borderColor = isSuccess ? 'border-emerald-500' : 'border-amber-500';
+    const headerColor = isSuccess ? 'text-emerald-400' : 'text-amber-400';
+
+    popup.innerHTML = `
+        <div class="trainer-card max-w-sm w-full p-5 space-y-3 border-4 ${borderColor} rounded-2xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white text-center">
+            <h3 class="text-sm font-black ${headerColor} font-cinzel">${title}</h3>
+            <p class="text-xs text-slate-200 whitespace-pre-line">${message}</p>
+            <button onclick="document.getElementById('global-custom-popup').remove()" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2 rounded-xl text-xs uppercase tracking-wider cursor-pointer">
+                OK
+            </button>
+        </div>
+    `;
+    popup.classList.remove('hidden');
+};
+
+// Função global para disparar o encontro automático com o Pokémon Selvagem ao aterrilar na casa
+window.triggerPokemonEncounterEvent = function(waypointId, waypointName) {
+    if (typeof window.boardPokemonCards === 'undefined') {
+        window.boardPokemonCards = {};
+    }
+
+    if (!window.boardPokemonCards[waypointId]) {
+        let targetTier = 1;
+        let tierFiltered = MONSTER_CATALOG.filter(m => Number(m.tier || 1) === targetTier);
+        if (tierFiltered.length === 0) tierFiltered = MONSTER_CATALOG;
+
+        const randomMon = tierFiltered[Math.floor(Math.random() * tierFiltered.length)];
+        const isShiny = Math.random() < 0.06;
+        const level = Math.floor(Math.random() * 4) + 3;
+        const maxHp = 20 + (level * 3);
+
+        window.boardPokemonCards[waypointId] = {
+            ...randomMon,
+            uniqueId: 'wild_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+            level: level,
+            tier: targetTier,
+            currentHp: maxHp,
+            maxHp: maxHp,
+            isShiny: isShiny,
+            waypointId: waypointId,
+            revealed: true,
+            weakened: false
+        };
+
+        if (typeof saveGameProgress === 'function') {
+            saveGameProgress();
+        }
+    }
+
+    const poke = window.boardPokemonCards[waypointId];
+    if (poke) {
+        poke.revealed = true;
+        if (typeof openEncounterModalWithPokemon === 'function') {
+            openEncounterModalWithPokemon(poke);
+        }
+    }
+};
+
+// Função para disparar eventos aleatórios nas casas de tipo 'event'
+window.triggerRandomBoardEvent = function(eventName) {
+    const cp = getCurrentPlayer();
+    if (!cp) return;
+
+    const eventsList = [
+        { title: "🎁 Tesouro na Rota!", text: `Encontraste uma algibeira perdida em ${eventName}!\nGanhaste +150 Ouro.`, apply: () => { cp.gold = (cp.gold || 0) + 150; }, success: true },
+        { title: "💊 Sorte no Caminho!", text: `Um viajante bondoso ofereceu-te suprimentos em ${eventName}!\nGanhaste +2 Poções e +1 Poké Ball.`, apply: () => { 
+            if (!Array.isArray(cp.inventory)) cp.inventory = [];
+            cp.inventory.push({ id: 'potion', name: 'Poção', count: 2, type: 'heal', value: 20 });
+            cp.inventory.push({ id: 'ball_poke', name: 'Poké Ball', count: 1, type: 'sphere', value: 1 });
+        }, success: true },
+        { title: "⚡ Tempestade Elétrica!", text: `Uma forte tempestade surpreendeu-te em ${eventName}!\nOs teus Pokémon cansaram-se e perdeste a vez de avançar.`, apply: () => {}, success: false },
+        { title: "🍃 Encontro Calmo", text: `Descansaste à sombra de uma árvore em ${eventName}.\nOs teus Pokémon recuperaram um pouco de energia.`, apply: () => {
+            if (Array.isArray(cp.activeTeam)) {
+                cp.activeTeam.forEach(m => {
+                    if (m && m.currentHp < m.maxHp) m.currentHp = Math.min(m.maxHp, m.currentHp + 10);
+                });
+            }
+        }, success: true }
+    ];
+
+    const randomEvt = eventsList[Math.floor(Math.random() * eventsList.length)];
+    randomEvt.apply();
+    saveGameProgress();
+
+    window.showCustomPopup(randomEvt.title, randomEvt.text, randomEvt.success);
+
+    const banner = document.getElementById('global-map-notification-banner');
+    const bannerText = document.getElementById('global-map-notification-text');
+    if (banner && bannerText) {
+        bannerText.textContent = `${eventName}: ${randomEvt.title}`;
+        banner.classList.remove('hidden');
+        setTimeout(() => {
+            banner.classList.add('hidden');
+        }, 5000);
+    }
+
+    if (typeof renderBoardMap === 'function') renderBoardMap();
+    if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+    if (typeof renderBottomPanel === 'function') renderBottomPanel();
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    console.log("🚀 Inicializando o Motor Modular do Jogo...");
+
+    initializeSocketConnection();
+
+    const loaded = loadGameProgress();
+    if (!loaded) {
+        ensureValidGameState();
+        saveGameProgress();
+    }
+
+    renderBoardMap();
+    renderTeamCardSlots();
+    renderBottomPanel();
+
+    setupDiceListeners();
+    setupGlobalInterfaceListeners();
+    setupAuthenticationListeners();
+    loadDailyPokemonPreview();
+
+    // Botão Admin
+    const adminBtn = document.getElementById('open-admin-btn');
+    if (adminBtn) {
+        adminBtn.onclick = () => {
+            if (typeof window.openAdminPanelModal === 'function') {
+                window.openAdminPanelModal();
+            } else {
+                console.warn("⚠️ O módulo de administração ainda não foi carregado.");
+            }
+        };
+    }
+
+    // Botão Gravar e Iniciar Nova Partida
+    const finalizeBtn = document.getElementById('finalize-creation-btn');
+    if (finalizeBtn) {
+        finalizeBtn.onclick = () => {
+            const nameInput = document.getElementById('setup-trainer-name');
+            const trainerName = nameInput ? nameInput.value.trim() : 'Ash Ketchum';
+            const avatarId = window.selectedAvatarId || 1;
+            const starterKey = window.selectedStarterPokemon || 'bulbasaur';
+
+            const monData = MONSTER_CATALOG.find(m => m.id === starterKey) || {
+                id: starterKey,
+                name: starterKey.charAt(0).toUpperCase() + starterKey.slice(1),
+                image: `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/001.png`,
+                types: ['Grass']
+            };
+
+            const starterInstance = {
+                uniqueId: 'mon_' + Date.now(),
+                id: monData.id,
+                name: monData.name,
+                level: 5,
+                currentHp: 25,
+                maxHp: 25,
+                image: monData.image,
+                types: monData.types || ['Normal']
+            };
+
+            if (!gameState.players || gameState.players.length === 0) {
+                ensureValidGameState();
+            }
+            const player = getCurrentPlayer();
+            if (player) {
+                player.name = trainerName;
+                player.avatarId = avatarId;
+                player.gold = 350;
+                
+                player.team = [starterInstance];
+                player.activeTeam = [starterInstance];
+                player.pcBox = [starterInstance];
+                
+                player.pokedex = [starterKey];
+                player.inventory = [{ 
+                    id: 'ball_poke', 
+                    name: 'Poké Ball', 
+                    count: 5, 
+                    type: 'sphere', 
+                    value: 1,
+                    image: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/items/poke_ball.png' 
+                }];
+            }
+
+            saveGameProgress();
+
+            emitSocket('save_game_state', {
+                gameState: gameState,
+                profileData: { trainerName, avatarId, gold: 350 },
+                trainerName: trainerName
+            });
+
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('main-game-layout').classList.remove('hidden');
+
+            updateTrainerVisuals(trainerName, avatarId);
+            renderBoardMap();
+            renderTeamCardSlots();
+            renderBottomPanel();
+        };
+    }
+
+    console.log("✅ Jogo inicializado com sucesso!");
+});
+
+function updateTrainerVisuals(trainerName, avatarId) {
+    const hudAvatar = document.getElementById('hud-trainer-avatar');
+    if (hudAvatar) {
+        const avatarIdStr = avatarId < 10 ? `0${avatarId}` : `${avatarId}`;
+        hudAvatar.src = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_${avatarIdStr}.png`;
+    }
+
+    const hubAvatarImg = document.getElementById('hub-avatar-img');
+    if (hubAvatarImg) {
+        const avatarIdStr = avatarId < 10 ? `0${avatarId}` : `${avatarId}`;
+        hubAvatarImg.src = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_${avatarIdStr}.png`;
+    }
+
+    const hudName = document.getElementById('hud-trainer-name');
+    if (hudName) hudName.textContent = trainerName;
+}
+
+function setupAuthenticationListeners() {
+    const submitBtn = document.getElementById('auth-submit-btn');
+    if (submitBtn) {
+        submitBtn.onclick = () => {
+            const emailInput = document.getElementById('auth-email-input');
+            const passwordInput = document.getElementById('auth-password-input');
+            const email = emailInput ? emailInput.value.trim() : '';
+            const password = passwordInput ? passwordInput.value.trim() : '';
+
+            if (!email || !password) {
+                alert("Por favor, preencha o e-mail e a senha do treinador.");
+                return;
+            }
+
+            emitSocket('login_request', { email, password });
+        };
+    }
+
+    const resumeBtn = document.getElementById('hub-resume-btn');
+    if (resumeBtn) {
+        resumeBtn.onclick = () => {
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('main-game-layout').classList.remove('hidden');
+            const player = getCurrentPlayer();
+            if (player) {
+                updateTrainerVisuals(player.name || 'Ash', player.avatarId || 1);
+            }
+            renderBoardMap();
+            renderTeamCardSlots();
+            renderBottomPanel();
+        };
+    }
+
+    const vaultBtn = document.getElementById('hub-vault-btn');
+    if (vaultBtn) vaultBtn.onclick = () => openVaultModal();
+
+    const onlineBtn = document.getElementById('hub-online-btn');
+    const onlineLobby = document.getElementById('online-lobby-container');
+    const trainerMainMenu = document.getElementById('trainer-main-menu');
+    if (onlineBtn && onlineLobby && trainerMainMenu) {
+        onlineBtn.onclick = () => {
+            trainerMainMenu.classList.add('hidden');
+            onlineLobby.classList.remove('hidden');
+        };
+    }
+
+    const lobbyBackBtn = document.getElementById('lobby-back-btn');
+    if (lobbyBackBtn && onlineLobby && trainerMainMenu) {
+        lobbyBackBtn.onclick = () => {
+            onlineLobby.classList.add('hidden');
+            trainerMainMenu.classList.remove('hidden');
+        };
+    }
+}
+
+window.handleLoginResponse = function(response) {
+    if (!response || response.success !== true) {
+        alert(response?.message || 'Erro ao autenticar no servidor.');
+        return;
+    }
+
+    if (response.isNew || response.newAccount) {
+        document.getElementById('auth-container')?.classList.add('hidden');
+        if (typeof window.openCharacterCreationMode === 'function') {
+            window.openCharacterCreationMode();
+        }
+        return;
+    }
+
+    document.getElementById('auth-container')?.classList.add('hidden');
+    document.getElementById('trainer-main-menu')?.classList.remove('hidden');
+
+    const player = getCurrentPlayer();
+    if (player && response.profileData) {
+        Object.assign(player, response.profileData);
+        updateTrainerVisuals(player.name, player.avatarId || 1);
+        renderBoardMap();
+        saveGameProgress();
+    }
+};
+
+window.openCharacterCreationMode = function () {
+    document.getElementById('auth-container')?.classList.add('hidden');
+    document.getElementById('trainer-main-menu')?.classList.add('hidden');
+    document.getElementById('character-creation-container')?.classList.remove('hidden');
+
+    const avatarGrid = document.getElementById('avatar-selection-grid');
+    if (avatarGrid && avatarGrid.children.length === 0) {
+        let avatarsHtml = '';
+        for (let i = 1; i <= 8; i++) {
+            const avatarId = i < 10 ? `0${i}` : `${i}`;
+            const url = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_${avatarId}.png`;
+            avatarsHtml += `
+                <div onclick="selectAvatar(${i})" data-avatar="${i}" class="avatar-option w-14 h-16 bg-black/60 border-2 ${i === 1 ? 'border-amber-400' : 'border-blue-900'} rounded-xl p-1 flex items-center justify-center cursor-pointer hover:border-amber-400 transition-all">
+                    <img src="${url}" class="w-full h-full object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                </div>
+            `;
+        }
+        avatarGrid.innerHTML = avatarsHtml;
+        window.selectedAvatarId = 1;
+    }
+
+    const starterGrid = document.getElementById('starter-selection-grid');
+    if (starterGrid && starterGrid.children.length === 0) {
+        const starters = [
+            { id: 'bulbasaur', name: 'Bulbasaur', dex: '001' },
+            { id: 'charmander', name: 'Charmander', dex: '004' },
+            { id: 'squirtle', name: 'Squirtle', dex: '007' },
+            { id: 'pikachu', name: 'Pikachu', dex: '025' },
+            { id: 'eevee', name: 'Eevee', dex: '133' },
+            { id: 'machop', name: 'Machop', dex: '066' },
+            { id: 'gastly', name: 'Gastly', dex: '092' },
+            { id: 'cubone', name: 'Cubone', dex: '104' }
+        ];
+
+        let startersHtml = '';
+        starters.forEach((mon, index) => {
+            const url = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/${mon.dex}.png`;
+            const isSelected = index === 0;
+            startersHtml += `
+                <div id="starter-${mon.id}" onclick="selectStarter('${mon.id}')" class="starter-option w-16 h-20 bg-black/40 border-2 ${isSelected ? 'border-amber-400 bg-amber-950/60' : 'border-blue-900'} rounded-xl p-1 flex flex-col items-center justify-between cursor-pointer hover:border-amber-400 transition-all">
+                    <img src="${url}" class="w-10 h-10 object-contain drop-shadow" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                    <span class="text-[8px] text-white font-bold truncate">${mon.name}</span>
+                </div>
+            `;
+        });
+        starterGrid.innerHTML = startersHtml;
+        window.selectedStarterPokemon = 'bulbasaur';
+    }
+};
+
+window.selectAvatar = function(id) {
+    window.selectedAvatarId = id;
+    const previewImg = document.getElementById('preview-avatar-img');
+    if (previewImg) {
+        const avatarIdStr = id < 10 ? `0${id}` : `${id}`;
+        previewImg.src = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_${avatarIdStr}.png`;
+    }
+
+    document.querySelectorAll('.avatar-option').forEach(el => {
+        el.classList.remove('border-amber-400');
+        el.classList.add('border-blue-900');
+    });
+    document.querySelector(`[data-avatar="${id}"]`)?.classList.replace('border-blue-900', 'border-amber-400');
+};
+
+window.selectStarter = function(starterName) {
+    window.selectedStarterPokemon = starterName.toLowerCase();
+    document.querySelectorAll('.starter-option').forEach(el => {
+        el.classList.remove('border-amber-400', 'bg-amber-950/60');
+        el.classList.add('border-blue-900', 'bg-black/40');
+    });
+    document.getElementById(`starter-${starterName.toLowerCase()}`)?.classList.replace('border-blue-900', 'border-amber-400');
+};
+
+function loadDailyPokemonPreview() {
+    const nameEl = document.getElementById('daily-pokemon-name');
+    const spriteEl = document.getElementById('daily-pokemon-sprite');
+
+    if (MONSTER_CATALOG && MONSTER_CATALOG.length > 0) {
+        const randomIndex = Math.floor(Math.random() * MONSTER_CATALOG.length);
+        const dailyMon = MONSTER_CATALOG[randomIndex];
+
+        if (nameEl) nameEl.textContent = dailyMon.name;
+        if (spriteEl && dailyMon.image) {
+            spriteEl.src = dailyMon.image;
+        }
+    }
+}
+
+// Vinculação de todos os botões de controlo do HUD superior
+function setupGlobalInterfaceListeners() {
+    const trainerCardBtn = document.getElementById('open-trainer-card-btn') || document.getElementById('trainer-badge-btn');
+    if (trainerCardBtn) {
+        trainerCardBtn.onclick = () => {
+            openSpecificTrainerCardModal(gameState.currentPlayerIndex || 0);
+        };
+    }
+
+    const pokedexBtn = document.getElementById('open-pokedex-btn');
+    if (pokedexBtn) {
+        pokedexBtn.onclick = () => openPokedexModal();
+    }
+
+    const saveGameBtn = document.getElementById('save-game-btn');
+    if (saveGameBtn) {
+        saveGameBtn.onclick = () => {
+            saveGameProgress();
+            alert("💾 Jogo salvo com sucesso!");
+        };
+    }
+
+    const exportSaveBtn = document.getElementById('export-save-btn');
+    if (exportSaveBtn) {
+        exportSaveBtn.onclick = () => {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(gameState, null, 2));
+            const dlAnchorElem = document.createElement('a');
+            dlAnchorElem.setAttribute("href", dataStr);
+            dlAnchorElem.setAttribute("download", "pokemon_master_trainer_save.json");
+            dlAnchorElem.click();
+        };
+    }
+
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.onclick = () => {
+            if (confirm("Deseja sair para o menu principal?")) {
+                document.getElementById('main-game-layout').classList.add('hidden');
+                document.getElementById('setup-screen').classList.remove('hidden');
+                document.getElementById('auth-container')?.classList.remove('hidden');
+            }
+        };
+    }
+
+    const passTurnBtn = document.getElementById('pass-turn-btn');
+    if (passTurnBtn) {
+        passTurnBtn.onclick = () => {
+            gameState.currentPlayerIndex = ((gameState.currentPlayerIndex || 0) + 1) % (gameState.players?.length || 1);
+            
+            if (typeof movementState !== 'undefined') {
+                movementState.hasRolledThisTurn = false;
+                movementState.isMoving = false;
+            }
+
+            alert(`🔄 Turno passado com sucesso! Agora é a vez do próximo jogador.`);
+            renderTeamCardSlots();
+            renderBoardMap();
+        };
+    }
+}
