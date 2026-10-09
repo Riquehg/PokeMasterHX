@@ -5,7 +5,7 @@ import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 import { gameState, getCurrentPlayer, movementState } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
 import { BOARD_WAYPOINTS, getValidDestinations, renderBoardMap, renderBoardMapWithHighlights, moveTokenToWaypoint } from './map.js';
-import { openEncounterModalWithPokemon } from './battle.js';
+import { openEncounterModalWithPokemon } from './encounter.js';
 
 // ------------------------------------------------------------
 // CONFIGURAÇÃO DE EVENTOS DA HUD (Vincula o clique do dado)
