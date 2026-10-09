@@ -87,7 +87,8 @@
                     <button type="button" id="hub-resume-btn" class="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-wider shadow transition-all cursor-pointer">
                         ▶ Continuar Partida Salva
                     </button>
-                    <button type="button" id="hub-new-game-btn" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2.5 rounded-xl text-xs uppercase tracking-wider shadow transition-all cursor-pointer">
+                    <!-- Botão de Nova Partida (Reset Inteligente) -->
+                    <button type="button" id="hub-new-game-btn" onclick="resetGameProgressKeepCollection()" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2.5 rounded-xl text-xs uppercase tracking-wider shadow transition-all cursor-pointer">
                         ✨ Nova Partida (Manter Perfil & Farmar Pokédex)
                     </button>
                     <button type="button" id="hub-vault-btn" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-wider shadow transition-all cursor-pointer">
@@ -294,7 +295,7 @@
         </main>
     </div>
 
-    <!-- === MODAL DE COMBATE TCG & CAPTURA (Atualizado com os botões funcionais do encounter.js) === -->
+    <!-- === MODAL DE COMBATE TCG & CAPTURA === -->
     <div id="wild-encounter-modal" class="fixed inset-0 bg-black/90 z-[500] flex items-center justify-center p-4 backdrop-blur-md hidden">
         <div class="trainer-card max-w-4xl w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white relative">
             <div class="flex justify-between items-center border-b border-amber-900/60 pb-2">
