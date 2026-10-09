@@ -10,6 +10,7 @@ import { openPokemartModal } from './systems/inventory.js';
 import { MONSTER_CATALOG } from './config/cards-data.js';
 import './systems/city.js';
 import './systems/trainer.js';
+import './systems/battle.js';
 
 // ==========================================
 // EXPOSIÇÃO GLOBAL PARA O HTML (Evita erros de onclick)
