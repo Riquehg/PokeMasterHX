@@ -8,6 +8,20 @@ import { BOARD_WAYPOINTS, getValidDestinations, renderBoardMap, renderBoardMapWi
 import { openEncounterModalWithPokemon } from './battle.js';
 
 // ------------------------------------------------------------
+// CONFIGURAÇÃO DE EVENTOS DA HUD (Vincula o clique do dado)
+// ------------------------------------------------------------
+
+export function setupDiceListeners() {
+    const diceBtn = document.getElementById('roll-dice-btn') || document.getElementById('dice-container');
+    if (diceBtn && !diceBtn.dataset.listenerAttached) {
+        diceBtn.dataset.listenerAttached = "true";
+        diceBtn.onclick = () => {
+            rollDiceForMovement();
+        };
+    }
+}
+
+// ------------------------------------------------------------
 // FUNÇÕES AUXILIARES
 // ------------------------------------------------------------
 
