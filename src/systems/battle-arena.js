@@ -1,4 +1,5 @@
 // --- MÓDULO DE ARENA DE BATALHA TCG (battle-arena.js) ---
+import { getCurrentPlayer, gameState } from '../core/state.js';
 
 if (typeof SUPABASE_STORAGE_URL === 'undefined') {
     var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
