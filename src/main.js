@@ -3,7 +3,7 @@
 
 import { gameState, setupConfig, ensureValidGameState, getCurrentPlayer } from './core/state.js';
 import { loadGameProgress, saveGameProgress } from './core/storage.js';
-import { renderBoardMap, tryInteractWithCity } from './systems/map.js';
+import { renderBoardMap, tryInteractWithCity, onHexClick } from './systems/map.js';
 import { setupDiceListeners } from './systems/dice.js';
 import { MONSTER_CATALOG } from './config/cards-data.js';
 
@@ -11,7 +11,6 @@ import { MONSTER_CATALOG } from './config/cards-data.js';
 import './systems/city.js';
 import './systems/trainer.js';
 import './systems/battle.js';
-import { onHexClick } from './systems/map.js';
 import { openPokemartModal, useInventoryItem } from './systems/inventory.js';
 import { openSpecificTrainerCardModal } from './systems/trainer.js';
 import { initiateGymSequence, GYM_LEADERS_CATALOG } from './systems/gym.js';
@@ -22,6 +21,7 @@ import { openPokedexModal, openPokedexDetailCard } from './systems/pokedex.js';
 // ==========================================
 // EXPOSIÇÃO GLOBAL PARA O HTML (Evita erros de onclick)
 // ==========================================
+window.onHexClick = onHexClick;
 window.openSpecificTrainerCardModal = openSpecificTrainerCardModal;
 window.openTrainerCardModal = function() { openSpecificTrainerCardModal(gameState.currentPlayerIndex || 0); };
 window.openPokemartModal = openPokemartModal;
@@ -147,13 +147,6 @@ function setupGlobalInterfaceListeners() {
     if (trainerCardBtn) {
         trainerCardBtn.onclick = () => {
             openSpecificTrainerCardModal(gameState.currentPlayerIndex || 0);
-        };
-    }
-
-    const martBtn = document.getElementById('open-pokemart-btn');
-    if (martBtn) {
-        martBtn.onclick = () => {
-            openPokemartModal();
         };
     }
 
