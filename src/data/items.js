@@ -490,3 +490,9 @@ window.usePlayerItem = function(itemId, itemIndex) {
         showCustomPopup('Item', `Usaste ${itemInfo.name}.`, true);
     }
 };
+
+window.usePlayerItem = function(itemId, index) {
+    if (typeof window.useInventoryItem === 'function') {
+        window.useInventoryItem(index);
+    }
+};
