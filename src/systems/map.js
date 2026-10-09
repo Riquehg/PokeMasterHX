@@ -357,7 +357,6 @@ export function handleWaypointArrival(waypointId) {
                 weakened: false
             };
 
-            // ADIÇÃO: Força o salvamento imediato do jogo para guardar o Pokémon gerado
             if (typeof saveGameProgress === 'function') {
                 saveGameProgress();
             }
