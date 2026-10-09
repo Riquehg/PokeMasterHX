@@ -7,7 +7,11 @@ import { saveGameProgress } from '../core/storage.js';
 import { openEncounterModalWithPokemon } from './encounter.js';
 import { MONSTER_CATALOG } from '../config/cards-data.js';
 
-export const BOARD_WAYPOINTS = [
+// ADIÇÃO CRUCIAL: Garantir que o gestor global dos Pokémon do tabuleiro existe
+if (typeof window.boardPokemonCards === 'undefined') {
+    window.boardPokemonCards = {};
+}
+const boardPokemonCards = window.boardPokemonCards;
     // --- HEXÁGONO A ---
     { id: 5, name: "Inicio Pallet", hexagon: "A", top: 61.2, left: 6.7, type: "city", color: "rosa", requiredType: "", connections: [6] },
     { id: 6, name: "casa_6", hexagon: "A", top: 72.2, left: 7.7, type: "pokemon", color: "rosa", requiredType: "", connections: [7] },
