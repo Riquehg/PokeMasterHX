@@ -222,80 +222,85 @@ export function changePcBoxPage(direction) {
     renderBottomPanel();
 }
 
-export function addExperienceToMonster(monster, amount) {
-    monster.xp = (monster.xp || 0) + amount;
-    if (monster.xp >= 100) {
-        monster.xp -= 100;
-        monster.level = (monster.level || 1) + 1;
-        
-        monster.maxHp = (monster.maxHp || 20) + 2;
-        monster.currentHp = Math.min(monster.maxHp, (monster.currentHp || monster.maxHp) + 2);
-        monster.str = (monster.str || 4) + 1;
+// ==========================================
+// MODAL DE FICHA TÉCNICA DO ANIMA (Corrigido com XP, Nível e Stats Reais)
+// ==========================================
+window.openPokemonDetailModal = function(identifier, sourceArea) {
+    const cp = getCurrentPlayer();
+    if (!cp) return;
 
-        if (typeof appendAdventureLog === 'function') {
-            appendAdventureLog(`📈 ${monster.name} subiu para o Nível ${monster.level}! (HP +2, STR +1)`);
-        }
-        checkMonsterEvolution(monster);
+    let monster = null;
+    if (sourceArea === 'team' && Array.isArray(cp.activeTeam)) {
+        monster = cp.activeTeam.find(m => m && (m.uniqueId === identifier || m.id === identifier));
+    } else if (Array.isArray(cp.pcBox)) {
+        monster = cp.pcBox.find(m => m && (m.uniqueId === identifier || m.id === identifier));
     }
-    renderTeamCardSlots();
-}
-
-export function checkMonsterEvolution(monster) {
-    if (!monster.evolvesTo) return;
-    if (monster.level >= (monster.evolutionLevel || 16)) {
-        const nextEvolution = MONSTER_CATALOG_REF.find(m => m.id === monster.evolvesTo);
-        if (nextEvolution) {
-            const oldName = monster.name;
-            monster.name = nextEvolution.name;
-            monster.image = nextEvolution.image;
-            if (nextEvolution.shinyImage) monster.shinyImage = nextEvolution.shinyImage;
-            monster.str = (monster.str || 4) + 3;
-            monster.maxHp = (monster.maxHp || 20) + 10;
-            monster.currentHp = monster.maxHp;
-            
-            if (typeof appendAdventureLog === 'function') {
-                appendAdventureLog(`✨ O ${oldName} evoluiu para ${monster.name}!`);
-            }
-            showEvolutionModalUI(oldName, monster);
-        }
-    }
-}
-
-function showEvolutionModalUI(oldName, evolvedMonster) {
-    let evoModal = document.getElementById('evolution-popup-modal');
-    if (!evoModal) {
-        evoModal = document.createElement('div');
-        evoModal.id = 'evolution-popup-modal';
-        evoModal.className = 'fixed inset-0 bg-black/90 z-[300] flex items-center justify-center p-4 backdrop-blur-sm';
-        document.body.appendChild(evoModal);
+    if (!monster && Array.isArray(cp.activeTeam)) {
+        monster = cp.activeTeam.find(m => m && (m.uniqueId === identifier || m.id === identifier));
     }
 
-    const evoImgUrl = evolvedMonster.isShiny && evolvedMonster.shinyImage ? evolvedMonster.shinyImage : evolvedMonster.image;
+    if (!monster) return;
 
-    evoModal.innerHTML = `
-        <div class="trainer-card max-w-sm w-full p-6 text-center space-y-4 border-4 border-amber-400 rounded-2xl bg-gradient-to-b from-amber-950 to-black shadow-2xl animate-bounce">
-            <h2 class="text-lg font-black text-amber-300 font-cinzel">✨ EVOLUÇÃO! ✨</h2>
-            <p class="text-xs text-slate-300">O teu <span class="font-bold text-white">${oldName}</span> está a evoluir...</p>
-            <div class="my-3 flex justify-center">
-                <img src="${evoImgUrl}" alt="${evolvedMonster.name}" class="w-24 h-24 object-contain drop-shadow-[0_0_15px_rgba(255,215,0,0.8)]" onerror="this.src='https://api.iconify.design/noto:star.svg'">
+    let modal = document.getElementById('monster-detail-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'monster-detail-modal';
+        modal.className = 'fixed inset-0 bg-black/90 z-[550] flex items-center justify-center p-4 backdrop-blur-md';
+        document.body.appendChild(modal);
+    }
+
+    const currentExp = monster.exp || 0;
+    const maxExp = (monster.level || 1) * 100;
+    const expPercent = Math.min(100, Math.max(0, Math.round((currentExp / maxExp) * 100)));
+
+    // Verifica no catálogo se tem evolução por nível para mostrar na ficha
+    const catalogItem = MONSTER_CATALOG_REF.find(m => m.id === (monster.catalogId || monster.id) || m.name.toLowerCase() === monster.name.toLowerCase());
+    const hasEvolution = catalogItem && catalogItem.evolvesTo;
+    const evolveLevelInfo = hasEvolution ? `Evolui no Nv. ${catalogItem.evolveLevel || 16}` : 'Forma Final';
+
+    const monsterImg = monster.isShiny && monster.shinyImage ? monster.shinyImage : monster.image;
+
+    modal.innerHTML = `
+        <div class="trainer-card max-w-lg w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white relative">
+            <div class="flex justify-between items-center border-b border-amber-900/60 pb-2">
+                <h3 class="text-xs font-black text-amber-400 font-cinzel">FICHA TÉCNICA DO ANIMA</h3>
+                <button onclick="document.getElementById('monster-detail-modal').remove()" class="text-amber-400 hover:text-white font-bold text-sm px-2.5 py-0.5 bg-black/60 rounded border border-amber-800 cursor-pointer">✕</button>
             </div>
-            <h3 class="text-xl font-black text-amber-400 uppercase tracking-wider">${evolvedMonster.name}!</h3>
-            <p class="text-[10px] text-emerald-400 font-bold">Atributos melhorados: STR ${evolvedMonster.str} | HP ${evolvedMonster.maxHp}</p>
-            <button onclick="document.getElementById('evolution-popup-modal').remove()" class="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 rounded-xl text-xs uppercase shadow transition-all cursor-pointer">
-                Continuar Aventura
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center bg-black/50 p-4 rounded-2xl border border-amber-900/50">
+                <div class="flex justify-center bg-black/60 rounded-xl p-3 border border-amber-500/40 relative">
+                    ${monster.isShiny ? '<span class="absolute top-1 left-1 text-[9px] bg-amber-400 text-black font-black px-1.5 rounded animate-pulse">✨ SHINY</span>' : ''}
+                    <img src="${monsterImg || ''}" class="w-28 h-28 object-contain drop-shadow" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                </div>
+                <div class="space-y-2">
+                    <h4 class="text-base font-black text-white">${monster.name}</h4>
+                    <p class="text-[10px] text-amber-400 font-bold uppercase">Tipo: ${Array.isArray(monster.types) ? monster.types.join('/') : (monster.type || 'Normal')}</p>
+                    <div class="bg-black/80 p-2.5 rounded-xl border border-amber-900/60 space-y-1 text-xs">
+                        <p class="text-slate-300">Nível: <strong class="text-amber-300 font-bold">Nv. ${monster.level || 1}</strong></p>
+                        <p class="text-slate-300">Força (STR): <strong class="text-amber-300 font-bold">${monster.str || 4}</strong></p>
+                        <p class="text-slate-300">Vida (HP): <strong class="text-emerald-400 font-bold">${monster.currentHp !== undefined ? monster.currentHp : monster.maxHp}/${monster.maxHp || 25}</strong></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-black/60 p-3 rounded-2xl border border-amber-900/60 space-y-1.5">
+                <div class="flex justify-between text-[10px] font-bold">
+                    <span class="text-amber-300">Experiência (XP):</span>
+                    <span class="text-slate-300">${currentExp} / ${maxExp} (${expPercent}%)</span>
+                </div>
+                <div class="w-full bg-slate-800 h-3 rounded-full overflow-hidden border border-amber-600/50 relative">
+                    <div class="bg-gradient-to-r from-amber-500 to-yellow-400 h-full transition-all duration-500" style="width: ${expPercent}%"></div>
+                </div>
+                <p class="text-[9px] text-slate-400 text-right pt-0.5">${evolveLevelInfo}</p>
+            </div>
+
+            <button onclick="document.getElementById('monster-detail-modal').remove()" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2.5 rounded-xl text-xs uppercase tracking-wider cursor-pointer shadow">
+                Fechar Ficha
             </button>
         </div>
     `;
-    evoModal.classList.remove('hidden');
-}
-
-function showCustomPopup(title, message, isSuccess) {
-    if (typeof window.showCustomPopup === 'function') {
-        window.showCustomPopup(title, message, isSuccess);
-    } else {
-        alert(`${title}: ${message}`);
-    }
-}
+    modal.classList.remove('hidden');
+};
 
 export function switchBottomView(viewName) {
     if (!gameState) return;
