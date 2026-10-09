@@ -65,7 +65,7 @@ export function openPokedexModal() {
             
             if (isCaptured) {
                 gridHtml += `
-                    <div onclick="openPokedexDetailCard('${mon.id}')" class="bg-gradient-to-b from-red-950/90 to-black border-2 border-red-500 rounded-2xl p-2.5 flex flex-col items-center justify-between cursor-pointer hover:scale-105 transition-all shadow-lg text-white group">
+                    <div onclick="openPokedexDetailCard('${mon.id}')" class="bg-gradient-to-b from-red-950/90 to-black border-2 border-red-500 rounded-2xl p-2.5 flex flex-col items-center justify-between cursor-pointer hover:scale-105 transition-all shadow-lg text-white group h-28">
                         <span class="text-[9px] font-bold text-red-400 font-mono">Nº ${dexNum}</span>
                         <img src="${mon.image}" class="w-12 h-12 object-contain drop-shadow group-hover:scale-110 transition-transform" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                         <span class="text-[10px] font-black truncate w-full text-center text-amber-300">${mon.name}</span>
@@ -73,10 +73,10 @@ export function openPokedexModal() {
                 `;
             } else {
                 gridHtml += `
-                    <div class="bg-black/65 border-2 border-slate-800 rounded-2xl p-2.5 flex flex-col items-center justify-between opacity-50 text-slate-600">
-                        <span class="text-[9px] font-bold font-mono">Nº ${dexNum}</span>
-                        <div class="w-12 h-12 flex items-center justify-center text-xl text-slate-500 font-bold">❓</div>
-                        <span class="text-[10px] font-bold truncate w-full text-center text-slate-500">--------</span>
+                    <div class="bg-black/65 border-2 border-slate-800 rounded-2xl p-2.5 flex flex-col items-center justify-between opacity-60 text-slate-600 h-28">
+                        <span class="text-[9px] font-bold font-mono text-slate-500">Nº ${dexNum}</span>
+                        <div class="w-12 h-12 flex items-center justify-center text-xl text-slate-500 font-bold bg-slate-950/50 rounded-xl border border-slate-800">❓</div>
+                        <span class="text-[10px] font-bold truncate w-full text-center text-slate-600">--------</span>
                     </div>
                 `;
             }
@@ -97,7 +97,7 @@ export function openPokedexModal() {
                 </div>
                 <button onclick="document.getElementById('pokedex-modal').remove()" class="text-red-400 hover:text-white font-bold text-sm px-2.5 py-0.5 bg-black/60 rounded border border-red-800 cursor-pointer">✕ Fechar</button>
             </div>
-            <div class="grid grid-cols-4 sm:grid-cols-6 gap-3 max-h-[400px] overflow-y-auto p-1 pr-2">
+            <div class="grid grid-cols-4 sm:grid-cols-6 gap-3 max-h-[420px] overflow-y-auto p-1 pr-2">
                 ${gridHtml}
             </div>
         </div>
