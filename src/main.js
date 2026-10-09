@@ -1,3 +1,4 @@
+// --- src/main.js ---
 import { gameState, setupConfig, ensureValidGameState, getCurrentPlayer, movementState } from './core/state.js';
 import { loadGameProgress, saveGameProgress } from './core/storage.js';
 import { renderBoardMap, tryInteractWithCity, onHexClick } from './systems/map.js';
@@ -11,11 +12,13 @@ import './systems/battle.js';
 import './systems/vault.js';
 import './systems/lobby.js';
 import './systems/admin.js';
+import './systems/capture.js';
+import './systems/encounter.js';
 import { openPokemartModal, useInventoryItem } from './systems/inventory.js';
 import { openSpecificTrainerCardModal } from './systems/trainer.js';
 import { initiateGymSequence, GYM_LEADERS_CATALOG } from './systems/gym.js';
-import { openEncounterModalWithPokemon, fleeEncounter } from './systems/encounter.js';
-import { renderTeamCardSlots, renderBottomPanel, changePcBoxPage } from './systems/pcbox.js';
+import { openEncounterModalWithPokemon, fleeEncounter, cyclePlayerEncounterPokemon, resolveCaptureAttempt } from './systems/encounter.js';
+import { renderTeamCardSlots, renderBottomPanel, changePcBoxPage, switchBottomView } from './systems/pcbox.js';
 import { openPokedexModal, openPokedexDetailCard } from './systems/pokedex.js';
 import { openVaultModal } from './systems/vault.js';
 import { initializeSocketConnection, emitSocket } from './core/socket.js';
@@ -38,9 +41,12 @@ window.initiateGymSequence = initiateGymSequence;
 window.GYM_LEADERS_CATALOG = GYM_LEADERS_CATALOG;
 window.openEncounterModalWithPokemon = openEncounterModalWithPokemon;
 window.fleeEncounter = fleeEncounter;
+window.cyclePlayerEncounterPokemon = cyclePlayerEncounterPokemon;
+window.resolveCaptureAttempt = resolveCaptureAttempt;
 window.renderTeamCardSlots = renderTeamCardSlots;
 window.renderBottomPanel = renderBottomPanel;
 window.changePcBoxPage = changePcBoxPage;
+window.switchBottomView = switchBottomView;
 window.openPokedexModal = openPokedexModal;
 window.openPokedexDetailCard = openPokedexDetailCard;
 window.openVaultModal = openVaultModal;
@@ -56,11 +62,80 @@ window.rollDiceWithAnimation = function(callback) {
             diceBtn.classList.remove('animate-spin');
         }
         const result = Math.floor(Math.random() * 6) + 1;
-        alert(`🎲 Resultado do Dado: ${result}`);
         if (typeof callback === 'function') {
             callback(result);
         }
     }, 800);
+};
+
+// Exposição do Popup Global de Alerta/Notificação para os eventos do mapa e capturas
+window.showCustomPopup = function(title, message, isSuccess) {
+    let popup = document.getElementById('global-custom-popup');
+    if (!popup) {
+        popup = document.createElement('div');
+        popup.id = 'global-custom-popup';
+        popup.className = 'fixed inset-0 bg-black/80 z-[700] flex items-center justify-center p-4 backdrop-blur-sm';
+        document.body.appendChild(popup);
+    }
+
+    const borderColor = isSuccess ? 'border-emerald-500' : 'border-amber-500';
+    const headerColor = isSuccess ? 'text-emerald-400' : 'text-amber-400';
+
+    popup.innerHTML = `
+        <div class="trainer-card max-w-sm w-full p-5 space-y-3 border-4 ${borderColor} rounded-2xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white text-center">
+            <h3 class="text-sm font-black ${headerColor} font-cinzel">${title}</h3>
+            <p class="text-xs text-slate-200 whitespace-pre-line">${message}</p>
+            <button onclick="document.getElementById('global-custom-popup').remove()" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2 rounded-xl text-xs uppercase tracking-wider cursor-pointer">
+                OK
+            </button>
+        </div>
+    `;
+    popup.classList.remove('hidden');
+};
+
+// Função para disparar eventos aleatórios nas casas de tipo 'event'
+window.triggerRandomBoardEvent = function(eventName) {
+    const cp = getCurrentPlayer();
+    if (!cp) return;
+
+    const eventsList = [
+        { title: "🎁 Tesouro na Rota!", text: `Encontraste uma algibeira perdida em ${eventName}!\nGanhaste +150 Ouro.`, apply: () => { cp.gold = (cp.gold || 0) + 150; }, success: true },
+        { title: "💊 Sorte no Caminho!", text: `Um viajante bondoso ofereceu-te suprimentos em ${eventName}!\nGanhaste +2 Poções e +1 Poké Ball.`, apply: () => { 
+            if (!Array.isArray(cp.inventory)) cp.inventory = [];
+            cp.inventory.push({ id: 'potion', name: 'Poção', count: 2, type: 'heal', value: 20 });
+            cp.inventory.push({ id: 'ball_poke', name: 'Poké Ball', count: 1, type: 'sphere', value: 1 });
+        }, success: true },
+        { title: "⚡ Tempestade Elétrica!", text: `Uma forte tempestade surpreendeu-te em ${eventName}!\nOs teus Pokémon cansaram-se e perdeste a vez de avançar.`, apply: () => {}, success: false },
+        { title: "🍃 Encontro Calmo", text: `Descansaste à sombra de uma árvore em ${eventName}.\nOs teus Pokémon recuperaram um pouco de energia.`, apply: () => {
+            if (Array.isArray(cp.activeTeam)) {
+                cp.activeTeam.forEach(m => {
+                    if (m && m.currentHp < m.maxHp) m.currentHp = Math.min(m.maxHp, m.currentHp + 10);
+                });
+            }
+        }, success: true }
+    ];
+
+    const randomEvt = eventsList[Math.floor(Math.random() * eventsList.length)];
+    randomEvt.apply();
+    saveGameProgress();
+
+    // Mostra o popup detalhado do evento
+    window.showCustomPopup(randomEvt.title, randomEvt.text, randomEvt.success);
+
+    // Atualiza o Banner visual animado no topo do mapa se existir
+    const banner = document.getElementById('global-map-notification-banner');
+    const bannerText = document.getElementById('global-map-notification-text');
+    if (banner && bannerText) {
+        bannerText.textContent = `${eventName}: ${randomEvt.title}`;
+        banner.classList.remove('hidden');
+        setTimeout(() => {
+            banner.classList.add('hidden');
+        }, 5000);
+    }
+
+    if (typeof renderBoardMap === 'function') renderBoardMap();
+    if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+    if (typeof renderBottomPanel === 'function') renderBottomPanel();
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -131,7 +206,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 player.avatarId = avatarId;
                 player.gold = 350;
                 
-                // Define em ambas as propriedades para garantir compatibilidade com todos os módulos (PC Box, Equipa e Batalha)
                 player.team = [starterInstance];
                 player.activeTeam = [starterInstance];
                 player.pcBox = [starterInstance];
@@ -141,6 +215,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     id: 'ball_poke', 
                     name: 'Poké Ball', 
                     count: 5, 
+                    type: 'sphere', 
+                    value: 1,
                     image: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/items/poke_ball.png' 
                 }];
             }
@@ -157,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('main-game-layout').classList.remove('hidden');
 
             updateTrainerVisuals(trainerName, avatarId);
-            renderBoardMap(); // Atualiza imediatamente o mapa com a sprite correta do jogador
+            renderBoardMap();
             renderTeamCardSlots();
             renderBottomPanel();
         };
@@ -367,16 +443,6 @@ function setupGlobalInterfaceListeners() {
         pokedexBtn.onclick = () => openPokedexModal();
     }
 
-    // Vinculação do botão da PC Box
-    const pcBoxBtn = document.getElementById('open-pc-box-btn') || document.querySelector('[onclick*="pcBox"]');
-    if (pcBoxBtn) {
-        pcBoxBtn.onclick = () => {
-            if (typeof window.openVaultModal === 'function') {
-                window.openVaultModal();
-            }
-        };
-    }
-
     const saveGameBtn = document.getElementById('save-game-btn');
     if (saveGameBtn) {
         saveGameBtn.onclick = () => {
@@ -412,7 +478,6 @@ function setupGlobalInterfaceListeners() {
         passTurnBtn.onclick = () => {
             gameState.currentPlayerIndex = ((gameState.currentPlayerIndex || 0) + 1) % (gameState.players?.length || 1);
             
-            // Reseta o estado de movimento para permitir rolar o dado novamente no novo turno
             if (typeof movementState !== 'undefined') {
                 movementState.hasRolledThisTurn = false;
                 movementState.isMoving = false;
