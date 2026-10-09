@@ -321,7 +321,6 @@ export function handleWaypointArrival(waypointId) {
             window.boardPokemonCards = {};
         }
 
-        // Se a casa ainda não tiver um Pokémon gerado, gera respeitando a cor/tier da casa
         if (!boardPokemonCards[waypointId]) {
             let targetTier = 1;
             const color = String(waypoint.color || 'rosa').toLowerCase();
@@ -366,7 +365,6 @@ export function handleWaypointArrival(waypointId) {
             }
         }
     } else if (waypoint.type === 'event') {
-        // Dispara o evento aleatório com banner e popup estruturado
         triggerRandomBoardEvent(waypoint.name);
     }
 }
@@ -391,7 +389,6 @@ export function tryInteractWithWeakenedPokemon(waypointId) {
     }
 }
 
-// Função de eventos aleatórios nas casas do tipo 'event'
 function triggerRandomBoardEvent(eventName) {
     const cp = getCurrentPlayer();
     if (!cp) return;
@@ -607,10 +604,6 @@ function renderBoardMapWithHighlights(validNextSteps) {
     renderBoardMap(validNextSteps);
 }
 
-function moveTokenToWaypoint(waypointId) {
-    renderBoardMap();
-}
-
 function animateTokenMovement(newPositionIndex) {
     const cp = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : gameState.player;
     if (cp) {
@@ -618,7 +611,8 @@ function animateTokenMovement(newPositionIndex) {
     }
     renderBoardMap();
 }
-// Função de atalho para o módulo do dado (evita erros de importação)
+
+// Função exportada exigida pelo módulo do dado (dice.js)
 export function moveTokenToWaypoint(waypointId) {
     renderBoardMap();
 }
@@ -630,4 +624,3 @@ window.onHexClick = onHexClick;
 window.tryInteractWithCity = tryInteractWithCity;
 window.tryInteractWithWeakenedPokemon = tryInteractWithWeakenedPokemon;
 window.renderBoardMap = renderBoardMap;
-
