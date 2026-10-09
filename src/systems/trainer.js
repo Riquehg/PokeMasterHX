@@ -128,7 +128,7 @@ export function openSpecificTrainerCardModal(playerIndex) {
     cardModal.innerHTML = `
         <div class="max-w-4xl w-full p-6 bg-gradient-to-b from-[#0f172a] to-[#020617] border-4 border-blue-600 rounded-2xl shadow-2xl space-y-4 text-white relative">
             <div class="flex justify-between items-center border-b border-blue-900/60 pb-2">
-                <span class="text-xs font-black text-blue-400 font-cinzel tracking-wider">TRAINER'S CARD (${cp.name}) - Zona #${cp.currentZone}</span>
+                <span class="text-xs font-black text-blue-400 font-cinzel tracking-wider">TRAINER'S CARD (${cp.name}) - Zona #${cp.currentZone || 0}</span>
                 <button onclick="document.getElementById('trainer-card-modal-full').remove()" class="text-blue-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-blue-950/60 rounded border border-blue-800 cursor-pointer">✕</button>
             </div>
 
@@ -136,7 +136,7 @@ export function openSpecificTrainerCardModal(playerIndex) {
                 <div class="bg-black/60 border-2 border-blue-900 p-4 rounded-xl flex flex-col items-center justify-center space-y-2">
                     <img src="${SUPABASE_STORAGE_URL}player_0${cp.avatarId || 1}.png" class="w-20 h-20 object-contain drop-shadow-[0_0_10px_rgba(59,130,246,0.6)]" onerror="this.src='https://api.iconify.design/noto:boy.svg'">
                     <span class="text-xs font-black text-amber-400">${cp.name}</span>
-                    <span class="text-[10px] text-slate-300">Ouro: ${cp.gold} 🪙</span>
+                    <span class="text-[10px] text-slate-300">Ouro: ${cp.gold || 0} 🪙</span>
                 </div>
 
                 <div class="md:col-span-3 grid grid-cols-3 gap-2">
@@ -163,7 +163,7 @@ export function openTrainerCardModal() {
 }
 
 // ------------------------------------------------------------
-// FICHA DETALHADA DO POKÉMON
+// FICHA DETALHADA DO POKÉMON (Com XP Real Dinâmico)
 // ------------------------------------------------------------
 const TYPE_ADVANTAGES = {
     "Fogo": { strongAgainst: ["Grama", "Inseto", "Gelo", "Aço"], weakAgainst: ["Água", "Fogo", "Pedra", "Dragão"] },
@@ -193,14 +193,20 @@ export function openPokemonDetailModal(monsterIdOrUniqueId, fromArea = 'team') {
     }
 
     const typeKey = monster.type ? monster.type.split('/')[0].trim() : 'Normal';
-    const xpCurrent = monster.xp || 0;
-    const curHp = monster.currentHp !== undefined ? monster.currentHp : (monster.hp || 20);
+    
+    // Cálculos dinâmicos reais de XP e Nível
+    const xpCurrent = Number(monster.xp || monster.exp || 0);
+    const monsterLevel = Number(monster.level || 1);
+    const xpMax = monsterLevel * 100; // Base de 100 XP por nível
+    const xpPercentage = Math.min(100, Math.round((xpCurrent / xpMax) * 100));
+
+    const curHp = monster.currentHp !== undefined ? monster.currentHp : (monster.maxHp || monster.hp || 20);
     const maxHp = monster.maxHp || monster.hp || 20;
     const isFainted = curHp <= 0;
     
     let evolutionText = 'Forma Final';
     if (monster.evolvesTo) {
-        evolutionText = `Evolui no Nv. ${monster.evolutionLevel || 16}`;
+        evolutionText = `Evolui no Nv. ${monster.evolutionLevel || (monsterLevel + 5)}`;
     }
 
     const typeInfo = TYPE_ADVANTAGES[typeKey] || { strongAgainst: [], weakAgainst: [] };
@@ -231,7 +237,7 @@ export function openPokemonDetailModal(monsterIdOrUniqueId, fromArea = 'team') {
                         <p class="text-[10px] text-amber-400 font-bold uppercase">Tipo: ${monster.type || 'Normal'}</p>
                     </div>
                     <div class="bg-black/40 p-2 rounded-lg border border-amber-900/40 space-y-0.5 text-[10px]">
-                        <div class="flex justify-between"><span>Nível:</span> <span class="font-bold text-amber-300">Nv. ${monster.level || 1}</span></div>
+                        <div class="flex justify-between"><span>Nível:</span> <span class="font-bold text-amber-300">Nv. ${monsterLevel}</span></div>
                         <div class="flex justify-between"><span>Força (STR):</span> <span class="font-bold text-amber-300">${monster.str || 4}</span></div>
                         <div class="flex justify-between"><span>Vida (HP):</span> <span class="font-bold ${isFainted ? 'text-red-400' : 'text-emerald-400'}">${curHp} / ${maxHp}</span></div>
                     </div>
@@ -247,10 +253,10 @@ export function openPokemonDetailModal(monsterIdOrUniqueId, fromArea = 'team') {
             <div class="space-y-1 bg-black/50 p-2.5 rounded-xl border border-amber-900/50">
                 <div class="flex justify-between text-[10px] font-bold text-slate-300">
                     <span>Experiência (XP):</span>
-                    <span>${xpCurrent} / 100</span>
+                    <span>${xpCurrent} / ${xpMax}</span>
                 </div>
                 <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden border border-amber-900">
-                    <div class="bg-gradient-to-r from-amber-500 to-yellow-400 h-full transition-all duration-300" style="width: ${Math.min(xpCurrent, 100)}%;"></div>
+                    <div class="bg-gradient-to-r from-amber-500 to-yellow-400 h-full transition-all duration-300" style="width: ${xpPercentage}%;"></div>
                 </div>
                 <p class="text-[9px] text-slate-400 text-right pt-0.5">✨ ${evolutionText}</p>
             </div>
