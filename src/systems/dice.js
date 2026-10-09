@@ -449,66 +449,6 @@ function updatePlayerLocationUI(waypointId) {
 // ------------------------------------------------------------
 
 export function triggerWaypointEvent(waypointId) {
-    const waypoint = getWaypointById(waypointId);
-    const player = getMovementPlayer();
-
-    if (!waypoint || !player) return;
-
-    player.currentZone = Number(waypoint.id);
-
-    if (
-        typeof checkPlayerCellCollision === 'function' &&
-        typeof gameState !== 'undefined' &&
-        gameState &&
-        Array.isArray(gameState.players)
-    ) {
-        const currentPlayerIndex = Number(gameState.currentPlayerIndex) || 0;
-        checkPlayerCellCollision(waypoint.id, currentPlayerIndex);
-    }
-
-    if (waypoint.type === 'pokemon') {
-        if (typeof boardPokemonCards === 'undefined') {
-            window.boardPokemonCards = {};
-        }
-
-        // Se ainda não houver Pokémon gerado nesta casa, gera um aleatório oculto
-        if (!boardPokemonCards[waypointId]) {
-            const catalog = typeof MONSTER_CATALOG !== 'undefined' ? MONSTER_CATALOG : [];
-            if (catalog.length > 0) {
-                const randomMon = catalog[Math.floor(Math.random() * catalog.length)];
-                const tier = randomMon.tier || 1;
-                const minLvl = tier === 1 ? 3 : tier === 2 ? 8 : tier === 3 ? 15 : 25;
-                const level = Math.floor(Math.random() * 4) + minLvl;
-                const isShiny = Math.random() < 0.06;
-
-                boardPokemonCards[waypointId] = {
-                    ...randomMon,
-                    level: level,
-                    tier: tier,
-                    currentHp: 20 + (level * 2),
-                    maxHp: 20 + (level * 2),
-                    isShiny: isShiny,
-                    waypointId: waypointId,
-                    revealed: true,
-                    weakened: false
-                };
-            }
-        }
-
-        const wildPokemon = boardPokemonCards[waypointId];
-        if (wildPokemon) {
-            wildPokemon.revealed = true;
-            if (typeof dailyFeaturedPokemonConfig !== 'undefined' && wildPokemon.id === dailyFeaturedPokemonConfig.pokemonId) {
-                if (typeof showCustomPopup === 'function') {
-                    showCustomPopup("⭐ POKÉMON DO DIA ENCONTRADO!", `Este é o Anima em destaque de hoje (${dailyFeaturedPokemonConfig.pokemonName})! Ao capturá-lo, receberás o item bónus (${dailyFeaturedPokemonConfig.bonusItemName})!`, true);
-                }
-            }
-            if (typeof openEncounterModalWithPokemon === 'function') {
-                openEncounterModalWithPokemon(wildPokemon);
-            }
-        }
-        return;
-    }
 
     if (waypoint.type === 'city') {
         if (typeof openCityModal === 'function') {
