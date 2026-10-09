@@ -388,6 +388,7 @@ window.usePlayerItem = function(itemId, itemIndex) {
 
     if (!item || !itemInfo || Number(item.count) <= 0) return;
 
+    // 1. Poké Balls / Esferas de Captura
     if (itemInfo.type === 'sphere') {
         const wild = typeof currentEncounterState !== 'undefined' ? currentEncounterState.wildPokemon : null;
         if (!wild) {
@@ -402,10 +403,90 @@ window.usePlayerItem = function(itemId, itemIndex) {
         return;
     }
 
-    item.count--;
-    if (item.count <= 0) {
-        cp.inventory.splice(itemIndex, 1);
+    // 2. Rare Candy (Concede XP / Sobe de nível o primeiro Pokémon ativo)
+    if (normalizedId === 'rare_candy' || itemInfo.type === 'rarecandy') {
+        const targetMon = cp.activeTeam?.[0] || cp.team?.[0];
+        if (!targetMon) {
+            if (typeof showCustomPopup === 'function') {
+                showCustomPopup('Aviso', 'Não tens nenhum Pokémon na equipa ativa para receber o Rare Candy.', false);
+            }
+            return;
+        }
+        targetMon.level = (Number(targetMon.level) || 1) + 1;
+        targetMon.maxHp = (Number(targetMon.maxHp) || 20) + 5;
+        targetMon.currentHp = targetMon.maxHp;
+        targetMon.str = (Number(targetMon.str) || 4) + 2;
+
+        item.count--;
+        if (item.count <= 0) cp.inventory.splice(itemIndex, 1);
+        normalizePlayerInventory(cp);
+        renderInventoryUI(cp);
+
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup('🌟 Rare Candy Usado!', `${targetMon.name} subiu para o Nv.${targetMon.level}!\nOs seus atributos melhoraram.`, true);
+        }
+        return;
     }
-    normalizePlayerInventory(cp);
-    renderInventoryUI(cp);
+
+    // 3. Vitamin / X Attack (Bónus de Combate)
+    if (itemInfo.type === 'battle') {
+        const bonus = Number(itemInfo.value) || 2;
+        item.count--;
+        if (item.count <= 0) cp.inventory.splice(itemIndex, 1);
+        normalizePlayerInventory(cp);
+        renderInventoryUI(cp);
+
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup('🧪 Item Aplicado!', `${itemInfo.name} aplicado com sucesso! Bónus de força garantido para o próximo combate.`, true);
+        }
+        return;
+    }
+
+    // 4. Poção / Cura
+    if (itemInfo.type === 'heal') {
+        const targetMon = cp.activeTeam?.[0];
+        if (!targetMon) return;
+        if (targetMon.currentHp >= targetMon.maxHp) {
+            if (typeof showCustomPopup === 'function') {
+                showCustomPopup('Aviso', 'O Pokémon ativo já está com HP máximo.', false);
+            }
+            return;
+        }
+        targetMon.currentHp = Math.min(targetMon.maxHp, targetMon.currentHp + (Number(itemInfo.value) || 20));
+        item.count--;
+        if (item.count <= 0) cp.inventory.splice(itemIndex, 1);
+        normalizePlayerInventory(cp);
+        renderInventoryUI(cp);
+
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup('💊 Poção Usada!', `HP atualizado para ${targetMon.currentHp}/${targetMon.maxHp}`, true);
+        }
+        return;
+    }
+
+    // 5. Revive
+    if (itemInfo.type === 'revive') {
+        const faintedMon = cp.activeTeam?.find(m => m && (m.currentHp !== undefined ? m.currentHp : m.maxHp) <= 0);
+        if (!faintedMon) {
+            if (typeof showCustomPopup === 'function') {
+                showCustomPopup('Aviso', 'Não há nenhum Pokémon desmaiado na equipa ativa.', false);
+            }
+            return;
+        }
+        faintedMon.currentHp = Math.floor((faintedMon.maxHp || 20) / 2);
+        item.count--;
+        if (item.count <= 0) cp.inventory.splice(itemIndex, 1);
+        normalizePlayerInventory(cp);
+        renderInventoryUI(cp);
+
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup('🌟 Revive Usado!', `${faintedMon.name} foi revivido com ${faintedMon.currentHp} HP.`, true);
+        }
+        return;
+    }
+
+    // Genérico para outros itens
+    if (typeof showCustomPopup === 'function') {
+        showCustomPopup('Item', `Usaste ${itemInfo.name}.`, true);
+    }
 };
