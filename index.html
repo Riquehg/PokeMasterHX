@@ -237,7 +237,7 @@
                 </div>
             </section>
 
-            <!-- COLUNA DIREITA: Trainer's Card, Equipa Ativa e Inventário/Mochila -->
+            <!-- COLUNA DIREITA: Trainer's Card, Equipa Ativa e Inventário/Mochila com Design Aprimorado -->
             <section class="lg:col-span-5 space-y-3">
                 <!-- TRAINER'S CARD (Botão / Perfil Resumido) -->
                 <div id="open-trainer-card-btn" class="cursor-pointer bg-gradient-to-br from-blue-950 via-slate-900 to-blue-900 border-2 border-blue-600 rounded-xl p-3 shadow-xl relative text-white hover:border-amber-400 transition-all">
@@ -245,7 +245,6 @@
                         <span class="text-xs font-bold text-amber-300 font-cinzel tracking-wider">TRAINER'S CARD (Ver Completo)</span>
                         <span class="text-[10px] text-blue-300">ID: #HEX-2026</span>
                     </div>
-                    <!-- Dados rápidos do Treinador -->
                     <div class="flex items-center gap-3">
                         <img id="hud-trainer-avatar" src="https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_01.png" class="w-12 h-12 object-contain bg-black/50 rounded-lg p-1 border border-blue-500">
                         <div>
@@ -261,7 +260,6 @@
                         <span class="text-amber-300 font-bold">🛡️ Equipa Ativa (Anima)</span>
                         <span class="text-[10px] text-slate-400">Até 6 Pokémon</span>
                     </div>
-                    <!-- Contenedor estruturado com os 6 slots fixos estáticos pré-definidos -->
                     <div id="team-card-slots-container" class="grid grid-cols-3 gap-2">
                         <div id="trainer-card-slot-0" class="h-20"></div>
                         <div id="trainer-card-slot-1" class="h-20"></div>
@@ -272,13 +270,19 @@
                     </div>
                 </div>
 
-                <!-- PAINEL DINÂMICO INFERIOR (Mochila / Itens / PC Box) -->
+                <!-- PAINEL DINÂMICO INFERIOR (Mochila / Itens / PC Box com Botões de Destaque Visual) -->
                 <div class="bg-[#16110d] border-2 border-amber-900/70 p-3 rounded-xl space-y-2">
-                    <div class="flex justify-between items-center text-xs border-b border-amber-900/40 pb-1">
+                    <div class="flex justify-between items-center text-xs border-b border-amber-900/40 pb-2">
                         <span id="bottom-panel-title" class="text-amber-300 font-bold">🎒 Mochila & Inventário</span>
-                        <div class="flex gap-1 text-[9px]">
-                           <button onclick="switchBottomView('inventory')" class="...">Mochila</button>
-                            <button onclick="switchBottomView('pcbox')" class="...">PC Box</button>
+                        <div class="flex gap-2">
+                            <!-- Botão da Mochila Estilizado -->
+                            <button onclick="switchBottomView('inventory')" class="px-3 py-1 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-black font-black text-[10px] uppercase shadow border border-amber-300 cursor-pointer transition-all flex items-center gap-1">
+                                <span>🎒</span> Mochila
+                            </button>
+                            <!-- Botão da PC Box Estilizado -->
+                            <button onclick="switchBottomView('pcbox')" class="px-3 py-1 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white font-black text-[10px] uppercase shadow border border-blue-400 cursor-pointer transition-all flex items-center gap-1">
+                                <span>💻</span> PC Box
+                            </button>
                         </div>
                     </div>
                     <!-- Contenedor onde a mochila/inventário é renderizada -->
