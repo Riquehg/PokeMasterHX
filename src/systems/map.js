@@ -313,15 +313,18 @@ export function tryInteractWithWeakenedPokemon(waypointId) {
     }
 }
 
+// CORREÇÃO PRINCIPAL: Garante a geração imediata e abertura automática do modal do Pokémon selvagem ao chegar na casa
 export function handleWaypointArrival(waypointId) {
     const waypoint = BOARD_WAYPOINTS.find(w => w.id === waypointId);
     if (!waypoint) return;
 
     const cp = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : gameState.players[gameState.currentPlayerIndex];
-    cp.currentZone = waypointId;
+    if (cp) {
+        cp.currentZone = waypointId;
+    }
 
     if (typeof appendAdventureLog === 'function') {
-        appendAdventureLog(`${cp.name} chegou a ${waypoint.name} (Zona #${waypoint.id}).`);
+        appendAdventureLog(`${cp?.name || 'Treinador'} chegou a ${waypoint.name} (Zona #${waypoint.id}).`);
     }
 
     if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function') {
@@ -393,6 +396,10 @@ export function handleWaypointArrival(waypointId) {
         }
     } else if (waypoint.type === 'event') {
         triggerRandomBoardEvent(waypoint.name);
+    }
+    
+    if (typeof renderBoardMap === 'function') {
+        renderBoardMap();
     }
 }
 
