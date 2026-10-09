@@ -13,6 +13,7 @@ import './systems/trainer.js';
 import './systems/battle.js';
 import { openPokemartModal, useInventoryItem } from './systems/inventory.js';
 import { openSpecificTrainerCardModal } from './systems/trainer.js';
+import { initiateGymSequence, GYM_LEADERS_CATALOG } from './systems/gym.js';
 
 // ==========================================
 // EXPOSIÇÃO GLOBAL PARA O HTML (Evita erros de onclick)
@@ -23,6 +24,8 @@ window.openPokemartModal = openPokemartModal;
 window.useInventoryItem = useInventoryItem;
 window.tryInteractWithCity = tryInteractWithCity;
 window.saveGameProgress = saveGameProgress;
+window.initiateGymSequence = initiateGymSequence;
+window.GYM_LEADERS_CATALOG = GYM_LEADERS_CATALOG;
 
 // Executado assim que o DOM estiver totalmente carregado
 document.addEventListener('DOMContentLoaded', () => {
