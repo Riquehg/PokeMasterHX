@@ -11,6 +11,7 @@ import { MONSTER_CATALOG } from './config/cards-data.js';
 import './systems/city.js';
 import './systems/trainer.js';
 import './systems/battle.js';
+import './systems/vault.js';
 import { openPokemartModal, useInventoryItem } from './systems/inventory.js';
 import { openSpecificTrainerCardModal } from './systems/trainer.js';
 import { initiateGymSequence, GYM_LEADERS_CATALOG } from './systems/gym.js';
