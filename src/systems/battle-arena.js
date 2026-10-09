@@ -25,17 +25,14 @@ let currentBattleSession = {
 
 function arenaHp(monster) {
     if (!monster) return 0;
-
     const hp = monster.currentHp !== undefined
         ? Number(monster.currentHp)
         : Number(monster.maxHp || monster.hp || 20);
-
     return Number.isFinite(hp) ? Math.max(0, hp) : 0;
 }
 
 function arenaMaxHp(monster) {
     if (!monster) return 1;
-
     const maxHp = Number(monster.maxHp || monster.hp || 20);
     return Number.isFinite(maxHp) && maxHp > 0 ? maxHp : 1;
 }
@@ -55,66 +52,43 @@ function arenaSafeText(value, fallback = '') {
 
 function arenaImage(monster) {
     if (!monster) return '';
-
-    if (monster.isShiny && monster.shinyImage) {
-        return monster.shinyImage;
-    }
-
-    if (monster.image) {
-        return monster.image;
-    }
-
+    if (monster.isShiny && monster.shinyImage) return monster.shinyImage;
+    if (monster.image) return monster.image;
     if (monster.dexNumber) {
         const dex = String(monster.dexNumber).padStart(3, '0');
-
         return monster.isShiny
             ? `${SUPABASE_STORAGE_URL}monsters/shiny/${dex}.png`
             : `${SUPABASE_STORAGE_URL}monsters/${dex}.png`;
     }
-
     return '';
 }
 
 function arenaFindNextHealthy(team, currentIndex) {
     if (!Array.isArray(team)) return -1;
-
     for (let offset = 1; offset <= team.length; offset++) {
         const index = (currentIndex + offset) % team.length;
-
-        if (arenaIsHealthy(team[index])) {
-            return index;
-        }
+        if (arenaIsHealthy(team[index])) return index;
     }
-
     return -1;
 }
 
 function arenaFinishTurn() {
     if (currentBattleSession.battleEnded) return;
-
     currentBattleSession.turnBusy = false;
     currentBattleSession.playerSwitchedThisTurn = false;
     currentBattleSession.enemySwitchedThisTurn = false;
     currentBattleSession.turnNumber++;
-
     const modal = document.getElementById('main-battle-arena-modal');
-
-    if (modal) {
-        renderArenaCombatUI(modal);
-    }
+    if (modal) renderArenaCombatUI(modal);
 }
 
 function arenaUpdateOriginalTeams() {
     const cp = getCurrentPlayer();
-
     if (cp && Array.isArray(cp.activeTeam)) {
         currentBattleSession.playerTeam.forEach(updatedMonster => {
             const original = cp.activeTeam.find(monster =>
-                monster &&
-                monster.uniqueId &&
-                monster.uniqueId === updatedMonster.uniqueId
+                monster && monster.uniqueId && monster.uniqueId === updatedMonster.uniqueId
             );
-
             if (original) {
                 original.currentHp = updatedMonster.currentHp;
                 original.str = updatedMonster.str;
@@ -123,15 +97,11 @@ function arenaUpdateOriginalTeams() {
     }
 
     const opponent = currentBattleSession.defender?.opponentRef;
-
     if (opponent && Array.isArray(opponent.activeTeam)) {
         currentBattleSession.enemyTeam.forEach(updatedMonster => {
             const original = opponent.activeTeam.find(monster =>
-                monster &&
-                monster.uniqueId &&
-                monster.uniqueId === updatedMonster.uniqueId
+                monster && monster.uniqueId && monster.uniqueId === updatedMonster.uniqueId
             );
-
             if (original) {
                 original.currentHp = updatedMonster.currentHp;
                 original.str = updatedMonster.str;
@@ -140,29 +110,21 @@ function arenaUpdateOriginalTeams() {
     }
 }
 
-// Ponto de entrada chamado pela engine principal
-window.openBattleArena = function(config = {}) {
+// Ponto de entrada principal
+function openBattleArena(config = {}) {
     const cp = getCurrentPlayer();
-
     if (!cp || !Array.isArray(cp.activeTeam)) {
         showCustomPopup("Aviso", "🚫 A Equipa Ativa não está disponível.", false);
         return;
     }
 
     const healthyPlayerCount = cp.activeTeam.filter(arenaIsHealthy).length;
-
     if (healthyPlayerCount === 0) {
-        showCustomPopup(
-            "Equipa Desmaiada",
-            "⚠ Todos os Pokémon da tua equipa ativa estão desmaiados. Visita um Centro Pokémon.",
-            false
-        );
+        showCustomPopup("Equipa Desmaiada", "⚠ Todos os Pokémon da tua equipa ativa estão desmaiados. Visita um Centro Pokémon.", false);
         return;
     }
 
-    const requestedMode = ['gym', 'pvp', 'wild'].includes(config.type)
-        ? config.type
-        : 'gym';
+    const requestedMode = ['gym', 'pvp', 'wild'].includes(config.type) ? config.type : 'gym';
 
     currentBattleSession = {
         mode: requestedMode,
@@ -185,12 +147,7 @@ window.openBattleArena = function(config = {}) {
 
     if (requestedMode === 'gym') {
         const gym = config.data || {};
-        const gymTeam = Array.isArray(gym.pokemons)
-            ? gym.pokemons
-            : gym.pokemon
-                ? [gym.pokemon]
-                : [];
-
+        const gymTeam = Array.isArray(gym.pokemons) ? gym.pokemons : (gym.pokemon ? [gym.pokemon] : []);
         currentBattleSession.defender = {
             name: `Líder ${gym.leader || 'Desconhecido'} (${gym.city || 'Ginásio'})`,
             isGymLeader: true,
@@ -200,12 +157,10 @@ window.openBattleArena = function(config = {}) {
         };
     } else if (requestedMode === 'wild') {
         const wildPokemon = config.opponent;
-
         if (!wildPokemon) {
             showCustomPopup("Erro", "❌ Pokémon selvagem não encontrado.", false);
             return;
         }
-
         currentBattleSession.defender = {
             name: wildPokemon.name || 'Pokémon Selvagem',
             isGymLeader: false,
@@ -214,19 +169,11 @@ window.openBattleArena = function(config = {}) {
         };
     } else {
         const opponent = config.opponent;
-        const opponentTeam = opponent && Array.isArray(opponent.activeTeam)
-            ? opponent.activeTeam.filter(arenaIsHealthy)
-            : [];
-
+        const opponentTeam = opponent && Array.isArray(opponent.activeTeam) ? opponent.activeTeam.filter(arenaIsHealthy) : [];
         if (!opponent || opponentTeam.length === 0) {
-            showCustomPopup(
-                "Erro",
-                "❌ O treinador adversário não possui Pokémon aptos para batalhar.",
-                false
-            );
+            showCustomPopup("Erro", "❌ O treinador adversário não possui Pokémon aptos para batalhar.", false);
             return;
         }
-
         currentBattleSession.defender = {
             name: opponent.name || 'Treinador adversário',
             isGymLeader: false,
@@ -241,25 +188,13 @@ window.openBattleArena = function(config = {}) {
         : 0;
 
     if (enemyHealthyCount === 0) {
-        showCustomPopup(
-            "Batalha Indisponível",
-            "❌ O adversário não possui Pokémon disponíveis para o combate.",
-            false
-        );
+        showCustomPopup("Batalha Indisponível", "❌ O adversário não possui Pokémon disponíveis para o combate.", false);
         return;
     }
 
-    currentBattleSession.format = Math.max(
-        1,
-        Math.min(
-            currentBattleSession.format,
-            healthyPlayerCount,
-            enemyHealthyCount
-        )
-    );
-
+    currentBattleSession.format = Math.max(1, Math.min(currentBattleSession.format, healthyPlayerCount, enemyHealthyCount));
     openArenaTeamSelectionModal();
-};
+}
 
 function openArenaTeamSelectionModal() {
     const cp = getCurrentPlayer();
@@ -281,7 +216,6 @@ function openArenaTeamSelectionModal() {
             const isSelected = selectedIndices.includes(idx);
             const tierBg = typeof getTierColorClass === 'function' ? getTierColorClass(mon.tier || 1) : 'bg-slate-900 border-amber-600';
             const auraCls = mon.auraEffect || '';
-
             let imgSrc = arenaImage(mon);
 
             html += `
@@ -398,33 +332,24 @@ function renderPreBattleContent(modalEl) {
     `;
 }
 
-window.confirmArenaTeamAndStart = function(indexes) {
+function confirmArenaTeamAndStart(indexes) {
     const modal = document.getElementById('arena-team-sel-modal');
     if (modal) modal.remove();
 
     const cp = getCurrentPlayer();
-    const selectedIndexes = Array.isArray(indexes)
-        ? indexes.map(Number).filter(Number.isInteger)
-        : [];
+    const selectedIndexes = Array.isArray(indexes) ? indexes.map(Number).filter(Number.isInteger) : [];
 
     const validSelection = selectedIndexes.length === currentBattleSession.format &&
         new Set(selectedIndexes).size === selectedIndexes.length &&
-        selectedIndexes.every(index =>
-            cp.activeTeam[index] && arenaIsHealthy(cp.activeTeam[index])
-        );
+        selectedIndexes.every(index => cp.activeTeam[index] && arenaIsHealthy(cp.activeTeam[index]));
 
     if (!validSelection) {
-        showCustomPopup(
-            "Seleção Inválida",
-            "⚠️ Escolha exatamente os Pokémon disponíveis para este formato.",
-            false
-        );
+        showCustomPopup("Seleção Inválida", "⚠️ Escolha exatamente os Pokémon disponíveis para este formato.", false);
         return;
     }
 
     currentBattleSession.playerTeam = selectedIndexes.map(index => {
         const monster = cp.activeTeam[index];
-
         return {
             ...monster,
             image: arenaImage(monster),
@@ -448,11 +373,7 @@ window.confirmArenaTeamAndStart = function(indexes) {
         }));
 
     if (currentBattleSession.enemyTeam.length === 0) {
-        showCustomPopup(
-            "Batalha Inválida",
-            "❌ Não foi possível preparar a equipa adversária.",
-            false
-        );
+        showCustomPopup("Batalha Inválida", "❌ Não foi possível preparar a equipa adversária.", false);
         return;
     }
 
@@ -466,17 +387,14 @@ window.confirmArenaTeamAndStart = function(indexes) {
     currentBattleSession.combatBonus = 0;
     currentBattleSession.lastAction = 'A batalha começou.';
 
-    if (
-        currentBattleSession.mode === 'gym' &&
-        typeof gymAttemptedThisTurn !== 'undefined'
-    ) {
+    if (currentBattleSession.mode === 'gym' && typeof gymAttemptedThisTurn !== 'undefined') {
         const city = currentBattleSession.defender.name || 'Ginásio';
         const attemptKey = `${gameState.currentPlayerIndex || 0}_${city}`;
         gymAttemptedThisTurn[attemptKey] = true;
     }
 
     openPreBattlePhaseModal();
-};
+}
 
 function openPreBattlePhaseModal() {
     let modal = document.getElementById('arena-prebattle-modal');
@@ -486,18 +404,17 @@ function openPreBattlePhaseModal() {
         modal.className = 'fixed inset-0 bg-black/90 z-[460] flex items-center justify-center p-4 backdrop-blur-md';
         document.body.appendChild(modal);
     }
-
     renderPreBattleContent(modal);
     modal.classList.remove('hidden');
 }
 
-window.closePreBattleAndLaunchArena = function() {
+function closePreBattleAndLaunchArena() {
     const preModal = document.getElementById('arena-prebattle-modal');
     if (preModal) preModal.remove();
     launchMainArenaCombatInterface();
-};
+}
 
-window.useItemInPreBattle = function(itemId, itemIndex) {
+function useItemInPreBattle(itemId, itemIndex) {
     const cp = getCurrentPlayer();
     let item = cp.inventory.find(i => i.id === itemId);
     let activeMon = currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
@@ -528,7 +445,7 @@ window.useItemInPreBattle = function(itemId, itemIndex) {
 
     const preModal = document.getElementById('arena-prebattle-modal');
     if (preModal) renderPreBattleContent(preModal);
-};
+}
 
 function launchMainArenaCombatInterface() {
     let arenaModal = document.getElementById('main-battle-arena-modal');
@@ -538,7 +455,6 @@ function launchMainArenaCombatInterface() {
         arenaModal.className = 'fixed inset-0 bg-black/95 z-[480] flex flex-col justify-between p-6 backdrop-blur-md text-white';
         document.body.appendChild(arenaModal);
     }
-
     renderArenaCombatUI(arenaModal);
     arenaModal.classList.remove('hidden');
 }
@@ -548,9 +464,7 @@ function renderArenaCombatUI(modalEl) {
     const pMon = currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
     const eMon = currentBattleSession.enemyTeam[currentBattleSession.activeEnemyIndex];
 
-    if (!pMon || !eMon || currentBattleSession.battleEnded) {
-        return;
-    }
+    if (!pMon || !eMon || currentBattleSession.battleEnded) return;
 
     const isGymBattle = (currentBattleSession.mode === 'gym');
 
@@ -566,7 +480,6 @@ function renderArenaCombatUI(modalEl) {
                 onclick="${isFaint ? '' : `switchArenaPlayerPokemon(${idx})`}"
                 ${isFaint || currentBattleSession.turnBusy ? 'disabled' : ''}
                 class="flex items-center gap-1.5 bg-black/60 border ${isFaint ? 'border-red-800 opacity-40 cursor-not-allowed' : 'border-amber-600 hover:border-amber-300 cursor-pointer'} rounded-xl p-1.5 px-3 text-[10px] text-left"
-                title="${isFaint ? 'Pokémon desmaiado' : 'Trocar, a troca encerra o turno'}"
             >
                 <img src="${mImg}" class="w-6 h-6 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                 <span>
@@ -583,12 +496,7 @@ function renderArenaCombatUI(modalEl) {
     if (cp && Array.isArray(cp.inventory)) {
         cp.inventory.forEach(item => {
             if (!item || Number(item.count) <= 0) return;
-
-            const supportedItem =
-                item.type === 'heal' ||
-                item.type === 'revive' ||
-                item.type === 'battle';
-
+            const supportedItem = item.type === 'heal' || item.type === 'revive' || item.type === 'battle';
             if (!supportedItem) return;
 
             arenaItemsHtml += `
@@ -596,10 +504,8 @@ function renderArenaCombatUI(modalEl) {
                     onclick="useArenaItem('${item.id}')"
                     ${currentBattleSession.turnBusy ? 'disabled' : ''}
                     class="bg-blue-700 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black px-2.5 py-1.5 rounded-lg text-[10px] shadow cursor-pointer"
-                    title="Itens não encerram o turno"
                 >
-                    ${arenaSafeText(item.icon || '🎒')} ${arenaSafeText(item.name || item.id)}
-                    (${Number(item.count) || 0})
+                    ${arenaSafeText(item.icon || '🎒')} ${arenaSafeText(item.name || item.id)} (${Number(item.count) || 0})
                 </button>
             `;
         });
@@ -623,13 +529,7 @@ function renderArenaCombatUI(modalEl) {
 
     let pActiveImg = arenaImage(pMon);
     let eActiveImg = arenaImage(eMon);
-
-    // Aviso explícito de combate oficial sem captura para ginásios
-    let gymNoticeHtml = isGymBattle ? `
-        <div class="bg-amber-950/80 border border-amber-600/80 rounded-xl py-1 px-3 text-[10px] text-amber-300 font-bold tracking-wide">
-            🛡️ Batalha Oficial de Ginásio — Captura Proibida
-        </div>
-    ` : '';
+    let gymNoticeHtml = isGymBattle ? `<div class="bg-amber-950/80 border border-amber-600/80 rounded-xl py-1 px-3 text-[10px] text-amber-300 font-bold tracking-wide">🛡️ Batalha Oficial de Ginásio — Captura Proibida</div>` : '';
 
     modalEl.innerHTML = `
         <div class="flex justify-between items-center bg-gradient-to-b from-red-950/80 to-black/80 border-2 border-red-600 p-4 rounded-3xl shadow-2xl">
@@ -649,48 +549,25 @@ function renderArenaCombatUI(modalEl) {
         </div>
 
         <div class="text-center my-auto space-y-3">
-            <h2 class="text-2xl font-black text-amber-400 font-cinzel tracking-widest animate-pulse">
-                ARENA DE COMBATE TCG
-            </h2>
-
+            <h2 class="text-2xl font-black text-amber-400 font-cinzel tracking-widest animate-pulse">ARENA DE COMBATE TCG</h2>
             ${gymNoticeHtml}
-
-            <p class="text-xs text-slate-300">
-                Turno ${currentBattleSession.turnNumber}
-                ${currentBattleSession.mode === 'pvp' ? '| Duelo por turnos' : '| Ação da rodada'}
-            </p>
-
-            <p class="text-[10px] text-amber-300">
-                ${arenaSafeText(currentBattleSession.lastAction)}
-            </p>
-
-            <button
-                onclick="executeArenaTurn()"
-                ${currentBattleSession.turnBusy ? 'disabled' : ''}
-                class="bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-black px-8 py-3 rounded-2xl text-xs uppercase tracking-wider shadow-2xl transition-all transform hover:scale-105 cursor-pointer"
-            >
+            <p class="text-xs text-slate-300">Turno ${currentBattleSession.turnNumber}</p>
+            <p class="text-[10px] text-amber-300">${arenaSafeText(currentBattleSession.lastAction)}</p>
+            <button onclick="executeArenaTurn()" ${currentBattleSession.turnBusy ? 'disabled' : ''} class="bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-black px-8 py-3 rounded-2xl text-xs uppercase tracking-wider shadow-2xl transition-all transform hover:scale-105 cursor-pointer">
                 ⚔️ Atacar / Rolar Dado
             </button>
-
             <div class="bg-black/60 border border-blue-700/60 rounded-xl p-2 space-y-2">
-                <p class="text-[10px] font-bold text-blue-300">
-                    Itens, não encerram o turno
-                </p>
+                <p class="text-[10px] font-bold text-blue-300">Itens, não encerram o turno</p>
                 <div class="flex flex-wrap justify-center gap-1.5">
                     ${arenaItemsHtml || '<span class="text-[9px] text-slate-500">Nenhum item de suporte disponível.</span>'}
                 </div>
             </div>
-
-            <p class="text-[9px] text-slate-400">
-                Trocar Pokémon encerra o turno e permite apenas uma troca por rodada.
-            </p>
         </div>
 
         <div class="space-y-3">
             <div class="flex gap-2 overflow-x-auto pb-1 justify-center">
                 ${pReservesHtml || '<span class="text-[10px] text-slate-500">Nenhum reserva na retaguarda</span>'}
             </div>
-
             <div class="flex justify-between items-center bg-gradient-to-t from-amber-950/80 to-black/80 border-2 border-amber-500 p-4 rounded-3xl shadow-2xl">
                 <div class="flex items-center gap-4">
                     <div class="w-24 h-24 bg-black/60 rounded-2xl border border-amber-400 flex items-center justify-center p-2">
@@ -708,267 +585,128 @@ function renderArenaCombatUI(modalEl) {
 }
 
 function arenaSwitchEnemyAfterFaint() {
-    const nextIndex = arenaFindNextHealthy(
-        currentBattleSession.enemyTeam,
-        currentBattleSession.activeEnemyIndex
-    );
-
+    const nextIndex = arenaFindNextHealthy(currentBattleSession.enemyTeam, currentBattleSession.activeEnemyIndex);
     if (nextIndex < 0) {
         concludeArenaBattle(true);
         return false;
     }
-
     currentBattleSession.activeEnemyIndex = nextIndex;
     currentBattleSession.enemySwitchedThisTurn = true;
-    currentBattleSession.lastAction =
-        `O adversário enviou ${currentBattleSession.enemyTeam[nextIndex].name}.`;
-
-    showCustomPopup(
-        "Pokémon Adversário Derrotado",
-        `💀 O Pokémon adversário desmaiou!\n\n🔄 ${currentBattleSession.enemyTeam[nextIndex].name} entrou em campo.`,
-        true
-    );
-
+    currentBattleSession.lastAction = `O adversário enviou ${currentBattleSession.enemyTeam[nextIndex].name}.`;
+    showCustomPopup("Pokémon Adversário Derrotado", `💀 O Pokémon adversário desmaiou!\n\n🔄 ${currentBattleSession.enemyTeam[nextIndex].name} entrou em campo.`, true);
     return true;
 }
 
 function arenaForcePlayerReplacement() {
-    const nextIndex = arenaFindNextHealthy(
-        currentBattleSession.playerTeam,
-        currentBattleSession.activePlayerIndex
-    );
-
+    const nextIndex = arenaFindNextHealthy(currentBattleSession.playerTeam, currentBattleSession.activePlayerIndex);
     if (nextIndex < 0) {
         concludeArenaBattle(false);
         return false;
     }
-
     currentBattleSession.activePlayerIndex = nextIndex;
-    currentBattleSession.lastAction =
-        `${currentBattleSession.playerTeam[nextIndex].name} entrou automaticamente em campo.`;
-
-    showCustomPopup(
-        "Substituição Obrigatória",
-        `💀 O Pokémon ativo desmaiou!\n\n🔄 ${currentBattleSession.playerTeam[nextIndex].name} entrou automaticamente em campo.`,
-        false
-    );
-
+    currentBattleSession.lastAction = `${currentBattleSession.playerTeam[nextIndex].name} entrou automaticamente em campo.`;
+    showCustomPopup("Substituição Obrigatória", `💀 O Pokémon ativo desmaiou!\n\n🔄 ${currentBattleSession.playerTeam[nextIndex].name} entrou automaticamente em campo.`, false);
     return true;
 }
 
 function arenaTypeMultiplier(attacker, defender) {
-    if (
-        typeof calculateTypeAdvantageMultiplier !== 'function' ||
-        !attacker ||
-        !defender
-    ) {
-        return 1;
-    }
-
-    return calculateTypeAdvantageMultiplier(
-        attacker.type,
-        defender.type
-    );
+    if (typeof calculateTypeAdvantageMultiplier !== 'function' || !attacker || !defender) return 1;
+    return calculateTypeAdvantageMultiplier(attacker.type, defender.type);
 }
 
 function arenaShouldEnemySwitch() {
-    if (
-        currentBattleSession.mode === 'wild' ||
-        currentBattleSession.enemySwitchedThisTurn
-    ) {
-        return false;
-    }
-
+    if (currentBattleSession.mode === 'wild' || currentBattleSession.enemySwitchedThisTurn) return false;
     const enemyTeam = currentBattleSession.enemyTeam;
     const activeIndex = currentBattleSession.activeEnemyIndex;
     const activeEnemy = enemyTeam[activeIndex];
-    const playerMonster =
-        currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
-
+    const playerMonster = currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
     if (!activeEnemy || !playerMonster) return false;
 
-    const replacementIndex = arenaFindNextHealthy(
-        enemyTeam,
-        activeIndex
-    );
-
+    const replacementIndex = arenaFindNextHealthy(enemyTeam, activeIndex);
     if (replacementIndex < 0) return false;
 
-    const activeHpRatio =
-        arenaHp(activeEnemy) / arenaMaxHp(activeEnemy);
-
-    const activeMultiplier =
-        arenaTypeMultiplier(activeEnemy, playerMonster);
-
+    const activeHpRatio = arenaHp(activeEnemy) / arenaMaxHp(activeEnemy);
+    const activeMultiplier = arenaTypeMultiplier(activeEnemy, playerMonster);
     const replacement = enemyTeam[replacementIndex];
-    const replacementMultiplier =
-        arenaTypeMultiplier(replacement, playerMonster);
+    const replacementMultiplier = arenaTypeMultiplier(replacement, playerMonster);
 
-    return (
-        activeHpRatio <= 0.3 &&
-        replacementMultiplier > activeMultiplier
-    ) || (
-        activeMultiplier < 1 &&
-        replacementMultiplier > activeMultiplier
-    );
+    return (activeHpRatio <= 0.3 && replacementMultiplier > activeMultiplier) || (activeMultiplier < 1 && replacementMultiplier > activeMultiplier);
 }
 
 function arenaResolveEnemyResponse() {
-    const pMon =
-        currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
-
-    const eMon =
-        currentBattleSession.enemyTeam[currentBattleSession.activeEnemyIndex];
-
+    const pMon = currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
+    const eMon = currentBattleSession.enemyTeam[currentBattleSession.activeEnemyIndex];
     if (!pMon || !eMon || currentBattleSession.battleEnded) return;
 
     if (arenaShouldEnemySwitch()) {
-        const nextIndex = arenaFindNextHealthy(
-            currentBattleSession.enemyTeam,
-            currentBattleSession.activeEnemyIndex
-        );
-
+        const nextIndex = arenaFindNextHealthy(currentBattleSession.enemyTeam, currentBattleSession.activeEnemyIndex);
         if (nextIndex >= 0) {
             currentBattleSession.activeEnemyIndex = nextIndex;
             currentBattleSession.enemySwitchedThisTurn = true;
-
-            const nextEnemy =
-                currentBattleSession.enemyTeam[nextIndex];
-
-            currentBattleSession.lastAction =
-                `O adversário trocou para ${nextEnemy.name}.`;
-
-            showCustomPopup(
-                "Troca do Adversário",
-                `🔄 O adversário percebeu uma desvantagem e enviou ${nextEnemy.name} para o combate.\n\nA troca encerrou a rodada.`,
-                true
-            );
-
+            const nextEnemy = currentBattleSession.enemyTeam[nextIndex];
+            currentBattleSession.lastAction = `O adversário trocou para ${nextEnemy.name}.`;
+            showCustomPopup("Troca do Adversário", `🔄 O adversário percebeu uma desvantagem e enviou ${nextEnemy.name} para o combate.\n\nA troca encerrou a rodada.`, true);
             arenaFinishTurn();
             return;
         }
     }
 
     rollDiceWithAnimation((playerRoll, enemyRoll) => {
-        const typeMultiplier =
-            arenaTypeMultiplier(eMon, pMon);
-
-        const playerPower =
-            (Number(pMon.str) || 4) +
-            Number(currentBattleSession.combatBonus) +
-            Number(playerRoll || 0);
-
-        const enemyPower = Math.round(
-            (
-                (Number(eMon.str) || 5) +
-                Number(enemyRoll || 0)
-            ) *
-            typeMultiplier
-        );
-
+        const typeMultiplier = arenaTypeMultiplier(eMon, pMon);
+        const playerPower = (Number(pMon.str) || 4) + Number(currentBattleSession.combatBonus) + Number(playerRoll || 0);
+        const enemyPower = Math.round(((Number(eMon.str) || 5) + Number(enemyRoll || 0)) * typeMultiplier);
         const enemyWon = enemyPower >= playerPower;
+        const damage = enemyWon ? Math.max(6, enemyPower - playerPower + 8) : Math.max(4, Math.floor((enemyPower - playerPower + 8) / 2));
 
-        const damage = enemyWon
-            ? Math.max(6, enemyPower - playerPower + 8)
-            : Math.max(4, Math.floor((enemyPower - playerPower + 8) / 2));
-
-        pMon.currentHp = Math.max(
-            0,
-            arenaHp(pMon) - damage
-        );
-
-        currentBattleSession.lastAction = enemyWon
-            ? `${eMon.name} atacou ${pMon.name} e causou ${damage} de dano.`
-            : `${pMon.name} resistiu ao ataque de ${eMon.name}.`;
+        pMon.currentHp = Math.max(0, arenaHp(pMon) - damage);
+        currentBattleSession.lastAction = enemyWon ? `${eMon.name} atacou ${pMon.name} e causou ${damage} de dano.` : `${pMon.name} resistiu ao ataque de ${eMon.name}.`;
 
         showCustomPopup(
-            enemyWon
-                ? "Contra-ataque do Adversário!"
-                : "Defesa Bem-Sucedida!",
-            enemyWon
-                ? `${eMon.name} respondeu à ação!\n\n💥 ${pMon.name} sofreu ${damage} de dano.\n\nHP: ${pMon.currentHp}/${pMon.maxHp}`
-                : `${pMon.name} resistiu ao ataque de ${eMon.name}.\n\nDano reduzido: ${damage}\n\nHP: ${pMon.currentHp}/${pMon.maxHp}`,
-            enemyWon ? false : true
+            enemyWon ? "Contra-ataque do Adversário!" : "Defesa Bem-Sucedida!",
+            enemyWon ? `${eMon.name} respondeu à ação!\n\n💥 ${pMon.name} sofreu ${damage} de dano.\n\nHP: ${pMon.currentHp}/${pMon.maxHp}` : `${pMon.name} resistiu ao ataque de ${eMon.name}.\n\nDano reduzido: ${damage}\n\nHP: ${pMon.currentHp}/${pMon.maxHp}`,
+            !enemyWon
         );
 
         if (!arenaIsHealthy(pMon)) {
             if (!arenaForcePlayerReplacement()) return;
         }
-
         arenaFinishTurn();
     });
 }
 
-window.switchArenaPlayerPokemon = function(index) {
-    if (currentBattleSession.battleEnded || currentBattleSession.turnBusy) {
-        return;
-    }
-
+function switchArenaPlayerPokemon(index) {
+    if (currentBattleSession.battleEnded || currentBattleSession.turnBusy) return;
     const targetIndex = Number(index);
     const currentIndex = currentBattleSession.activePlayerIndex;
     const target = currentBattleSession.playerTeam[targetIndex];
 
-    if (!Number.isInteger(targetIndex) || !target || targetIndex === currentIndex) {
-        return;
-    }
-
+    if (!Number.isInteger(targetIndex) || !target || targetIndex === currentIndex) return;
     if (!arenaIsHealthy(target)) {
-        showCustomPopup(
-            "Troca Bloqueada",
-            "⚠️ Este Pokémon está desmaiado e não pode entrar em campo.",
-            false
-        );
+        showCustomPopup("Troca Bloqueada", "⚠️ Este Pokémon está desmaiado e não pode entrar em campo.", false);
         return;
     }
-
     if (currentBattleSession.playerSwitchedThisTurn) {
-        showCustomPopup(
-            "Troca já realizada",
-            "⚠️ Só é permitida uma troca voluntária por turno.",
-            false
-        );
+        showCustomPopup("Troca já realizada", "⚠️ Só é permitida uma troca voluntária por turno.", false);
         return;
     }
 
     currentBattleSession.activePlayerIndex = targetIndex;
     currentBattleSession.playerSwitchedThisTurn = true;
     currentBattleSession.turnBusy = true;
-    currentBattleSession.lastAction =
-        `${target.name} entrou em campo. A troca encerrou o turno.`;
+    currentBattleSession.lastAction = `${target.name} entrou em campo. A troca encerrou o turno.`;
 
-    showCustomPopup(
-        "Troca de Pokémon",
-        `🔄 ${target.name} entrou em campo.\n\nA troca encerra o teu turno. O adversário poderá responder agora.`,
-        true
-    );
-
+    showCustomPopup("Troca de Pokémon", `🔄 ${target.name} entrou em campo.\n\nA troca encerra o teu turno. O adversário poderá responder agora.`, true);
     arenaResolveEnemyResponse();
-};
+}
 
-window.useArenaItem = function(itemId) {
-    if (currentBattleSession.battleEnded || currentBattleSession.turnBusy) {
-        return;
-    }
-
+function useArenaItem(itemId) {
+    if (currentBattleSession.battleEnded || currentBattleSession.turnBusy) return;
     const cp = getCurrentPlayer();
-
-    const item = cp && Array.isArray(cp.inventory)
-        ? cp.inventory.find(entry =>
-            entry &&
-            entry.id === itemId &&
-            Number(entry.count) > 0
-        )
-        : null;
-
-    const activeMon =
-        currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
+    const item = cp && Array.isArray(cp.inventory) ? cp.inventory.find(entry => entry && entry.id === itemId && Number(entry.count) > 0) : null;
+    const activeMon = currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
 
     if (!item || !activeMon) {
-        showCustomPopup(
-            "Item Indisponível",
-            "❌ Este item não está disponível para uso.",
-            false
-        );
+        showCustomPopup("Item Indisponível", "❌ Este item não está disponível para uso.", false);
         return;
     }
 
@@ -978,206 +716,83 @@ window.useArenaItem = function(itemId) {
 
     if (item.type === 'heal') {
         if (currentHp >= maxHp) {
-            showCustomPopup(
-                "Item não utilizado",
-                "✨ O Pokémon ativo já está com HP máximo.",
-                false
-            );
+            showCustomPopup("Item não utilizado", "✨ O Pokémon ativo já está com HP máximo.", false);
             return;
         }
-
         const healing = Math.max(1, Number(item.value) || 20);
-
-        activeMon.currentHp = Math.min(
-            maxHp,
-            currentHp + healing
-        );
-
+        activeMon.currentHp = Math.min(maxHp, currentHp + healing);
         item.count--;
         itemWasUsed = true;
-
-        currentBattleSession.lastAction =
-            `${activeMon.name} recuperou ${healing} HP.`;
-
-        showCustomPopup(
-            "Item Usado",
-            `💊 ${item.name || 'Potion'} usada em ${activeMon.name}.\n\nHP: ${activeMon.currentHp}/${maxHp}\n\nO item não encerra o turno. Ainda podes atacar ou trocar.`,
-            true
-        );
+        currentBattleSession.lastAction = `${activeMon.name} recuperou ${healing} HP.`;
+        showCustomPopup("Item Usado", `💊 ${item.name || 'Potion'} usada em ${activeMon.name}.\n\nHP: ${activeMon.currentHp}/${maxHp}`, true);
     } else if (item.type === 'revive') {
-        const faintedTarget =
-            currentBattleSession.playerTeam.find(monster =>
-                !arenaIsHealthy(monster)
-            );
-
+        const faintedTarget = currentBattleSession.playerTeam.find(monster => !arenaIsHealthy(monster));
         if (!faintedTarget) {
-            showCustomPopup(
-                "Item não utilizado",
-                "⚠️ Não há Pokémon desmaiado disponível para usar o Revive.",
-                false
-            );
+            showCustomPopup("Item não utilizado", "⚠️ Não há Pokémon desmaiado disponível para usar o Revive.", false);
             return;
         }
-
         const reviveMaxHp = arenaMaxHp(faintedTarget);
-
-        faintedTarget.currentHp = Math.max(
-            1,
-            Math.floor(reviveMaxHp / 2)
-        );
-
+        faintedTarget.currentHp = Math.max(1, Math.floor(reviveMaxHp / 2));
         item.count--;
         itemWasUsed = true;
-
-        currentBattleSession.lastAction =
-            `${faintedTarget.name} foi revivido.`;
-
-        showCustomPopup(
-            "Revive Usado",
-            `🌟 ${faintedTarget.name} foi revivido com ${faintedTarget.currentHp} HP.\n\nO item não encerra o turno.`,
-            true
-        );
+        currentBattleSession.lastAction = `${faintedTarget.name} foi revivido.`;
+        showCustomPopup("Revive Usado", `🌟 ${faintedTarget.name} foi revivido com ${faintedTarget.currentHp} HP.`, true);
     } else if (item.type === 'battle') {
-        const bonus = Math.max(
-            1,
-            Number(item.value) || 2
-        );
-
+        const bonus = Math.max(1, Number(item.value) || 2);
         currentBattleSession.combatBonus += bonus;
         item.count--;
         itemWasUsed = true;
-
-        currentBattleSession.lastAction =
-            `Bónus de combate aumentado em +${bonus}.`;
-
-        showCustomPopup(
-            "Bónus Aplicado",
-            `🧪 ${item.name || 'Vitamin'} aplicado.\n\nBónus acumulado nesta batalha: +${currentBattleSession.combatBonus}\n\nO item não encerra o turno. Ainda podes atacar ou trocar.`,
-            true
-        );
-    } else {
-        showCustomPopup(
-            "Item Indisponível",
-            "ℹ️ Este item não pode ser usado durante a batalha da Arena.",
-            false
-        );
-        return;
+        currentBattleSession.lastAction = `Bónus de combate aumentado em +${bonus}.`;
+        showCustomPopup("Bónus Aplicado", `🧪 ${item.name || 'Vitamin'} aplicado.\n\nBónus acumulado: +${currentBattleSession.combatBonus}`, true);
     }
 
     if (!itemWasUsed) return;
+    if (typeof updatePlayerUI === 'function') updatePlayerUI();
+    if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+    if (typeof renderBottomPanel === 'function') renderBottomPanel();
 
-    if (typeof updatePlayerUI === 'function') {
-        updatePlayerUI();
-    }
+    const arenaModal = document.getElementById('main-battle-arena-modal');
+    if (arenaModal) renderArenaCombatUI(arenaModal);
+}
 
-    if (typeof renderTeamCardSlots === 'function') {
-        renderTeamCardSlots();
-    }
+function executeArenaTurn() {
+    if (currentBattleSession.battleEnded || currentBattleSession.turnBusy) return;
+    const pMon = currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
+    const eMon = currentBattleSession.enemyTeam[currentBattleSession.activeEnemyIndex];
 
-    if (typeof renderBottomPanel === 'function') {
-        renderBottomPanel();
-    }
-
-    const arenaModal =
-        document.getElementById('main-battle-arena-modal');
-
-    if (arenaModal) {
-        renderArenaCombatUI(arenaModal);
-    }
-};
-
-window.executeArenaTurn = function() {
-    if (
-        currentBattleSession.battleEnded ||
-        currentBattleSession.turnBusy
-    ) {
-        return;
-    }
-
-    const pMon =
-        currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
-
-    const eMon =
-        currentBattleSession.enemyTeam[currentBattleSession.activeEnemyIndex];
-
-    if (!pMon || !eMon || !arenaIsHealthy(pMon) || !arenaIsHealthy(eMon)) {
-        return;
-    }
-
+    if (!pMon || !eMon || !arenaIsHealthy(pMon) || !arenaIsHealthy(eMon)) return;
     currentBattleSession.turnBusy = true;
 
     rollDiceWithAnimation((playerRoll, enemyRoll) => {
-        const typeMult =
-            typeof calculateTypeAdvantageMultiplier === 'function'
-                ? calculateTypeAdvantageMultiplier(pMon.type, eMon.type)
-                : 1;
-
-        const playerPower = Math.round(
-            ((Number(pMon.str) || 4) +
-                Number(currentBattleSession.combatBonus) +
-                Number(playerRoll || 0)) *
-            typeMult
-        );
-
-        const enemyPower =
-            (Number(eMon.str) || 5) +
-            Number(enemyRoll || 0);
+        const typeMult = typeof calculateTypeAdvantageMultiplier === 'function' ? calculateTypeAdvantageMultiplier(pMon.type, eMon.type) : 1;
+        const playerPower = Math.round(((Number(pMon.str) || 4) + Number(currentBattleSession.combatBonus) + Number(playerRoll || 0)) * typeMult);
+        const enemyPower = (Number(eMon.str) || 5) + Number(enemyRoll || 0);
 
         if (playerPower >= enemyPower) {
-            const damage = Math.max(
-                8,
-                playerPower - enemyPower + 10
-            );
-
-            eMon.currentHp = Math.max(
-                0,
-                arenaHp(eMon) - damage
-            );
-
-            currentBattleSession.lastAction =
-                `${pMon.name} causou ${damage} de dano em ${eMon.name}.`;
-
-            showCustomPopup(
-                "Ataque Bem-Sucedido!",
-                `⚔️ ${pMon.name} venceu a disputa da rodada!\n\n💥 ${eMon.name} sofreu ${damage} de dano.\n\nHP adversário: ${eMon.currentHp}/${eMon.maxHp}`,
-                true
-            );
+            const damage = Math.max(8, playerPower - enemyPower + 10);
+            eMon.currentHp = Math.max(0, arenaHp(eMon) - damage);
+            currentBattleSession.lastAction = `${pMon.name} causou ${damage} de dano em ${eMon.name}.`;
+            showCustomPopup("Ataque Bem-Sucedido!", `⚔️ ${pMon.name} venceu!\n\n💥 ${eMon.name} sofreu ${damage} de dano.\n\nHP adversário: ${eMon.currentHp}/${eMon.maxHp}`, true);
 
             if (!arenaIsHealthy(eMon)) {
                 if (!arenaSwitchEnemyAfterFaint()) return;
             }
         } else {
-            const damage = Math.max(
-                8,
-                enemyPower - playerPower + 8
-            );
-
-            pMon.currentHp = Math.max(
-                0,
-                arenaHp(pMon) - damage
-            );
-
-            currentBattleSession.lastAction =
-                `${eMon.name} causou ${damage} de dano em ${pMon.name}.`;
-
-            showCustomPopup(
-                "Contra-ataque do Adversário!",
-                `💥 ${eMon.name} venceu a disputa da rodada!\n\n💔 ${pMon.name} sofreu ${damage} de dano.\n\nHP do teu Pokémon: ${pMon.currentHp}/${pMon.maxHp}`,
-                false
-            );
+            const damage = Math.max(8, enemyPower - playerPower + 8);
+            pMon.currentHp = Math.max(0, arenaHp(pMon) - damage);
+            currentBattleSession.lastAction = `${eMon.name} causou ${damage} de dano em ${pMon.name}.`;
+            showCustomPopup("Contra-ataque do Adversário!", `💥 ${eMon.name} venceu!\n\n💔 ${pMon.name} sofreu ${damage} de dano.\n\nHP: ${pMon.currentHp}/${pMon.maxHp}`, false);
 
             if (!arenaIsHealthy(pMon)) {
                 if (!arenaForcePlayerReplacement()) return;
             }
         }
-
         arenaFinishTurn();
     });
-};
+}
 
 function concludeArenaBattle(isVictory) {
     if (currentBattleSession.battleEnded) return;
-
     currentBattleSession.battleEnded = true;
     currentBattleSession.turnBusy = false;
 
@@ -1190,78 +805,37 @@ function concludeArenaBattle(isVictory) {
     if (isVictory) {
         if (currentBattleSession.mode === 'gym') {
             const def = currentBattleSession.defender;
-
-            if (!Array.isArray(cp.badges)) {
-                cp.badges = [];
-            }
-
-            if (def.badgeKey && !cp.badges.includes(def.badgeKey)) {
-                cp.badges.push(def.badgeKey);
-            }
-
+            if (!Array.isArray(cp.badges)) cp.badges = [];
+            if (def.badgeKey && !cp.badges.includes(def.badgeKey)) cp.badges.push(def.badgeKey);
             cp.gold = (Number(cp.gold) || 0) + (Number(def.rewardGold) || 300);
-
-            showCustomPopup(
-                "🏆 VITÓRIA ÉPICA NO GINÁSIO!",
-                `Derrotaste toda a equipa do Líder!\n\n✨ Ganhaste a Insígnia!\n💰 Ouro: +${Number(def.rewardGold) || 300}\n🎖️ Total de Insígnias: ${cp.badges.length} / 6`,
-                true
-            );
+            showCustomPopup("🏆 VITÓRIA ÉPICA NO GINÁSIO!", `Derrotaste toda a equipa do Líder!\n\n✨ Ganhaste a Insígnia!\n💰 Ouro: +${Number(def.rewardGold) || 300}`, true);
         } else if (currentBattleSession.mode === 'wild') {
             const defeatedMon = currentBattleSession.enemyTeam[0];
-
-            if (
-                defeatedMon &&
-                defeatedMon.waypointId &&
-                typeof boardPokemonCards !== 'undefined' &&
-                boardPokemonCards[defeatedMon.waypointId]
-            ) {
+            if (defeatedMon && defeatedMon.waypointId && typeof boardPokemonCards !== 'undefined' && boardPokemonCards[defeatedMon.waypointId]) {
                 boardPokemonCards[defeatedMon.waypointId].weakened = true;
                 boardPokemonCards[defeatedMon.waypointId].currentHp = 0;
             }
-
-            showCustomPopup(
-                "🏆 VITÓRIA SOBRE O SELVAGEM!",
-                "Derrotaste o Pokémon selvagem!\n\n🩹 Ele ficou enfraquecido e pode ser capturado.",
-                true
-            );
+            showCustomPopup("🏆 VITÓRIA SOBRE O SELVAGEM!", "Derrotaste o Pokémon selvagem!\n\n🩹 Ele ficou enfraquecido e pode ser capturado.", true);
         } else {
             cp.gold = (Number(cp.gold) || 0) + 150;
-
-            showCustomPopup(
-                "🏆 VITÓRIA NO DUELO PVP!",
-                "Derrotaste a equipa adversária em um combate por turnos!\n\n💰 Prémio: +150 Ouro.",
-                true
-            );
-        }
-
-        if (typeof appendAdventureLog === 'function') {
-            appendAdventureLog(
-                `Batalha na Arena TCG concluída com vitória para ${cp.name}.`
-            );
+            showCustomPopup("🏆 VITÓRIA NO DUELO PVP!", "Derrotaste a equipa adversária!\n\n💰 Prémio: +150 Ouro.", true);
         }
     } else {
-        showCustomPopup(
-            "💀 DERROTA NA ARENA",
-            "Toda a tua equipa alinhada desmaiou em combate. Visita um Centro Pokémon para recuperar as forças.",
-            false
-        );
-
-        if (typeof appendAdventureLog === 'function') {
-            appendAdventureLog(
-                `${cp.name} foi derrotado na Arena TCG.`
-            );
-        }
+        showCustomPopup("💀 DERROTA NA ARENA", "Toda a tua equipa alinhada desmaiou em combate. Visita um Centro Pokémon.", false);
     }
 
-    if (typeof updatePlayerUI === 'function') {
-        updatePlayerUI();
-    }
-
-    if (typeof renderTeamCardSlots === 'function') {
-        renderTeamCardSlots();
-    }
-
-    if (typeof renderBottomPanel === 'function') {
-        renderBottomPanel();
-    }
+    if (typeof updatePlayerUI === 'function') updatePlayerUI();
+    if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+    if (typeof renderBottomPanel === 'function') renderBottomPanel();
 }
+
+// ==========================================
+// EXPOSIÇÃO GLOBAL OBRIGATÓRIA PARA O HTML
+// ==========================================
+window.openBattleArena = openBattleArena;
+window.confirmArenaTeamAndStart = confirmArenaTeamAndStart;
+window.switchArenaPlayerPokemon = switchArenaPlayerPokemon;
+window.useArenaItem = useArenaItem;
+window.executeArenaTurn = executeArenaTurn;
+window.closePreBattleAndLaunchArena = closePreBattleAndLaunchArena;
+window.useItemInPreBattle = useItemInPreBattle;
