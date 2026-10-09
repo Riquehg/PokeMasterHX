@@ -69,6 +69,16 @@ document.addEventListener('DOMContentLoaded', () => {
     setupGlobalInterfaceListeners();
     setupAuthenticationListeners();
     loadDailyPokemonPreview();
+    const adminBtn = document.getElementById('open-admin-btn');
+    if (adminBtn) {
+        adminBtn.onclick = () => {
+            if (typeof window.openAdminPanelModal === 'function') {
+                window.openAdminPanelModal();
+            } else {
+                console.warn("⚠️ O módulo de administração ainda não foi carregado.");
+            }
+        };
+    }
 
     console.log("✅ Jogo inicializado com sucesso!");
 });
