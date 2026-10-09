@@ -5,10 +5,9 @@ import { renderBoardMap, tryInteractWithCity, onHexClick } from './systems/map.j
 import { setupDiceListeners, rollDiceForMovement, handleWaypointClick, resetTurnDiceState } from './systems/dice.js';
 import { MONSTER_CATALOG } from './config/cards-data.js';
 
-// Importação dos Módulos dos Sistemas (battle.js desativado para priorizar o encounter.js TCG)
+// Importação dos Módulos dos Sistemas
 import './systems/city.js';
 import './systems/trainer.js';
-// import './systems/battle.js'; 
 import './systems/vault.js';
 import './systems/lobby.js';
 import './systems/admin.js';
@@ -52,7 +51,7 @@ window.openPokedexModal = openPokedexModal;
 window.openPokedexDetailCard = openPokedexDetailCard;
 window.openVaultModal = openVaultModal;
 
-// Função global de animação de dado caso o módulo externo não a possua
+// Função global de animação de dado
 window.rollDiceWithAnimation = function(callback) {
     const diceBtn = document.getElementById('roll-dice-btn');
     if (diceBtn) {
@@ -69,7 +68,7 @@ window.rollDiceWithAnimation = function(callback) {
     }, 800);
 };
 
-// Exposição do Popup Global de Alerta/Notificação para os eventos do mapa e capturas
+// Popup Global de Alerta/Notificação
 window.showCustomPopup = function(title, message, isSuccess) {
     let popup = document.getElementById('global-custom-popup');
     if (!popup) {
@@ -94,7 +93,7 @@ window.showCustomPopup = function(title, message, isSuccess) {
     popup.classList.remove('hidden');
 };
 
-// Função para disparar eventos aleatórios nas casas de tipo 'event'
+// Eventos aleatórios nas casas de tipo 'event'
 window.triggerRandomBoardEvent = function(eventName) {
     const cp = getCurrentPlayer();
     if (!cp) return;
