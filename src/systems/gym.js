@@ -1,115 +1,83 @@
 // --- src/systems/gym.js ---
-// Subsistema de Ginásios Oficiais e Líderes de Kanto com Insígnias e Arena
-
 import { gameState, getCurrentPlayer } from '../core/state.js';
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 import { saveGameProgress } from '../core/storage.js';
 import { emitSocket } from '../core/socket.js';
 
-let currentGymBattleSession = null;
-let gymAttemptedThisTurn = {}; 
-
 export const GYM_LEADERS_CATALOG = [
-    { 
-        city: "Pewter City", 
-        leader: "Brock", 
-        type: "Pedra", 
-        badgeKey: "boulder",
-        badgeName: "Insígnia da Rocha", 
-        badgeIcon: `${SUPABASE_STORAGE_URL}sprites/badges/boulder.png`,
-        rewardGold: 300, 
+    {
+        city: 'Pewter City',
+        leader: 'Brock',
+        badgeName: 'Boulder',
+        badgeIcon: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/badges/boulder.png',
+        prize: 300,
         format: 1,
         pokemons: [
-            { id: 'onix', name: "Onix", level: 3, str: 6, hp: 24, maxHp: 24, currentHp: 24, type: "Pedra/Terra", image: `${SUPABASE_STORAGE_URL}monsters/095.png` }
-        ] 
+            { id: 'geodude', name: 'Geodude', level: 3, type: 'Rock/Ground', image: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/074.png', currentHp: 20, maxHp: 20, str: 6 }
+        ]
     },
-    { 
-        city: "Cerulean City", 
-        leader: "Misty", 
-        type: "Água", 
-        badgeKey: "cascade",
-        badgeName: "Insígnia da Cascata", 
-        badgeIcon: `${SUPABASE_STORAGE_URL}sprites/badges/cascade.png`,
-        rewardGold: 400, 
+    {
+        city: 'Cerulean City',
+        leader: 'Misty',
+        badgeName: 'Cascade',
+        badgeIcon: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/badges/cascade.png',
+        prize: 400,
         format: 1,
         pokemons: [
-            { id: 'starmie', name: "Starmie", level: 4, str: 7, hp: 28, maxHp: 28, currentHp: 28, type: "Água/Psíquico", image: `${SUPABASE_STORAGE_URL}monsters/121.png` }
-        ] 
+            { id: 'starmie', name: 'Starmie', level: 4, type: 'Water/Psychic', image: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/121.png', currentHp: 25, maxHp: 25, str: 7 }
+        ]
     },
-    { 
-        city: "Vermilion City", 
-        leader: "Lt. Surge", 
-        type: "Elétrico", 
-        badgeKey: "thunder",
-        badgeName: "Insígnia do Trovão", 
-        badgeIcon: `${SUPABASE_STORAGE_URL}sprites/badges/thunder.png`,
-        rewardGold: 500, 
-        format: 2,
+    {
+        city: 'Vermilion City',
+        leader: 'Lt. Surge',
+        badgeName: 'Thunder',
+        badgeIcon: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/badges/thunder.png',
+        prize: 500,
+        format: 1,
         pokemons: [
-            { id: 'voltorb', name: "Voltorb", level: 4, str: 7, hp: 26, maxHp: 26, currentHp: 26, type: "Elétrico", image: `${SUPABASE_STORAGE_URL}monsters/101.png` },
-            { id: 'raichu', name: "Raichu", level: 5, str: 8, hp: 32, maxHp: 32, currentHp: 32, type: "Elétrico", image: `${SUPABASE_STORAGE_URL}monsters/026.png` }
-        ] 
+            { id: 'raichu', name: 'Raichu', level: 6, type: 'Electric', image: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/026.png', currentHp: 30, maxHp: 30, str: 9 }
+        ]
     },
-    { 
-        city: "Celadon City", 
-        leader: "Erika", 
-        type: "Grama", 
-        badgeKey: "rainbow",
-        badgeName: "Insígnia do Arco-Íris", 
-        badgeIcon: `${SUPABASE_STORAGE_URL}sprites/badges/rainbow.png`,
-        rewardGold: 600, 
-        format: 2,
+    {
+        city: 'Celadon City',
+        leader: 'Erika',
+        badgeName: 'Rainbow',
+        badgeIcon: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/badges/rainbow.png',
+        prize: 600,
+        format: 1,
         pokemons: [
-            { id: 'tangela', name: "Tangela", level: 5, str: 8, hp: 30, maxHp: 30, currentHp: 30, type: "Grama", image: `${SUPABASE_STORAGE_URL}monsters/114.png` },
-            { id: 'vileplume', name: "Vileplume", level: 6, str: 9, hp: 36, maxHp: 36, currentHp: 36, type: "Grama/Veneno", image: `${SUPABASE_STORAGE_URL}monsters/045.png` }
-        ] 
+            { id: 'vileplume', name: 'Vileplume', level: 8, type: 'Grass/Poison', image: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/045.png', currentHp: 35, maxHp: 35, str: 11 }
+        ]
     },
-    { 
-        city: "Fuchsia City", 
-        leader: "Koga", 
-        type: "Veneno", 
-        badgeKey: "soul",
-        badgeName: "Insígnia da Alma", 
-        badgeIcon: `${SUPABASE_STORAGE_URL}sprites/badges/soul.png`,
-        rewardGold: 700, 
-        format: 2,
+    {
+        city: 'Fuchsia City',
+        leader: 'Koga',
+        badgeName: 'Soul',
+        badgeIcon: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/badges/soul.png',
+        prize: 700,
+        format: 1,
         pokemons: [
-            { id: 'koffing', name: "Koffing", level: 5, str: 8, hp: 30, maxHp: 30, currentHp: 30, type: "Veneno", image: `${SUPABASE_STORAGE_URL}monsters/109.png` },
-            { id: 'weezing', name: "Weezing", level: 6, str: 9, hp: 38, maxHp: 38, currentHp: 38, type: "Veneno", image: `${SUPABASE_STORAGE_URL}monsters/110.png` }
-        ] 
+            { id: 'weezing', name: 'Weezing', level: 10, type: 'Poison', image: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/110.png', currentHp: 40, maxHp: 40, str: 13 }
+        ]
     },
-    { 
-        city: "Cinnabar Island", 
-        leader: "Blaine", 
-        type: "Fogo", 
-        badgeKey: "volcano",
-        badgeName: "Insígnia do Vulcão", 
-        badgeIcon: `${SUPABASE_STORAGE_URL}sprites/badges/volcano.png`,
-        rewardGold: 850, 
-        format: 2,
+    {
+        city: 'Cinnabar Island',
+        leader: 'Blaine',
+        badgeName: 'Volcano',
+        badgeIcon: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/badges/volcano.png',
+        prize: 800,
+        format: 1,
         pokemons: [
-            { id: 'arcanine', name: "Arcanine", level: 6, str: 9, hp: 38, maxHp: 38, currentHp: 38, type: "Fogo", image: `${SUPABASE_STORAGE_URL}monsters/059.png` },
-            { id: 'magmar', name: "Magmar", level: 6, str: 9, hp: 36, maxHp: 36, currentHp: 36, type: "Fogo", image: `${SUPABASE_STORAGE_URL}monsters/126.png` }
+            { id: 'arcanine', name: 'Arcanine', level: 12, type: 'Fire', image: 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/059.png', currentHp: 50, maxHp: 50, str: 16 }
         ]
     }
 ];
 
 export function initiateGymSequence(cityName) {
-    const cp = getCurrentPlayer();
-    const gymInfo = GYM_LEADERS_CATALOG.find(g => g.city.toLowerCase() === cityName.toLowerCase());
-    
-    if (!gymInfo) return;
-
-    currentGymBattleSession = {
-        gym: gymInfo,
-        format: gymInfo.format || 1,
-        challengerTeam: []
-    };
-
+    const gymInfo = GYM_LEADERS_CATALOG.find(g => g.city.toLowerCase() === cityName.toLowerCase()) || GYM_LEADERS_CATALOG[1];
     showGymVsScreen(gymInfo);
 }
 
-// --- Substituir na função showGymVsScreen em src/systems/gym.js ---
 function showGymVsScreen(gymInfo) {
     let vsModal = document.getElementById('gym-vs-modal');
     if (!vsModal) {
@@ -134,7 +102,7 @@ function showGymVsScreen(gymInfo) {
             <h2 class="text-2xl font-black text-white font-cinzel tracking-wider">LÍDER ${gymInfo.leader.toUpperCase()}</h2>
             <div class="flex items-center justify-center gap-2 mt-2">
                 <span class="text-xs text-slate-300 font-bold">Insígnia em Disputa:</span>
-                <img src="${gymInfo.badgeIcon}" class="w-8 h-8 object-contain drop-shadow-[0_0_8px_rgba(255,215,0,0.8)]" title="${gymInfo.badgeName}">
+                <img src="${gymInfo.badgeIcon}" class="w-10 h-10 object-contain drop-shadow-[0_0_8px_rgba(255,215,0,0.8)]" title="${gymInfo.badgeName}">
                 <span class="text-xs font-black text-amber-300 uppercase">${gymInfo.badgeName}</span>
             </div>
         </div>
@@ -155,9 +123,14 @@ function showGymVsScreen(gymInfo) {
             </div>
         </div>
 
-        <button id="gym-accept-btn" class="mt-6 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-black font-black px-8 py-3 rounded-2xl text-xs uppercase tracking-wider shadow-2xl transition-all transform hover:scale-105 cursor-pointer">
-            Preparar Equipa e Aceitar Desafio <i class="fa-solid fa-arrow-right ml-1"></i>
-        </button>
+        <div class="flex gap-4 mt-6">
+            <button id="gym-accept-btn" class="bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-black font-black px-8 py-3 rounded-2xl text-xs uppercase tracking-wider shadow-2xl transition-all transform hover:scale-105 cursor-pointer">
+                Preparar Equipa e Aceitar Desafio <i class="fa-solid fa-arrow-right ml-1"></i>
+            </button>
+            <button onclick="document.getElementById('gym-vs-modal').remove()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-6 py-3 rounded-2xl text-xs uppercase cursor-pointer">
+                Voltar
+            </button>
+        </div>
     `;
     vsModal.classList.remove('hidden');
 
@@ -174,10 +147,13 @@ function launchGymBattleArenaDirect(gymInfo) {
             format: gymInfo.format || 1,
             data: gymInfo
         });
+    } else if (typeof window.openEncounterModalWithPokemon === 'function' && gymInfo.pokemons && gymInfo.pokemons.length > 0) {
+        // Redirecionamento seguro para a arena de combate se openBattleArena não estiver carregada
+        window.openEncounterModalWithPokemon(gymInfo.pokemons[0]);
     } else {
-        // Fallback direto caso a função esteja mapeada com outro nome no escopo global
-        console.warn("⚠️ openBattleArena não encontrada diretamente, tentando iniciar rotina alternativa.");
+        alert(`Batalha de Ginásio contra ${gymInfo.leader} iniciada! (Modo Arena em preparação)`);
     }
 }
 
 window.initiateGymSequence = initiateGymSequence;
+window.GYM_LEADERS_CATALOG = GYM_LEADERS_CATALOG;
