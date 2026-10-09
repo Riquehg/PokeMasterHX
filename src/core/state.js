@@ -73,9 +73,12 @@ export function getCurrentPlayer() {
     return null;
 }
 
-// Fallback de segurança para garantir que o estado nunca fique nulo
+// Fallback de segurança para garantir que o estado nunca fique nulo sem apagar dados existentes
 export function ensureValidGameState() {
-    if (!gameState.players) gameState.players = [];
+    if (!Array.isArray(gameState.players)) {
+        gameState.players = [];
+    }
+    
     if (gameState.players.length === 0) {
         gameState.players = [{
             name: setupConfig.trainerName || 'Ash Ketchum',
@@ -85,10 +88,21 @@ export function ensureValidGameState() {
             currentZone: 5,
             level: 1,
             activeTeam: [],
-            pcBox: [],
+            pcBox: [], // PC Box limpa inicialmente para evitar duplicações
             inventory: [],
             equipmentSlots: [null, null]
         }];
     }
+    
+    // Garante que o jogador atual possui as propriedades mínimas essenciais
+    const cp = getCurrentPlayer();
+    if (cp) {
+        if (!Array.isArray(cp.activeTeam)) cp.activeTeam = [];
+        if (!Array.isArray(cp.pcBox)) cp.pcBox = [];
+        if (!Array.isArray(cp.inventory)) cp.inventory = [];
+        if (!Array.isArray(cp.badges)) cp.badges = [];
+        if (cp.currentZone === undefined || cp.currentZone === null) cp.currentZone = 5;
+    }
+
     gameState.currentPlayerIndex = gameState.currentPlayerIndex || 0;
 }
