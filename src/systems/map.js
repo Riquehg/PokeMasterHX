@@ -5,6 +5,7 @@ import { SUPABASE_STORAGE_URL, FULL_MAP_IMAGE } from '../config/constants.js';
 import { gameState, getCurrentPlayer, movementState, ensureValidGameState } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
 import { openEncounterModalWithPokemon } from './battle.js';
+import { MONSTER_CATALOG } from '../config/cards-data.js';
 
 export const BOARD_WAYPOINTS = [
     // --- HEXÁGONO A ---
@@ -343,6 +344,26 @@ export function renderBoardMap(highlightIds = []) {
     const container = document.getElementById('board-path');
     if (!container) return;
 
+    // Inicializa o dicionário global de cartas de Pokémon no tabuleiro se estiver vazio
+    if (typeof boardPokemonCards === 'undefined') {
+        window.boardPokemonCards = {};
+    }
+    if (Object.keys(boardPokemonCards).length === 0 && Array.isArray(MONSTER_CATALOG) && MONSTER_CATALOG.length > 0) {
+        BOARD_WAYPOINTS.forEach(wp => {
+            if (wp.type === 'pokemon') {
+                const randomMon = MONSTER_CATALOG[Math.floor(Math.random() * MONSTER_CATALOG.length)];
+                boardPokemonCards[wp.id] = {
+                    ...randomMon,
+                    level: Math.floor(Math.random() * 5) + 3,
+                    currentHp: 20,
+                    maxHp: 20,
+                    waypointId: wp.id,
+                    weakened: true
+                };
+            }
+        });
+    }
+
     let mapOverlayHtml = '';
 
     const playersList = (typeof gameState !== 'undefined' && gameState && Array.isArray(gameState.players)) ? gameState.players : ((typeof gameState !== 'undefined' && gameState && gameState.player) ? [gameState.player] : []);
@@ -528,3 +549,11 @@ export function animateTokenMovement(newPositionIndex) {
     }
     renderBoardMap();
 }
+
+// ==========================================
+// EXPOSIÇÃO GLOBAL PARA O HTML
+// ==========================================
+window.onHexClick = onHexClick;
+window.tryInteractWithCity = tryInteractWithCity;
+window.tryInteractWithWeakenedPokemon = tryInteractWithWeakenedPokemon;
+window.renderBoardMap = renderBoardMap;
