@@ -1,5 +1,5 @@
 // --- src/data/items.js ---
-// Base de dados oficial e utilitários de itens do jogo
+// Base de dados oficial de itens (Apenas Sprites Oficiais, sem emojis)
 
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 import { getCurrentPlayer } from '../core/state.js';
@@ -10,7 +10,6 @@ export const ITEM_CATALOG = [
         id: 'bicycle',
         name: 'Bicycle',
         category: 'common',
-        icon: '🚲',
         image: `${SUPABASE_STORAGE_URL}items/bicycle.png`,
         desc: 'Permite jogar um turno extra após o seu turno atual.'
     },
@@ -18,7 +17,6 @@ export const ITEM_CATALOG = [
         id: 'escape_rope',
         name: 'Escape Rope',
         category: 'common',
-        icon: '🪢',
         image: `${SUPABASE_STORAGE_URL}items/escape_rope.png`,
         desc: 'Permite ativar o espaço em que você está ou um adjacente.'
     },
@@ -26,7 +24,6 @@ export const ITEM_CATALOG = [
         id: 'fly',
         name: 'Fly',
         category: 'common',
-        icon: '🦅',
         image: `${SUPABASE_STORAGE_URL}items/fly.png`,
         desc: 'Move seu peão para qualquer espaço no hexágono atual.'
     },
@@ -34,7 +31,6 @@ export const ITEM_CATALOG = [
         id: 'fishing_rod',
         name: 'Fishing Rod',
         category: 'common',
-        icon: '🎣',
         image: `${SUPABASE_STORAGE_URL}items/fishing_rod.png`,
         desc: 'Equipamento para interagir com áreas de pesca ou água.'
     },
@@ -42,7 +38,6 @@ export const ITEM_CATALOG = [
         id: 'honey',
         name: 'Honey',
         category: 'common',
-        icon: '🍯',
         image: `${SUPABASE_STORAGE_URL}items/honey.png`,
         desc: 'Tenta capturar um Pokémon no mesmo hexágono.'
     },
@@ -50,7 +45,6 @@ export const ITEM_CATALOG = [
         id: 'pokenav_plus',
         name: 'PokéNav Plus',
         category: 'common',
-        icon: '📱',
         image: `${SUPABASE_STORAGE_URL}items/pokenav.png`,
         desc: 'Força um oponente a descartar o Card de Treinador.'
     },
@@ -58,7 +52,6 @@ export const ITEM_CATALOG = [
         id: 'rare_candy',
         name: 'Rare Candy',
         category: 'common',
-        icon: '🍬',
         image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`,
         desc: 'Concede XP imediato e sobe de nível o Anima.'
     },
@@ -66,7 +59,6 @@ export const ITEM_CATALOG = [
         id: 'repel',
         name: 'Repel',
         category: 'common',
-        icon: '💨',
         image: `${SUPABASE_STORAGE_URL}items/repel.png`,
         desc: 'Troca um Pokémon revelado no tabuleiro.'
     },
@@ -74,7 +66,6 @@ export const ITEM_CATALOG = [
         id: 'rocket_attack',
         name: 'Rocket Attack',
         category: 'common',
-        icon: '🚀',
         image: `${SUPABASE_STORAGE_URL}items/rocket_attack.png`,
         desc: 'Rouba aleatoriamente um Item da mão de um oponente.'
     },
@@ -84,7 +75,6 @@ export const ITEM_CATALOG = [
         id: 'poke_doll',
         name: 'Poké Doll',
         category: 'quick',
-        icon: '🧸',
         image: `${SUPABASE_STORAGE_URL}items/poke_doll.png`,
         desc: 'Bloqueia efeitos diretos causados a você.'
     },
@@ -92,7 +82,6 @@ export const ITEM_CATALOG = [
         id: 'time_travel',
         name: 'Time Travel',
         category: 'quick',
-        icon: '⏳',
         image: `${SUPABASE_STORAGE_URL}items/time_travel.png`,
         desc: 'Força a rerrolagem de qualquer dado.'
     },
@@ -100,7 +89,6 @@ export const ITEM_CATALOG = [
         id: 'exp_share',
         name: 'Exp. Share',
         category: 'quick',
-        icon: '📈',
         image: `${SUPABASE_STORAGE_URL}items/exp_share.png`,
         desc: 'Copia os efeitos de Eventos ativados por oponentes.'
     },
@@ -108,7 +96,6 @@ export const ITEM_CATALOG = [
         id: 'lure_module',
         name: 'Lure Module',
         category: 'quick',
-        icon: '🔮',
         image: `${SUPABASE_STORAGE_URL}items/lure_module.png`,
         desc: 'Troca posições de dois Pokémon no tabuleiro.'
     },
@@ -116,7 +103,6 @@ export const ITEM_CATALOG = [
         id: 'poke_flute',
         name: 'Poké Flute',
         category: 'quick',
-        icon: '🎶',
         image: `${SUPABASE_STORAGE_URL}items/poke_flute.png`,
         desc: 'Cancela um Evento e puxa outro em seu lugar.'
     },
@@ -129,7 +115,6 @@ export const ITEM_CATALOG = [
         type: 'sphere',
         value: 0,
         cost: 50,
-        icon: '🔴',
         image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`,
         desc: 'Esfera clássica padrão.'
     },
@@ -140,7 +125,6 @@ export const ITEM_CATALOG = [
         type: 'sphere',
         value: 1,
         cost: 100,
-        icon: '🔵',
         image: `${SUPABASE_STORAGE_URL}items/great_ball.png`,
         desc: 'Adiciona +1 na captura.'
     },
@@ -151,7 +135,6 @@ export const ITEM_CATALOG = [
         type: 'sphere',
         value: 2,
         cost: 200,
-        icon: '🟡',
         image: `${SUPABASE_STORAGE_URL}items/ultra_ball.png`,
         desc: 'Adiciona +2 na captura.'
     },
@@ -162,7 +145,6 @@ export const ITEM_CATALOG = [
         type: 'sphere',
         value: 4,
         cost: 1000,
-        icon: '🟣',
         image: `${SUPABASE_STORAGE_URL}items/master_ball.png`,
         desc: 'Adiciona +4 na captura.'
     },
@@ -173,7 +155,6 @@ export const ITEM_CATALOG = [
         type: 'sphere',
         value: 2,
         cost: 300,
-        icon: '🔮',
         image: `${SUPABASE_STORAGE_URL}items/mystic_ball.png`,
         aura: 'aura-mystic',
         visualClass: 'aura-mystic',
@@ -186,7 +167,6 @@ export const ITEM_CATALOG = [
         type: 'sphere',
         value: 2,
         cost: 300,
-        icon: '🔥',
         image: `${SUPABASE_STORAGE_URL}items/flame_ball.png`,
         aura: 'aura-flame',
         visualClass: 'aura-flame',
@@ -199,7 +179,6 @@ export const ITEM_CATALOG = [
         type: 'sphere',
         value: 2,
         cost: 300,
-        icon: '💧',
         image: `${SUPABASE_STORAGE_URL}items/aqua_ball.png`,
         aura: 'aura-aqua',
         visualClass: 'aura-aqua',
@@ -212,7 +191,6 @@ export const ITEM_CATALOG = [
         type: 'sphere',
         value: 3,
         cost: 400,
-        icon: '⚡',
         image: `${SUPABASE_STORAGE_URL}items/electric_ball.png`,
         aura: 'aura-electric',
         visualClass: 'aura-electric',
@@ -225,7 +203,6 @@ export const ITEM_CATALOG = [
         type: 'sphere',
         value: 3,
         cost: 400,
-        icon: '🌑',
         image: `${SUPABASE_STORAGE_URL}items/shadow_ball.png`,
         aura: 'aura-shadow',
         visualClass: 'aura-shadow',
@@ -238,7 +215,6 @@ export const ITEM_CATALOG = [
         type: 'sphere',
         value: 4,
         cost: 800,
-        icon: '🌈',
         image: `${SUPABASE_STORAGE_URL}items/rainbow_ball.png`,
         aura: 'aura-rainbow',
         visualClass: 'aura-rainbow',
@@ -253,7 +229,6 @@ export const ITEM_CATALOG = [
         type: 'evolution',
         value: 1,
         cost: 500,
-        icon: '💎',
         image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`,
         desc: 'Força a evolução imediata de um Pokémon compatível.'
     },
@@ -264,7 +239,6 @@ export const ITEM_CATALOG = [
         type: 'battle',
         value: 2,
         cost: 150,
-        icon: '🧪',
         image: `${SUPABASE_STORAGE_URL}items/vitamin.png`,
         desc: 'Aumenta o bônus de combate em +2.'
     },
@@ -275,7 +249,6 @@ export const ITEM_CATALOG = [
         type: 'battle',
         value: 2,
         cost: 150,
-        icon: '⚔️',
         image: `${SUPABASE_STORAGE_URL}items/x_attack.png`,
         desc: 'Aumenta o bônus temporário de combate.'
     },
@@ -286,7 +259,6 @@ export const ITEM_CATALOG = [
         type: 'heal',
         value: 20,
         cost: 50,
-        icon: '💊',
         image: `${SUPABASE_STORAGE_URL}items/potion.png`,
         desc: 'Restaura 20 HP do Pokémon ativo.'
     },
@@ -297,7 +269,6 @@ export const ITEM_CATALOG = [
         type: 'revive',
         value: 50,
         cost: 250,
-        icon: '🌟',
         image: `${SUPABASE_STORAGE_URL}items/revive.png`,
         desc: 'Revive um Pokémon desmaiado.'
     },
@@ -308,7 +279,6 @@ export const ITEM_CATALOG = [
         type: 'rarecandy',
         value: 100,
         cost: 300,
-        icon: '🍬',
         image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`,
         desc: 'Concede 100 XP ao Pokémon selecionado.'
     }
@@ -349,7 +319,7 @@ export function normalizeInventoryItem(itemEntry) {
 
     if (!itemInfo) {
         return typeof itemEntry === 'string'
-            ? { id: normalizeItemId(itemEntry), name: itemEntry, count: 1, category: 'common', type: 'common', icon: '🎒', desc: 'Item não catalogado.' }
+            ? { id: normalizeItemId(itemEntry), name: itemEntry, count: 1, category: 'common', type: 'common', desc: 'Item não catalogado.' }
             : itemEntry;
     }
 
@@ -396,8 +366,7 @@ export function renderInventoryUI(player) {
 
         container.innerHTML += `
             <div class="bg-black/50 border border-amber-900/60 rounded-lg p-2 flex flex-col items-center justify-between text-center relative group overflow-hidden ${auraClass}">
-                <span class="text-lg">${itemInfo.icon}</span>
-                <img src="${itemInfo.image}" alt="${itemInfo.name}" class="w-10 h-10 object-contain drop-shadow" onerror="this.style.display='none'">
+                <img src="${itemInfo.image}" alt="${itemInfo.name}" class="w-10 h-10 object-contain drop-shadow" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                 <span class="text-[9px] font-bold text-amber-300 truncate w-full">${itemInfo.name} (${itemEntry.count})</span>
                 <span class="text-[8px] text-slate-400 leading-tight">${itemInfo.desc}</span>
                 <button type="button" onclick="window.usePlayerItem('${itemInfo.id}', ${index})" class="mt-1 bg-amber-600 hover:bg-amber-500 text-black px-2 py-0.5 rounded text-[8px] font-black w-full shadow cursor-pointer">
