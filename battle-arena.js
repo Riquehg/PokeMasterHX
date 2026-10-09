@@ -141,7 +141,7 @@ function arenaUpdateOriginalTeams() {
 }
 
 // Ponto de entrada chamado pela engine principal
-function openBattleArena(config = {}) {
+window.openBattleArena = function(config = {}) {
     const cp = getCurrentPlayer();
 
     if (!cp || !Array.isArray(cp.activeTeam)) {
@@ -259,7 +259,7 @@ function openBattleArena(config = {}) {
     );
 
     openArenaTeamSelectionModal();
-}
+};
 
 function openArenaTeamSelectionModal() {
     const cp = getCurrentPlayer();
@@ -282,14 +282,7 @@ function openArenaTeamSelectionModal() {
             const tierBg = typeof getTierColorClass === 'function' ? getTierColorClass(mon.tier || 1) : 'bg-slate-900 border-amber-600';
             const auraCls = mon.auraEffect || '';
 
-            // Tratamento da imagem via Supabase
-            let imgSrc = mon.image || '';
-            if (mon.isShiny && mon.shinyImage) {
-                imgSrc = mon.shinyImage;
-            } else if (mon.dexNumber) {
-                const paddedDex = String(mon.dexNumber).padStart(3, '0');
-                imgSrc = mon.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${paddedDex}.png` : `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
-            }
+            let imgSrc = arenaImage(mon);
 
             html += `
                 <div onclick="${isFainted ? '' : `toggleArenaSelection(${idx})`}" class="${tierBg} ${auraCls} p-3 rounded-2xl border-2 ${isSelected ? 'border-amber-400 bg-amber-950/80 scale-105 shadow-[0_0_15px_rgba(255,215,0,0.5)]' : 'border-amber-900/60'} ${isFainted ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-amber-500'} flex flex-col justify-between h-36 transition-all text-white">
@@ -377,11 +370,7 @@ function renderPreBattleContent(modalEl) {
         `;
     });
 
-    let activeImg = activeMon.image || '';
-    if (activeMon.dexNumber) {
-        const paddedDex = String(activeMon.dexNumber).padStart(3, '0');
-        activeImg = activeMon.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${paddedDex}.png` : `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
-    }
+    let activeImg = arenaImage(activeMon);
 
     modalEl.innerHTML = `
         <div class="trainer-card max-w-md w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
@@ -489,7 +478,6 @@ window.confirmArenaTeamAndStart = function(indexes) {
     openPreBattlePhaseModal();
 };
 
-// --- FASE PRÉ-BATALHA: USO DE ITENS & POÇÕES ---
 function openPreBattlePhaseModal() {
     let modal = document.getElementById('arena-prebattle-modal');
     if (!modal) {
@@ -542,7 +530,6 @@ window.useItemInPreBattle = function(itemId, itemIndex) {
     if (preModal) renderPreBattleContent(preModal);
 };
 
-// --- INTERFACE PRINCIPAL DA ARENA TCG ---
 function launchMainArenaCombatInterface() {
     let arenaModal = document.getElementById('main-battle-arena-modal');
     if (!arenaModal) {
@@ -569,12 +556,9 @@ function renderArenaCombatUI(modalEl) {
     currentBattleSession.playerTeam.forEach((m, idx) => {
         if (idx === currentBattleSession.activePlayerIndex) return;
         const isFaint = m.currentHp <= 0;
-        let mImg = m.image || '';
-        if (m.dexNumber) {
-            const paddedDex = String(m.dexNumber).padStart(3, '0');
-            mImg = m.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${paddedDex}.png` : `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
-        }
-                pReservesHtml += `
+        let mImg = arenaImage(m);
+
+        pReservesHtml += `
             <button
                 type="button"
                 onclick="${isFaint ? '' : `switchArenaPlayerPokemon(${idx})`}"
@@ -591,7 +575,7 @@ function renderArenaCombatUI(modalEl) {
         `;
     });
 
-        let eReservesHtml = '';
+    let eReservesHtml = '';
     let arenaItemsHtml = '';
 
     if (cp && Array.isArray(cp.inventory)) {
@@ -607,7 +591,7 @@ function renderArenaCombatUI(modalEl) {
 
             arenaItemsHtml += `
                 <button
-                    onclick="useArenaItem(${JSON.stringify(item.id)})"
+                    onclick="useArenaItem('${item.id}')"
                     ${currentBattleSession.turnBusy ? 'disabled' : ''}
                     class="bg-blue-700 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black px-2.5 py-1.5 rounded-lg text-[10px] shadow cursor-pointer"
                     title="Itens não encerram o turno"
@@ -622,11 +606,8 @@ function renderArenaCombatUI(modalEl) {
     currentBattleSession.enemyTeam.forEach((m, idx) => {
         if (idx === currentBattleSession.activeEnemyIndex) return;
         const isFaint = m.currentHp <= 0;
-        let mImg = m.image || '';
-        if (m.dexNumber) {
-            const paddedDex = String(m.dexNumber).padStart(3, '0');
-            mImg = m.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${paddedDex}.png` : `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
-        }
+        let mImg = arenaImage(m);
+
         eReservesHtml += `
             <div class="flex items-center gap-1.5 bg-black/60 border ${isFaint ? 'border-red-800 opacity-40' : 'border-red-600'} rounded-xl p-1.5 px-3 text-[10px]">
                 <img src="${mImg}" class="w-6 h-6 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
@@ -638,20 +619,10 @@ function renderArenaCombatUI(modalEl) {
         `;
     });
 
-    let pActiveImg = pMon.image || '';
-    if (pMon.dexNumber) {
-        const paddedDex = String(pMon.dexNumber).padStart(3, '0');
-        pActiveImg = pMon.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${paddedDex}.png` : `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
-    }
-
-    let eActiveImg = eMon.image || '';
-    if (eMon.dexNumber) {
-        const paddedDex = String(eMon.dexNumber).padStart(3, '0');
-        eActiveImg = eMon.isShiny ? `${SUPABASE_STORAGE_URL}monsters/shiny/${paddedDex}.png` : `${SUPABASE_STORAGE_URL}monsters/${paddedDex}.png`;
-    }
+    let pActiveImg = arenaImage(pMon);
+    let eActiveImg = arenaImage(eMon);
 
     modalEl.innerHTML = `
-        <!-- TOPO: INIMIGO EM DESTAQUE -->
         <div class="flex justify-between items-center bg-gradient-to-b from-red-950/80 to-black/80 border-2 border-red-600 p-4 rounded-3xl shadow-2xl">
             <div class="flex items-center gap-4">
                 <div class="w-24 h-24 bg-black/60 rounded-2xl border border-red-500 flex items-center justify-center p-2">
@@ -668,8 +639,7 @@ function renderArenaCombatUI(modalEl) {
             </div>
         </div>
 
-        <!-- CENTRO: AVISO / STATUS -->
-                <div class="text-center my-auto space-y-3">
+        <div class="text-center my-auto space-y-3">
             <h2 class="text-2xl font-black text-amber-400 font-cinzel tracking-widest animate-pulse">
                 ARENA DE COMBATE TCG
             </h2>
@@ -705,7 +675,6 @@ function renderArenaCombatUI(modalEl) {
             </p>
         </div>
 
-        <!-- FUNDO: JOGADOR ATIVO EM DESTAQUE E RESERVAS ABAIXO -->
         <div class="space-y-3">
             <div class="flex gap-2 overflow-x-auto pb-1 justify-center">
                 ${pReservesHtml || '<span class="text-[10px] text-slate-500">Nenhum reserva na retaguarda</span>'}
@@ -726,8 +695,6 @@ function renderArenaCombatUI(modalEl) {
         </div>
     `;
 }
-
-// --- EXECUÇÃO DE TURNO MANUAL E AÇÕES DA ARENA ---
 
 function arenaSwitchEnemyAfterFaint() {
     const nextIndex = arenaFindNextHealthy(
@@ -921,7 +888,7 @@ function arenaResolveEnemyResponse() {
     });
 }
 
-function switchArenaPlayerPokemon(index) {
+window.switchArenaPlayerPokemon = function(index) {
     if (currentBattleSession.battleEnded || currentBattleSession.turnBusy) {
         return;
     }
@@ -965,9 +932,9 @@ function switchArenaPlayerPokemon(index) {
     );
 
     arenaResolveEnemyResponse();
-}
+};
 
-function useArenaItem(itemId) {
+window.useArenaItem = function(itemId) {
     if (currentBattleSession.battleEnded || currentBattleSession.turnBusy) {
         return;
     }
@@ -1106,9 +1073,9 @@ function useArenaItem(itemId) {
     if (arenaModal) {
         renderArenaCombatUI(arenaModal);
     }
-}
+};
 
-function executeArenaTurn() {
+window.executeArenaTurn = function() {
     if (
         currentBattleSession.battleEnded ||
         currentBattleSession.turnBusy
@@ -1195,7 +1162,7 @@ function executeArenaTurn() {
 
         arenaFinishTurn();
     });
-}
+};
 
 function concludeArenaBattle(isVictory) {
     if (currentBattleSession.battleEnded) return;
