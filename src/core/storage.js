@@ -26,7 +26,7 @@ export function saveGameProgress() {
     }
 }
 
-// Carrega o progresso salvo
+// Carrega o progresso salvo de forma segura sem perder propriedades
 export function loadGameProgress() {
     try {
         const raw = localStorage.getItem(SAVE_KEY);
@@ -34,7 +34,17 @@ export function loadGameProgress() {
 
         const parsed = JSON.parse(raw);
         if (parsed && parsed.gameState) {
-            Object.assign(gameState, parsed.gameState);
+            // Garante uma mesclagem profunda preservando estruturas essenciais (players, inventory, pcBox)
+            if (parsed.gameState.players && Array.isArray(parsed.gameState.players)) {
+                gameState.players = parsed.gameState.players;
+            }
+            if (parsed.gameState.currentPlayerIndex !== undefined) {
+                gameState.currentPlayerIndex = parsed.gameState.currentPlayerIndex;
+            }
+            if (parsed.gameState.globalVault) {
+                gameState.globalVault = parsed.gameState.globalVault;
+            }
+
             ensureValidGameState();
             console.log("📂 Jogo carregado com sucesso!");
             return true;
@@ -96,10 +106,14 @@ export function saveMonsterToVault(uniqueId) {
     let foundIndex = -1;
 
     // Procura na equipe ativa
-    foundIndex = cp.activeTeam.findIndex(m => m && m.uniqueId === uniqueId);
-    if (foundIndex > -1) {
-        targetMonster = cp.activeTeam.splice(foundIndex, 1)[0];
-    } else {
+    if (cp.activeTeam && Array.isArray(cp.activeTeam)) {
+        foundIndex = cp.activeTeam.findIndex(m => m && m.uniqueId === uniqueId);
+        if (foundIndex > -1) {
+            targetMonster = cp.activeTeam.splice(foundIndex, 1)[0];
+        }
+    }
+    
+    if (!targetMonster && cp.pcBox && Array.isArray(cp.pcBox)) {
         // Procura na PC Box
         foundIndex = cp.pcBox.findIndex(m => m && m.uniqueId === uniqueId);
         if (foundIndex > -1) {
