@@ -7,13 +7,16 @@ import { renderBoardMap, tryInteractWithCity } from './systems/map.js';
 import { setupDiceListeners } from './systems/dice.js';
 import { MONSTER_CATALOG } from './config/cards-data.js';
 
-// Importação dos Módulos da Parte 1
+// Importação dos Módulos da Parte 1 e Parte 2
 import './systems/city.js';
 import './systems/trainer.js';
 import './systems/battle.js';
 import { openPokemartModal, useInventoryItem } from './systems/inventory.js';
 import { openSpecificTrainerCardModal } from './systems/trainer.js';
 import { initiateGymSequence, GYM_LEADERS_CATALOG } from './systems/gym.js';
+import { openEncounterModalWithPokemon, fleeEncounter } from './systems/encounter.js';
+import { renderTeamCardSlots, renderBottomPanel, changePcBoxPage } from './systems/pcbox.js';
+import { openPokedexModal, openPokedexDetailCard } from './systems/pokedex.js';
 
 // ==========================================
 // EXPOSIÇÃO GLOBAL PARA O HTML (Evita erros de onclick)
@@ -26,10 +29,17 @@ window.tryInteractWithCity = tryInteractWithCity;
 window.saveGameProgress = saveGameProgress;
 window.initiateGymSequence = initiateGymSequence;
 window.GYM_LEADERS_CATALOG = GYM_LEADERS_CATALOG;
+window.openEncounterModalWithPokemon = openEncounterModalWithPokemon;
+window.fleeEncounter = fleeEncounter;
+window.renderTeamCardSlots = renderTeamCardSlots;
+window.renderBottomPanel = renderBottomPanel;
+window.changePcBoxPage = changePcBoxPage;
+window.openPokedexModal = openPokedexModal;
+window.openPokedexDetailCard = openPokedexDetailCard;
 
 // Executado assim que o DOM estiver totalmente carregado
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("🚀 Inicializando o Motor Modular do Jogo...");
+    console.log("🚀 Inicializando o Motor Modular do Jogo (Partes 1 & 2)...");
 
     // 1. Tenta carregar um save existente ou inicializa um estado padrão
     const loaded = loadGameProgress();
@@ -41,7 +51,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. Renderiza o tabuleiro modular inicial e as waypoints
     renderBoardMap();
 
-    // 3. Vincula os ouvintes de eventos da interface e menus
+    // 3. Renderiza os slots da equipa ativa e painel inferior (Mochila/PC Box)
+    renderTeamCardSlots();
+    renderBottomPanel();
+
+    // 4. Vincula os ouvintes de eventos da interface e menus
     setupDiceListeners();
     setupGlobalInterfaceListeners();
     setupAuthenticationListeners();
@@ -87,6 +101,8 @@ function setupAuthenticationListeners() {
         resumeBtn.onclick = () => {
             document.getElementById('setup-screen').classList.add('hidden');
             document.getElementById('main-game-layout').classList.remove('hidden');
+            renderTeamCardSlots();
+            renderBottomPanel();
         };
     }
 
@@ -137,6 +153,13 @@ function setupGlobalInterfaceListeners() {
     if (martBtn) {
         martBtn.onclick = () => {
             openPokemartModal();
+        };
+    }
+
+    const pokedexBtn = document.getElementById('open-pokedex-btn');
+    if (pokedexBtn) {
+        pokedexBtn.onclick = () => {
+            openPokedexModal();
         };
     }
 }
