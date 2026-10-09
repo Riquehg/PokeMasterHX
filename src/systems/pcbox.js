@@ -7,7 +7,7 @@ import { MONSTER_CATALOG } from '../config/cards-data.js';
 
 const MONSTER_CATALOG_REF = Array.isArray(MONSTER_CATALOG) ? MONSTER_CATALOG : [];
 
-export function getTierColorClass(tier) {        
+export function getTierColorClass(tier) {
     switch (tier) {
         case 2: return 'bg-gradient-to-b from-green-950 to-black border-green-600 ';
         case 3: return 'bg-gradient-to-b from-blue-950 to-black border-blue-600 ';
@@ -132,7 +132,6 @@ export function renderBottomPanel() {
                     if (typeof useInventoryItemMainScreen === 'function') useInventoryItemMainScreen(item.id);
                 };
                 
-                // Mapeia diretamente a sprite correta baseada no ID do item no Supabase
                 let itemImgUrl = item.image;
                 if (item.id === 'ball_poke' || item.id === 'poke_ball') {
                     itemImgUrl = `${SUPABASE_STORAGE_URL}items/poke_ball.png`;
@@ -157,7 +156,6 @@ export function renderBottomPanel() {
                 container.appendChild(slot);
             });
         }
-    }
     } else {
         const totalBoxes = cp.pcBox ? cp.pcBox.length : 0;
         const maxPages = Math.max(0, Math.ceil(totalBoxes / 12) - 1);
@@ -301,7 +299,7 @@ function showCustomPopup(title, message, isSuccess) {
 
 export function switchBottomView(viewName) {
     if (!gameState) return;
-    gameState.currentBottomView = viewName; // 'inventory' ou 'pcbox'
+    gameState.currentBottomView = viewName;
     renderBottomPanel();
 }
 
