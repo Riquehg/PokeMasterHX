@@ -145,7 +145,6 @@ export const BOARD_WAYPOINTS = [
     { id: 124, name: "Arena Final", hexagon: "H", top: 28.8, left: 92.1, type: "city", color: "amarelo", requiredType: "", connections: [114, 122] }
 ];
 
-// --- BFS OTIMIZADO (Verificação correta de Tipagem Requerida) ---
 export function getValidDestinations(startWaypointId, steps) {
     let validIds = new Set();
     const activePlayer = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : (gameState.players ? gameState.players[gameState.currentPlayerIndex || 0] : null);
@@ -183,7 +182,6 @@ export function getValidDestinations(startWaypointId, steps) {
             let neighborWp = BOARD_WAYPOINTS.find(w => w.id === neighborId);
             if (!neighborWp) return;
 
-            // Validação de tipo obrigatório para casas bloqueadas (ex: Rock, Fire, Grass, etc.)
             if (neighborWp.requiredType && neighborWp.requiredType.trim() !== "") {
                 const required = neighborWp.requiredType.toLowerCase();
                 const team = activePlayer && (activePlayer.activeTeam || activePlayer.team) ? (activePlayer.activeTeam || activePlayer.team) : [];
@@ -262,7 +260,6 @@ export function onHexClick(waypointId, hexName) {
         return;
     }
 
-    // Se o jogador clicar diretamente na sua casa atual, interage com o evento/Pokémon/cidade dela
     const cp = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : (gameState.players ? gameState.players[gameState.currentPlayerIndex || 0] : null);
     const currentZoneId = cp ? (cp.currentZone || 5) : 5;
 
@@ -315,7 +312,6 @@ export function handleWaypointArrival(waypointId) {
         checkPlayerCellCollision(waypointId, gameState.currentPlayerIndex || 0);
     }
 
-    // Processamento correto baseado no tipo da casa
     if (waypoint.type === 'city') {
         if (typeof openCityModal === 'function') {
             openCityModal(waypoint.name);
@@ -364,7 +360,7 @@ export function handleWaypointArrival(waypointId) {
         if (typeof triggerRandomBoardEvent === 'function') {
             triggerRandomBoardEvent(waypoint.name);
         } else if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Carta de Evento", `Chegaste a ${waypoint.name}. Um evento aleatório ocorreu na rota!`, true);
+            showCustomPopup("🎁 Carta de Evento", `Chegaste a ${waypoint.name}. Um evento aleatório ocorreu na rota!`, true);
         }
     }
 }
@@ -428,6 +424,7 @@ export function renderBoardMap(highlightIds = []) {
         `;
     });
 
+    // Renderiza apenas os Pokémon que já foram revelados ou interagidos (Removido o ícone vermelho flutuante de rota desconhecida)
     BOARD_WAYPOINTS.forEach(wp => {
         if (wp.type === 'pokemon') {
             const pokeCard = boardPokemonCards[wp.id];
@@ -452,14 +449,6 @@ export function renderBoardMap(highlightIds = []) {
                                 <p class="text-[9px] font-black text-white leading-none">${pokeCard.name}</p>
                                 <span class="text-[8px] font-bold text-amber-300">${isFeaturedDaily ? '⭐ DIA' : '🩹 Nv.' + pokeCard.level}</span>
                             </div>
-                        </div>
-                    </div>
-                `;
-            } else {
-                mapOverlayHtml += `
-                    <div onclick="tryInteractWithWeakenedPokemon(${wp.id})" class="absolute -translate-x-1/2 -translate-y-1/2 z-30 cursor-pointer group" style="top: ${wp.top - 3}%; left: ${wp.left}%;" title="Rota Selvagem Desconhecida">
-                        <div class="bg-black/80 border-2 border-red-500 rounded-full w-6 h-6 flex items-center justify-center shadow-lg hover:scale-125 transition-transform animate-pulse">
-                            <span class="text-[10px]">🔴</span>
                         </div>
                     </div>
                 `;
