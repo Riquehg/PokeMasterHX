@@ -324,16 +324,30 @@ export function handleWaypointArrival(waypointId) {
         if (!boardPokemonCards[waypointId]) {
             const catalog = Array.isArray(MONSTER_CATALOG) ? MONSTER_CATALOG : [];
             if (catalog.length > 0) {
-                const randomMon = catalog[Math.floor(Math.random() * catalog.length)];
-                const tier = randomMon.tier || 1;
-                const minLvl = tier === 1 ? 3 : tier === 2 ? 8 : tier === 3 ? 15 : 25;
-                const level = Math.floor(Math.random() * 4) + minLvl;
+                // Mapeia a cor da casa para o Tier correspondente
+                // rosa = 1, verde = 2, azul = 3, vermelho = 4, amarelo = 5 (lendário)
+                let targetTier = 1;
+                const color = String(waypoint.color || 'rosa').toLowerCase();
+                if (color === 'verde') targetTier = 2;
+                else if (color === 'azul') targetTier = 3;
+                else if (color === 'vermelho') targetTier = 4;
+                else if (color === 'amarelo') targetTier = 5;
+
+                // Filtra o catálogo respeitando estritamente o tier da cor da casa
+                let tierFiltered = catalog.filter(m => Number(m.tier || 1) === targetTier);
+                if (tierFiltered.length === 0) tierFiltered = catalog; // Fallback se o tier não tiver pokémons no catálogo
+
+                const randomMon = tierFiltered[Math.floor(Math.random() * tierFiltered.length)];
+                
+                // Brilhantes (Shiny) podem aparecer em qualquer casa de forma rara (6% de chance)
                 const isShiny = Math.random() < 0.06;
+                const minLvl = targetTier === 1 ? 3 : targetTier === 2 ? 8 : targetTier === 3 ? 15 : targetTier === 4 ? 25 : 40;
+                const level = Math.floor(Math.random() * 4) + minLvl;
 
                 boardPokemonCards[waypointId] = {
                     ...randomMon,
                     level: level,
-                    tier: tier,
+                    tier: targetTier,
                     currentHp: 20 + (level * 2),
                     maxHp: 20 + (level * 2),
                     isShiny: isShiny,
@@ -424,7 +438,7 @@ export function renderBoardMap(highlightIds = []) {
         `;
     });
 
-    // Renderiza apenas os Pokémon que já foram revelados ou interagidos (Removido o ícone vermelho flutuante de rota desconhecida)
+    // Renderiza apenas os Pokémon revelados nas casas, sem ícones flutuantes vermelhos
     BOARD_WAYPOINTS.forEach(wp => {
         if (wp.type === 'pokemon') {
             const pokeCard = boardPokemonCards[wp.id];
