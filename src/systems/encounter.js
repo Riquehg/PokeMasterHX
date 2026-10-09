@@ -29,7 +29,7 @@ function getTierColorClass(tier) {
     }
 }
 
-// Correção robusta para detetar vantangem mesmo em tipos compostos ou múltiplos
+// Detetora robusta para vantagem de tipagem mesmo em tipos compostos
 function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
     if (!attackerType || !defenderType) return 1.0;
     
@@ -85,8 +85,9 @@ export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa
     const level = Math.floor(Math.random() * (maxLevel - minLevel + 1)) + minLevel;
     const isShiny = Math.random() < 0.06; // 6% de chance
     
+    // Fórmulas de balanceamento competitivo ajustadas para dar bons status iniciais
     const maxHp = 20 + (level * 4);
-    const calculatedStr = 4 + Math.floor(level * 0.7);
+    const calculatedStr = 5 + Math.floor(level * 0.9);
 
     return {
         ...baseMon,
@@ -397,6 +398,7 @@ function syncGameStateToCloud() {
     }
 }
 
+// Subida de nível equilibrada e competitiva (Ganha HP e STR consistentes)
 function addExperienceAndCheckEvolution(monster, expGain) {
     if (!monster) return;
     monster.exp = (monster.exp || 0) + expGain;
@@ -405,11 +407,13 @@ function addExperienceAndCheckEvolution(monster, expGain) {
     if (monster.exp >= nextLevelExp) {
         monster.level = (monster.level || 1) + 1;
         monster.exp -= nextLevelExp;
-        monster.maxHp = (monster.maxHp || 20) + 6;
+        
+        // Atributos ajustados para subida de nível mais competitiva
+        monster.maxHp = (monster.maxHp || 20) + 5;
         monster.currentHp = monster.maxHp;
-        monster.str = (monster.str || (4 + monster.level)) + 2;
+        monster.str = (monster.str || 5) + 2; // Garante +2 de STR por nível para escalar perfeitamente
 
-        showCustomPopup("✨ SUBIDA DE NÍVEL!", `O teu ${monster.name} subiu para o Nível ${monster.level}!\nOs seus atributos melhoraram!`, true);
+        showCustomPopup("✨ SUBIDA DE NÍVEL!", `O teu ${monster.name} subiu para o Nível ${monster.level}!\nOs seus atributos melhoraram (STR +2, HP +5)!`, true);
 
         const baseCatalogItem = MONSTER_CATALOG.find(m => m.id === monster.catalogId || m.id === monster.id || m.name.toLowerCase() === monster.name.toLowerCase());
         
@@ -473,8 +477,8 @@ export function resolveBattleAttempt() {
 
         const wildDice = Math.floor(Math.random() * 6) + 1;
         const typeMult = calculateTypeAdvantageMultiplier(activeMon.type || activeMon.types, wild.type || wild.types);
-        const playerPower = Math.round(((activeMon.str || (4 + activeMon.level)) + currentEncounterState.battlePowerBonus + playerDice) * typeMult);
-        const wildPower = (wild.str || 3) + wildDice;
+        const playerPower = Math.round(((activeMon.str || (5 + (activeMon.level * 0.9))) + currentEncounterState.battlePowerBonus + playerDice) * typeMult);
+        const wildPower = (wild.str || 4) + wildDice;
 
         if (playerPower >= wildPower) {
             const damageToWild = Math.max(12, playerPower - wildPower + 8);
@@ -489,7 +493,7 @@ export function resolveBattleAttempt() {
             }
             updateEncounterUIInfo();
         } else {
-            const damageToPlayer = 12 + Math.floor(wild.level * 0.4);
+            const damageToPlayer = 10 + Math.floor(wild.level * 0.4);
             activeMon.currentHp = Math.max(0, (activeMon.currentHp || activeMon.maxHp) - damageToPlayer);
             
             if (activeMon.currentHp <= 0) {
