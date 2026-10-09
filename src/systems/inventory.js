@@ -194,7 +194,7 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
         return;
     }
 
-    // 2. Rare Candy (Concede nível ao primeiro Pokémon ativo)
+    // 2. Rare Candy (Sobe de nível o primeiro Pokémon ativo)
     if (item.id === 'item_rarecandy' || item.id === 'rare_candy' || itemInfo.type === 'rarecandy') {
         const targetMon = cp.activeTeam?.[0] || cp.team?.[0];
         if (!targetMon) {
@@ -230,7 +230,6 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
 
         normalizePlayerInventory(cp);
         saveGameProgress();
-
         if (typeof renderBottomPanel === 'function') renderBottomPanel();
 
         if (typeof showCustomPopup === 'function') {
@@ -258,11 +257,8 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
         }
 
         targetMon.currentHp = Math.min(maxHp, (targetMon.currentHp !== undefined ? targetMon.currentHp : maxHp) + healAmount);
-
         item.count = (Number(item.count) || 1) - 1;
-        if (item.count <= 0) {
-            cp.inventory.splice(itemIndex, 1);
-        }
+        if (item.count <= 0) cp.inventory.splice(itemIndex, 1);
 
         normalizePlayerInventory(cp);
         saveGameProgress();
@@ -301,10 +297,18 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
         return;
     }
 
-    if (typeof showCustomPopup === 'function') {
-        showCustomPopup("Informação", `ℹ️ O item ${itemInfo.name} deve ser utilizado no contexto adequado.`, true);
+    // 6. Evolution Stone / Outros itens de utilidade
+    if (itemInfo.type === 'evolution' || item.id.includes('evolution')) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup('Evolution Stone', `💎 ${itemInfo.name} está pronto a ser usado! Abre a ficha do teu Pokémon para selecionar a evolução.`, true);
+        }
+        return;
     }
-}
+
+    // Genérico para itens comuns/rápidos
+    if (typeof showCustomPopup === 'function') {
+        showCustomPopup('Item Utilizado', `🎒 Usaste o item ${itemInfo.name} com sucesso.`, true);
+    }
 
 // Expõe as funções principais globalmente
 window.openPokemartModal = openPokemartModal;
