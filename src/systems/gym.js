@@ -4,6 +4,11 @@ import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 import { saveGameProgress } from '../core/storage.js';
 import { emitSocket } from '../core/socket.js';
 
+// Registo global de tentativas de ginásio por turno/jogador
+if (typeof window.gymAttemptedThisTurn === 'undefined') {
+    window.gymAttemptedThisTurn = {};
+}
+
 export const GYM_LEADERS_CATALOG = [
     {
         city: 'Pewter City',
@@ -80,7 +85,28 @@ export const GYM_LEADERS_CATALOG = [
 ];
 
 export function initiateGymSequence(cityName) {
+    const cp = getCurrentPlayer();
+    const attemptKey = `${gameState.currentPlayerIndex || 0}_${cityName}`;
+
+    // Verifica se já tentou este ginásio neste turno
+    if (window.gymAttemptedThisTurn && window.gymAttemptedThisTurn[attemptKey]) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup("Ginásio Indisponível", "⏳ Já desafiaste este ginásio neste turno. Avança para o próximo turno para tentar novamente.", false);
+        } else {
+            alert("⏳ Já desafiaste este ginásio neste turno.");
+        }
+        return;
+    }
+
+    // Verifica se já tem a insígnia deste ginásio (torna-o inativo permanentemente)
     const gymInfo = GYM_LEADERS_CATALOG.find(g => g.city.toLowerCase() === cityName.toLowerCase()) || GYM_LEADERS_CATALOG[0];
+    if (cp && Array.isArray(cp.badges) && gymInfo.badgeKey && cp.badges.includes(gymInfo.badgeKey)) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup("Ginásio Conquistado", "🛡️ Já conquistaste a insígnia deste ginásio! O Líder reconhece a tua superioridade e descansa.", true);
+        }
+        return;
+    }
+
     showGymVsScreen(gymInfo);
 }
 
@@ -141,6 +167,11 @@ function showGymVsScreen(gymInfo) {
     vsModal.classList.remove('hidden');
 
     document.getElementById('gym-accept-btn').onclick = () => {
+        // Regista tentativa imediata para bloquear re-enfrentamento no mesmo turno
+        const attemptKey = `${gameState.currentPlayerIndex || 0}_${gymInfo.city}`;
+        if (!window.gymAttemptedThisTurn) window.gymAttemptedThisTurn = {};
+        window.gymAttemptedThisTurn[attemptKey] = true;
+
         vsModal.remove();
         launchGymBattleArenaDirect(gymInfo);
     };
