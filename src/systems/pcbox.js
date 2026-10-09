@@ -132,9 +132,15 @@ export function renderBottomPanel() {
                     if (typeof useInventoryItemMainScreen === 'function') useInventoryItemMainScreen(item.id);
                 };
                 
-                const itemVisual = item.image 
-                    ? `<img src="${item.image}" alt="${item.name}" class="w-10 h-10 object-contain drop-shadow" onerror="this.onerror=null; this.src='https://api.iconify.design/noto:package.svg'">`
-                    : `<span class="text-2xl">${item.icon || '🎒'}</span>`;
+                // Mapeia diretamente a sprite correta baseada no ID do item no Supabase
+                let itemImgUrl = item.image;
+                if (item.id === 'ball_poke' || item.id === 'poke_ball') {
+                    itemImgUrl = `${SUPABASE_STORAGE_URL}items/poke_ball.png`;
+                } else if (!itemImgUrl) {
+                    itemImgUrl = `${SUPABASE_STORAGE_URL}items/${item.id}.png`;
+                }
+
+                const itemVisual = `<img src="${itemImgUrl}" alt="${item.name}" class="w-10 h-10 object-contain drop-shadow" onerror="this.src='https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/items/poke_ball.png'">`;
 
                 slot.innerHTML = `
                     <div class="flex justify-between items-center text-[10px] font-bold">
@@ -145,12 +151,13 @@ export function renderBottomPanel() {
                         ${itemVisual}
                     </div>
                     <div class="text-[8px] text-slate-400 text-center truncate">
-                        ${item.desc || ''}
+                        ${item.desc || 'Item útil'}
                     </div>
                 `;
                 container.appendChild(slot);
             });
         }
+    }
     } else {
         const totalBoxes = cp.pcBox ? cp.pcBox.length : 0;
         const maxPages = Math.max(0, Math.ceil(totalBoxes / 12) - 1);
