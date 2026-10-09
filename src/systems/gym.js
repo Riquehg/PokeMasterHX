@@ -1,9 +1,10 @@
 // --- src/systems/gym.js ---
-// Subsistema de Ginásios Oficiais e Líderes de Kanto
+// Subsistema de Ginásios Oficiais e Líderes de Kanto com Insígnias e Arena
 
 import { gameState, getCurrentPlayer } from '../core/state.js';
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
-import { calculateTypeAdvantageMultiplier } from './battle.js';
+import { saveGameProgress } from '../core/storage.js';
+import { emitSocket } from '../core/socket.js';
 
 let currentGymBattleSession = null;
 let gymAttemptedThisTurn = {}; 
@@ -15,10 +16,11 @@ export const GYM_LEADERS_CATALOG = [
         type: "Pedra", 
         badgeKey: "boulder",
         badgeName: "Insígnia da Rocha", 
+        badgeIcon: `${SUPABASE_STORAGE_URL}sprites/badges/boulder.png`,
         rewardGold: 300, 
         format: 1,
         pokemons: [
-            { id: 'onix', name: "Onix", level: 3, str: 6, hp: 24, type: "Pedra/Terra", image: `${SUPABASE_STORAGE_URL}monsters/095.png` }
+            { id: 'onix', name: "Onix", level: 3, str: 6, hp: 24, maxHp: 24, currentHp: 24, type: "Pedra/Terra", image: `${SUPABASE_STORAGE_URL}monsters/095.png` }
         ] 
     },
     { 
@@ -27,10 +29,11 @@ export const GYM_LEADERS_CATALOG = [
         type: "Água", 
         badgeKey: "cascade",
         badgeName: "Insígnia da Cascata", 
+        badgeIcon: `${SUPABASE_STORAGE_URL}sprites/badges/cascade.png`,
         rewardGold: 400, 
         format: 1,
         pokemons: [
-            { id: 'starmie', name: "Starmie", level: 4, str: 7, hp: 28, type: "Água/Psíquico", image: `${SUPABASE_STORAGE_URL}monsters/121.png` }
+            { id: 'starmie', name: "Starmie", level: 4, str: 7, hp: 28, maxHp: 28, currentHp: 28, type: "Água/Psíquico", image: `${SUPABASE_STORAGE_URL}monsters/121.png` }
         ] 
     },
     { 
@@ -39,11 +42,12 @@ export const GYM_LEADERS_CATALOG = [
         type: "Elétrico", 
         badgeKey: "thunder",
         badgeName: "Insígnia do Trovão", 
+        badgeIcon: `${SUPABASE_STORAGE_URL}sprites/badges/thunder.png`,
         rewardGold: 500, 
-        format: 3,
+        format: 2,
         pokemons: [
-            { id: 'voltorb', name: "Voltorb", level: 4, str: 7, hp: 26, type: "Elétrico", image: `${SUPABASE_STORAGE_URL}monsters/101.png` },
-            { id: 'raichu', name: "Raichu", level: 5, str: 8, hp: 32, type: "Elétrico", image: `${SUPABASE_STORAGE_URL}monsters/026.png` }
+            { id: 'voltorb', name: "Voltorb", level: 4, str: 7, hp: 26, maxHp: 26, currentHp: 26, type: "Elétrico", image: `${SUPABASE_STORAGE_URL}monsters/101.png` },
+            { id: 'raichu', name: "Raichu", level: 5, str: 8, hp: 32, maxHp: 32, currentHp: 32, type: "Elétrico", image: `${SUPABASE_STORAGE_URL}monsters/026.png` }
         ] 
     },
     { 
@@ -52,11 +56,12 @@ export const GYM_LEADERS_CATALOG = [
         type: "Grama", 
         badgeKey: "rainbow",
         badgeName: "Insígnia do Arco-Íris", 
+        badgeIcon: `${SUPABASE_STORAGE_URL}sprites/badges/rainbow.png`,
         rewardGold: 600, 
-        format: 3,
+        format: 2,
         pokemons: [
-            { id: 'tangela', name: "Tangela", level: 5, str: 8, hp: 30, type: "Grama", image: `${SUPABASE_STORAGE_URL}monsters/114.png` },
-            { id: 'vileplume', name: "Vileplume", level: 6, str: 9, hp: 36, type: "Grama/Veneno", image: `${SUPABASE_STORAGE_URL}monsters/045.png` }
+            { id: 'tangela', name: "Tangela", level: 5, str: 8, hp: 30, maxHp: 30, currentHp: 30, type: "Grama", image: `${SUPABASE_STORAGE_URL}monsters/114.png` },
+            { id: 'vileplume', name: "Vileplume", level: 6, str: 9, hp: 36, maxHp: 36, currentHp: 36, type: "Grama/Veneno", image: `${SUPABASE_STORAGE_URL}monsters/045.png` }
         ] 
     },
     { 
@@ -65,11 +70,12 @@ export const GYM_LEADERS_CATALOG = [
         type: "Veneno", 
         badgeKey: "soul",
         badgeName: "Insígnia da Alma", 
+        badgeIcon: `${SUPABASE_STORAGE_URL}sprites/badges/soul.png`,
         rewardGold: 700, 
-        format: 3,
+        format: 2,
         pokemons: [
-            { id: 'koffing', name: "Koffing", level: 5, str: 8, hp: 30, type: "Veneno", image: `${SUPABASE_STORAGE_URL}monsters/109.png` },
-            { id: 'weezing', name: "Weezing", level: 6, str: 9, hp: 38, type: "Veneno", image: `${SUPABASE_STORAGE_URL}monsters/110.png` }
+            { id: 'koffing', name: "Koffing", level: 5, str: 8, hp: 30, maxHp: 30, currentHp: 30, type: "Veneno", image: `${SUPABASE_STORAGE_URL}monsters/109.png` },
+            { id: 'weezing', name: "Weezing", level: 6, str: 9, hp: 38, maxHp: 38, currentHp: 38, type: "Veneno", image: `${SUPABASE_STORAGE_URL}monsters/110.png` }
         ] 
     },
     { 
@@ -78,11 +84,12 @@ export const GYM_LEADERS_CATALOG = [
         type: "Fogo", 
         badgeKey: "volcano",
         badgeName: "Insígnia do Vulcão", 
+        badgeIcon: `${SUPABASE_STORAGE_URL}sprites/badges/volcano.png`,
         rewardGold: 850, 
-        format: 3,
+        format: 2,
         pokemons: [
-            { id: 'arcanine', name: "Arcanine", level: 6, str: 9, hp: 38, type: "Fogo", image: `${SUPABASE_STORAGE_URL}monsters/059.png` },
-            { id: 'magmar', name: "Magmar", level: 6, str: 9, hp: 36, type: "Fogo", image: `${SUPABASE_STORAGE_URL}monsters/126.png` }
+            { id: 'arcanine', name: "Arcanine", level: 6, str: 9, hp: 38, maxHp: 38, currentHp: 38, type: "Fogo", image: `${SUPABASE_STORAGE_URL}monsters/059.png` },
+            { id: 'magmar', name: "Magmar", level: 6, str: 9, hp: 36, maxHp: 36, currentHp: 36, type: "Fogo", image: `${SUPABASE_STORAGE_URL}monsters/126.png` }
         ]
     }
 ];
@@ -91,14 +98,7 @@ export function initiateGymSequence(cityName) {
     const cp = getCurrentPlayer();
     const gymInfo = GYM_LEADERS_CATALOG.find(g => g.city.toLowerCase() === cityName.toLowerCase());
     
-    if (!gymInfo) {
-        return;
-    }
-
-    const attemptKey = `${gameState.currentPlayerIndex}_${gymInfo.city}`;
-    if (gymAttemptedThisTurn[attemptKey]) {
-        return;
-    }
+    if (!gymInfo) return;
 
     currentGymBattleSession = {
         gym: gymInfo,
@@ -122,7 +122,7 @@ function showGymVsScreen(gymInfo) {
     const leaderSpriteUrl = `${SUPABASE_STORAGE_URL}leaders/${encodeURIComponent(leaderFileName)}.png`;
 
     let leaderPokemonsHtml = '';
-    const leaderTeam = gymInfo.pokemons || [gymInfo.pokemon];
+    const leaderTeam = gymInfo.pokemons || [];
     leaderTeam.forEach(pk => {
         leaderPokemonsHtml += `<img src="${pk.image}" class="w-12 h-12 object-contain bg-black/60 rounded-xl p-1.5 border border-red-600 shadow" title="${pk.name} Nv.${pk.level}">`;
     });
@@ -216,13 +216,12 @@ function openTeamSelectionModalForGym() {
                         Voltar / Desistir
                     </button>
                     <button id="gym-sel-confirm" ${canConfirm ? '' : 'disabled'} class="flex-2 ${canConfirm ? 'bg-amber-500 hover:bg-amber-400 text-black cursor-pointer shadow-lg' : 'bg-slate-800 text-slate-500 cursor-not-allowed'} font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-all">
-                        Confirmar e Iniciar
+                        Confirmar e Iniciar Batalha de Ginásio
                     </button>
                 </div>
             </div>
         `;
 
-        // Event Listeners dinâmicos
         selModal.querySelectorAll('.gym-select-card').forEach(el => {
             el.onclick = () => {
                 const idx = Number(el.getAttribute('data-index'));
@@ -250,6 +249,7 @@ function openTeamSelectionModalForGym() {
                 selModal.remove();
                 if (currentGymBattleSession) {
                     currentGymBattleSession.challengerTeam = selectedIndices;
+                    launchGymBattleArena(currentGymBattleSession);
                 }
             };
         }
@@ -258,3 +258,45 @@ function openTeamSelectionModalForGym() {
     renderSelectionGrid();
     selModal.classList.remove('hidden');
 }
+
+function launchGymBattleArena(session) {
+    if (typeof window.openBattleArena === 'function') {
+        window.openBattleArena({
+            type: 'gym',
+            gymSession: session,
+            onVictory: () => {
+                const cp = getCurrentPlayer();
+                if (!Array.isArray(cp.badges)) cp.badges = [];
+                
+                const badgeIdentifier = session.gym.badgeKey;
+                if (!cp.badges.includes(badgeIdentifier)) {
+                    cp.badges.push(badgeIdentifier);
+                }
+
+                cp.gold = (cp.gold || 0) + session.gym.rewardGold;
+                
+                if (typeof window.showCustomPopup === 'function') {
+                    window.showCustomPopup(
+                        "🏆 VITÓRIA NO GINÁSIO!",
+                        `Conquistaste a ${session.gym.badgeName} e ${session.gym.rewardGold} G do Líder ${session.gym.leader}!`,
+                        true
+                    );
+                }
+                
+                saveGameProgress();
+                if (typeof emitSocket === 'function') {
+                    emitSocket('save_game_state', { gameState, trainerName: cp.name });
+                }
+            },
+            onDefeat: () => {
+                if (typeof window.showCustomPopup === 'function') {
+                    window.showCustomPopup("Derrota", "Os teus Pokémon foram derrotados pelo Líder de Ginásio!", false);
+                }
+            }
+        });
+    } else {
+        alert("Arena de combate TCG de ginásio iniciada com sucesso!");
+    }
+}
+
+window.initiateGymSequence = initiateGymSequence;
