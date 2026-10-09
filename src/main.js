@@ -227,8 +227,17 @@ window.openCharacterCreationMode = function () {
     }
 };
 
+// Atualização da seleção do avatar com alteração visual imediata da sprite
 window.selectAvatar = function(id) {
     window.selectedAvatarId = id;
+    
+    // Atualiza a imagem de pré-visualização no topo do registo
+    const previewImg = document.getElementById('preview-avatar-img');
+    if (previewImg) {
+        const avatarIdStr = id < 10 ? `0${id}` : `${id}`;
+        previewImg.src = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_${avatarIdStr}.png`;
+    }
+
     document.querySelectorAll('.avatar-option').forEach(el => {
         el.classList.remove('border-amber-400');
         el.classList.add('border-blue-900');
@@ -245,35 +254,61 @@ window.selectStarter = function(starterName) {
     document.getElementById(`starter-${starterName.toLowerCase()}`)?.classList.replace('border-blue-900', 'border-amber-400');
 };
 
-// Carrega o Pokémon do dia de forma aleatória para o banner inicial
-function loadDailyPokemonPreview() {
-    const nameEl = document.getElementById('daily-pokemon-name');
-    const spriteEl = document.getElementById('daily-pokemon-sprite');
+// Vinculação do botão de Gravar e Iniciar Nova Partida
+document.addEventListener('DOMContentLoaded', () => {
+    const finalizeBtn = document.getElementById('finalize-creation-btn');
+    if (finalizeBtn) {
+        finalizeBtn.onclick = () => {
+            const nameInput = document.getElementById('setup-trainer-name');
+            const trainerName = nameInput ? nameInput.value.trim() : 'Ash Ketchum';
+            const avatarId = window.selectedAvatarId || 1;
+            const starter = window.selectedStarterPokemon || 'bulbasaur';
 
-    if (MONSTER_CATALOG && MONSTER_CATALOG.length > 0) {
-        const randomIndex = Math.floor(Math.random() * MONSTER_CATALOG.length);
-        const dailyMon = MONSTER_CATALOG[randomIndex];
+            console.log("✨ A gravar novo personagem:", { trainerName, avatarId, starter });
 
-        if (nameEl) nameEl.textContent = dailyMon.name;
-        if (spriteEl && dailyMon.image) {
-            spriteEl.src = dailyMon.image;
-        }
-    }
-}
+            // Monta o estado inicial do jogador com o starter escolhido
+            const initialGameState = {
+                gold: 350,
+                players: [{
+                    name: trainerName,
+                    avatarId: avatarId,
+                    gold: 350,
+                    pokedex: [starter],
+                    pcBox: [{ id: starter, name: starter, level: 5, currentHp: 20, maxHp: 20 }],
+                    inventory: [{ id: 'ball_poke', name: 'Poké Ball', count: 5 }]
+                }]
+            };
 
-// Vincula atalhos e botões globais da HUD
-function setupGlobalInterfaceListeners() {
-    const trainerCardBtn = document.getElementById('open-trainer-card-btn') || document.getElementById('trainer-badge-btn');
-    if (trainerCardBtn) {
-        trainerCardBtn.onclick = () => {
-            openSpecificTrainerCardModal(gameState.currentPlayerIndex || 0);
+            const profileData = {
+                trainerName: trainerName,
+                avatarId: avatarId,
+                gold: 350,
+                statistics: { captures: 1, shinyCaptures: 0, legendaryCaptures: 0, battlesWon: 0 }
+            };
+
+            // Envia o estado completo para o servidor guardar na tabela accounts do Supabase
+            emitSocket('save_game_state', {
+                gameState: initialGameState,
+                profileData: profileData,
+                trainerName: trainerName
+            });
+
+            // Oculta a tela de registo e abre o layout principal do mapa
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('main-game-layout').classList.remove('hidden');
+
+            // Atualiza as sprites nos elementos do HUD do mapa (garantindo que reflete o novo avatar)
+            const hudAvatar = document.getElementById('hud-trainer-avatar');
+            if (hudAvatar) {
+                const avatarIdStr = avatarId < 10 ? `0${avatarId}` : `${avatarId}`;
+                hudAvatar.src = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_${avatarIdStr}.png`;
+            }
+
+            const hudName = document.getElementById('hud-trainer-name');
+            if (hudName) hudName.textContent = trainerName;
+
+            if (typeof window.renderTeamCardSlots === 'function') window.renderTeamCardSlots();
+            if (typeof window.renderBottomPanel === 'function') window.renderBottomPanel();
         };
     }
-
-    const pokedexBtn = document.getElementById('open-pokedex-btn');
-    if (pokedexBtn) {
-        pokedexBtn.onclick = () => {
-            openPokedexModal();
-        };
-    }
-}
+});
