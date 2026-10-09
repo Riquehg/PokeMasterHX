@@ -29,10 +29,17 @@ function getTierColorClass(tier) {
     }
 }
 
+// Correção robusta para detetar vantangem mesmo em tipos compostos ou múltiplos
 function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
     if (!attackerType || !defenderType) return 1.0;
-    const a = attackerType.toLowerCase();
-    const d = defenderType.toLowerCase();
+    
+    const parseTypes = (t) => {
+        if (Array.isArray(t)) return t.map(x => String(x).toLowerCase());
+        return String(t).toLowerCase().split(/[\/\s,]+/);
+    };
+
+    const attackerTypes = parseTypes(attackerType);
+    const defenderTypes = parseTypes(defenderType);
     
     const advantages = {
         'fire': ['grass', 'bug', 'ice', 'steel'],
@@ -43,7 +50,13 @@ function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
         'fighting': ['normal', 'ice', 'rock', 'dark', 'steel']
     };
 
-    if (advantages[a] && advantages[a].includes(d)) return 1.5;
+    for (let a of attackerTypes) {
+        for (let d of defenderTypes) {
+            if (advantages[a] && advantages[a].includes(d)) {
+                return 1.5;
+            }
+        }
+    }
     return 1.0;
 }
 
@@ -70,10 +83,10 @@ export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa
     else if (tier === 5) { minLevel = 40; maxLevel = 50; }
 
     const level = Math.floor(Math.random() * (maxLevel - minLevel + 1)) + minLevel;
-    const isShiny = Math.random() < 0.06;
+    const isShiny = Math.random() < 0.06; // 6% de chance
     
-    const maxHp = 15 + (level * 5);
-    const calculatedStr = 3 + Math.floor(level * 0.8);
+    const maxHp = 20 + (level * 4);
+    const calculatedStr = 4 + Math.floor(level * 0.7);
 
     return {
         ...baseMon,
@@ -171,7 +184,7 @@ export function updateEncounterUIInfo() {
     const wildHp = wild.currentHp !== undefined ? wild.currentHp : (wild.maxHp || 20);
     const wildMaxHp = wild.maxHp || wild.hp || 20;
 
-    const typeMult = calculateTypeAdvantageMultiplier(activeMon.type, wild.type);
+    const typeMult = calculateTypeAdvantageMultiplier(activeMon.type || activeMon.types, wild.type || wild.types);
     let advantageBadgeHtml = '';
     if (typeMult > 1.0) {
         advantageBadgeHtml = `<span class="bg-emerald-500 text-black text-[9px] px-2 py-0.5 rounded font-black uppercase">⚡ Vantagem (1.5x)</span>`;
@@ -198,12 +211,13 @@ export function updateEncounterUIInfo() {
 
     const playerVisual = document.getElementById('player-card-visual');
     if (playerVisual) {
+        const activeMonTypeDisplay = Array.isArray(activeMon.types) ? activeMon.types.join('/') : (activeMon.type || 'Normal');
         playerVisual.className = `relative flex flex-col justify-between p-4 rounded-3xl border-4 ${playerCardBg} shadow-2xl w-72 h-[420px] text-white`;
         playerVisual.innerHTML = `
             <div class="flex justify-between items-center font-black text-xs border-b-2 border-amber-400 pb-2">
                 <span class="text-amber-300 font-bold uppercase">NV. ${activeMon.level || 1} (EXP: ${activeMon.exp || 0})</span>
                 ${advantageBadgeHtml}
-                <span class="text-amber-900 bg-amber-200 px-2 py-0.5 rounded font-bold uppercase text-[10px] border border-amber-400">${activeMon.type || 'Normal'}</span>
+                <span class="text-amber-900 bg-amber-200 px-2 py-0.5 rounded font-bold uppercase text-[10px] border border-amber-400">${activeMonTypeDisplay}</span>
             </div>
             
             <div class="flex flex-col items-center justify-center my-auto space-y-3">
@@ -226,6 +240,7 @@ export function updateEncounterUIInfo() {
 
     const encVisual = document.getElementById('enc-card-visual');
     if (encVisual) {
+        const wildTypeDisplay = Array.isArray(wild.types) ? wild.types.join('/') : (wild.type || 'Normal');
         encVisual.className = `relative flex flex-col justify-between p-4 rounded-3xl border-4 ${enemyCardBg} shadow-2xl w-72 h-[420px] text-white ${wild.isShiny ? 'shiny-card-glow' : ''}`;
         const statusBadge = currentEncounterState.wildDefeated 
             ? `<span class="bg-emerald-600 text-white text-[9px] px-2 py-0.5 rounded-md font-bold shadow animate-bounce">🏆 DERROTADO (Pronto a Capturar!)</span>`
@@ -236,7 +251,7 @@ export function updateEncounterUIInfo() {
             <div class="flex justify-between items-center font-black text-xs border-b-2 border-red-900 pb-2">
                 <span class="text-red-400 font-bold uppercase">NV. ${wild.level || 1}</span>
                 ${shinyWildBadge}
-                <span class="text-red-300 bg-red-950 px-2 py-0.5 rounded font-bold uppercase text-[10px] border border-red-800">${wild.type || 'Normal'}</span>
+                <span class="text-red-300 bg-red-950 px-2 py-0.5 rounded font-bold uppercase text-[10px] border border-red-800">${wildTypeDisplay}</span>
             </div>
 
             <div class="flex flex-col items-center justify-center my-auto space-y-3">
@@ -372,7 +387,6 @@ function playAttackAnimation() {
     }
 }
 
-// SINCRONIZAÇÃO COM O SERVIDOR CLOUD
 function syncGameStateToCloud() {
     saveGameProgress();
     if (typeof emitSocket === 'function') {
@@ -383,7 +397,6 @@ function syncGameStateToCloud() {
     }
 }
 
-// SISTEMA CORRIGIDO DE EVOLUÇÃO E XP
 function addExperienceAndCheckEvolution(monster, expGain) {
     if (!monster) return;
     monster.exp = (monster.exp || 0) + expGain;
@@ -398,7 +411,6 @@ function addExperienceAndCheckEvolution(monster, expGain) {
 
         showCustomPopup("✨ SUBIDA DE NÍVEL!", `O teu ${monster.name} subiu para o Nível ${monster.level}!\nOs seus atributos melhoraram!`, true);
 
-        // Procura no catálogo usando o ID base ou nome correspondente
         const baseCatalogItem = MONSTER_CATALOG.find(m => m.id === monster.catalogId || m.id === monster.id || m.name.toLowerCase() === monster.name.toLowerCase());
         
         if (baseCatalogItem && baseCatalogItem.evolvesTo && monster.level >= (baseCatalogItem.evolveLevel || 16)) {
@@ -417,7 +429,6 @@ function addExperienceAndCheckEvolution(monster, expGain) {
     syncGameStateToCloud();
 }
 
-// Função opcional para evolução por Pedra/Item
 export function evolveMonsterWithStone(monster, stoneItemId) {
     if (!monster) return false;
     const baseCatalogItem = MONSTER_CATALOG.find(m => m.id === monster.catalogId || m.id === monster.id);
@@ -461,7 +472,7 @@ export function resolveBattleAttempt() {
         playAttackAnimation();
 
         const wildDice = Math.floor(Math.random() * 6) + 1;
-        const typeMult = calculateTypeAdvantageMultiplier(activeMon.type, wild.type);
+        const typeMult = calculateTypeAdvantageMultiplier(activeMon.type || activeMon.types, wild.type || wild.types);
         const playerPower = Math.round(((activeMon.str || (4 + activeMon.level)) + currentEncounterState.battlePowerBonus + playerDice) * typeMult);
         const wildPower = (wild.str || 3) + wildDice;
 
@@ -478,7 +489,7 @@ export function resolveBattleAttempt() {
             }
             updateEncounterUIInfo();
         } else {
-            const damageToPlayer = 12 + Math.floor(wild.level * 0.5);
+            const damageToPlayer = 12 + Math.floor(wild.level * 0.4);
             activeMon.currentHp = Math.max(0, (activeMon.currentHp || activeMon.maxHp) - damageToPlayer);
             
             if (activeMon.currentHp <= 0) {
