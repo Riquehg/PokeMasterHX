@@ -30,6 +30,26 @@ function getTierColorClass(tier) {
     }
 }
 
+// Cálculo dinâmico de atributos por Nível com bónus garantido para Pokémon Shiny
+export function calculatePokemonStats(baseMonster, level, isShiny = false) {
+    const baseStr = baseMonster.str || Math.floor(5 + (level * 1.5));
+    const baseHp = baseMonster.maxHp || baseMonster.hp || Math.floor(20 + (level * 5));
+
+    // Bónus fixo e multiplicador para variantes Shiny
+    const shinyStrBonus = isShiny ? 3 : 0;
+    const shinyHpBonus = isShiny ? 10 : 0;
+    const shinyMultiplier = isShiny ? 1.25 : 1.0;
+
+    const finalStr = Math.floor((baseStr + shinyStrBonus) * (isShiny ? 1.15 : 1.0));
+    const finalHp = Math.floor((baseHp + shinyHpBonus) * shinyMultiplier);
+
+    return {
+        str: finalStr,
+        maxHp: finalHp,
+        currentHp: finalHp
+    };
+}
+
 // Detetora ultra-robusta e flexível para vantagem de tipagem em tipos compostos, strings ou arrays
 function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
     if (!attackerType || !defenderType) return 1.0;
@@ -94,17 +114,17 @@ export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa
     const level = Math.floor(Math.random() * (maxLevel - minLevel + 1)) + minLevel;
     const isShiny = Math.random() < 0.06;
     
-    const maxHp = 20 + (level * 4);
-    const calculatedStr = 5 + Math.floor(level * 0.9);
+    // Aplicação dos atributos escalados por nível e bónus shiny
+    const stats = calculatePokemonStats(baseMon, level, isShiny);
 
     return {
         ...baseMon,
         uniqueId: 'wild_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
         level: level,
         tier: tier,
-        currentHp: maxHp,
-        maxHp: maxHp,
-        str: calculatedStr,
+        currentHp: stats.currentHp,
+        maxHp: stats.maxHp,
+        str: stats.str,
         isShiny: isShiny,
         waypointId: waypointId,
         weakened: false
@@ -189,7 +209,9 @@ export function updateEncounterUIInfo() {
     if (!wild || !activeMon) return;
 
     if (activeMon.level && (!activeMon.str || activeMon.str < (4 + activeMon.level))) {
-        activeMon.str = 5 + Math.floor(activeMon.level * 0.9);
+        const stats = calculatePokemonStats(activeMon, activeMon.level, activeMon.isShiny);
+        activeMon.str = stats.str;
+        activeMon.maxHp = stats.maxHp;
     }
 
     const activeHp = activeMon.currentHp !== undefined ? activeMon.currentHp : (activeMon.maxHp || 20);
@@ -208,7 +230,7 @@ export function updateEncounterUIInfo() {
         advantageBadgeHtml = `<span class="bg-red-700 text-white text-[9px] px-2 py-0.5 rounded font-black uppercase">⚠️ Desvantagem</span>`;
     }
 
-    const baseStr = (activeMon.str || (5 + (activeMon.level * 0.9))) + currentEncounterState.battlePowerBonus;
+    const baseStr = (activeMon.str || 5) + currentEncounterState.battlePowerBonus;
     const estimatedPlayerPower = Math.round(baseStr * typeMult); 
     
     const isLegendary = (wild.tier === 5) || (wild.color && wild.color.toLowerCase() === 'amarelo');
@@ -228,10 +250,12 @@ export function updateEncounterUIInfo() {
     const playerVisual = document.getElementById('player-card-visual');
     if (playerVisual) {
         const activeMonTypeDisplay = Array.isArray(activeMon.types) ? activeMon.types.join('/') : (activeMon.type || 'Normal');
-        playerVisual.className = `relative flex flex-col justify-between p-4 rounded-3xl border-4 ${playerCardBg} shadow-2xl w-72 h-[420px] text-white`;
+        const shinyBadgePlayer = activeMon.isShiny ? `<span class="bg-amber-400 text-black text-[9px] px-2 py-0.5 rounded font-black uppercase">✨ SHINY</span>` : '';
+        playerVisual.className = `relative flex flex-col justify-between p-4 rounded-3xl border-4 ${playerCardBg} shadow-2xl w-72 h-[420px] text-white ${activeMon.isShiny ? 'shiny-card-glow' : ''}`;
         playerVisual.innerHTML = `
             <div class="flex justify-between items-center font-black text-xs border-b-2 border-amber-400 pb-2">
                 <span class="text-amber-300 font-bold uppercase">NV. ${activeMon.level || 1} (EXP: ${activeMon.exp || 0})</span>
+                ${shinyBadgePlayer}
                 ${advantageBadgeHtml}
                 <span class="text-amber-900 bg-amber-200 px-2 py-0.5 rounded font-bold uppercase text-[10px] border border-amber-400">${activeMonTypeDisplay}</span>
             </div>
@@ -417,11 +441,12 @@ function addExperienceAndCheckEvolution(monster, expGain) {
         monster.level = (monster.level || 1) + 1;
         monster.exp -= nextLevelExp;
         
-        monster.maxHp = (monster.maxHp || 20) + 5;
-        monster.currentHp = monster.maxHp;
-        monster.str = (monster.str || 5) + 2;
+        const stats = calculatePokemonStats(monster, monster.level, monster.isShiny);
+        monster.maxHp = stats.maxHp;
+        monster.currentHp = stats.maxHp;
+        monster.str = stats.str;
 
-        showCustomPopup("✨ SUBIDA DE NÍVEL!", `O teu ${monster.name} subiu para o Nível ${monster.level}!\nOs seus atributos melhoraram (STR +2, HP +5)!`, true);
+        showCustomPopup("✨ SUBIDA DE NÍVEL!", `O teu ${monster.name} subiu para o Nível ${monster.level}!\nOs seus atributos melhoraram de acordo com o nível e forma!`, true);
 
         const baseCatalogItem = MONSTER_CATALOG.find(m => m.id === monster.catalogId || m.id === monster.id || m.name.toLowerCase() === monster.name.toLowerCase());
         
@@ -488,7 +513,7 @@ export function resolveBattleAttempt() {
         const wType = wild.types || wild.type;
         const typeMult = calculateTypeAdvantageMultiplier(pType, wType);
 
-        const playerPower = Math.round(((activeMon.str || (5 + (activeMon.level * 0.9))) + currentEncounterState.battlePowerBonus + playerDice) * typeMult);
+        const playerPower = Math.round(((activeMon.str || 5) + currentEncounterState.battlePowerBonus + playerDice) * typeMult);
         const wildPower = (wild.str || 4) + wildDice;
 
         if (playerPower >= wildPower) {
