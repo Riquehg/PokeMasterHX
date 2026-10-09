@@ -330,3 +330,7 @@ export const MONSTER_CATALOG = [
 export function getMonsterById(idOrDex) {
     return MONSTER_CATALOG.find(m => m.id === idOrDex || m.dexNumber === Number(idOrDex));
 }
+
+// Exposição global para depuração e compatibilidade com scripts legados
+window.MONSTER_CATALOG = MONSTER_CATALOG;
+window.getMonsterById = getMonsterById;
