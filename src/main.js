@@ -12,6 +12,8 @@ import './systems/city.js';
 import './systems/trainer.js';
 import './systems/battle.js';
 import './systems/vault.js';
+import './systems/lobby.js';
+import './systems/admin.js';
 import { openPokemartModal, useInventoryItem } from './systems/inventory.js';
 import { openSpecificTrainerCardModal } from './systems/trainer.js';
 import { initiateGymSequence, GYM_LEADERS_CATALOG } from './systems/gym.js';
