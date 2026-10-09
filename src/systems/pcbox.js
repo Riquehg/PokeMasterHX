@@ -4,7 +4,6 @@
 import { gameState, getCurrentPlayer } from '../core/state.js';
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 
-// Catálogo básico de monstros para referência de evolução (caso não esteja global)
 const MONSTER_CATALOG_REF = typeof MONSTER_CATALOG !== 'undefined' ? MONSTER_CATALOG : [];
 
 export function getTierColorClass(tier) {
@@ -207,7 +206,7 @@ export function renderBottomPanel() {
     }
 }
 
-window.changePcBoxPage = function(direction) {
+export function changePcBoxPage(direction) {
     gameState.pcBoxCurrentPage = (gameState.pcBoxCurrentPage || 0) + direction;
     const cp = getCurrentPlayer();
     const totalBoxes = cp.pcBox ? cp.pcBox.length : 0;
@@ -215,7 +214,7 @@ window.changePcBoxPage = function(direction) {
     if (gameState.pcBoxCurrentPage < 0) gameState.pcBoxCurrentPage = 0;
     if (gameState.pcBoxCurrentPage > maxPages) gameState.pcBoxCurrentPage = maxPages;
     renderBottomPanel();
-};
+}
 
 export function addExperienceToMonster(monster, amount) {
     monster.xp = (monster.xp || 0) + amount;
@@ -298,3 +297,4 @@ window.handleDragOver = handleDragOver;
 window.handleDrop = handleDrop;
 window.renderTeamCardSlots = renderTeamCardSlots;
 window.renderBottomPanel = renderBottomPanel;
+window.changePcBoxPage = changePcBoxPage;
