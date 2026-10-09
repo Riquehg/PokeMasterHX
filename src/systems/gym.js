@@ -2,7 +2,7 @@
 // Subsistema de Ginásios Oficiais e Líderes de Kanto
 
 import { gameState, getCurrentPlayer } from '../core/state.js';
-import { SUPABASE_STORAGE_URL } from '../config/supabase-config.js';
+import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 import { calculateTypeAdvantageMultiplier } from './battle.js';
 
 let currentGymBattleSession = null;
