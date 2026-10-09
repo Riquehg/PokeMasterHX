@@ -66,18 +66,18 @@ export function openCityModal(cityName) {
                         </div>
                     </div>
                     <div>
-                        ${hasBadge ? '<span class="bg-emerald-600 text-white font-bold text-[9px] px-2 py-0.5 rounded-full shadow">✔ Insígnia Conquistada</span>' : '<span class="bg-amber-500 text-black font-black text-[9px] px-2 py-0.5 rounded-full animate-pulse shadow">⭐ Ginásio Pendente</span>'}
+                        ${hasBadge ? '<span class="bg-emerald-600 text-white font-bold text-[9px] px-2 py-0.5 rounded-full shadow">Insígnia Conquistada</span>' : '<span class="bg-amber-500 text-black font-black text-[9px] px-2 py-0.5 rounded-full animate-pulse shadow">Ginásio Pendente</span>'}
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-2">
                     ${teamPokesHtml}
                 </div>
                 <div class="flex justify-between items-center text-[10px] text-slate-300 pt-1 border-t border-red-900/40">
-                    <span>Prémio: <strong class="text-amber-400">${gymInfo.rewardGold} 🪙</strong></span>
+                    <span>Prémio: <strong class="text-amber-400">${gymInfo.rewardGold}</strong></span>
                     <span>Insígnia: <strong class="text-amber-300 uppercase">${gymInfo.badgeKey}</strong></span>
                 </div>
-                <button onclick="document.getElementById('city-hub-modal').remove(); initiateGymSequence('${gymInfo.city}');" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2 rounded-xl text-xs uppercase shadow transition-all cursor-pointer">
-                    ⚔️ Desafiar Ginásio de ${gymInfo.city}
+                <button onclick="document.getElementById('city-hub-modal').remove(); if(typeof initiateGymSequence === 'function') { initiateGymSequence('${gymInfo.city}'); } else { console.warn('initiateGymSequence não definida.'); }" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2 rounded-xl text-xs uppercase shadow transition-all cursor-pointer">
+                    Desafiar Ginásio de ${gymInfo.city}
                 </button>
             </div>
         `;
@@ -86,23 +86,22 @@ export function openCityModal(cityName) {
     cityModal.innerHTML = `
         <div class="trainer-card max-w-md w-full p-6 space-y-4 border-4 border-amber-500 rounded-2xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
             <div class="flex justify-between items-center border-b border-amber-900/60 pb-2">
-                <span class="text-xs font-black text-amber-400 font-cinzel tracking-wider">🏙 CIDADE DE ${cityName.toUpperCase()}</span>
+                <span class="text-xs font-black text-amber-400 font-cinzel tracking-wider">CIDADE DE ${cityName.toUpperCase()}</span>
                 <button onclick="document.getElementById('city-hub-modal').remove()" class="text-amber-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-amber-950/60 rounded border border-amber-800">✕</button>
             </div>
             
             <div class="grid grid-cols-2 gap-2">
                 <button onclick="document.getElementById('city-hub-modal').remove(); openPokemonCenterModal('${cityName}');" class="bg-emerald-700 hover:bg-emerald-600 text-white font-black py-2 px-3 rounded-xl text-[10px] uppercase shadow flex items-center justify-center gap-1.5 cursor-pointer">
-                    🏥 Centro Pokémon
+                    Centro Pokémon
                 </button>
                 <button onclick="document.getElementById('city-hub-modal').remove(); openPokemartModal('${cityName}');" class="bg-blue-700 hover:bg-blue-600 text-white font-black py-2 px-3 rounded-xl text-[10px] uppercase shadow flex items-center justify-center gap-1.5 cursor-pointer">
-                    🏪 Poké Mart
+                    Poké Mart
                 </button>
             </div>
 
             ${gymSectionHtml}
 
-            <!-- Botão de Voltar / Continuar Viagem -->
-            <button onclick="document.getElementById('city-hub-modal').remove()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs cursor-pointer">← Voltar / Continuar Viagem</button>
+            <button onclick="document.getElementById('city-hub-modal').remove()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs cursor-pointer">Voltar / Continuar Viagem</button>
         </div>
     `;
     cityModal.classList.remove('hidden');
@@ -122,20 +121,19 @@ export function openPokemonCenterModal(cityName = '') {
     if (typeof updatePlayerUI === 'function') updatePlayerUI();
 
     if (typeof showCustomPopup === 'function') {
-        showCustomPopup("🏥 Centro Pokémon", `A enfermeira Joy cuidou da equipa de ${cp.name}!\n\n✨ Todos os Pokémon foram totalmente curados!`, true);
+        showCustomPopup("Centro Pokémon", `A enfermeira Joy cuidou da equipa de ${cp.name}!\n\nTodos os Pokémon foram totalmente curados!`, true);
     }
     if (typeof appendAdventureLog === 'function') {
         appendAdventureLog(`${cp.name} visitou o Centro Pokémon: Equipa totalmente curada.`);
     }
 
-    // Se veio de uma cidade, reabre o hub da cidade ao fechar ou voltar
     if (cityName && typeof openCityModal === 'function') {
         openCityModal(cityName);
     }
 }
 
 // ------------------------------------------------------------
-// --- POKÉ MART (LOJA DE ITENS COM QUANTIDADE) ---
+// POKÉ MART (LOJA DE ITENS COM QUANTIDADE E SPRITES)
 // ------------------------------------------------------------
 
 export function openPokemartModal(cityName = '') {
@@ -154,15 +152,14 @@ export function openPokemartModal(cityName = '') {
 function renderMartContent(modalEl, cityName = '') {
     const cp = getCurrentPlayer();
     
-    // Puxa diretamente do catálogo oficial de itens garantindo as sprites corretas do Supabase
     const sellableIds = ['poke_ball', 'ball_great', 'ball_ultra', 'item_rarecandy', 'evolution_stone', 'item_potion', 'item_revive', 'item_vitamin'];
     let itemsForSale = ITEM_CATALOG.filter(item => sellableIds.includes(item.id));
 
     let shopHTML = `
         <div class="trainer-card max-w-md w-full p-6 space-y-4 border-4 border-blue-500 rounded-2xl bg-gradient-to-b from-[#0f172a] to-[#020617] shadow-2xl text-white">
             <div class="flex justify-between items-center border-b border-blue-900/60 pb-2">
-                <span class="text-xs font-black text-blue-400 font-cinzel tracking-wider">🏪 POKÉ MART (${cp.name})</span>
-                <span class="bg-amber-500 text-black font-black text-[10px] px-2 py-0.5 rounded">Ouro: ${cp.gold} 🪙</span>
+                <span class="text-xs font-black text-blue-400 font-cinzel tracking-wider">POKÉ MART (${cp.name})</span>
+                <span class="bg-amber-500 text-black font-black text-[10px] px-2 py-0.5 rounded">Ouro: ${cp.gold}</span>
             </div>
             <div class="space-y-2 max-h-60 overflow-y-auto pr-1">
     `;
@@ -170,7 +167,7 @@ function renderMartContent(modalEl, cityName = '') {
     itemsForSale.forEach(item => {
         const itemImg = item.image
             ? `<img src="${item.image}" class="w-8 h-8 object-contain" onerror="this.style.display='none'">`
-            : `<span class="text-xl">${item.icon}</span>`;
+            : `<span class="text-xl">📦</span>`;
 
         shopHTML += `
             <div class="flex items-center justify-between gap-3 bg-black/50 p-2.5 rounded-xl border border-blue-900/50">
@@ -179,7 +176,7 @@ function renderMartContent(modalEl, cityName = '') {
                     <div class="min-w-0">
                         <p class="text-xs font-bold text-white truncate">${item.name}</p>
                         <p class="text-[9px] text-slate-400">${item.desc}</p>
-                        <p class="text-[10px] font-black text-amber-400 mt-0.5">${item.cost || 50} 🪙 por unidade</p>
+                        <p class="text-[10px] font-black text-amber-400 mt-0.5">${item.cost || 50} por unidade</p>
                     </div>
                 </div>
 
@@ -200,15 +197,11 @@ function renderMartContent(modalEl, cityName = '') {
 
     shopHTML += `
             </div>
-            <!-- Botão de Voltar para a Cidade -->
-            <button onclick="document.getElementById('pokemart-modal').remove(); ${cityName ? `window.openCityModal('${cityName}')` : ''}" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs cursor-pointer">← Voltar</button>
+            <button onclick="document.getElementById('pokemart-modal').remove(); ${cityName ? `window.openCityModal('${cityName}')` : ''}" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs cursor-pointer">Voltar</button>
         </div>
     `;
     modalEl.innerHTML = shopHTML;
 }
-// ------------------------------------------------------------
-// EXPOSIÇÃO GLOBAL E FUNÇÕES DE QUANTIDADE DA LOJA
-// ------------------------------------------------------------
 
 window.normalizeMartQuantity = function(input) {
     if (!input) return 1;
@@ -234,25 +227,14 @@ window.buyItemFromMart = function(itemId, cost, requestedQuantity = 1, cityName 
 
     if (Number(cp.gold) < totalCost) {
         if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Sem Ouro", `❌ Ouro insuficiente para comprar ${quantity} unidade(s).\nNecessário: ${totalCost} 🪙\nDisponível: ${Number(cp.gold) || 0} 🪙`, false);
+            showCustomPopup("Sem Ouro", `Ouro insuficiente para comprar ${quantity} unidade(s).\nNecessário: ${totalCost}\nDisponível: ${Number(cp.gold) || 0}`, false);
         }
         return;
     }
 
     if (!Array.isArray(cp.inventory)) cp.inventory = [];
 
-    const baseItemsCatalog = {
-        poke_ball: { id: 'poke_ball', name: 'Poké Ball', type: 'sphere', value: 0, icon: '🔴', image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`, desc: 'Esfera clássica.' },
-        ball_great: { id: 'ball_great', name: 'Great Ball', type: 'sphere', value: 1, icon: '🔵', image: `${SUPABASE_STORAGE_URL}items/ball_great.png`, desc: '+1 na captura.' },
-        ball_ultra: { id: 'ball_ultra', name: 'Ultra Ball', type: 'sphere', value: 2, icon: '🟡', image: `${SUPABASE_STORAGE_URL}items/ball_ultra.png`, desc: '+2 na captura.' },
-        item_rarecandy: { id: 'item_rarecandy', name: 'Rare Candy', type: 'rarecandy', value: 100, icon: '🍬', image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`, desc: 'Dá 100 XP (Sobe de Nível).' },
-        evolution_stone: { id: 'evolution_stone', name: 'Evolution Stone', type: 'evolution', value: 1, icon: '💎', image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`, desc: 'Evolve um Anima compatível.' },
-        item_potion: { id: 'item_potion', name: 'Potion', type: 'heal', value: 20, icon: '💊', image: `${SUPABASE_STORAGE_URL}items/potion.png`, desc: 'Restaura 20 HP.' },
-        item_revive: { id: 'item_revive', name: 'Revive', type: 'revive', value: 50, icon: '🌟', image: `${SUPABASE_STORAGE_URL}items/revive.png`, desc: 'Revive um Anima desmaiado.' },
-        item_vitamin: { id: 'item_vitamin', name: 'Vitamin', type: 'battle', value: 2, icon: '🧪', image: `${SUPABASE_STORAGE_URL}items/vitamin.png`, desc: '+2 STR na batalha.' }
-    };
-
-    const itemTemplate = baseItemsCatalog[itemId];
+    const itemTemplate = ITEM_CATALOG.find(i => i.id === itemId);
     if (!itemTemplate) return;
 
     cp.gold = Math.max(0, Number(cp.gold || 0) - totalCost);
@@ -269,7 +251,7 @@ window.buyItemFromMart = function(itemId, cost, requestedQuantity = 1, cityName 
     if (typeof saveGameProgress === 'function') saveGameProgress();
 
     if (typeof showCustomPopup === 'function') {
-        showCustomPopup("Compra Realizada", `🎉 ${quantity} unidade(s) de ${itemTemplate.name} adicionada(s) à mochila!\n\n💰 Total pago: ${totalCost} 🪙`, true);
+        showCustomPopup("Compra Realizada", `${quantity} unidade(s) de ${itemTemplate.name} adicionada(s) à mochila!\n\nTotal pago: ${totalCost}`, true);
     }
 
     const martModal = document.getElementById('pokemart-modal');
@@ -278,7 +260,6 @@ window.buyItemFromMart = function(itemId, cost, requestedQuantity = 1, cityName 
     }
 };
 
-// Expõe as funções principais para o escopo global
 window.openCityModal = openCityModal;
 window.openPokemonCenterModal = openPokemonCenterModal;
 window.openPokemartModal = openPokemartModal;
