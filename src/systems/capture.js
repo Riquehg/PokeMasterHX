@@ -1,7 +1,7 @@
 // --- src/systems/capture.js ---
 import { gameState, getCurrentPlayer, ensureValidGameState } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
-import { currentEncounterState } from './battle.js';
+import { currentEncountersState } from './battle.js';
 
 // Dispara o fluxo de escolha de Poké Balls para captura
 export function triggerCaptureFlow(wildPokemon) {
@@ -17,7 +17,7 @@ export function triggerCaptureFlow(wildPokemon) {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'capture-flow-modal';
-        modal.className = 'fixed inset-0 bg-black/9org0 z-[420] flex items-center justify-center p-4 backdrop-blur-md';
+        modal.className = 'fixed inset-0 bg-black/90 z-[600] flex items-center justify-center p-4 backdrop-blur-md';
         document.body.appendChild(modal);
     }
 
@@ -26,7 +26,8 @@ export function triggerCaptureFlow(wildPokemon) {
 
     let ballsHtml = '';
     if (captureItems.length > 0) {
-        captureItems.forEach((item, index) => {
+        captureItems.forEach((item) => {
+            const count = item.count !== undefined ? item.count : (item.quantity || 1);
             ballsHtml += `
                 <div onclick="attemptCatchWithSpecificBall('${item.id}', ${wildPokemon.waypointId || 0})" class="bg-black/60 border border-amber-600/60 p-3 rounded-xl flex items-center justify-between cursor-pointer hover:border-amber-400 transition-all text-white">
                     <div class="flex items-center gap-2">
@@ -36,14 +37,14 @@ export function triggerCaptureFlow(wildPokemon) {
                             <p class="text-[9px] text-slate-400">${item.desc || 'Esfera de captura'}</p>
                         </div>
                     </div>
-                    <span class="bg-amber-600 text-black font-black px-2.5 py-1 rounded text-[10px]">Usar</span>
+                    <span class="bg-amber-600 text-black font-black px-2.5 py-1 rounded text-[10px]">Usar (${count})</span>
                 </div>
             `;
         });
     } else {
         // Fallback caso não tenha Poké Balls na mochila (adiciona uma padrão para teste)
         ballsHtml = `
-            <div onclick="attemptCatchWithSpecificBall('poke_ball', ${wildPokemon.waypointId || 0})" class="bg-black/60 border border-amber-600/60 p-3 rounded-xl flex items-center justify-between cursor-pointer hover:border-amber-400 transition-all text-white">
+            <div onclick="attemptCatchWithSpecificBall('ball_poke', ${wildPokemon.waypointId || 0})" class="bg-black/60 border border-amber-600/60 p-3 rounded-xl flex items-center justify-between cursor-pointer hover:border-amber-400 transition-all text-white">
                 <div class="flex items-center gap-2">
                     <span class="text-xl">🔴</span>
                     <div>
@@ -78,11 +79,20 @@ window.attemptCatchWithSpecificBall = function(ballItemId, waypointId) {
 
     ensureValidGameState();
     const cp = getCurrentPlayer();
-    const wild = currentEncounterState.wildPokemon;
+    const wild = currentEncounterState?.wildPokemon;
 
     if (!wild) {
-        alert("Nenhum Pokémon em foco para captura.");
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup("Erro", "Nenhum Pokémon em foco para captura.", false);
+        }
         return;
+    }
+
+    // Reduz a quantidade da esfera usada no inventário
+    const sphereItem = cp.inventory.find(item => item && item.id === ballItemId);
+    if (sphereItem) {
+        if (sphereItem.count !== undefined && sphereItem.count > 0) sphereItem.count--;
+        else if (sphereItem.quantity !== undefined && sphereItem.quantity > 0) sphereItem.quantity--;
     }
 
     // Rolagem do dado de captura (1 a 6)
@@ -93,43 +103,69 @@ window.attemptCatchWithSpecificBall = function(ballItemId, waypointId) {
     if (ballItemId.includes('great')) sphereBonus = 1;
     if (ballItemId.includes('ultra')) sphereBonus = 2;
     if (ballItemId.includes('master') || ballItemId.includes('rainbow')) sphereBonus = 4;
-    if (ballItemId.includes('mystic') || ballItemId.includes('flame') || ballItemId.includes('aqua')) sphereBonus = 2;
-    if (ballItemId.includes('electric') || ballItemId.includes('shadow')) sphereBonus = 3;
 
-    const totalCapturePower = diceRoll + sphereBonus;
+    // Bônus se o Pokémon estiver enfraquecido
+    const weakenedBonus = wild.weakened ? 1 : 0;
+    const totalCapturePower = diceRoll + sphereBonus + weakenedBonus;
     const requiredThreshold = wild.level ? (3 + Math.floor(wild.level / 2)) : 4;
 
-    console.log(`🎯 Tentativa de captura em ${wild.name}: Rolagem=${diceRoll} + Bônus=${sphereBonus} = Total ${totalCapturePower} (Necessário: ${requiredThreshold})`);
+    console.log(`🎯 Tentativa de captura em ${wild.name}: Rolagem=${diceRoll} + Esfera=${sphereBonus} + Enfraquecido=${weakenedBonus} = Total ${totalCapturePower} (Necessário: ${requiredThreshold})`);
 
     if (totalCapturePower >= requiredThreshold || ballItemId.includes('master')) {
-        alert(`🎉 PARABÉNS! Capturaste com sucesso o ${wild.name}!`);
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup("CAPTURA BEM-SUCEDIDA!", `🎉 Parabéns! Capturaste com sucesso o ${wild.name} (Resultado: ${totalCapturePower})!`, true);
+        }
 
         // Cria o objeto do Anima capturado com identificador único
         const caughtMonster = {
             ...wild,
-            uniqueId: 'mon_' + Date.now() + '_' + Math.random().toString(36.substr(2, 5)),
+            uniqueId: 'mon_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
             currentHp: wild.maxHp || wild.hp || 20
         };
 
         // Adiciona à equipa ativa se houver espaço (< 6), senão vai para a PC Box
+        if (!Array.isArray(cp.activeTeam)) cp.activeTeam = [];
+        if (!Array.isArray(cp.pcBox)) cp.pcBox = [];
+
         if (cp.activeTeam.length < 6) {
             cp.activeTeam.push(caughtMonster);
         } else {
-            if (!Array.isArray(cp.pcBox)) cp.pcBox = [];
             cp.pcBox.push(caughtMonster);
-            alert(`📦 A tua equipa ativa está cheia! O ${wild.name} foi enviado para a PC Box.`);
+            if (typeof showCustomPopup === 'function') {
+                showCustomPopup("PC Box", `📦 A tua equipa ativa está cheia! O ${wild.name} foi enviado para a PC Box.`, true);
+            }
         }
 
-        // Fecha o modal de encontro selvagem
-        const encModal = document.getElementById('encounter-modal');
+        // Adiciona ao Pokedex do jogador se não existir
+        if (!Array.isArray(cp.pokedex)) cp.pokedex = [];
+        if (!cp.pokedex.includes(wild.id)) {
+            cp.pokedex.push(wild.id);
+        }
+
+        // Fecha o modal de encontro selvagem correto (`wild-encounter-modal`)
+        const encModal = document.getElementById('wild-encounter-modal');
         if (encModal) {
-            encModal.classList.add('hidden');
-            encModal.classList.remove('flex');
+            encModal.remove();
+        }
+
+        // Remove o Pokémon do tabuleiro para não poder ser capturado novamente na mesma zona
+        if (waypointId && typeof boardPokemonCards !== 'undefined') {
+            delete boardPokemonCards[waypointId];
         }
 
         currentEncounterState.wildPokemon = null;
+
+        // Atualiza a interface global e grava
+        if (typeof renderBoardMap === 'function') renderBoardMap();
+        if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+        if (typeof renderBottomPanel === 'function') renderBottomPanel();
         saveGameProgress();
     } else {
-        alert(`❌ A captura falhou! O ${wild.name} conseguiu escapar da Poké Ball (Resultado: ${totalCapturePower}).`);
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup("FALHA NA CAPTURA!", `❌ O ${wild.name} conseguiu escapar da esfera! (Resultado: ${totalCapturePower} / Alvo: ${requiredThreshold}).`, false);
+        }
     }
 };
+
+// Exportação global para garantir compatibilidade com os botões inline do HTML
+window.triggerCaptureFlow = triggerCaptureFlow;
