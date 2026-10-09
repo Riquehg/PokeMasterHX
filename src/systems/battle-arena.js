@@ -194,8 +194,8 @@ window.openBattleArena = function(config = {}) {
         currentBattleSession.defender = {
             name: `Líder ${gym.leader || 'Desconhecido'} (${gym.city || 'Ginásio'})`,
             isGymLeader: true,
-            badgeKey: gym.badgeKey || '',
-            rewardGold: Number(gym.rewardGold) || 0,
+            badgeKey: gym.badgeKey || gym.badgeName || '',
+            rewardGold: Number(gym.prize || gym.rewardGold) || 300,
             team: gymTeam
         };
     } else if (requestedMode === 'wild') {
@@ -552,6 +552,8 @@ function renderArenaCombatUI(modalEl) {
         return;
     }
 
+    const isGymBattle = (currentBattleSession.mode === 'gym');
+
     let pReservesHtml = '';
     currentBattleSession.playerTeam.forEach((m, idx) => {
         if (idx === currentBattleSession.activePlayerIndex) return;
@@ -622,6 +624,13 @@ function renderArenaCombatUI(modalEl) {
     let pActiveImg = arenaImage(pMon);
     let eActiveImg = arenaImage(eMon);
 
+    // Aviso explícito de combate oficial sem captura para ginásios
+    let gymNoticeHtml = isGymBattle ? `
+        <div class="bg-amber-950/80 border border-amber-600/80 rounded-xl py-1 px-3 text-[10px] text-amber-300 font-bold tracking-wide">
+            🛡️ Batalha Oficial de Ginásio — Captura Proibida
+        </div>
+    ` : '';
+
     modalEl.innerHTML = `
         <div class="flex justify-between items-center bg-gradient-to-b from-red-950/80 to-black/80 border-2 border-red-600 p-4 rounded-3xl shadow-2xl">
             <div class="flex items-center gap-4">
@@ -643,6 +652,8 @@ function renderArenaCombatUI(modalEl) {
             <h2 class="text-2xl font-black text-amber-400 font-cinzel tracking-widest animate-pulse">
                 ARENA DE COMBATE TCG
             </h2>
+
+            ${gymNoticeHtml}
 
             <p class="text-xs text-slate-300">
                 Turno ${currentBattleSession.turnNumber}
@@ -1188,11 +1199,11 @@ function concludeArenaBattle(isVictory) {
                 cp.badges.push(def.badgeKey);
             }
 
-            cp.gold = (Number(cp.gold) || 0) + (Number(def.rewardGold) || 0);
+            cp.gold = (Number(cp.gold) || 0) + (Number(def.rewardGold) || 300);
 
             showCustomPopup(
                 "🏆 VITÓRIA ÉPICA NO GINÁSIO!",
-                `Derrotaste toda a equipa do Líder!\n\n✨ Ganhaste a Insígnia!\n💰 Ouro: +${Number(def.rewardGold) || 0}\n🎖️ Total de Insígnias: ${cp.badges.length} / 6`,
+                `Derrotaste toda a equipa do Líder!\n\n✨ Ganhaste a Insígnia!\n💰 Ouro: +${Number(def.rewardGold) || 300}\n🎖️ Total de Insígnias: ${cp.badges.length} / 6`,
                 true
             );
         } else if (currentBattleSession.mode === 'wild') {
