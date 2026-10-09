@@ -4,6 +4,7 @@
 import { gameState, getCurrentPlayer, ensureValidGameState } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
 import { ITEM_CATALOG, getItemDetails, normalizePlayerInventory } from '../data/items.js';
+import { MONSTER_CATALOG } from '../config/cards-data.js';
 
 // ------------------------------------------------------------
 // POKÉ MART (LOJA DE ITENS)
