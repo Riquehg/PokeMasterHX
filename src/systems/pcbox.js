@@ -337,6 +337,16 @@ export function switchBottomView(viewName) {
     renderBottomPanel();
 }
 
+// Ponte unificada global para disparar o uso do item a partir do painel inferior da mochila
+window.useInventoryItemMainScreen = function(itemId) {
+    const cp = getCurrentPlayer();
+    if (!cp || !Array.isArray(cp.inventory)) return;
+    const itemIndex = cp.inventory.findIndex(i => i && i.id === itemId);
+    if (itemIndex !== -1 && typeof useInventoryItem === 'function') {
+        useInventoryItem(itemIndex);
+    }
+};
+
 window.handleDragStart = handleDragStart;
 window.handleDragOver = handleDragOver;
 window.handleDrop = handleDrop;
