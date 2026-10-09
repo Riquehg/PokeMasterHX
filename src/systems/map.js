@@ -4,7 +4,7 @@
 import { SUPABASE_STORAGE_URL, FULL_MAP_IMAGE } from '../config/constants.js';
 import { gameState, getCurrentPlayer, movementState, ensureValidGameState } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
-import { openEncounterModalWithPokemon } from './battle.js';
+import { openEncounterModalWithPokemon, generateWildPokemonForWaypoint } from './encounter.js';
 import { MONSTER_CATALOG } from '../config/cards-data.js';
 
 export const BOARD_WAYPOINTS = [
@@ -322,39 +322,10 @@ export function handleWaypointArrival(waypointId) {
         }
 
         if (!boardPokemonCards[waypointId]) {
-            const catalog = Array.isArray(MONSTER_CATALOG) ? MONSTER_CATALOG : [];
-            if (catalog.length > 0) {
-                // Mapeia a cor da casa para o Tier correspondente
-                // rosa = 1, verde = 2, azul = 3, vermelho = 4, amarelo = 5 (lendário)
-                let targetTier = 1;
-                const color = String(waypoint.color || 'rosa').toLowerCase();
-                if (color === 'verde') targetTier = 2;
-                else if (color === 'azul') targetTier = 3;
-                else if (color === 'vermelho') targetTier = 4;
-                else if (color === 'amarelo') targetTier = 5;
-
-                // Filtra o catálogo respeitando estritamente o tier da cor da casa
-                let tierFiltered = catalog.filter(m => Number(m.tier || 1) === targetTier);
-                if (tierFiltered.length === 0) tierFiltered = catalog; // Fallback se o tier não tiver pokémons no catálogo
-
-                const randomMon = tierFiltered[Math.floor(Math.random() * tierFiltered.length)];
-                
-                // Brilhantes (Shiny) podem aparecer em qualquer casa de forma rara (6% de chance)
-                const isShiny = Math.random() < 0.06;
-                const minLvl = targetTier === 1 ? 3 : targetTier === 2 ? 8 : targetTier === 3 ? 15 : targetTier === 4 ? 25 : 40;
-                const level = Math.floor(Math.random() * 4) + minLvl;
-
-                boardPokemonCards[waypointId] = {
-                    ...randomMon,
-                    level: level,
-                    tier: targetTier,
-                    currentHp: 20 + (level * 2),
-                    maxHp: 20 + (level * 2),
-                    isShiny: isShiny,
-                    waypointId: waypointId,
-                    revealed: true,
-                    weakened: false
-                };
+            // Gera o Pokémon selvagem respeitando estritamente a cor da casa (tier correspondente)
+            const wildMon = generateWildPokemonForWaypoint(waypointId, waypoint.color);
+            if (wildMon) {
+                boardPokemonCards[waypointId] = wildMon;
             }
         }
 
@@ -371,10 +342,9 @@ export function handleWaypointArrival(waypointId) {
             }
         }
     } else if (waypoint.type === 'event') {
+        // Dispara o evento e exibe o banner visual animado no topo do mapa com o resultado exato
         if (typeof triggerRandomBoardEvent === 'function') {
             triggerRandomBoardEvent(waypoint.name);
-        } else if (typeof showCustomPopup === 'function') {
-            showCustomPopup("🎁 Carta de Evento", `Chegaste a ${waypoint.name}. Um evento aleatório ocorreu na rota!`, true);
         }
     }
 }
@@ -438,7 +408,7 @@ export function renderBoardMap(highlightIds = []) {
         `;
     });
 
-    // Renderiza apenas os Pokémon revelados nas casas, sem ícones flutuantes vermelhos
+    // Renderiza apenas os Pokémon revelados nas casas, mantendo a interface limpa
     BOARD_WAYPOINTS.forEach(wp => {
         if (wp.type === 'pokemon') {
             const pokeCard = boardPokemonCards[wp.id];
