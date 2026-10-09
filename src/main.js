@@ -1,10 +1,7 @@
-// --- src/main.js ---
-// Ponto de Entrada Principal e Inicializador do Motor Modular
-
-import { gameState, setupConfig, ensureValidGameState, getCurrentPlayer } from './core/state.js';
+import { gameState, setupConfig, ensureValidGameState, getCurrentPlayer, movementState } from './core/state.js';
 import { loadGameProgress, saveGameProgress } from './core/storage.js';
 import { renderBoardMap, tryInteractWithCity, onHexClick } from './systems/map.js';
-import { setupDiceListeners, rollDiceForMovement, handleWaypointClick } from './systems/dice.js';
+import { setupDiceListeners, rollDiceForMovement, handleWaypointClick, resetTurnDiceState } from './systems/dice.js';
 import { MONSTER_CATALOG } from './config/cards-data.js';
 
 // Importação dos Módulos dos Sistemas
@@ -28,7 +25,9 @@ import { initializeSocketConnection, emitSocket } from './core/socket.js';
 // ==========================================
 window.onHexClick = onHexClick;
 window.rollDiceForMovement = rollDiceForMovement;
+window.rollDice = rollDiceForMovement;
 window.handleWaypointClick = handleWaypointClick;
+window.resetTurnDiceState = resetTurnDiceState;
 window.openSpecificTrainerCardModal = openSpecificTrainerCardModal;
 window.openTrainerCardModal = function() { openSpecificTrainerCardModal(gameState.currentPlayerIndex || 0); };
 window.openPokemartModal = openPokemartModal;
