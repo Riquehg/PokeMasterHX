@@ -296,6 +296,23 @@ export function tryInteractWithCity(waypointId, cityName) {
     }
 }
 
+export function tryInteractWithWeakenedPokemon(waypointId) {
+    if (typeof boardPokemonCards !== 'undefined' && boardPokemonCards[waypointId]) {
+        const poke = boardPokemonCards[waypointId];
+        poke.revealed = true;
+        if (typeof openEncounterModalWithPokemon === 'function') {
+            openEncounterModalWithPokemon(poke);
+        } else {
+            console.error("openEncounterModalWithPokemon não está definida ou não foi importada!");
+        }
+    } else {
+        const waypoint = BOARD_WAYPOINTS.find(w => w.id === waypointId);
+        if (waypoint && waypoint.type === 'pokemon') {
+            handleWaypointArrival(waypointId);
+        }
+    }
+}
+
 export function handleWaypointArrival(waypointId) {
     const waypoint = BOARD_WAYPOINTS.find(w => w.id === waypointId);
     if (!waypoint) return;
