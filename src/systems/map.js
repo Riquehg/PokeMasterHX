@@ -261,6 +261,14 @@ export function rollDiceForMovement() {
 }
 
 export function onHexClick(waypointId, hexName) {
+    // 🛡️ TRAVA DE SEGURANÇA ONLINE: Impede clicar no mapa fora da vez do jogador
+    if (gameState.online && gameState.currentPlayerIndex !== gameState.myPlayerIndex) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup("Não é o seu turno!", "Aguarde a sua vez para se movimentar.", false);
+        }
+        return;
+    }
+
     const waypoint = BOARD_WAYPOINTS.find(w => w.id === waypointId);
     if (!waypoint) return;
 
