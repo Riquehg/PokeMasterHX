@@ -38,30 +38,24 @@ export function saveGameProgress() {
 
 // Solicita os dados salvos na nuvem ao servidor backend de forma segura
 export function loadGameProgressFromServer() {
+    const activeEmail = typeof currentAuthenticatedAccount !== 'undefined' && currentAuthenticatedAccount ? currentAuthenticatedAccount : (gameState.accountEmail || null);
+    
     if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function') {
-        const activeEmail = typeof currentAuthenticatedAccount !== 'undefined' && currentAuthenticatedAccount ? currentAuthenticatedAccount : (gameState.accountEmail || null);
-        if (!activeEmail) return;
+        if (!activeEmail) {
+            console.warn("⚠️ Nenhum e-mail autenticado encontrado para carregar o save do servidor.");
+            return;
+        }
 
-        socket.emit('request_saved_game', { accountEmail: activeEmail }, (response) => {
-            if (response && response.success && response.gameState) {
-                Object.assign(gameState, response.gameState);
-                ensureValidGameState();
-                if (typeof renderBoardMap === 'function') renderBoardMap();
-                if (typeof renderBottomPanel === 'function') renderBottomPanel();
-                if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
-                console.log("☁️ Progresso carregado com sucesso a partir do servidor!");
-            }
-        });
+        socket.emit('request_saved_game', { accountEmail: activeEmail });
+        console.log(`☁️ A solicitar progresso da nuvem para: ${activeEmail}`);
     }
 }
 
 // Carrega o progresso pedindo diretamente ao servidor (Sem localStorage)
 export function loadGameProgress() {
     try {
-        if (typeof socket !== 'undefined' && socket && socket.connected) {
-            loadGameProgressFromServer();
-            return true;
-        }
+        loadGameProgressFromServer();
+        return true;
     } catch (e) {
         console.error("Erro ao solicitar carregamento do servidor:", e);
     }
@@ -141,16 +135,25 @@ export function saveMonsterToVault(uniqueId) {
     console.log(`📦 ${targetMonster.name} enviado para o cofre global na nuvem.`);
 }
 
-// Ouvinte para resposta de salvamento na nuvem via socket
+// Ouvinte para resposta de salvamento/carregamento na nuvem via socket
 if (typeof socket !== 'undefined' && socket) {
     socket.off('saved_game_response');
     socket.on('saved_game_response', (response) => {
-        if (response && response.success && response.gameState) {
-            Object.assign(gameState, response.gameState);
+        if (response && response.success) {
+            if (response.gameState && Object.keys(response.gameState).length > 0) {
+                Object.assign(gameState, response.gameState);
+            }
             ensureValidGameState();
+            
+            const cp = getCurrentPlayer();
+            if (cp && typeof updateTrainerVisualsAndHud === 'function') {
+                updateTrainerVisualsAndHud(cp.name, cp.avatarId);
+            }
+
             if (typeof renderBoardMap === 'function') renderBoardMap();
             if (typeof renderBottomPanel === 'function') renderBottomPanel();
             if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+            console.log("☁️ Dados da nuvem aplicados com sucesso à interface!");
         }
     });
 }
