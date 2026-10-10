@@ -4,6 +4,9 @@ export let gameState = {
     gameMode: 'solo',
     playersCount: 1,
     currentPlayerIndex: 0,
+    myPlayerIndex: 0, // Índice do jogador local nas partidas online
+    online: false,    // Flag de controle de modo online ativo
+    roomId: null,     // ID da sala online atual
     turnCounter: 1,
     players: [],
     player: null, // Fallback para modo solo
@@ -14,7 +17,8 @@ export let gameState = {
         { sender: "Sistema", text: "Bem-vindo ao Pokémon Master Trainer HEX Edition!" }
     ],
     currentBottomView: 'inventory',
-    pcBoxCurrentPage: 0
+    pcBoxCurrentPage: 0,
+    globalVault: [] // Cofre global de herança de Animas
 };
 
 export let setupConfig = {
@@ -64,8 +68,9 @@ export let dailyFeaturedPokemonConfig = {
 // Atalho seguro para obter o jogador da vez
 export function getCurrentPlayer() {
     if (gameState && Array.isArray(gameState.players) && gameState.players.length > 0) {
-        const index = gameState.currentPlayerIndex || 0;
-        return gameState.players[index] || gameState.players[0];
+        const index = Number.isFinite(gameState.currentPlayerIndex) ? gameState.currentPlayerIndex : 0;
+        const safeIndex = Math.max(0, Math.min(index, gameState.players.length - 1));
+        return gameState.players[safeIndex] || gameState.players[0];
     }
     if (gameState && gameState.player) {
         return gameState.player;
@@ -104,5 +109,7 @@ export function ensureValidGameState() {
         if (cp.currentZone === undefined || cp.currentZone === null) cp.currentZone = 5;
     }
 
-    gameState.currentPlayerIndex = gameState.currentPlayerIndex || 0;
+    if (gameState.currentPlayerIndex === undefined || gameState.currentPlayerIndex === null || gameState.currentPlayerIndex >= gameState.players.length) {
+        gameState.currentPlayerIndex = 0;
+    }
 }
