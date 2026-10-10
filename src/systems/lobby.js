@@ -133,7 +133,7 @@ export function showOnlineGameLayout() {
     }
 }
 
-// Criação de Sala Online com Opções Competitivas (Fresh Start vs Livre)
+// Criação de Sala Online com Opções Competitivas (Fresh Start vs Livre, PIN e Início Antecipado)
 export function createOnlineRoom() {
     let modal = document.getElementById('create-room-config-modal');
     if (!modal) {
@@ -163,6 +163,11 @@ export function createOnlineRoom() {
                         <option value="legacy">Livre / Legacy (Usa as equipas e itens do Solo)</option>
                     </select>
                 </div>
+
+                <div>
+                    <label class="block text-[10px] text-amber-300 font-bold mb-1">Senha PIN (Opcional):</label>
+                    <input id="new-room-pin-input" type="text" placeholder="Deixe em branco para sala pública" class="w-full bg-black/60 border border-amber-600/60 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400">
+                </div>
             </div>
 
             <div class="flex gap-2 pt-2">
@@ -177,9 +182,11 @@ export function createOnlineRoom() {
 window.submitCreateOnlineRoom = function() {
     const nameInput = document.getElementById('new-room-name-input');
     const modeSelect = document.getElementById('new-room-mode-select');
+    const pinInput = document.getElementById('new-room-pin-input');
     
     const roomName = nameInput ? nameInput.value.trim() : 'Sala de Kanto';
     const gameMode = modeSelect ? modeSelect.value : 'fresh_start';
+    const roomPin = pinInput ? pinInput.value.trim() : '';
 
     if (!roomName) return;
 
@@ -189,6 +196,8 @@ window.submitCreateOnlineRoom = function() {
         roomName,
         gameMode,
         maxPlayers: 4,
+        allowEarlyStart: true, // Permite iniciar a partida com menos de 4 jogadores (ex: 2 jogadores)
+        pin: roomPin,
         host: typeof currentAuthenticatedAccount !== 'undefined' && currentAuthenticatedAccount ? currentAuthenticatedAccount : (getCurrentPlayer()?.name || 'Treinador')
     });
 };
