@@ -43,9 +43,30 @@ export function saveGameProgress() {
     }
 }
 
-// Carrega o progresso salvo de forma segura sem perder propriedades
+// Solicita os dados salvos na nuvem ao servidor backend
+export function loadGameProgressFromServer() {
+    if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function') {
+        const account = typeof currentAuthenticatedAccount !== 'undefined' ? currentAuthenticatedAccount : null;
+        socket.emit('request_saved_game', { accountEmail: account }, (response) => {
+            if (response && response.gameState) {
+                Object.assign(gameState, response.gameState);
+                ensureValidGameState();
+                localStorage.setItem(SAVE_KEY, JSON.stringify({ gameState, savedAt: new Date().toISOString() }));
+                if (typeof renderBoardMap === 'function') renderBoardMap();
+                if (typeof renderBottomPanel === 'function') renderBottomPanel();
+                console.log("☁️ Progresso carregado com sucesso a partir da nuvem!");
+            }
+        });
+    }
+}
+
+// Carrega o progresso salvo de forma segura sem perder propriedades (priorizando a nuvem se online)
 export function loadGameProgress() {
     try {
+        if (typeof socket !== 'undefined' && socket && socket.connected) {
+            loadGameProgressFromServer();
+        }
+
         const raw = localStorage.getItem(SAVE_KEY);
         if (!raw) return false;
 
@@ -151,6 +172,7 @@ export function saveMonsterToVault(uniqueId) {
 // Exposições globais para o navegador
 window.saveGameProgress = saveGameProgress;
 window.loadGameProgress = loadGameProgress;
+window.loadGameProgressFromServer = loadGameProgressFromServer;
 window.deleteGameSave = deleteGameSave;
 window.exportSaveToFile = exportSaveToFile;
 window.importSaveFromFile = importSaveFromFile;
