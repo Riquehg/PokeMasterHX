@@ -3,7 +3,7 @@
 
 import { gameState, getCurrentPlayer } from '../core/state.js';
 import { renderTeamCardSlots, renderBottomPanel } from './pcbox.js';
-import { SUPABASE_STORAGE_URL } from '../config/constants.js';
+import { SUPABASE_STORAGE_URL, TYPE_ADVANTAGES } from '../config/constants.js';
 import { MONSTER_CATALOG } from '../config/cards-data.js';
 import { getItemDetails } from '../data/items.js';
 import { saveGameProgress } from '../core/storage.js';
@@ -35,7 +35,6 @@ export function calculatePokemonStats(baseMonster, level, isShiny = false) {
     const baseStr = baseMonster.str || Math.floor(5 + (level * 1.5));
     const baseHp = baseMonster.maxHp || baseMonster.hp || Math.floor(20 + (level * 5));
 
-    // Bónus fixo e multiplicador para variantes Shiny
     const shinyStrBonus = isShiny ? 3 : 0;
     const shinyHpBonus = isShiny ? 10 : 0;
     const shinyMultiplier = isShiny ? 1.25 : 1.0;
@@ -50,8 +49,8 @@ export function calculatePokemonStats(baseMonster, level, isShiny = false) {
     };
 }
 
-// Detetora ultra-robusta e flexível para vantagem de tipagem em tipos compostos, strings ou arrays
-function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
+// Detetora integrada com a tabela centralizada TYPE_ADVANTAGES de src/config/constants.js
+export function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
     if (!attackerType || !defenderType) return 1.0;
     
     const parseTypes = (t) => {
@@ -62,31 +61,21 @@ function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
     const attackerTypes = parseTypes(attackerType);
     const defenderTypes = parseTypes(defenderType);
     
-    const advantages = {
-        'fire': ['grass', 'bug', 'ice', 'steel'],
-        'water': ['fire', 'ground', 'rock'],
-        'grass': ['water', 'ground', 'rock'],
-        'electric': ['water', 'flying'],
-        'psychic': ['fighting', 'poison'],
-        'fighting': ['normal', 'ice', 'rock', 'dark', 'steel'],
-        'ice': ['grass', 'ground', 'flying', 'dragon'],
-        'ground': ['fire', 'electric', 'poison', 'rock', 'steel'],
-        'rock': ['fire', 'ice', 'flying', 'bug'],
-        'flying': ['grass', 'fighting', 'bug'],
-        'bug': ['grass', 'psychic', 'dark'],
-        'poison': ['grass', 'fairy'],
-        'ghost': ['psychic', 'ghost'],
-        'dragon': ['dragon']
-    };
+    let bestMultiplier = 1.0;
 
     for (let a of attackerTypes) {
         for (let d of defenderTypes) {
-            if (advantages[a] && advantages[a].includes(d)) {
-                return 1.5;
+            if (TYPE_ADVANTAGES[a] && TYPE_ADVANTAGES[a][d] !== undefined) {
+                const mult = TYPE_ADVANTAGES[a][d];
+                if (mult > bestMultiplier) {
+                    bestMultiplier = mult;
+                } else if (mult < 1.0 && bestMultiplier === 1.0) {
+                    bestMultiplier = mult;
+                }
             }
         }
     }
-    return 1.0;
+    return bestMultiplier;
 }
 
 export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa') {
@@ -114,7 +103,6 @@ export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa
     const level = Math.floor(Math.random() * (maxLevel - minLevel + 1)) + minLevel;
     const isShiny = Math.random() < 0.06;
     
-    // Aplicação dos atributos escalados por nível e bónus shiny
     const stats = calculatePokemonStats(baseMon, level, isShiny);
 
     return {
@@ -225,9 +213,9 @@ export function updateEncounterUIInfo() {
     const typeMult = calculateTypeAdvantageMultiplier(pType, wType);
     let advantageBadgeHtml = '';
     if (typeMult > 1.0) {
-        advantageBadgeHtml = `<span class="bg-emerald-500 text-black text-[9px] px-2 py-0.5 rounded font-black uppercase">⚡ Vantagem (1.5x)</span>`;
+        advantageBadgeHtml = `<span class="bg-emerald-500 text-black text-[9px] px-2 py-0.5 rounded font-black uppercase">⚡ Vantagem (${typeMult}x)</span>`;
     } else if (typeMult < 1.0) {
-        advantageBadgeHtml = `<span class="bg-red-700 text-white text-[9px] px-2 py-0.5 rounded font-black uppercase">⚠️ Desvantagem</span>`;
+        advantageBadgeHtml = `<span class="bg-red-700 text-white text-[9px] px-2 py-0.5 rounded font-black uppercase">⚠️ Desvantagem (${typeMult}x)</span>`;
     }
 
     const baseStr = (activeMon.str || 5) + currentEncounterState.battlePowerBonus;
