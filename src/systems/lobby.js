@@ -1,9 +1,9 @@
 // --- src/systems/lobby.js ---
-// Sistema de Lobby Online, Salas, Sincronização de Partida e Chat em Tempo Real
+// Sistema de Lobby Online, Salas, Sincronização de Partida, Chat e Ranking
 
 import { gameState, ensureValidGameState, getCurrentPlayer } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
-import { emitSocket } from '../core/socket.js';
+import { emitSocket, socket } from '../core/socket.js';
 
 export let currentJoinedOnlineRoomId = null;
 export let onlineRoomStarted = false;
@@ -129,11 +129,56 @@ export function showOnlineGameLayout() {
     refreshOnlineGameInterface();
 
     if (typeof showCustomPopup === 'function') {
-        showCustomPopup('Partida Online', 'Todos os jogadores estão conectados ao mesmo estado de partida e ao mesmo tabuleiro.', true);
+        showCustomPopup('Partida Online', 'A partida online foi iniciada com sucesso!', true);
     }
 }
 
-// Criação de Sala Online com Opções Competitivas
+// Inicializa ouvintes de chat e ranking do lobby se o socket estiver ativo
+export function initLobbySocketListeners() {
+    if (!socket) return;
+
+    // Escuta mensagens do chat global do lobby
+    socket.off('chat_broadcast');
+    socket.on('chat_broadcast', (data) => {
+        const chatBox = document.getElementById('lobby-chat-messages');
+        if (chatBox && data && data.text) {
+            const time = new Date(data.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            chatBox.innerHTML += `
+                <div class="mb-1">
+                    <span class="text-slate-500">[${time}]</span> <strong class="text-amber-400">${data.sender}:</strong> <span class="text-white">${data.text}</span>
+                </div>
+            `;
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+    });
+
+    // Escuta a resposta do Ranking de Treinadores
+    socket.off('leaderboard_response');
+    socket.on('leaderboard_response', (response) => {
+        const rankingBox = document.getElementById('lobby-ranking-list');
+        if (!rankingBox) return;
+
+        if (!response || !response.success || !Array.isArray(response.ranking) || response.ranking.length === 0) {
+            rankingBox.innerHTML = `<p class="text-slate-500 italic text-center py-4">Sem registos no ranking da liga.</p>`;
+            return;
+        }
+
+        rankingBox.innerHTML = response.ranking.map((user, idx) => {
+            const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
+            return `
+                <div class="flex justify-between items-center bg-black/40 px-2 py-1 rounded border border-amber-600/30 text-[9px]">
+                    <span class="font-bold text-amber-300 truncate">${medal} ${user.trainerName}</span>
+                    <span class="text-emerald-400 font-bold">${user.masterPoints} PM</span>
+                </div>
+            `;
+        }).join('');
+    });
+}
+
+export function requestLobbyRanking() {
+    emitSocket('get_leaderboard');
+}
+
 export function createOnlineRoom() {
     let modal = document.getElementById('create-room-config-modal');
     if (!modal) {
@@ -146,30 +191,19 @@ export function createOnlineRoom() {
     modal.innerHTML = `
         <div class="trainer-card max-w-sm w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
             <div class="flex justify-between items-center border-b border-amber-900/60 pb-2">
-                <h3 class="text-xs font-black text-amber-400 font-cinzel">🛠️ CRIAR SALA ONLINE (ATÉ 4 JOGADORES)</h3>
+                <h3 class="text-xs font-black text-amber-400 font-cinzel">🛠️ CRIAR SALA ONLINE</h3>
                 <button onclick="document.getElementById('create-room-config-modal').remove()" class="text-amber-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-amber-800 cursor-pointer">✕</button>
             </div>
-            
             <div class="space-y-3">
                 <div>
                     <label class="block text-[10px] text-amber-300 font-bold mb-1">Nome da Sala:</label>
                     <input id="new-room-name-input" type="text" value="Sala de Kanto" class="w-full bg-black/60 border border-amber-600/60 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400">
                 </div>
-
-                <div>
-                    <label class="block text-[10px] text-amber-300 font-bold mb-1">Modo de Jogo & Balanceamento:</label>
-                    <select id="new-room-mode-select" class="w-full bg-black/60 border border-amber-600/60 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400">
-                        <option value="fresh_start">Fresh Start (Competitivo do Zero - Com opção de salvar na PC Box)</option>
-                        <option value="legacy">Livre / Legacy (Usa as equipas e itens do Solo)</option>
-                    </select>
-                </div>
-
                 <div>
                     <label class="block text-[10px] text-amber-300 font-bold mb-1">Senha PIN (Opcional):</label>
                     <input id="new-room-pin-input" type="text" placeholder="Deixe em branco para sala pública" class="w-full bg-black/60 border border-amber-600/60 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400">
                 </div>
             </div>
-
             <div class="flex gap-2 pt-2">
                 <button onclick="document.getElementById('create-room-config-modal').remove()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs cursor-pointer">Cancelar</button>
                 <button onclick="window.submitCreateOnlineRoom()" class="flex-2 bg-amber-600 hover:bg-amber-500 text-black font-black py-2.5 rounded-xl text-xs uppercase cursor-pointer">Criar Sala</button>
@@ -181,20 +215,16 @@ export function createOnlineRoom() {
 
 window.submitCreateOnlineRoom = function() {
     const nameInput = document.getElementById('new-room-name-input');
-    const modeSelect = document.getElementById('new-room-mode-select');
     const pinInput = document.getElementById('new-room-pin-input');
     
     const roomName = nameInput ? nameInput.value.trim() : 'Sala de Kanto';
-    const gameMode = modeSelect ? modeSelect.value : 'fresh_start';
     const roomPin = pinInput ? pinInput.value.trim() : '';
 
     if (!roomName) return;
-
     document.getElementById('create-room-config-modal')?.remove();
 
     emitSocket('create_room', {
         roomName,
-        gameMode,
         maxPlayers: 4,
         allowEarlyStart: true,
         pin: roomPin,
@@ -203,19 +233,13 @@ window.submitCreateOnlineRoom = function() {
 };
 
 export function searchOnlineRooms() {
-    if (emitSocket('get_rooms_list')) {
-        if (typeof showCustomPopup === 'function') {
-            showCustomPopup('Procurando salas', 'Buscando salas online disponíveis.', true);
-        }
-    }
+    emitSocket('get_rooms_list');
+    requestLobbyRanking();
 }
 
 export function refreshRoomsList() {
-    if (emitSocket('get_rooms_list')) {
-        if (typeof showCustomPopup === 'function') {
-            showCustomPopup('Salas atualizadas', 'A lista de salas foi solicitada ao servidor.', true);
-        }
-    }
+    emitSocket('get_rooms_list');
+    requestLobbyRanking();
 }
 
 export function sendLobbyChatMessage() {
@@ -223,41 +247,11 @@ export function sendLobbyChatMessage() {
     if (!input || !input.value.trim()) return;
 
     emitSocket('lobby_chat_message', {
-        roomId: currentJoinedOnlineRoomId,
         message: input.value.trim(),
-        text: input.value.trim(),
         sender: typeof currentAuthenticatedAccount !== 'undefined' && currentAuthenticatedAccount ? currentAuthenticatedAccount : (getCurrentPlayer()?.name || 'Treinador')
     });
 
     input.value = '';
-}
-
-export function sendChatMessage() {
-    const chatInput = document.getElementById('chat-input-field') || document.getElementById('map-chat-input');
-    if (!chatInput || !chatInput.value.trim()) return;
-
-    const message = chatInput.value.trim();
-    const sender = typeof currentAuthenticatedAccount !== 'undefined' && currentAuthenticatedAccount ? currentAuthenticatedAccount : (getCurrentPlayer()?.name || 'Treinador');
-
-    if (!Array.isArray(gameState.chatMessages)) {
-        gameState.chatMessages = [];
-    }
-
-    gameState.chatMessages.push({ sender, text: message });
-    if (gameState.chatMessages.length > 100) {
-        gameState.chatMessages = gameState.chatMessages.slice(-100);
-    }
-
-    if (typeof renderChatMessages === 'function') renderChatMessages();
-
-    emitSocket('room_chat_message', {
-        roomId: currentJoinedOnlineRoomId,
-        sender,
-        message,
-        text: message
-    });
-
-    chatInput.value = '';
 }
 
 export function joinAndStartOnlineGame() {
@@ -270,17 +264,15 @@ export function joinAndStartOnlineGame() {
 
     emitSocket('start_room_game', {
         roomId: currentJoinedOnlineRoomId,
-        player: getOnlinePlayerPayload(),
-        accountEmail: typeof currentAuthenticatedAccount !== 'undefined' ? currentAuthenticatedAccount : null
+        player: getOnlinePlayerPayload()
     });
 }
 
-// Injeta Chat do Lobby e Seção de Ranking no Container do Lobby
 export function renderRoomsListUI(rooms) {
     const container = document.getElementById('rooms-list-box') || document.getElementById('online-rooms-list-container');
     if (!container) return;
 
-    // Garante que adicionamos os painéis extra (Chat e Ranking) junto com a lista de salas se ainda não existirem
+    // Injeta os painéis de Chat e Ranking se não existirem
     let extraPanel = document.getElementById('lobby-extras-panel');
     if (!extraPanel) {
         const parentDiv = container.parentElement;
@@ -290,10 +282,10 @@ export function renderRoomsListUI(rooms) {
             extraPanel.className = 'grid grid-cols-1 md:grid-cols-2 gap-3 mt-4';
             extraPanel.innerHTML = `
                 <!-- Chat do Lobby -->
-                <div class="bg-black/60 border border-amber-600/50 rounded-xl p-3 flex flex-col h-40">
+                <div class="bg-black/60 border border-amber-600/50 rounded-xl p-3 flex flex-col h-44">
                     <h4 class="text-[10px] font-bold text-amber-400 font-cinzel mb-1">💬 Chat Global do Lobby</h4>
-                    <div id="lobby-chat-messages" class="flex-1 overflow-y-auto space-y-1 text-[9px] text-slate-300 pr-1 mb-2">
-                        <p class="text-slate-500 italic">Bem-vindo ao chat do lobby online!</p>
+                    <div id="lobby-chat-messages" class="flex-1 overflow-y-auto space-y-1 text-[9px] text-slate-300 pr-1 mb-2 bg-black/40 p-2 rounded border border-amber-900/40">
+                        <p class="text-slate-500 italic">Conectado ao chat do lobby...</p>
                     </div>
                     <div class="flex gap-1">
                         <input id="lobby-chat-input" type="text" placeholder="Escreve uma mensagem..." class="flex-1 bg-black/80 border border-amber-600/40 rounded px-2 py-1 text-[9px] text-white focus:outline-none focus:border-amber-400" onkeydown="if(event.key==='Enter') sendLobbyChatMessage()">
@@ -301,19 +293,21 @@ export function renderRoomsListUI(rooms) {
                     </div>
                 </div>
 
-                <!-- Painel de Ranking dos Treinadores -->
-                <div class="bg-black/60 border border-amber-600/50 rounded-xl p-3 flex flex-col h-40">
-                    <h4 class="text-[10px] font-bold text-amber-400 font-cinzel mb-1">🏆 Ranking de Treinadores</h4>
-                    <div id="lobby-ranking-list" class="flex-1 overflow-y-auto space-y-1 text-[9px] text-slate-300 pr-1">
-                        <p class="text-slate-500 italic text-center py-4">A carregar classificação da liga...</p>
+                <!-- Painel de Ranking da Liga -->
+                <div class="bg-black/60 border border-amber-600/50 rounded-xl p-3 flex flex-col h-44">
+                    <h4 class="text-[10px] font-bold text-amber-400 font-cinzel mb-1">🏆 Ranking da Liga (Pontos de Mestre)</h4>
+                    <div id="lobby-ranking-list" class="flex-1 overflow-y-auto space-y-1.5 text-[9px] text-slate-300 pr-1 bg-black/40 p-2 rounded border border-amber-900/40">
+                        <p class="text-slate-500 italic text-center py-4">A carregar classificação...</p>
                     </div>
                 </div>
             `;
             parentDiv.appendChild(extraPanel);
+            initLobbySocketListeners();
+            requestLobbyRanking();
         }
     }
 
-    // Painel do Botão Iniciar Partida (aparece se o utilizador já entrou numa sala)
+    // Painel do Botão Iniciar Partida
     let startPanel = document.getElementById('lobby-start-game-panel');
     if (!startPanel) {
         const parentDiv = container.parentElement;
@@ -327,10 +321,10 @@ export function renderRoomsListUI(rooms) {
     if (currentJoinedOnlineRoomId) {
         if (startPanel) {
             startPanel.innerHTML = `
-                <div class="bg-amber-950/40 border-2 border-amber-500 rounded-xl p-3 mb-3 flex items-center justify-between text-white">
+                <div class="bg-amber-950/40 border-2 border-amber-500 rounded-xl p-3 mb-3 flex items-center justify-between text-white shadow-lg">
                     <div>
-                        <p class="text-[10px] font-bold text-amber-300">🎮 Sala Online Selecionada</p>
-                        <p class="text-[9px] text-slate-300">ID da Sala: ${currentJoinedOnlineRoomId}</p>
+                        <p class="text-[10px] font-bold text-amber-300">🎮 Sala Online Conectada</p>
+                        <p class="text-[9px] text-slate-300">ID: ${currentJoinedOnlineRoomId}</p>
                     </div>
                     <button onclick="joinAndStartOnlineGame()" class="bg-emerald-600 hover:bg-emerald-500 text-black font-black px-4 py-2 rounded-xl text-xs uppercase shadow-lg cursor-pointer animate-pulse">
                         ▶ Iniciar Partida Online
@@ -386,8 +380,7 @@ export function renderRoomsListUI(rooms) {
                 emitSocket('join_room', {
                     roomId,
                     pin: enteredPin,
-                    player: getOnlinePlayerPayload(),
-                    accountEmail: typeof currentAuthenticatedAccount !== 'undefined' ? currentAuthenticatedAccount : null
+                    player: getOnlinePlayerPayload()
                 });
             }
         });
@@ -399,7 +392,5 @@ window.createOnlineRoom = createOnlineRoom;
 window.searchOnlineRooms = searchOnlineRooms;
 window.refreshRoomsList = refreshRoomsList;
 window.sendLobbyChatMessage = sendLobbyChatMessage;
-window.sendChatMessage = sendChatMessage;
-window.sendMessage = sendChatMessage;
 window.joinAndStartOnlineGame = joinAndStartOnlineGame;
 window.renderRoomsList = renderRoomsListUI;
