@@ -133,7 +133,7 @@ export function showOnlineGameLayout() {
     }
 }
 
-// Criação de Sala Online com Opções Competitivas (Fresh Start vs Livre, PIN e Início Antecipado)
+// Criação de Sala Online com Opções Competitivas
 export function createOnlineRoom() {
     let modal = document.getElementById('create-room-config-modal');
     if (!modal) {
@@ -196,7 +196,7 @@ window.submitCreateOnlineRoom = function() {
         roomName,
         gameMode,
         maxPlayers: 4,
-        allowEarlyStart: true, // Permite iniciar a partida com menos de 4 jogadores (ex: 2 jogadores)
+        allowEarlyStart: true,
         pin: roomPin,
         host: typeof currentAuthenticatedAccount !== 'undefined' && currentAuthenticatedAccount ? currentAuthenticatedAccount : (getCurrentPlayer()?.name || 'Treinador')
     });
@@ -275,9 +275,72 @@ export function joinAndStartOnlineGame() {
     });
 }
 
+// Injeta Chat do Lobby e Seção de Ranking no Container do Lobby
 export function renderRoomsListUI(rooms) {
     const container = document.getElementById('rooms-list-box') || document.getElementById('online-rooms-list-container');
     if (!container) return;
+
+    // Garante que adicionamos os painéis extra (Chat e Ranking) junto com a lista de salas se ainda não existirem
+    let extraPanel = document.getElementById('lobby-extras-panel');
+    if (!extraPanel) {
+        const parentDiv = container.parentElement;
+        if (parentDiv) {
+            extraPanel = document.createElement('div');
+            extraPanel.id = 'lobby-extras-panel';
+            extraPanel.className = 'grid grid-cols-1 md:grid-cols-2 gap-3 mt-4';
+            extraPanel.innerHTML = `
+                <!-- Chat do Lobby -->
+                <div class="bg-black/60 border border-amber-600/50 rounded-xl p-3 flex flex-col h-40">
+                    <h4 class="text-[10px] font-bold text-amber-400 font-cinzel mb-1">💬 Chat Global do Lobby</h4>
+                    <div id="lobby-chat-messages" class="flex-1 overflow-y-auto space-y-1 text-[9px] text-slate-300 pr-1 mb-2">
+                        <p class="text-slate-500 italic">Bem-vindo ao chat do lobby online!</p>
+                    </div>
+                    <div class="flex gap-1">
+                        <input id="lobby-chat-input" type="text" placeholder="Escreve uma mensagem..." class="flex-1 bg-black/80 border border-amber-600/40 rounded px-2 py-1 text-[9px] text-white focus:outline-none focus:border-amber-400" onkeydown="if(event.key==='Enter') sendLobbyChatMessage()">
+                        <button onclick="sendLobbyChatMessage()" class="bg-amber-600 hover:bg-amber-500 text-black font-bold px-2.5 py-1 rounded text-[9px] cursor-pointer">Enviar</button>
+                    </div>
+                </div>
+
+                <!-- Painel de Ranking dos Treinadores -->
+                <div class="bg-black/60 border border-amber-600/50 rounded-xl p-3 flex flex-col h-40">
+                    <h4 class="text-[10px] font-bold text-amber-400 font-cinzel mb-1">🏆 Ranking de Treinadores</h4>
+                    <div id="lobby-ranking-list" class="flex-1 overflow-y-auto space-y-1 text-[9px] text-slate-300 pr-1">
+                        <p class="text-slate-500 italic text-center py-4">A carregar classificação da liga...</p>
+                    </div>
+                </div>
+            `;
+            parentDiv.appendChild(extraPanel);
+        }
+    }
+
+    // Painel do Botão Iniciar Partida (aparece se o utilizador já entrou numa sala)
+    let startPanel = document.getElementById('lobby-start-game-panel');
+    if (!startPanel) {
+        const parentDiv = container.parentElement;
+        if (parentDiv) {
+            startPanel = document.createElement('div');
+            startPanel.id = 'lobby-start-game-panel';
+            parentDiv.insertBefore(startPanel, container);
+        }
+    }
+
+    if (currentJoinedOnlineRoomId) {
+        if (startPanel) {
+            startPanel.innerHTML = `
+                <div class="bg-amber-950/40 border-2 border-amber-500 rounded-xl p-3 mb-3 flex items-center justify-between text-white">
+                    <div>
+                        <p class="text-[10px] font-bold text-amber-300">🎮 Sala Online Selecionada</p>
+                        <p class="text-[9px] text-slate-300">ID da Sala: ${currentJoinedOnlineRoomId}</p>
+                    </div>
+                    <button onclick="joinAndStartOnlineGame()" class="bg-emerald-600 hover:bg-emerald-500 text-black font-black px-4 py-2 rounded-xl text-xs uppercase shadow-lg cursor-pointer animate-pulse">
+                        ▶ Iniciar Partida Online
+                    </button>
+                </div>
+            `;
+        }
+    } else {
+        if (startPanel) startPanel.innerHTML = '';
+    }
 
     if (!Array.isArray(rooms) || rooms.length === 0) {
         container.innerHTML = `<p class="text-[10px] text-slate-500 text-center py-6">Nenhuma sala encontrada. Crie uma sala para começar.</p>`;
