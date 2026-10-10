@@ -52,6 +52,17 @@ window.openPokedexModal = openPokedexModal;
 window.openPokedexDetailCard = openPokedexDetailCard;
 window.openVaultModal = openVaultModal;
 
+// Função auxiliar centralizada para transitar para o jogo e ocultar menus
+export function hideSetupAndShowGame() {
+    document.getElementById('setup-screen')?.classList.add('hidden');
+    document.getElementById('character-creation-container')?.classList.add('hidden');
+    document.getElementById('online-lobby-container')?.classList.add('hidden');
+    document.getElementById('trainer-main-menu')?.classList.add('hidden');
+    document.getElementById('auth-container')?.classList.add('hidden');
+    document.getElementById('main-game-layout')?.classList.remove('hidden');
+}
+window.hideSetupAndShowGame = hideSetupAndShowGame;
+
 // Função de Sincronização Global do HUD do Treinador (Menu Inicial e HUD Superior)
 export function updateTrainerVisualsAndHud(trainerName, avatarId) {
     const cp = getCurrentPlayer();
@@ -310,7 +321,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 player.avatarId = avatarId;
                 player.gold = 350;
                 
-                // Correção: Inicializa apenas na equipa ativa e deixa a pcBox limpa para evitar duplicações iniciais
                 player.team = [starterInstance];
                 player.activeTeam = [starterInstance];
                 player.pcBox = [];
@@ -334,8 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 trainerName: trainerName
             });
 
-            document.getElementById('setup-screen').classList.add('hidden');
-            document.getElementById('main-game-layout').classList.remove('hidden');
+            hideSetupAndShowGame();
 
             updateTrainerVisualsAndHud(trainerName, avatarId);
             renderBoardMap();
@@ -368,8 +377,7 @@ function setupAuthenticationListeners() {
     const resumeBtn = document.getElementById('hub-resume-btn');
     if (resumeBtn) {
         resumeBtn.onclick = () => {
-            document.getElementById('setup-screen').classList.add('hidden');
-            document.getElementById('main-game-layout').classList.remove('hidden');
+            hideSetupAndShowGame();
             const player = getCurrentPlayer();
             if (player) {
                 updateTrainerVisualsAndHud(player.name || 'Ash', player.avatarId || 1);
