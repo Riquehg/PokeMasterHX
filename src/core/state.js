@@ -80,6 +80,10 @@ export function getCurrentPlayer() {
 
 // Fallback de segurança para garantir integridade estrutural do estado gerido pelo servidor
 export function ensureValidGameState() {
+    if (!gameState) {
+        return;
+    }
+
     if (!Array.isArray(gameState.players)) {
         gameState.players = [];
     }
