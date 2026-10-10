@@ -6,7 +6,7 @@ import { gameState, getCurrentPlayer, movementState } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
 import { BOARD_WAYPOINTS, getValidDestinations, renderBoardMap, renderBoardMapWithHighlights, moveTokenToWaypoint } from './map.js';
 import { openEncounterModalWithPokemon } from './encounter.js';
-import { socket } from '../core/socket.js';
+import { socket, emitSocket } from '../core/socket.js';
 
 // ------------------------------------------------------------
 // CONFIGURAÇÃO DE EVENTOS DA HUD (Vincula o clique do dado)
@@ -34,14 +34,15 @@ export function setupDiceListeners() {
             }
 
             resetTurnDiceState();
-            // Avança o índice do jogador atual se houver multiplayer local ou online
+            
+            // Avança o índice do jogador atual
             if (typeof gameState !== 'undefined' && gameState.players && Array.isArray(gameState.players)) {
                 gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
             }
 
             // Sincroniza a mudança de turno com os outros jogadores na sala online
-            if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function') {
-                socket.emit('update_game_state', {
+            if (gameState.online) {
+                emitSocket('update_game_state', {
                     type: 'pass_turn',
                     gameState: gameState
                 });
@@ -53,6 +54,8 @@ export function setupDiceListeners() {
             if (typeof renderBoardMap === 'function') {
                 renderBoardMap();
             }
+            if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+            if (typeof renderBottomPanel === 'function') renderBottomPanel();
         };
     }
 }
@@ -425,8 +428,8 @@ export function finishMovementSession() {
             : `Local: Zona #${finalWaypointId}`
     );
 
-    if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function') {
-        socket.emit('update_game_state', {
+    if (gameState.online) {
+        emitSocket('update_game_state', {
             type: 'player_movement_finished',
             gameState: typeof gameState !== 'undefined' ? gameState : null
         });
