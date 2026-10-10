@@ -598,13 +598,22 @@ function setupMapChatListeners() {
     }
 }
 
+// --- Substituir no final de src/systems/map.js ---
+
 if (typeof socket !== 'undefined' && socket) {
     socket.off('sync_game_state');
     socket.on('sync_game_state', (data) => {
         if (data && data.gameState && typeof gameState !== 'undefined') {
+            // Atualiza o estado global partilhado na sessão online
             Object.assign(gameState, data.gameState);
+            if (typeof ensureValidGameState === 'function') {
+                ensureValidGameState();
+            }
             if (typeof renderBoardMap === 'function') {
                 renderBoardMap();
+            }
+            if (typeof renderBottomPanel === 'function') {
+                renderBottomPanel();
             }
         }
     });
