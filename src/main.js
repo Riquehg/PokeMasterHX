@@ -137,10 +137,6 @@ window.resetGameProgressKeepCollection = function() {
     }
 
     saveGameProgress();
-    emitSocket('save_game_state', {
-        gameState: gameState,
-        trainerName: cp.name
-    });
 
     window.showCustomPopup(
         "🔄 Nova Partida Iniciada!",
@@ -240,19 +236,17 @@ window.triggerRandomBoardEvent = function(eventName) {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("🚀 Inicializando o Motor Modular do Jogo...");
+    console.log("🚀 Inicializando o Motor Modular do Jogo (Modo Nuvem/Servidor)...");
 
     initializeSocketConnection();
 
-    const loaded = loadGameProgress();
-    if (!loaded) {
-        ensureValidGameState();
-        saveGameProgress();
-    } else {
-        const cp = getCurrentPlayer();
-        if (cp) {
-            updateTrainerVisualsAndHud(cp.name, cp.avatarId);
-        }
+    // Carregamento inicial centrado no servidor remoto via socket
+    loadGameProgress();
+    ensureValidGameState();
+
+    const cp = getCurrentPlayer();
+    if (cp) {
+        updateTrainerVisualsAndHud(cp.name, cp.avatarId);
     }
 
     renderBoardMap();
@@ -337,13 +331,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             saveGameProgress();
-
-            emitSocket('save_game_state', {
-                gameState: gameState,
-                profileData: { trainerName, avatarId, gold: 350 },
-                trainerName: trainerName
-            });
-
             hideSetupAndShowGame();
 
             updateTrainerVisualsAndHud(trainerName, avatarId);
@@ -440,24 +427,7 @@ window.handleLoginResponse = function(response) {
             saveGameProgress();
         }
     } else {
-        const activeEmail = window.currentAuthenticatedAccount;
-        if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function' && activeEmail) {
-            socket.emit('request_saved_game', { accountEmail: activeEmail }, (saveResponse) => {
-                if (saveResponse && saveResponse.success && saveResponse.gameState) {
-                    Object.assign(gameState, saveResponse.gameState);
-                    ensureValidGameState();
-                    const player = getCurrentPlayer();
-                    if (player) {
-                        updateTrainerVisualsAndHud(player.name, player.avatarId || 1);
-                    }
-                    renderBoardMap();
-                    renderTeamCardSlots();
-                    renderBottomPanel();
-                    saveGameProgress();
-                    console.log("☁️ Dados da conta carregados com sucesso do servidor!");
-                }
-            });
-        }
+        loadGameProgress();
     }
 };
 
@@ -567,7 +537,7 @@ function setupGlobalInterfaceListeners() {
     if (saveGameBtn) {
         saveGameBtn.onclick = () => {
             saveGameProgress();
-            alert("💾 Jogo salvo com sucesso!");
+            alert("💾 Progresso sincronizado com o servidor!");
         };
     }
 
