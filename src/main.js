@@ -416,6 +416,10 @@ window.handleLoginResponse = function(response) {
         return;
     }
 
+    if (response.accountEmail || response.email) {
+        window.currentAuthenticatedAccount = response.accountEmail || response.email;
+    }
+
     if (response.isNew || response.newAccount) {
         document.getElementById('auth-container')?.classList.add('hidden');
         if (typeof window.openCharacterCreationMode === 'function') {
@@ -427,12 +431,32 @@ window.handleLoginResponse = function(response) {
     document.getElementById('auth-container')?.classList.add('hidden');
     document.getElementById('trainer-main-menu')?.classList.remove('hidden');
 
-    const player = getCurrentPlayer();
-    if (player && response.profileData) {
-        Object.assign(player, response.profileData);
-        updateTrainerVisualsAndHud(player.name, player.avatarId || 1);
-        renderBoardMap();
-        saveGameProgress();
+    if (response.profileData) {
+        const player = getCurrentPlayer();
+        if (player) {
+            Object.assign(player, response.profileData);
+            updateTrainerVisualsAndHud(player.name, player.avatarId || 1);
+            renderBoardMap();
+            saveGameProgress();
+        }
+    } else {
+        if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function') {
+            socket.emit('request_saved_game', { accountEmail: window.currentAuthenticatedAccount }, (saveResponse) => {
+                if (saveResponse && saveResponse.gameState) {
+                    Object.assign(gameState, saveResponse.gameState);
+                    ensureValidGameState();
+                    const player = getCurrentPlayer();
+                    if (player) {
+                        updateTrainerVisualsAndHud(player.name, player.avatarId || 1);
+                    }
+                    renderBoardMap();
+                    renderTeamCardSlots();
+                    renderBottomPanel();
+                    saveGameProgress();
+                    console.log("☁️ Dados da conta carregados com sucesso do servidor!");
+                }
+            });
+        }
     }
 };
 
