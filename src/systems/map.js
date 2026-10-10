@@ -8,6 +8,7 @@ import { openEncounterModalWithPokemon } from './encounter.js';
 import { MONSTER_CATALOG } from '../config/cards-data.js';
 import { initiateGymSequence, GYM_LEADERS_CATALOG } from './gym.js';
 import { showOnlineGameLayout, applyOnlineRoomState } from './lobby.js';
+import { socket } from '../core/socket.js';
 
 // Garantir que o gestor global dos Pokémon do tabuleiro existe
 if (typeof window.boardPokemonCards === 'undefined') {
@@ -334,6 +335,7 @@ export function handleWaypointArrival(waypointId) {
         appendAdventureLog(`${cp?.name || 'Treinador'} chegou a ${waypoint.name} (Zona #${waypoint.id}).`);
     }
 
+    // Envia o estado atualizado da partida para o servidor sincronizar com os outros jogadores
     if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function') {
         socket.emit('update_game_state', {
             type: 'player_move',
@@ -598,13 +600,11 @@ function setupMapChatListeners() {
     }
 }
 
-// --- Substituir no final de src/systems/map.js ---
-
+// Ouvintes de Sincronização Multiplayer via WebSocket
 if (typeof socket !== 'undefined' && socket) {
     socket.off('sync_game_state');
     socket.on('sync_game_state', (data) => {
         if (data && data.gameState && typeof gameState !== 'undefined') {
-            // Atualiza o estado global partilhado na sessão online
             Object.assign(gameState, data.gameState);
             if (typeof ensureValidGameState === 'function') {
                 ensureValidGameState();
