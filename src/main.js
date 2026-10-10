@@ -86,7 +86,7 @@ export function updateTrainerVisualsAndHud(trainerName, avatarId) {
 }
 window.updateTrainerVisualsAndHud = updateTrainerVisualsAndHud;
 
-// Controlo visual do botão do dado (Preto e Branco / Cinzento após uso, acende ao passar o turno)
+// Controlo visual do botão do dado
 export function setDiceButtonState(hasRolled) {
     const diceBtn = document.getElementById('roll-dice-btn');
     if (!diceBtn) return;
@@ -144,7 +144,6 @@ window.resetGameProgressKeepCollection = function() {
 };
 window.resetGameProgressKeepCollection = resetGameProgressKeepCollection;
 
-// Função global de animação de dado
 window.rollDiceWithAnimation = function(callback) {
     const diceBtn = document.getElementById('roll-dice-btn');
     if (diceBtn) {
@@ -162,7 +161,6 @@ window.rollDiceWithAnimation = function(callback) {
     }, 800);
 };
 
-// Popup Global de Alerta/Notificação
 window.showCustomPopup = function(title, message, isSuccess) {
     let popup = document.getElementById('global-custom-popup');
     if (!popup) {
@@ -187,7 +185,6 @@ window.showCustomPopup = function(title, message, isSuccess) {
     popup.classList.remove('hidden');
 };
 
-// Eventos aleatórios nas casas de tipo 'event'
 window.triggerRandomBoardEvent = function(eventName) {
     const cp = getCurrentPlayer();
     if (!cp) return;
@@ -256,6 +253,17 @@ document.addEventListener('DOMContentLoaded', () => {
     setupAuthenticationListeners();
     loadDailyPokemonPreview();
 
+    // Vinculação robusta para os botões do lobby online
+    document.addEventListener('click', (event) => {
+        const target = event.target;
+        if (target && (target.id === 'create-room-btn' || target.closest('#create-room-btn'))) {
+            if (typeof window.createOnlineRoom === 'function') window.createOnlineRoom();
+        }
+        if (target && (target.id === 'refresh-rooms-btn' || target.closest('#refresh-rooms-btn'))) {
+            if (typeof window.refreshRoomsList === 'function') window.refreshRoomsList();
+        }
+    });
+
     const adminBtn = document.getElementById('open-admin-btn');
     if (adminBtn) {
         adminBtn.onclick = () => {
@@ -302,9 +310,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 player.avatarId = avatarId;
                 player.gold = 350;
                 
+                // Correção: Inicializa apenas na equipa ativa e deixa a pcBox limpa para evitar duplicações iniciais
                 player.team = [starterInstance];
                 player.activeTeam = [starterInstance];
-                player.pcBox = [starterInstance];
+                player.pcBox = [];
                 
                 player.pokedex = [starterKey];
                 player.inventory = [{ 
