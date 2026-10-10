@@ -14,11 +14,11 @@ export let gameState = {
     turn: 1,
     currentEncounter: null,
     chatMessages: [
-        { sender: "Sistema", text: "Bem-vindo ao Pokémon Master Trainer HEX Edition!" }
+        { sender: "Sistema", text: "Bem-vindo ao Pokémon Master Trainer HEX Edition (Modo Nuvem / Servidor)!" }
     ],
     currentBottomView: 'inventory',
     pcBoxCurrentPage: 0,
-    globalVault: [] // Cofre global de herança de Animas
+    globalVault: [] // Cofre global de herança de Animas gerido no servidor
 };
 
 export let setupConfig = {
@@ -78,7 +78,7 @@ export function getCurrentPlayer() {
     return null;
 }
 
-// Fallback de segurança para garantir que o estado nunca fique nulo sem apagar dados existentes
+// Fallback de segurança para garantir integridade estrutural do estado gerido pelo servidor
 export function ensureValidGameState() {
     if (!Array.isArray(gameState.players)) {
         gameState.players = [];
@@ -93,13 +93,12 @@ export function ensureValidGameState() {
             currentZone: 5,
             level: 1,
             activeTeam: [],
-            pcBox: [], // PC Box limpa inicialmente para evitar duplicações
+            pcBox: [],
             inventory: [],
             equipmentSlots: [null, null]
         }];
     }
     
-    // Garante que o jogador atual possui as propriedades mínimas essenciais
     const cp = getCurrentPlayer();
     if (cp) {
         if (!Array.isArray(cp.activeTeam)) cp.activeTeam = [];
