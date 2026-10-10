@@ -29,7 +29,6 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const PORT = process.env.PORT || 3000;
 const MAX_ROOM_PLAYERS = 4;
-const ADMIN_KEY = process.env.ADMIN_KEY || '';
 
 const allowedOrigins = process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
@@ -57,16 +56,7 @@ const io = new Server(server, {
     pingInterval: 25000
 });
 
-// ============================================================
-// ESTADOS TEMPORÁRIOS DO SERVIDOR
-// ============================================================
-
 let activeRooms = [];
-let globalFeed = [];
-
-// ============================================================
-// FUNÇÕES UTILITÁRIAS
-// ============================================================
 
 function normalizeEmail(email) {
     return String(email || '').trim().toLowerCase();
@@ -326,10 +316,6 @@ function removeSocketFromRooms(socketId) {
     return removedRooms;
 }
 
-// ============================================================
-// CONEXÃO SOCKET.IO
-// ============================================================
-
 io.on('connection', socket => {
     console.log(`🔌 Novo jogador conectado: ${socket.id}`);
 
@@ -442,6 +428,8 @@ io.on('connection', socket => {
                 isNew: !publicData.hasCharacter,
                 accountEmail: email,
                 accountData: publicData,
+                profileData: account.profile_data || {},
+                gameState: account.game_state || {},
                 message: publicData.hasCharacter ? 'Login realizado com sucesso.' : 'Conta encontrada. Crie o seu personagem.'
             });
         } catch (error) {
@@ -536,10 +524,6 @@ io.on('connection', socket => {
             socket.emit('save_response', { success: false, message: 'Erro interno.' });
         }
     });
-
-    // ========================================================
-    // PAINEL ADMINISTRATIVO E CONFIGURAÇÕES DO SUPABASE
-    // ========================================================
 
     socket.on('admin_get_users', async () => {
         try {
@@ -669,10 +653,6 @@ io.on('connection', socket => {
             socket.emit('admin_action_response', { success: false, message: 'Erro ao executar comando administrativo.' });
         }
     });
-
-    // ========================================================
-    // SALAS ONLINE
-    // ========================================================
 
     socket.on('get_rooms_list', () => {
         emitRoomsList();
@@ -900,10 +880,6 @@ io.on('connection', socket => {
         emitRoomsList();
     });
 });
-
-// ============================================================
-// INICIALIZAÇÃO DO SERVIDOR
-// ============================================================
 
 server.listen(PORT, () => {
     console.log(`🚀 Servidor Pokémon Master Trainer ativo na porta ${PORT}`);
