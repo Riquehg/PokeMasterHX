@@ -8,7 +8,7 @@ import { openEncounterModalWithPokemon } from './encounter.js';
 import { MONSTER_CATALOG } from '../config/cards-data.js';
 import { initiateGymSequence, GYM_LEADERS_CATALOG } from './gym.js';
 import { showOnlineGameLayout, applyOnlineRoomState } from './lobby.js';
-import { socket } from '../core/socket.js';
+import { socket, emitSocket } from '../core/socket.js';
 
 // Garantir que o gestor global dos Pokémon do tabuleiro existe
 if (typeof window.boardPokemonCards === 'undefined') {
@@ -203,8 +203,8 @@ export function getValidDestinations(startWaypointId, steps) {
             }
 
             const isIndigoPlateauOrEnd = neighborWp.name.toLowerCase().includes("indigo plateau") || 
-                                     neighborWp.name.toLowerCase().includes("liga pokémon") || 
-                                     neighborWp.name.toLowerCase().includes("arena final");
+                                       neighborWp.name.toLowerCase().includes("liga pokémon") || 
+                                       neighborWp.name.toLowerCase().includes("arena final");
             if (isIndigoPlateauOrEnd && playerBadges < 6) return;
 
             let nextVisited = new Set(current.visitedInPath);
@@ -222,6 +222,14 @@ export function getValidDestinations(startWaypointId, steps) {
 }
 
 export function rollDiceForMovement() {
+    // 🛡️ TRAVA DE SEGURANÇA ONLINE: Impede rolar o dado fora do turno
+    if (gameState.online && gameState.currentPlayerIndex !== gameState.myPlayerIndex) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup("Não é o seu turno!", "Aguarde o outro jogador concluir a jogada.", false);
+        }
+        return;
+    }
+
     if (typeof movementState !== 'undefined' && movementState.hasRolledThisTurn) {
         if (typeof showCustomPopup === 'function') {
             showCustomPopup("Aviso", "Já rolaste o dado neste turno! Clica numa casa destacada ou passa a vez.", false);
@@ -344,8 +352,8 @@ export function handleWaypointArrival(waypointId) {
     }
 
     // Envia o estado atualizado da partida para o servidor sincronizar com os outros jogadores
-    if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function') {
-        socket.emit('update_game_state', {
+    if (gameState.online) {
+        emitSocket('update_game_state', {
             type: 'player_move',
             gameState: typeof gameState !== 'undefined' ? gameState : null
         });
