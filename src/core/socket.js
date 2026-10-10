@@ -1,12 +1,12 @@
 // --- src/core/socket.js ---
 // Gestão de Conexão Socket.io, Autenticação Remota e Sincronização Online
 
-import { gameState, ensureValidGameState } from './state.js';
+import { gameState, ensureValidGameState, currentAuthenticatedAccount } from './state.js';
 import { saveGameProgress } from './storage.js';
 import { applyOnlineRoomState, showOnlineGameLayout, currentJoinedOnlineRoomId } from '../systems/lobby.js';
 
 export let socket = null;
-export let currentAuthenticatedAccount = null;
+export { currentAuthenticatedAccount };
 
 export function initializeSocketConnection() {
     try {
@@ -20,6 +20,14 @@ export function initializeSocketConnection() {
                 if (typeof appendAdventureLog === 'function') {
                     appendAdventureLog("🌐 Conectado com sucesso ao servidor online.");
                 }
+
+                // Tenta reconectar à sala ativa se o jogador já estiver numa
+                if (typeof currentJoinedOnlineRoomId !== 'undefined' && currentJoinedOnlineRoomId) {
+                    socket.emit('reconnect_sync', {
+                        roomId: currentJoinedOnlineRoomId,
+                        email: currentAuthenticatedAccount
+                    });
+                }
             });
 
             socket.on('disconnect', () => {
@@ -30,6 +38,9 @@ export function initializeSocketConnection() {
             });
 
             socket.on('login_response', (response) => {
+                if (response && response.success && (response.accountEmail || response.email)) {
+                    window.currentAuthenticatedAccount = response.accountEmail || response.email;
+                }
                 if (typeof window.handleLoginResponse === 'function') {
                     window.handleLoginResponse(response);
                 }
@@ -50,6 +61,9 @@ export function initializeSocketConnection() {
             // Confirmação de entrada na sala
             socket.on('room_joined', (data) => {
                 if (data && (data.roomId || data.id)) {
+                    if (data.gameState && typeof applyOnlineRoomState === 'function') {
+                        applyOnlineRoomState(data);
+                    }
                     if (typeof showCustomPopup === 'function') {
                         showCustomPopup('Sala Online', 'Entraste na sala com sucesso! Aguarda o Host iniciar a partida.', true);
                     }
@@ -66,7 +80,7 @@ export function initializeSocketConnection() {
             });
 
             // Sincronização em tempo real do estado de jogo entre os jogadores
-            socket.on('game_state_update', (data) => {
+            socket.on('sync_game_state', (data) => {
                 if (applyOnlineRoomState(data)) {
                     if (typeof refreshGameInterface === 'function') {
                         refreshGameInterface();
@@ -79,7 +93,7 @@ export function initializeSocketConnection() {
             });
 
             // Mensagens de chat em tempo real na sala
-            socket.on('room_chat_message', (msgData) => {
+            socket.on('room_chat_broadcast', (msgData) => {
                 if (msgData && msgData.text) {
                     if (!Array.isArray(gameState.chatMessages)) {
                         gameState.chatMessages = [];
