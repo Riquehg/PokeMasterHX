@@ -383,12 +383,20 @@ io.on('connection', socket => {
     socket.data.trainerName = 'Treinador';
     socket.data.avatarId = 1;
 
+    // 🛡️ RECONEXÃO BLINDADA: Reassocia o socket à sala ativa do utilizador
     socket.on('reconnect_sync', payload => {
         const roomId = sanitizeText(payload?.roomId, 120);
+        const email = normalizeEmail(payload?.email || payload?.accountEmail);
         const room = getRoomById(roomId);
         
         if (room) {
             socket.join(room.id);
+            if (email) {
+                const existingPlayer = room.players.find(p => normalizeEmail(p.email) === email);
+                if (existingPlayer) {
+                    existingPlayer.socketId = socket.id; // Atualiza o ID do socket novo
+                }
+            }
             socket.emit('room_joined', {
                 success: true,
                 roomId: room.id,
@@ -399,8 +407,10 @@ io.on('connection', socket => {
                     playerCount: room.players.length,
                     maxPlayers: MAX_ROOM_PLAYERS,
                     status: room.status
-                }
+                },
+                gameState: room.gameState
             });
+            io.to(room.id).emit('room_state', { roomId: room.id, players: room.players });
         }
     });
 
@@ -459,6 +469,7 @@ io.on('connection', socket => {
                 socket.emit('login_response', {
                     success: true,
                     isNew: true,
+                    accountEmail: email,
                     accountData: getAccountPublicData(account, email),
                     message: 'Conta criada com sucesso. Crie o seu personagem.'
                 });
@@ -478,12 +489,41 @@ io.on('connection', socket => {
             socket.emit('login_response', {
                 success: true,
                 isNew: !publicData.hasCharacter,
+                accountEmail: email,
                 accountData: publicData,
                 message: publicData.hasCharacter ? 'Login realizado com sucesso.' : 'Conta encontrada. Crie o seu personagem.'
             });
         } catch (error) {
             console.error('🔥 Erro crítico no login:', error);
             socket.emit('login_response', { success: false, message: 'Erro interno do servidor ao processar o login.' });
+        }
+    });
+
+    // ☁️ Rota oficial para carregar o progresso do usuário da nuvem
+    socket.on('request_saved_game', async payload => {
+        try {
+            const email = normalizeEmail(payload?.email || payload?.accountEmail || socket.data.email);
+            if (!email) {
+                socket.emit('saved_game_response', { success: false, message: 'E-mail não fornecido.' });
+                return;
+            }
+
+            const accountResult = await findAccountByEmail(email);
+            if (accountResult.error || !accountResult.data) {
+                socket.emit('saved_game_response', { success: false, message: 'Conta não encontrada.' });
+                return;
+            }
+
+            const account = accountResult.data;
+            socket.emit('saved_game_response', {
+                success: true,
+                gameState: account.game_state || {},
+                boardPokemonCards: account.board_pokemon_cards || {},
+                profileData: account.profile_data || {}
+            });
+        } catch (error) {
+            console.error('🔥 Erro ao buscar save da nuvem:', error);
+            socket.emit('saved_game_response', { success: false, message: 'Erro interno ao carregar dados.' });
         }
     });
 
@@ -712,7 +752,6 @@ io.on('connection', socket => {
         room.status = 'playing';
         const gameMode = room.gameMode || 'fresh_start';
 
-        // Prepara os dados individuais e reais de cada jogador (Legacy busca do Supabase por e-mail)
         const preparedPlayers = await Promise.all(room.players.map(async p => {
             if (gameMode === 'fresh_start') {
                 return {
