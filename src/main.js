@@ -21,7 +21,7 @@ import { openEncounterModalWithPokemon, fleeEncounter, cyclePlayerEncounterPokem
 import { renderTeamCardSlots, renderBottomPanel, changePcBoxPage, switchBottomView } from './systems/pcbox.js';
 import { openPokedexModal, openPokedexDetailCard } from './systems/pokedex.js';
 import { openVaultModal } from './systems/vault.js';
-import { initializeSocketConnection, emitSocket } from './core/socket.js';
+import { initializeSocketConnection, emitSocket, currentAuthenticatedAccount } from './core/socket.js';
 
 // ==========================================
 // EXPOSIÇÃO GLOBAL PARA O HTML (Evita erros de onclick)
@@ -440,9 +440,10 @@ window.handleLoginResponse = function(response) {
             saveGameProgress();
         }
     } else {
-        if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function') {
-            socket.emit('request_saved_game', { accountEmail: window.currentAuthenticatedAccount }, (saveResponse) => {
-                if (saveResponse && saveResponse.gameState) {
+        const activeEmail = window.currentAuthenticatedAccount;
+        if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function' && activeEmail) {
+            socket.emit('request_saved_game', { accountEmail: activeEmail }, (saveResponse) => {
+                if (saveResponse && saveResponse.success && saveResponse.gameState) {
                     Object.assign(gameState, saveResponse.gameState);
                     ensureValidGameState();
                     const player = getCurrentPlayer();
