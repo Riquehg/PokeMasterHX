@@ -1,7 +1,7 @@
 // --- src/systems/lobby.js ---
 // Sistema de Lobby Online, Salas, Sincronização de Partida, Chat e Ranking
 
-import { gameState, ensureValidGameState, getCurrentPlayer } from '../core/state.js';
+import { gameState, ensureValidGameState, getCurrentPlayer, currentAuthenticatedAccount } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
 import { emitSocket, socket } from '../core/socket.js';
 
