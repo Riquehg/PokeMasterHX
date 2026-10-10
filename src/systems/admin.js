@@ -1,5 +1,5 @@
 // --- src/systems/admin.js ---
-// Painel Administrativo Completo com Fallback de Segurança
+// Painel Administrativo Completo com Sincronização Cloud/Supabase
 
 import { gameState } from '../core/state.js';
 import { emitSocket } from '../core/socket.js';
@@ -7,7 +7,7 @@ import { emitSocket } from '../core/socket.js';
 let adminUsersListenerRegistered = false;
 let adminTimeoutTimer = null;
 
-export const dailyFeaturedPokemonConfig = {
+export let dailyFeaturedPokemonConfig = {
     pokemonId: 'charizard',
     pokemonName: 'Charizard',
     bonusItem: 'ball_ultra',
@@ -45,30 +45,38 @@ export function openAdminPanelModal() {
 
     adminModal.innerHTML = `
         <div class="trainer-card max-w-4xl w-full p-6 border-4 border-red-600 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white text-center space-y-4">
-            <p class="text-sm text-red-300 font-black">Carregando painel administrativo...</p>
-            <p class="text-[10px] text-slate-400">A aguardar resposta do servidor cloud...</p>
+            <p class="text-sm text-red-300 font-black">A carregar dados do Supabase (Servidor)...</p>
+            <p class="text-[10px] text-slate-400">A aguardar resposta da nuvem...</p>
         </div>
     `;
 
     const sock = typeof window.socket !== 'undefined' ? window.socket : null;
     if (sock && typeof sock.on === 'function' && !adminUsersListenerRegistered) {
         sock.on('admin_users_list', handleAdminUsersList);
+        sock.on('admin_action_response', (res) => {
+            if (res && res.message) {
+                alert(res.message);
+                if (res.success) {
+                    emitSocket('admin_get_users', { adminToken: password });
+                }
+            }
+        });
         sock.on('admin_error', (err) => {
             alert(err?.message || 'Erro no painel administrativo.');
         });
         adminUsersListenerRegistered = true;
     }
 
-    // Segurança de 3 segundos: se o servidor demorar ou falhar, abre o painel com os dados locais atuais
+    // Temporizador de fallback caso o servidor demore a responder
     adminTimeoutTimer = setTimeout(() => {
         const localAccounts = [{
-            email: 'treinador.atual@local.com',
+            email: gameState?.accountEmail || 'treinador@servidor.com',
             trainerName: gameState?.players?.[0]?.name || 'Ash Ketchum',
             lastLogin: new Date().toISOString(),
             gold: gameState?.players?.[0]?.gold || 350
         }];
         renderAdminDashboard(adminModal, localAccounts);
-    }, 3000);
+    }, 4000);
 
     emitSocket('admin_get_users', { adminToken: password });
     adminModal.classList.remove('hidden');
@@ -83,12 +91,12 @@ export function renderAdminDashboard(modalElement, users) {
     const safeUsers = Array.isArray(users) ? users : [];
 
     const rowsHtml = safeUsers.length === 0 ? `
-        <tr><td colspan="5" class="text-center py-4 text-slate-400">Nenhuma conta encontrada na nuvem.</td></tr>
+        <tr><td colspan="5" class="text-center py-4 text-slate-400">Nenhuma conta encontrada na base de dados do Supabase.</td></tr>
     ` : safeUsers.map(user => {
-        const email = user?.email || 'conta_local@game.com';
+        const email = user?.email || user?.accountEmail || 'conta@servidor.com';
         const trainerName = user?.trainerName || user?.trainer_name || user?.name || 'Treinador';
-        const lastLogin = user?.lastLogin ? new Date(user.lastLogin).toLocaleString('pt-BR') : 'Ativo agora';
-        const gold = Number(user?.gold || user?.profile_data?.gold || 350);
+        const lastLogin = user?.lastLogin || user?.updated_at ? new Date(user.lastLogin || user.updated_at).toLocaleString('pt-BR') : 'Ativo agora';
+        const gold = Number(user?.gold || user?.profileData?.gold || user?.profile_data?.gold || 350);
 
         return `
             <tr class="border-b border-red-900/40 text-[11px] hover:bg-red-950/20">
@@ -112,22 +120,22 @@ export function renderAdminDashboard(modalElement, users) {
     modalElement.innerHTML = `
         <div class="trainer-card max-w-5xl w-full p-6 space-y-4 border-4 border-red-600 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
             <div class="flex justify-between items-center border-b border-red-900 pb-2">
-                <span class="text-xs font-black text-red-400 font-cinzel"><i class="fa-solid fa-shield-halved"></i> PAINEL DO ADMINISTRADOR COMPLETO</span>
+                <span class="text-xs font-black text-red-400 font-cinzel"><i class="fa-solid fa-shield-halved"></i> PAINEL DO ADMINISTRADOR (SUPABASE CLOUD)</span>
                 <button type="button" id="close-admin-panel-button" class="text-red-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-red-800 cursor-pointer">✕ Fechar</button>
             </div>
             
             <!-- Configuração do Pokémon do Dia / Bônus -->
             <div class="bg-black/60 p-3 rounded-xl border border-red-900/60 flex items-center justify-between">
                 <div>
-                    <span class="text-[10px] text-amber-400 font-bold block">🌟 Pokémon de Destaque Atual (Bônus de Captura)</span>
-                    <span class="text-xs font-black text-white" id="admin-current-daily-label">${dailyFeaturedPokemonConfig.pokemonName} (Bônus: ${dailyFeaturedPokemonConfig.bonusItemName})</span>
+                    <span class="text-[10px] text-amber-400 font-bold block">🌟 Pokémon de Destaque Atual (Sincronizado)</span>
+                    <span class="text-xs font-black text-white" id="admin-current-daily-label">${dailyFeaturedPokemonConfig.pokemonName} (Item: ${dailyFeaturedPokemonConfig.bonusItemName})</span>
                 </div>
                 <button type="button" id="configure-daily-pokemon-btn" class="bg-amber-600 hover:bg-amber-500 text-black px-3 py-1.5 rounded-lg text-xs font-black cursor-pointer">⚙️ Configurar Destaque</button>
             </div>
 
             <div class="flex justify-between items-center">
-                <span class="text-xs font-bold text-slate-300">Contas geridas no painel: <span class="text-amber-400">${safeUsers.length}</span></span>
-                <button type="button" id="refresh-admin-users-button" class="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-1 rounded border border-red-700 cursor-pointer">🔄 Atualizar Lista</button>
+                <span class="text-xs font-bold text-slate-300">Contas na Base de Dados: <span class="text-amber-400">${safeUsers.length}</span></span>
+                <button type="button" id="refresh-admin-users-button" class="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-1 rounded border border-red-700 cursor-pointer">🔄 Atualizar Lista do Supabase</button>
             </div>
             <div class="max-h-72 overflow-y-auto border border-red-900/60 rounded-xl bg-black/60 p-2">
                 <table class="w-full text-left border-collapse">
@@ -137,7 +145,7 @@ export function renderAdminDashboard(modalElement, users) {
                             <th class="p-2">Treinador</th>
                             <th class="p-2">Último Login</th>
                             <th class="p-2">Ouro</th>
-                            <th class="p-2 text-right">Ações de Gestão</th>
+                            <th class="p-2 text-right">Ações de Gestão Cloud</th>
                         </tr>
                     </thead>
                     <tbody>${rowsHtml}</tbody>
@@ -161,8 +169,12 @@ export function renderAdminDashboard(modalElement, users) {
         if (!newMon) return;
         dailyFeaturedPokemonConfig.pokemonId = newMon.trim().toLowerCase();
         dailyFeaturedPokemonConfig.pokemonName = newMon.charAt(0).toUpperCase() + newMon.slice(1);
-        alert(`✅ Pokémon de Destaque alterado para ${dailyFeaturedPokemonConfig.pokemonName}!`);
-        document.getElementById('admin-current-daily-label').textContent = `${dailyFeaturedPokemonConfig.pokemonName} (Bônus ativo)`;
+        
+        // Envia a configuração do Pokémon do dia para o servidor manter fixo
+        emitSocket('admin_set_daily_pokemon', { dailyConfig: dailyFeaturedPokemonConfig });
+        
+        alert(`✅ Pokémon de Destaque fixado como ${dailyFeaturedPokemonConfig.pokemonName} no servidor!`);
+        document.getElementById('admin-current-daily-label').textContent = `${dailyFeaturedPokemonConfig.pokemonName} (Item: ${dailyFeaturedPokemonConfig.bonusItemName})`;
     });
 
     modalElement.querySelectorAll('[data-admin-action]').forEach(button => {
@@ -180,12 +192,12 @@ export function renderAdminDashboard(modalElement, users) {
 }
 
 export function adminGiveGold(email) {
-    const amountText = window.prompt(`Quantas moedas deseja adicionar à conta ${email}?`, '1000');
+    const amountText = window.prompt(`Quantas moedas deseja adicionar à conta ${email} no Supabase?`, '1000');
     const amount = Math.floor(Number(amountText) || 0);
     if (amount <= 0) return;
 
     emitSocket('admin_action', { action: 'give_gold', email, amount });
-    alert(`🪙 Pedido para adicionar ouro enviado para ${email}`);
+    alert(`🪙 Comando enviado para adicionar ouro na conta de ${email}`);
 }
 
 export function adminGivePokemon(email) {
@@ -196,7 +208,7 @@ export function adminGivePokemon(email) {
         email, 
         pokemon: { id: monId.trim().toLowerCase(), name: monId.charAt(0).toUpperCase() + monId.slice(1), level: 5 } 
     });
-    alert(`👾 Pedido para enviar Pokémon enviado para ${email}`);
+    alert(`👾 Comando enviado para inserir Pokémon na PC Box/Equipa de ${email}`);
 }
 
 export function adminGiveItem(email) {
@@ -205,20 +217,20 @@ export function adminGiveItem(email) {
     const qtyText = window.prompt(`Insira a quantidade:`, '5');
     const count = Math.max(1, Number(qtyText) || 1);
     emitSocket('admin_action', { action: 'give_item', email, itemId: itemId.trim().toLowerCase(), count });
-    alert(`🎒 Pedido para enviar itens enviado para ${email}`);
+    alert(`🎒 Comando enviado para adicionar itens na mochila de ${email}`);
 }
 
 export function adminResetPassword(email) {
-    const newPassword = window.prompt(`Insira a nova senha temporária para ${email}:`, '');
+    const newPassword = window.prompt(`Insira a nova senha para ${email}:`, '');
     if (!newPassword || newPassword.length < 4) return;
     emitSocket('admin_action', { action: 'reset_password', email, newPass: newPassword });
-    alert(`🔑 Pedido de alteração de senha enviado para ${email}`);
+    alert(`🔑 Comando enviado para redefinir senha de ${email}`);
 }
 
 export function adminDeleteAccount(email) {
-    if (!window.confirm(`⚠️ Tem certeza absoluta de que deseja apagar a conta ${email}?`)) return;
+    if (!window.confirm(`⚠️ Tem certeza absoluta de que deseja apagar a conta ${email} do Supabase?`)) return;
     emitSocket('admin_action', { action: 'delete_account', email });
-    alert(`🗑️ Pedido para apagar conta enviado.`);
+    alert(`🗑️ Comando enviado para remover a conta.`);
 }
 
 window.openAdminPanelModal = openAdminPanelModal;
