@@ -3,6 +3,7 @@
 
 import { gameState, ensureValidGameState } from './state.js';
 import { saveGameProgress } from './storage.js';
+import { applyOnlineRoomState, showOnlineGameLayout, currentJoinedOnlineRoomId } from '../systems/lobby.js';
 
 export let socket = null;
 export let currentAuthenticatedAccount = null;
@@ -37,6 +38,56 @@ export function initializeSocketConnection() {
             socket.on('rooms_list_update', (rooms) => {
                 if (typeof window.renderRoomsList === 'function') {
                     window.renderRoomsList(rooms);
+                }
+            });
+
+            // Confirmação de entrada na sala
+            socket.on('room_joined', (data) => {
+                if (data && (data.roomId || data.id)) {
+                    if (typeof showCustomPopup === 'function') {
+                        showCustomPopup('Sala Online', 'Entraste na sala com sucesso! Aguarda o Host iniciar a partida.', true);
+                    }
+                }
+            });
+
+            // Início do jogo na sala online (Ativa o layout partilhado)
+            socket.on('room_game_started', (data) => {
+                if (applyOnlineRoomState(data)) {
+                    showOnlineGameLayout();
+                } else if (typeof showCustomPopup === 'function') {
+                    showCustomPopup('Erro ao Iniciar', 'Não foi possível sincronizar os dados da sala para iniciar a partida.', false);
+                }
+            });
+
+            // Sincronização em tempo real do estado de jogo entre os jogadores
+            socket.on('game_state_update', (data) => {
+                if (applyOnlineRoomState(data)) {
+                    if (typeof refreshGameInterface === 'function') {
+                        refreshGameInterface();
+                    } else {
+                        if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+                        if (typeof renderBottomPanel === 'function') renderBottomPanel();
+                        if (typeof renderBoardMap === 'function') renderBoardMap();
+                    }
+                }
+            });
+
+            // Mensagens de chat em tempo real na sala
+            socket.on('room_chat_message', (msgData) => {
+                if (msgData && msgData.text) {
+                    if (!Array.isArray(gameState.chatMessages)) {
+                        gameState.chatMessages = [];
+                    }
+                    gameState.chatMessages.push({
+                        sender: msgData.sender || 'Treinador',
+                        text: msgData.text
+                    });
+                    if (gameState.chatMessages.length > 100) {
+                        gameState.chatMessages = gameState.chatMessages.slice(-100);
+                    }
+                    if (typeof renderChatMessages === 'function') {
+                        renderChatMessages();
+                    }
                 }
             });
 
