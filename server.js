@@ -712,7 +712,7 @@ io.on('connection', socket => {
         room.status = 'playing';
         const gameMode = room.gameMode || 'fresh_start';
 
-        // Prepara os dados de cada jogador conforme o modo de jogo selecionado
+        // Prepara os dados individuais e reais de cada jogador (Legacy busca do Supabase por e-mail)
         const preparedPlayers = await Promise.all(room.players.map(async p => {
             if (gameMode === 'fresh_start') {
                 return {
@@ -730,7 +730,6 @@ io.on('connection', socket => {
                     equipmentSlots: [null, null]
                 };
             } else {
-                // Modo Legacy: busca dados salvos da conta no Supabase se existirem
                 if (p.email) {
                     const accRes = await findAccountByEmail(p.email);
                     if (accRes.data && accRes.data.game_state) {
@@ -739,15 +738,19 @@ io.on('connection', socket => {
                             return {
                                 ...existingPlayer,
                                 name: p.name,
-                                avatarId: p.avatarId,
-                                currentZone: existingPlayer.currentZone || 5
+                                avatarId: p.avatarId || existingPlayer.avatarId || 1,
+                                currentZone: existingPlayer.currentZone || 5,
+                                activeTeam: safeArray(existingPlayer.activeTeam),
+                                pcBox: safeArray(existingPlayer.pcBox),
+                                inventory: safeArray(existingPlayer.inventory),
+                                badges: safeArray(existingPlayer.badges)
                             };
                         }
                     }
                 }
                 return {
                     name: p.name,
-                    avatarId: p.avatarId,
+                    avatarId: p.avatarId || 1,
                     gold: p.gold || 350,
                     currentZone: 5,
                     activeTeam: safeArray(p.activeTeam),
@@ -772,7 +775,7 @@ io.on('connection', socket => {
         });
 
         emitRoomsList();
-        console.log(`🎮 Partida iniciada na sala ${room.name} [Modo: ${gameMode}] com ${room.players.length} jogadores.`);
+        console.log(`🎮 Partida iniciada na sala ${room.name} [Modo: ${gameMode}] com ${preparedPlayers.length} jogadores.`);
     });
 
     // ========================================================
