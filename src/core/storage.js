@@ -1,6 +1,6 @@
 // --- src/core/storage.js ---
-import { gameState, getCurrentPlayer, ensureValidGameState } from './state.js';
-import { emitSocket, currentAuthenticatedAccount } from './socket.js';
+import { gameState, getCurrentPlayer, ensureValidGameState, currentAuthenticatedAccount } from './state.js';
+import { emitSocket } from './socket.js';
 
 const SAVE_KEY = 'pokemon_master_trainer_hex_save';
 
@@ -15,10 +15,12 @@ export function saveGameProgress() {
         };
         localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
         
-        // Sincroniza com o backend online (salva na conta do servidor remoto para não perder ao limpar o browser)
+        // Sincroniza com o backend online utilizando a conta ativa
+        const activeEmail = typeof currentAuthenticatedAccount !== 'undefined' && currentAuthenticatedAccount ? currentAuthenticatedAccount : (gameState.accountEmail || null);
+
         const savePayload = {
             gameState: gameState,
-            accountEmail: typeof currentAuthenticatedAccount !== 'undefined' ? currentAuthenticatedAccount : null,
+            accountEmail: activeEmail,
             trainerName: cp?.name || 'Treinador',
             profileData: cp ? {
                 name: cp.name,
@@ -43,17 +45,20 @@ export function saveGameProgress() {
     }
 }
 
-// Solicita os dados salvos na nuvem ao servidor backend
+// Solicita os dados salvos na nuvem ao servidor backend de forma segura
 export function loadGameProgressFromServer() {
     if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function') {
-        const account = typeof currentAuthenticatedAccount !== 'undefined' ? currentAuthenticatedAccount : null;
-        socket.emit('request_saved_game', { accountEmail: account }, (response) => {
-            if (response && response.gameState) {
+        const activeEmail = typeof currentAuthenticatedAccount !== 'undefined' && currentAuthenticatedAccount ? currentAuthenticatedAccount : (gameState.accountEmail || null);
+        if (!activeEmail) return;
+
+        socket.emit('request_saved_game', { accountEmail: activeEmail }, (response) => {
+            if (response && response.success && response.gameState) {
                 Object.assign(gameState, response.gameState);
                 ensureValidGameState();
                 localStorage.setItem(SAVE_KEY, JSON.stringify({ gameState, savedAt: new Date().toISOString() }));
                 if (typeof renderBoardMap === 'function') renderBoardMap();
                 if (typeof renderBottomPanel === 'function') renderBottomPanel();
+                if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
                 console.log("☁️ Progresso carregado com sucesso a partir da nuvem!");
             }
         });
@@ -72,7 +77,7 @@ export function loadGameProgress() {
 
         const parsed = JSON.parse(raw);
         if (parsed && parsed.gameState) {
-            // Garante uma mesclagem profunda preservando estruturas essenciais (players, inventory, pcBox)
+            // Garante uma mesclagem profunda preservando estruturas essenciais
             if (parsed.gameState.players && Array.isArray(parsed.gameState.players)) {
                 gameState.players = parsed.gameState.players;
             }
@@ -84,7 +89,7 @@ export function loadGameProgress() {
             }
 
             ensureValidGameState();
-            console.log("📂 Jogo carregado com sucesso!");
+            console.log("📂 Jogo carregado localmente com sucesso!");
             return true;
         }
     } catch (e) {
@@ -167,6 +172,21 @@ export function saveMonsterToVault(uniqueId) {
     
     saveGameProgress();
     console.log(`📦 ${targetMonster.name} enviado para o cofre global.`);
+}
+
+// Ouvinte adicional para resposta de salvamento na nuvem via socket
+if (typeof socket !== 'undefined' && socket) {
+    socket.off('saved_game_response');
+    socket.on('saved_game_response', (response) => {
+        if (response && response.success && response.gameState) {
+            Object.assign(gameState, response.gameState);
+            ensureValidGameState();
+            localStorage.setItem(SAVE_KEY, JSON.stringify({ gameState, savedAt: new Date().toISOString() }));
+            if (typeof renderBoardMap === 'function') renderBoardMap();
+            if (typeof renderBottomPanel === 'function') renderBottomPanel();
+            if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+        }
+    });
 }
 
 // Exposições globais para o navegador
