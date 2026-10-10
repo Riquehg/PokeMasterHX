@@ -1,26 +1,43 @@
 // --- src/core/storage.js ---
 import { gameState, getCurrentPlayer, ensureValidGameState } from './state.js';
+import { emitSocket, currentAuthenticatedAccount } from './socket.js';
 
 const SAVE_KEY = 'pokemon_master_trainer_hex_save';
 
-// Salva o progresso no localStorage e via socket se houver conexão
+// Salva o progresso no localStorage e via socket com sincronização remota completa
 export function saveGameProgress() {
     ensureValidGameState();
     try {
+        const cp = getCurrentPlayer();
         const saveData = {
             gameState,
             savedAt: new Date().toISOString()
         };
         localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
         
-        // Sincroniza com o backend online se o socket estiver disponível
-        if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function') {
-            socket.emit('update_game_state', {
-                type: 'save_game',
-                gameState
-            });
+        // Sincroniza com o backend online (salva na conta do servidor remoto para não perder ao limpar o browser)
+        const savePayload = {
+            gameState: gameState,
+            accountEmail: typeof currentAuthenticatedAccount !== 'undefined' ? currentAuthenticatedAccount : null,
+            trainerName: cp?.name || 'Treinador',
+            profileData: cp ? {
+                name: cp.name,
+                avatarId: cp.avatarId,
+                gold: cp.gold,
+                badges: cp.badges,
+                activeTeam: cp.activeTeam,
+                pcBox: cp.pcBox,
+                inventory: cp.inventory
+            } : null
+        };
+
+        if (typeof emitSocket === 'function') {
+            emitSocket('save_game_state', savePayload);
+        } else if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function') {
+            socket.emit('save_game_state', savePayload);
         }
-        console.log("💾 Jogo salvo com sucesso!");
+
+        console.log("💾 Jogo salvo localmente e sincronizado com o servidor remoto!");
     } catch (e) {
         console.error("Erro ao salvar o jogo:", e);
     }
@@ -130,3 +147,11 @@ export function saveMonsterToVault(uniqueId) {
     saveGameProgress();
     console.log(`📦 ${targetMonster.name} enviado para o cofre global.`);
 }
+
+// Exposições globais para o navegador
+window.saveGameProgress = saveGameProgress;
+window.loadGameProgress = loadGameProgress;
+window.deleteGameSave = deleteGameSave;
+window.exportSaveToFile = exportSaveToFile;
+window.importSaveFromFile = importSaveFromFile;
+window.saveMonsterToVault = saveMonsterToVault;
