@@ -41,6 +41,12 @@ export function initializeSocketConnection() {
                 }
             });
 
+            socket.on('rooms_list_response', (rooms) => {
+                if (typeof window.renderRoomsList === 'function') {
+                    window.renderRoomsList(rooms);
+                }
+            });
+
             // Confirmação de entrada na sala
             socket.on('room_joined', (data) => {
                 if (data && (data.roomId || data.id)) {
