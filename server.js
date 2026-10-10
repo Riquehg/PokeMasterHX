@@ -324,12 +324,19 @@ function getRoomById(roomId) {
     return activeRooms.find(room => room.id === roomId);
 }
 
-function getSocketPlayerData(socket) {
+function getSocketPlayerData(socket, payloadPlayer = null) {
     return {
         socketId: socket.id,
-        email: socket.data.email || '',
-        name: socket.data.trainerName || 'Treinador',
-        avatarId: socket.data.avatarId || 1
+        email: payloadPlayer?.email || socket.data.email || '',
+        name: payloadPlayer?.name || socket.data.trainerName || 'Treinador',
+        avatarId: payloadPlayer?.avatarId || socket.data.avatarId || 1,
+        gold: payloadPlayer?.gold || 350,
+        currentZone: 5,
+        activeTeam: safeArray(payloadPlayer?.activeTeam),
+        pcBox: safeArray(payloadPlayer?.pcBox),
+        inventory: safeArray(payloadPlayer?.inventory),
+        badges: safeArray(payloadPlayer?.badges),
+        equipmentSlots: safeArray(payloadPlayer?.equipmentSlots, [null, null])
     };
 }
 
@@ -543,7 +550,7 @@ io.on('connection', socket => {
     });
 
     // ========================================================
-    // SALAS ONLINE (COM SUPORTE A PIN E INÍCIO ANTECIPADO)
+    // SALAS ONLINE (COM SUPORTE A PIN, TEMPO REAL E MODOS)
     // ========================================================
 
     socket.on('get_rooms_list', () => {
@@ -554,6 +561,7 @@ io.on('connection', socket => {
         const roomName = sanitizeText(payload?.roomName, 80) || 'Sala de Kanto';
         const roomPin = String(payload?.pin || '').trim();
         const allowEarlyStart = Boolean(payload?.allowEarlyStart ?? true);
+        const gameMode = sanitizeText(payload?.gameMode, 40) || 'fresh_start';
 
         const existingRoom = getRoomBySocketId(socket.id);
         if (existingRoom) {
@@ -561,18 +569,20 @@ io.on('connection', socket => {
             return;
         }
 
-        const playerData = getSocketPlayerData(socket);
+        const playerData = getSocketPlayerData(socket, payload?.player);
 
         const room = {
             id: `room_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
             name: roomName,
             pin: roomPin,
             allowEarlyStart,
+            gameMode,
             host: playerData.name,
             hostSocketId: socket.id,
             status: 'waiting',
             createdAt: new Date().toISOString(),
-            players: [playerData]
+            players: [playerData],
+            gameState: null
         };
 
         activeRooms.push(room);
@@ -593,7 +603,7 @@ io.on('connection', socket => {
         });
 
         emitRoomsList();
-        console.log(`🏠 Sala criada: ${room.name} por ${playerData.name} ${room.pin ? '(Protegida por PIN)' : ''}`);
+        console.log(`🏠 Sala criada: ${room.name} por ${playerData.name} [Modo: ${gameMode}]`);
     });
 
     socket.on('join_room', payload => {
@@ -626,7 +636,7 @@ io.on('connection', socket => {
             return;
         }
 
-        const playerData = getSocketPlayerData(socket);
+        const playerData = getSocketPlayerData(socket, payload?.player);
         room.players.push(playerData);
         socket.join(room.id);
 
@@ -680,7 +690,7 @@ io.on('connection', socket => {
         emitRoomsList();
     });
 
-    socket.on('start_room_game', payload => {
+    socket.on('start_room_game', async payload => {
         const room = getRoomBySocketId(socket.id);
 
         if (!room) {
@@ -700,16 +710,69 @@ io.on('connection', socket => {
         }
 
         room.status = 'playing';
-        room.gameConfig = safeObject(payload?.gameConfig);
+        const gameMode = room.gameMode || 'fresh_start';
+
+        // Prepara os dados de cada jogador conforme o modo de jogo selecionado
+        const preparedPlayers = await Promise.all(room.players.map(async p => {
+            if (gameMode === 'fresh_start') {
+                return {
+                    name: p.name,
+                    avatarId: p.avatarId,
+                    gold: 350,
+                    currentZone: 5,
+                    activeTeam: [],
+                    pcBox: [],
+                    inventory: [
+                        { id: 'ball_poke', name: 'Poké Ball', count: 5, type: 'sphere', value: 1 },
+                        { id: 'potion', name: 'Poção', count: 2, type: 'heal', value: 20 }
+                    ],
+                    badges: [],
+                    equipmentSlots: [null, null]
+                };
+            } else {
+                // Modo Legacy: busca dados salvos da conta no Supabase se existirem
+                if (p.email) {
+                    const accRes = await findAccountByEmail(p.email);
+                    if (accRes.data && accRes.data.game_state) {
+                        const existingPlayer = getFirstPlayer(accRes.data.game_state);
+                        if (existingPlayer) {
+                            return {
+                                ...existingPlayer,
+                                name: p.name,
+                                avatarId: p.avatarId,
+                                currentZone: existingPlayer.currentZone || 5
+                            };
+                        }
+                    }
+                }
+                return {
+                    name: p.name,
+                    avatarId: p.avatarId,
+                    gold: p.gold || 350,
+                    currentZone: 5,
+                    activeTeam: safeArray(p.activeTeam),
+                    pcBox: safeArray(p.pcBox),
+                    inventory: safeArray(p.inventory),
+                    badges: safeArray(p.badges),
+                    equipmentSlots: safeArray(p.equipmentSlots, [null, null])
+                };
+            }
+        }));
+
+        room.gameState = {
+            players: preparedPlayers,
+            currentPlayerIndex: 0,
+            turn: 1
+        };
 
         io.to(room.id).emit('room_game_started', {
             roomId: room.id,
-            gameConfig: room.gameConfig,
-            players: room.players
+            gameState: room.gameState,
+            boardPokemonCards: {}
         });
 
         emitRoomsList();
-        console.log(`🎮 Partida iniciada na sala ${room.name} com ${room.players.length} jogadores.`);
+        console.log(`🎮 Partida iniciada na sala ${room.name} [Modo: ${gameMode}] com ${room.players.length} jogadores.`);
     });
 
     // ========================================================
@@ -737,7 +800,6 @@ io.on('connection', socket => {
                 const shinyCount = Number(profileData.statistics?.shinyCaptures || 0);
                 const legendaryCount = Number(profileData.statistics?.legendaryCaptures || 0);
 
-                // Cálculo dos Pontos de Mestre (PM)
                 const masterPoints = (pokedex.length * 10) + (shinyCount * 30) + (legendaryCount * 50) + (badgesCount * 100);
 
                 return {
@@ -759,7 +821,7 @@ io.on('connection', socket => {
     });
 
     // ========================================================
-    // CHAT E SINCRONIZAÇÃO
+    // CHAT E SINCRONIZAÇÃO EM TEMPO REAL DA PARTIDA
     // ========================================================
 
     socket.on('lobby_chat_message', payload => {
@@ -793,8 +855,13 @@ io.on('connection', socket => {
         const safeData = safeObject(data);
 
         if (room) {
+            if (safeData.gameState) {
+                room.gameState = safeData.gameState;
+            }
+
             socket.to(room.id).emit('sync_game_state', {
                 ...safeData,
+                gameState: room.gameState,
                 sender: socket.data.trainerName,
                 updatedAt: new Date().toISOString()
             });
