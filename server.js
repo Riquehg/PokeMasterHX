@@ -365,43 +365,6 @@ function removeSocketFromRooms(socketId) {
     return removedRooms;
 }
 
-function verifyAdmin(socket, token) {
-    if (!ADMIN_KEY) {
-        return true;
-    }
-
-    const receivedToken = token || socket.handshake.auth?.adminToken;
-
-    return receivedToken === ADMIN_KEY;
-}
-
-function createFeedEvent(data = {}) {
-    return {
-        id: `feed_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        type: sanitizeText(data.type || 'capture', 40),
-        trainerName: sanitizeText(data.trainerName || 'Treinador', 80),
-        pokemonName: sanitizeText(data.pokemonName || '', 80),
-        rarity: sanitizeText(data.rarity || '', 40),
-        message: sanitizeText(data.message || '', 240),
-        createdAt: new Date().toISOString()
-    };
-}
-
-function publishFeedEvent(data) {
-    const event = createFeedEvent(data);
-
-    globalFeed.unshift(event);
-
-    if (globalFeed.length > MAX_FEED_ITEMS) {
-        globalFeed = globalFeed.slice(0, MAX_FEED_ITEMS);
-    }
-
-    io.emit('feed_event', event);
-    io.emit('feed_list_response', globalFeed);
-
-    return event;
-}
-
 // ============================================================
 // CONEXÃO SOCKET.IO
 // ============================================================
@@ -648,7 +611,6 @@ io.on('connection', socket => {
             return;
         }
 
-        // Validação de PIN se houver
         if (room.pin && room.pin !== enteredPin) {
             socket.emit('room_joined', { success: false, message: 'Senha PIN incorreta.' });
             return;
@@ -731,7 +693,6 @@ io.on('connection', socket => {
             return;
         }
 
-        // Permite iniciar com 2 jogadores (ou mais) se allowEarlyStart for verdadeiro
         const minRequired = room.allowEarlyStart ? 2 : MAX_ROOM_PLAYERS;
         if (room.players.length < minRequired) {
             socket.emit('room_action_response', { success: false, message: `É necessário ter pelo menos ${minRequired} jogadores para iniciar.` });
@@ -749,6 +710,52 @@ io.on('connection', socket => {
 
         emitRoomsList();
         console.log(`🎮 Partida iniciada na sala ${room.name} com ${room.players.length} jogadores.`);
+    });
+
+    // ========================================================
+    // RANKING DA LIGA (PONTOS DE MESTRE)
+    // ========================================================
+
+    socket.on('get_leaderboard', async () => {
+        try {
+            const result = await supabase
+                .from('accounts')
+                .select('email, character_name, game_state, profile_data');
+
+            if (result.error) {
+                socket.emit('leaderboard_response', { success: false, message: result.error.message });
+                return;
+            }
+
+            const ranking = (result.data || []).map(account => {
+                const pokedex = getPokedexFromAccount(account);
+                const profileData = safeObject(account.profile_data);
+                const gameState = safeObject(account.game_state);
+                const player = getFirstPlayer(gameState);
+
+                const badgesCount = Array.isArray(player?.badges) ? player.badges.length : (Array.isArray(profileData.badges) ? profileData.badges.length : 0);
+                const shinyCount = Number(profileData.statistics?.shinyCaptures || 0);
+                const legendaryCount = Number(profileData.statistics?.legendaryCaptures || 0);
+
+                // Cálculo dos Pontos de Mestre (PM)
+                const masterPoints = (pokedex.length * 10) + (shinyCount * 30) + (legendaryCount * 50) + (badgesCount * 100);
+
+                return {
+                    trainerName: extractTrainerName(gameState, account.character_name, profileData, account.email),
+                    avatarId: profileData.avatarId || 1,
+                    masterPoints,
+                    pokedexCount: pokedex.length,
+                    badgesCount
+                };
+            })
+            .sort((a, b) => b.masterPoints - a.masterPoints)
+            .slice(0, 50);
+
+            socket.emit('leaderboard_response', { success: true, ranking });
+        } catch (error) {
+            console.error('🔥 Erro no ranking:', error);
+            socket.emit('leaderboard_response', { success: false, message: 'Erro ao carregar o ranking.' });
+        }
     });
 
     // ========================================================
