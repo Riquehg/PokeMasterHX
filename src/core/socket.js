@@ -2,7 +2,6 @@
 // Gestão de Conexão Socket.io, Autenticação Remota e Sincronização Online
 
 import { gameState, ensureValidGameState, currentAuthenticatedAccount } from './state.js';
-import { saveGameProgress } from './storage.js';
 import { applyOnlineRoomState, showOnlineGameLayout, currentJoinedOnlineRoomId } from '../systems/lobby.js';
 
 export let socket = null;
