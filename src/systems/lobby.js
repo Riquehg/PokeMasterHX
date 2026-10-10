@@ -281,15 +281,15 @@ export function renderRoomsListUI(rooms) {
         const host = room?.host || 'Treinador';
         const playerCount = Number(room?.playerCount ?? room?.players?.length ?? 0);
         const maxPlayers = Number(room?.maxPlayers) || 4;
-        const modeLabel = room?.gameMode === 'fresh_start' ? 'Fresh Start 🌟' : 'Livre ⚔️';
+        const hasPin = Boolean(room?.pin);
 
         return `
             <div class="flex justify-between items-center gap-2 bg-black/60 p-2.5 rounded-xl border border-amber-600/50 text-white text-[10px] my-1">
                 <div class="min-w-0">
-                    <p class="font-bold text-amber-300 truncate">${roomName} <span class="text-[9px] text-slate-400">(${modeLabel})</span></p>
+                    <p class="font-bold text-amber-300 truncate">${roomName} ${hasPin ? '🔒' : ''}</p>
                     <p class="text-slate-400 truncate">Host: ${host} · ${playerCount}/${maxPlayers} Jogadores</p>
                 </div>
-                <button type="button" data-room-id="${roomId}" class="join-online-room-button bg-amber-600 hover:bg-amber-500 text-black font-bold px-3 py-1 rounded cursor-pointer whitespace-nowrap">
+                <button type="button" data-room-id="${roomId}" data-has-pin="${hasPin}" class="join-online-room-button bg-amber-600 hover:bg-amber-500 text-black font-bold px-3 py-1 rounded cursor-pointer whitespace-nowrap">
                     Entrar
                 </button>
             </div>
@@ -299,17 +299,24 @@ export function renderRoomsListUI(rooms) {
     container.querySelectorAll('.join-online-room-button').forEach(button => {
         button.addEventListener('click', () => {
             const roomId = button.getAttribute('data-room-id');
+            const hasPin = button.getAttribute('data-has-pin') === 'true';
+            
+            let enteredPin = '';
+            if (hasPin) {
+                enteredPin = prompt('Esta sala é protegida por PIN. Insira a senha:') || '';
+            }
+
             if (roomId) {
                 currentJoinedOnlineRoomId = roomId;
                 onlineRoomStarted = false;
                 onlineBoardReady = false;
 
-                const joinPayload = {
+                emitSocket('join_room', {
                     roomId,
+                    pin: enteredPin,
                     player: getOnlinePlayerPayload(),
                     accountEmail: typeof currentAuthenticatedAccount !== 'undefined' ? currentAuthenticatedAccount : null
-                };
-                emitSocket('join_room', joinPayload);
+                });
             }
         });
     });
