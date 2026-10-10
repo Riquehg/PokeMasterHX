@@ -53,8 +53,8 @@ const io = new Server(server, {
         methods: ['GET', 'POST']
     },
     maxHttpBufferSize: 10e6,
-    pingTimeout: 60000,   // 60 segundos sem resposta antes de dropar o cliente
-    pingInterval: 25000   // Envia um ping a cada 25 segundos para manter a conexão ativa
+    pingTimeout: 60000,
+    pingInterval: 25000
 });
 
 // ============================================================
@@ -63,8 +63,6 @@ const io = new Server(server, {
 
 let activeRooms = [];
 let globalFeed = [];
-
-const MAX_FEED_ITEMS = 80;
 
 // ============================================================
 // FUNÇÕES UTILITÁRIAS
@@ -119,19 +117,14 @@ function getFirstPlayer(gameState) {
     ) {
         return gameState.players[0];
     }
-
     return null;
 }
 
 function extractTrainerName(gameState, trainerName, profileData, email) {
     const explicitName = sanitizeText(trainerName, 80);
-
-    if (explicitName) {
-        return explicitName;
-    }
+    if (explicitName) return explicitName;
 
     const firstPlayer = getFirstPlayer(gameState);
-
     if (firstPlayer && sanitizeText(firstPlayer.name, 80)) {
         return sanitizeText(firstPlayer.name, 80);
     }
@@ -149,19 +142,15 @@ function extractTrainerName(gameState, trainerName, profileData, email) {
 
 function getGoldFromGameState(gameState, profileData = {}) {
     const firstPlayer = getFirstPlayer(gameState);
-
     if (firstPlayer && Number.isFinite(Number(firstPlayer.gold))) {
         return Number(firstPlayer.gold);
     }
-
     if (Number.isFinite(Number(gameState && gameState.gold))) {
         return Number(gameState.gold);
     }
-
     if (Number.isFinite(Number(profileData && profileData.gold))) {
         return Number(profileData.gold);
     }
-
     return 350;
 }
 
@@ -169,19 +158,11 @@ function getPokedexFromAccount(account) {
     const profileData = safeObject(account.profile_data);
     const gameState = safeObject(account.game_state);
 
-    if (Array.isArray(profileData.pokedex)) {
-        return profileData.pokedex;
-    }
-
-    if (Array.isArray(gameState.pokedex)) {
-        return gameState.pokedex;
-    }
+    if (Array.isArray(profileData.pokedex)) return profileData.pokedex;
+    if (Array.isArray(gameState.pokedex)) return gameState.pokedex;
 
     const firstPlayer = getFirstPlayer(gameState);
-
-    if (firstPlayer && Array.isArray(firstPlayer.pokedex)) {
-        return firstPlayer.pokedex;
-    }
+    if (firstPlayer && Array.isArray(firstPlayer.pokedex)) return firstPlayer.pokedex;
 
     return [];
 }
@@ -226,35 +207,23 @@ function getAccountPublicData(account, email) {
 
 function isColumnMissingError(error, columnName) {
     if (!error) return false;
-
     const text = [
         error.message,
         error.details,
         error.hint,
         error.code
-    ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
+    ].filter(Boolean).join(' ').toLowerCase();
 
     return (
         text.includes(columnName.toLowerCase()) &&
-        (
-            text.includes('column') ||
-            text.includes('schema cache') ||
-            text.includes('does not exist')
-        )
+        (text.includes('column') || text.includes('schema cache') || text.includes('does not exist'))
     );
 }
 
 async function updateAccountByEmail(email, payload) {
     const normalizedEmail = normalizeEmail(email);
-
     if (!normalizedEmail) {
-        return {
-            data: null,
-            error: new Error('E-mail inválido.')
-        };
+        return { data: null, error: new Error('E-mail inválido.') };
     }
 
     let { data, error } = await supabase
@@ -277,10 +246,6 @@ async function updateAccountByEmail(email, payload) {
 
         data = fallbackResult.data;
         error = fallbackResult.error;
-
-        console.warn(
-            '⚠ profile_data não foi salvo porque a coluna não existe na tabela accounts.'
-        );
     }
 
     return { data, error };
@@ -288,7 +253,6 @@ async function updateAccountByEmail(email, payload) {
 
 async function findAccountByEmail(email) {
     const normalizedEmail = normalizeEmail(email);
-
     return await supabase
         .from('accounts')
         .select('*')
@@ -342,33 +306,23 @@ function getSocketPlayerData(socket, payloadPlayer = null) {
 
 function removeSocketFromRooms(socketId) {
     const removedRooms = [];
-
     activeRooms = activeRooms.filter(room => {
-        const wasInside = room.players.some(
-            player => player.socketId === socketId
-        );
-
-        room.players = room.players.filter(
-            player => player.socketId !== socketId
-        );
+        const wasInside = room.players.some(player => player.socketId === socketId);
+        room.players = room.players.filter(player => player.socketId !== socketId);
 
         if (wasInside && room.players.length === 0) {
             removedRooms.push(room.id);
             return false;
         }
-
         if (wasInside && room.hostSocketId === socketId) {
             const nextHost = room.players[0];
-
             if (nextHost) {
                 room.hostSocketId = nextHost.socketId;
                 room.host = nextHost.name;
             }
         }
-
         return true;
     });
-
     return removedRooms;
 }
 
@@ -383,7 +337,6 @@ io.on('connection', socket => {
     socket.data.trainerName = 'Treinador';
     socket.data.avatarId = 1;
 
-    // 🛡️ RECONEXÃO BLINDADA: Reassocia o socket à sala ativa do utilizador
     socket.on('reconnect_sync', payload => {
         const roomId = sanitizeText(payload?.roomId, 120);
         const email = normalizeEmail(payload?.email || payload?.accountEmail);
@@ -394,7 +347,7 @@ io.on('connection', socket => {
             if (email) {
                 const existingPlayer = room.players.find(p => normalizeEmail(p.email) === email);
                 if (existingPlayer) {
-                    existingPlayer.socketId = socket.id; // Atualiza o ID do socket novo
+                    existingPlayer.socketId = socket.id;
                 }
             }
             socket.emit('room_joined', {
@@ -430,7 +383,6 @@ io.on('connection', socket => {
             }
 
             const accountResult = await findAccountByEmail(email);
-
             if (accountResult.error) {
                 socket.emit('login_response', { success: false, message: `Erro no banco de dados: ${accountResult.error.message}` });
                 return;
@@ -450,7 +402,6 @@ io.on('connection', socket => {
                 };
 
                 let insertResult = await supabase.from('accounts').insert([insertPayload]).select().single();
-
                 if (insertResult.error && isColumnMissingError(insertResult.error, 'profile_data')) {
                     delete insertPayload.profile_data;
                     insertResult = await supabase.from('accounts').insert([insertPayload]).select().single();
@@ -471,7 +422,7 @@ io.on('connection', socket => {
                     isNew: true,
                     accountEmail: email,
                     accountData: getAccountPublicData(account, email),
-                    message: 'Conta criada com sucesso. Crie o seu personagem.'
+                    message: 'Conta criada com sucesso.'
                 });
                 return;
             }
@@ -495,11 +446,10 @@ io.on('connection', socket => {
             });
         } catch (error) {
             console.error('🔥 Erro crítico no login:', error);
-            socket.emit('login_response', { success: false, message: 'Erro interno do servidor ao processar o login.' });
+            socket.emit('login_response', { success: false, message: 'Erro interno do servidor.' });
         }
     });
 
-    // ☁️ Rota oficial para carregar o progresso do usuário da nuvem
     socket.on('request_saved_game', async payload => {
         try {
             const email = normalizeEmail(payload?.email || payload?.accountEmail || socket.data.email);
@@ -523,7 +473,7 @@ io.on('connection', socket => {
             });
         } catch (error) {
             console.error('🔥 Erro ao buscar save da nuvem:', error);
-            socket.emit('saved_game_response', { success: false, message: 'Erro interno ao carregar dados.' });
+            socket.emit('saved_game_response', { success: false, message: 'Erro interno.' });
         }
     });
 
@@ -539,7 +489,6 @@ io.on('connection', socket => {
             }
 
             let profileData = isPlainObject(payload?.profileData) ? payload.profileData : null;
-
             if (!profileData) {
                 const existingAccount = await findAccountByEmail(email);
                 if (!existingAccount.error && existingAccount.data && isPlainObject(existingAccount.data.profile_data)) {
@@ -572,9 +521,8 @@ io.on('connection', socket => {
             };
 
             const result = await updateAccountByEmail(email, updatePayload);
-
             if (result.error) {
-                socket.emit('save_response', { success: false, message: 'Não foi possível salvar o progresso.' });
+                socket.emit('save_response', { success: false, message: 'Erro ao salvar.' });
                 return;
             }
 
@@ -582,15 +530,148 @@ io.on('connection', socket => {
             socket.data.trainerName = trainerName;
             socket.data.avatarId = profileData.avatarId;
 
-            socket.emit('save_response', { success: true, message: 'Progresso salvo com sucesso.', trainerName, profileData });
+            socket.emit('save_response', { success: true, message: 'Salvo com sucesso.', trainerName, profileData });
         } catch (error) {
             console.error('🔥 Erro crítico ao salvar:', error);
-            socket.emit('save_response', { success: false, message: 'Erro interno ao salvar o progresso.' });
+            socket.emit('save_response', { success: false, message: 'Erro interno.' });
         }
     });
 
     // ========================================================
-    // SALAS ONLINE (COM SUPORTE A PIN, TEMPO REAL E MODOS)
+    // PAINEL ADMINISTRATIVO E CONFIGURAÇÕES DO SUPABASE
+    // ========================================================
+
+    socket.on('admin_get_users', async () => {
+        try {
+            const { data, error } = await supabase
+                .from('accounts')
+                .select('email, character_name, profile_data, updated_at, game_state');
+
+            if (error) {
+                socket.emit('admin_error', { message: 'Erro ao buscar contas do Supabase.' });
+                return;
+            }
+
+            const usersList = (data || []).map(acc => {
+                const profile = safeObject(acc.profile_data);
+                const gameState = safeObject(acc.game_state);
+                const firstPlayer = getFirstPlayer(gameState);
+
+                return {
+                    email: acc.email,
+                    trainerName: acc.character_name || profile.trainerName || firstPlayer?.name || 'Treinador',
+                    lastLogin: acc.updated_at || new Date().toISOString(),
+                    gold: getGoldFromGameState(gameState, profile)
+                };
+            });
+
+            socket.emit('admin_users_list', usersList);
+        } catch (err) {
+            console.error('🔥 Erro no admin_get_users:', err);
+            socket.emit('admin_error', { message: 'Erro interno ao listar utilizadores.' });
+        }
+    });
+
+    socket.on('admin_set_daily_pokemon', async payload => {
+        try {
+            const dailyConfig = payload?.dailyConfig;
+            if (!dailyConfig) return;
+
+            await supabase
+                .from('game_config')
+                .upsert({
+                    config_key: 'pokemon_do_dia',
+                    config_value: dailyConfig,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'config_key' });
+
+            io.emit('daily_pokemon_updated', dailyConfig);
+        } catch (err) {
+            console.error('🔥 Erro ao salvar Pokémon do dia:', err);
+        }
+    });
+
+    socket.on('admin_action', async payload => {
+        try {
+            const { action, email, amount, pokemon, itemId, count, newPass } = payload;
+            const targetEmail = normalizeEmail(email);
+            if (!targetEmail) return;
+
+            const accRes = await findAccountByEmail(targetEmail);
+            if (accRes.error || !accRes.data) {
+                socket.emit('admin_action_response', { success: false, message: 'Conta não encontrada.' });
+                return;
+            }
+
+            let account = accRes.data;
+            let gameState = safeObject(account.game_state);
+            let profileData = safeObject(account.profile_data);
+            let firstPlayer = getFirstPlayer(gameState);
+
+            if (action === 'give_gold') {
+                const addGold = Number(amount) || 0;
+                if (firstPlayer) {
+                    firstPlayer.gold = (Number(firstPlayer.gold) || 350) + addGold;
+                }
+                profileData.gold = (Number(profileData.gold) || 350) + addGold;
+                
+                await updateAccountByEmail(targetEmail, { game_state: gameState, profile_data: profileData });
+                socket.emit('admin_action_response', { success: true, message: `Adicionadas ${addGold} moedas a ${targetEmail}.` });
+            } 
+            else if (action === 'give_pokemon') {
+                if (pokemon && pokemon.id) {
+                    const newMon = {
+                        uniqueId: 'mon_' + Date.now(),
+                        id: pokemon.id,
+                        name: pokemon.name || pokemon.id,
+                        level: pokemon.level || 5,
+                        currentHp: 30,
+                        maxHp: 30,
+                        image: `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/001.png`
+                    };
+                    if (!gameState.players) gameState.players = [{}];
+                    if (!gameState.players[0].pcBox) gameState.players[0].pcBox = [];
+                    gameState.players[0].pcBox.push(newMon);
+
+                    await updateAccountByEmail(targetEmail, { game_state: gameState });
+                    socket.emit('admin_action_response', { success: true, message: `Pokémon ${pokemon.name} enviado para a PC Box de ${targetEmail}.` });
+                }
+            } 
+            else if (action === 'give_item') {
+                if (itemId) {
+                    if (!gameState.players) gameState.players = [{}];
+                    if (!gameState.players[0].inventory) gameState.players[0].inventory = [];
+                    
+                    const inv = gameState.players[0].inventory;
+                    const existing = inv.find(i => i.id === itemId);
+                    if (existing) {
+                        existing.count = (Number(existing.count) || 1) + (Number(count) || 1);
+                    } else {
+                        inv.push({ id: itemId, name: itemId, count: Number(count) || 1, type: 'item' });
+                    }
+
+                    await updateAccountByEmail(targetEmail, { game_state: gameState });
+                    socket.emit('admin_action_response', { success: true, message: `Item ${itemId} (${count}x) adicionado a ${targetEmail}.` });
+                }
+            } 
+            else if (action === 'reset_password') {
+                if (newPass) {
+                    await supabase.from('accounts').update({ password: newPass }).eq('email', targetEmail);
+                    socket.emit('admin_action_response', { success: true, message: `Senha alterada com sucesso para ${targetEmail}.` });
+                }
+            } 
+            else if (action === 'delete_account') {
+                await supabase.from('accounts').delete().eq('email', targetEmail);
+                socket.emit('admin_action_response', { success: true, message: `Conta ${targetEmail} apagada do Supabase.` });
+            }
+        } catch (err) {
+            console.error('🔥 Erro na ação de admin:', err);
+            socket.emit('admin_action_response', { success: false, message: 'Erro ao executar comando administrativo.' });
+        }
+    });
+
+    // ========================================================
+    // SALAS ONLINE
     // ========================================================
 
     socket.on('get_rooms_list', () => {
@@ -603,14 +684,12 @@ io.on('connection', socket => {
         const allowEarlyStart = Boolean(payload?.allowEarlyStart ?? true);
         const gameMode = sanitizeText(payload?.gameMode, 40) || 'fresh_start';
 
-        const existingRoom = getRoomBySocketId(socket.id);
-        if (existingRoom) {
+        if (getRoomBySocketId(socket.id)) {
             socket.emit('room_joined', { success: false, message: 'Você já está em uma sala.' });
             return;
         }
 
         const playerData = getSocketPlayerData(socket, payload?.player);
-
         const room = {
             id: `room_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
             name: roomName,
@@ -643,7 +722,6 @@ io.on('connection', socket => {
         });
 
         emitRoomsList();
-        console.log(`🏠 Sala criada: ${room.name} por ${playerData.name} [Modo: ${gameMode}]`);
     });
 
     socket.on('join_room', payload => {
@@ -667,12 +745,12 @@ io.on('connection', socket => {
         }
 
         if (room.players.length >= MAX_ROOM_PLAYERS) {
-            socket.emit('room_joined', { success: false, message: 'Esta sala já atingiu o limite de 4 jogadores.' });
+            socket.emit('room_joined', { success: false, message: 'Sala cheia.' });
             return;
         }
 
         if (room.status === 'playing') {
-            socket.emit('room_joined', { success: false, message: 'A partida desta sala já começou.' });
+            socket.emit('room_joined', { success: false, message: 'A partida já começou.' });
             return;
         }
 
@@ -698,17 +776,13 @@ io.on('connection', socket => {
         });
 
         io.to(room.id).emit('room_state', { roomId: room.id, players: room.players });
-        io.to(room.id).emit('room_notification', { message: `${playerData.name} entrou na sala.` });
-
         emitRoomsList();
-        console.log(`👥 ${playerData.name} entrou na sala ${room.name}`);
     });
 
     socket.on('leave_room', () => {
         const room = getRoomBySocketId(socket.id);
         if (!room) return;
 
-        const leavingPlayer = room.players.find(player => player.socketId === socket.id);
         room.players = room.players.filter(player => player.socketId !== socket.id);
         socket.leave(room.id);
 
@@ -719,86 +793,27 @@ io.on('connection', socket => {
                 room.hostSocketId = room.players[0].socketId;
                 room.host = room.players[0].name;
             }
-            if (room.status === 'full') {
-                room.status = 'waiting';
-            }
             io.to(room.id).emit('room_state', { roomId: room.id, players: room.players });
-            io.to(room.id).emit('room_notification', { message: `${leavingPlayer?.name || 'Jogador'} saiu da sala.` });
         }
 
         socket.emit('room_left', { success: true, roomId: room.id });
         emitRoomsList();
     });
 
-    socket.on('start_room_game', async payload => {
+    socket.on('start_room_game', async () => {
         const room = getRoomBySocketId(socket.id);
-
-        if (!room) {
-            socket.emit('room_action_response', { success: false, message: 'Você não está em uma sala.' });
-            return;
-        }
-
-        if (room.hostSocketId !== socket.id) {
-            socket.emit('room_action_response', { success: false, message: 'Somente o anfitrião pode iniciar a partida.' });
-            return;
-        }
-
-        const minRequired = room.allowEarlyStart ? 2 : MAX_ROOM_PLAYERS;
-        if (room.players.length < minRequired) {
-            socket.emit('room_action_response', { success: false, message: `É necessário ter pelo menos ${minRequired} jogadores para iniciar.` });
-            return;
-        }
+        if (!room || room.hostSocketId !== socket.id) return;
 
         room.status = 'playing';
-        const gameMode = room.gameMode || 'fresh_start';
-
-        const preparedPlayers = await Promise.all(room.players.map(async p => {
-            if (gameMode === 'fresh_start') {
-                return {
-                    name: p.name,
-                    avatarId: p.avatarId,
-                    gold: 350,
-                    currentZone: 5,
-                    activeTeam: [],
-                    pcBox: [],
-                    inventory: [
-                        { id: 'ball_poke', name: 'Poké Ball', count: 5, type: 'sphere', value: 1 },
-                        { id: 'potion', name: 'Poção', count: 2, type: 'heal', value: 20 }
-                    ],
-                    badges: [],
-                    equipmentSlots: [null, null]
-                };
-            } else {
-                if (p.email) {
-                    const accRes = await findAccountByEmail(p.email);
-                    if (accRes.data && accRes.data.game_state) {
-                        const existingPlayer = getFirstPlayer(accRes.data.game_state);
-                        if (existingPlayer) {
-                            return {
-                                ...existingPlayer,
-                                name: p.name,
-                                avatarId: p.avatarId || existingPlayer.avatarId || 1,
-                                currentZone: existingPlayer.currentZone || 5,
-                                activeTeam: safeArray(existingPlayer.activeTeam),
-                                pcBox: safeArray(existingPlayer.pcBox),
-                                inventory: safeArray(existingPlayer.inventory),
-                                badges: safeArray(existingPlayer.badges)
-                            };
-                        }
-                    }
-                }
-                return {
-                    name: p.name,
-                    avatarId: p.avatarId || 1,
-                    gold: p.gold || 350,
-                    currentZone: 5,
-                    activeTeam: safeArray(p.activeTeam),
-                    pcBox: safeArray(p.pcBox),
-                    inventory: safeArray(p.inventory),
-                    badges: safeArray(p.badges),
-                    equipmentSlots: safeArray(p.equipmentSlots, [null, null])
-                };
-            }
+        const preparedPlayers = room.players.map(p => ({
+            name: p.name,
+            avatarId: p.avatarId,
+            gold: p.gold || 350,
+            currentZone: 5,
+            activeTeam: safeArray(p.activeTeam),
+            pcBox: safeArray(p.pcBox),
+            inventory: safeArray(p.inventory),
+            badges: safeArray(p.badges)
         }));
 
         room.gameState = {
@@ -814,12 +829,7 @@ io.on('connection', socket => {
         });
 
         emitRoomsList();
-        console.log(`🎮 Partida iniciada na sala ${room.name} [Modo: ${gameMode}] com ${preparedPlayers.length} jogadores.`);
     });
-
-    // ========================================================
-    // RANKING DA LIGA (PONTOS DE MESTRE)
-    // ========================================================
 
     socket.on('get_leaderboard', async () => {
         try {
@@ -827,10 +837,7 @@ io.on('connection', socket => {
                 .from('accounts')
                 .select('email, character_name, game_state, profile_data');
 
-            if (result.error) {
-                socket.emit('leaderboard_response', { success: false, message: result.error.message });
-                return;
-            }
+            if (result.error) return;
 
             const ranking = (result.data || []).map(account => {
                 const pokedex = getPokedexFromAccount(account);
@@ -838,11 +845,8 @@ io.on('connection', socket => {
                 const gameState = safeObject(account.game_state);
                 const player = getFirstPlayer(gameState);
 
-                const badgesCount = Array.isArray(player?.badges) ? player.badges.length : (Array.isArray(profileData.badges) ? profileData.badges.length : 0);
-                const shinyCount = Number(profileData.statistics?.shinyCaptures || 0);
-                const legendaryCount = Number(profileData.statistics?.legendaryCaptures || 0);
-
-                const masterPoints = (pokedex.length * 10) + (shinyCount * 30) + (legendaryCount * 50) + (badgesCount * 100);
+                const badgesCount = Array.isArray(player?.badges) ? player.badges.length : 0;
+                const masterPoints = (pokedex.length * 10) + (badgesCount * 100);
 
                 return {
                     trainerName: extractTrainerName(gameState, account.character_name, profileData, account.email),
@@ -851,31 +855,12 @@ io.on('connection', socket => {
                     pokedexCount: pokedex.length,
                     badgesCount
                 };
-            })
-            .sort((a, b) => b.masterPoints - a.masterPoints)
-            .slice(0, 50);
+            }).sort((a, b) => b.masterPoints - a.masterPoints).slice(0, 50);
 
             socket.emit('leaderboard_response', { success: true, ranking });
         } catch (error) {
             console.error('🔥 Erro no ranking:', error);
-            socket.emit('leaderboard_response', { success: false, message: 'Erro ao carregar o ranking.' });
         }
-    });
-
-    // ========================================================
-    // CHAT E SINCRONIZAÇÃO EM TEMPO REAL DA PARTIDA
-    // ========================================================
-
-    socket.on('lobby_chat_message', payload => {
-        const message = sanitizeText(payload?.message, 500);
-        if (!message) return;
-
-        io.emit('chat_broadcast', {
-            channel: 'lobby',
-            sender: socket.data.trainerName || sanitizeText(payload?.sender, 80) || 'Treinador',
-            text: message,
-            createdAt: new Date().toISOString()
-        });
     });
 
     socket.on('room_chat_message', payload => {
@@ -900,7 +885,6 @@ io.on('connection', socket => {
             if (safeData.gameState) {
                 room.gameState = safeData.gameState;
             }
-
             socket.to(room.id).emit('sync_game_state', {
                 ...safeData,
                 gameState: room.gameState,
@@ -909,10 +893,6 @@ io.on('connection', socket => {
             });
         }
     });
-
-    // ========================================================
-    // DESCONEXÃO
-    // ========================================================
 
     socket.on('disconnect', reason => {
         console.log(`❌ Jogador desconectado: ${socket.id} | Motivo: ${reason}`);
@@ -928,5 +908,4 @@ io.on('connection', socket => {
 server.listen(PORT, () => {
     console.log(`🚀 Servidor Pokémon Master Trainer ativo na porta ${PORT}`);
     console.log(`🗄️ Supabase conectado em: ${SUPABASE_URL}`);
-    console.log(`🏠 Limite de jogadores por sala: ${MAX_ROOM_PLAYERS}`);
 });
