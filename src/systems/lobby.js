@@ -136,6 +136,26 @@ export function showOnlineGameLayout() {
 export function initLobbySocketListeners() {
     if (!socket) return;
 
+    socket.off('rooms_list_response');
+    socket.on('rooms_list_response', (rooms) => {
+        renderRoomsListUI(rooms);
+    });
+
+    socket.off('room_joined');
+    socket.on('room_joined', (response) => {
+        if (response && response.success) {
+            currentJoinedOnlineRoomId = response.roomId;
+            refreshRoomsList();
+        } else if (response && response.message && typeof showCustomPopup === 'function') {
+            showCustomPopup('Erro na Sala', response.message, false);
+        }
+    });
+
+    socket.off('room_state');
+    socket.on('room_state', () => {
+        refreshRoomsList();
+    });
+
     socket.off('chat_broadcast');
     socket.on('chat_broadcast', (data) => {
         const chatBox = document.getElementById('lobby-chat-messages');
@@ -202,7 +222,7 @@ export function createOnlineRoom() {
                 <div>
                     <label class="block text-[10px] text-amber-300 font-bold mb-1">Modo de Jogo & Balanceamento:</label>
                     <select id="new-room-mode-select" class="w-full bg-black/60 border border-amber-600/60 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400">
-                        <option value="fresh_start">Fresh Start (Competitivo do Zero - Com opção de salvar na PC Box)</option>
+                        <option value="fresh_start">Fresh Start (Competitivo do Zero)</option>
                         <option value="legacy">Livre / Legacy (Usa as equipas e itens do Solo)</option>
                     </select>
                 </div>
@@ -240,7 +260,7 @@ window.submitCreateOnlineRoom = function() {
         maxPlayers: 4,
         allowEarlyStart: true,
         pin: roomPin,
-        host: typeof currentAuthenticatedAccount !== 'undefined' && currentAuthenticatedAccount ? currentAuthenticatedAccount : (getCurrentPlayer()?.name || 'Treinador')
+        player: getOnlinePlayerPayload()
     });
 };
 
