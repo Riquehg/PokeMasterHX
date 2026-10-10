@@ -133,11 +133,9 @@ export function showOnlineGameLayout() {
     }
 }
 
-// Inicializa ouvintes de chat e ranking do lobby se o socket estiver ativo
 export function initLobbySocketListeners() {
     if (!socket) return;
 
-    // Escuta mensagens do chat global do lobby
     socket.off('chat_broadcast');
     socket.on('chat_broadcast', (data) => {
         const chatBox = document.getElementById('lobby-chat-messages');
@@ -152,7 +150,6 @@ export function initLobbySocketListeners() {
         }
     });
 
-    // Escuta a resposta do Ranking de Treinadores
     socket.off('leaderboard_response');
     socket.on('leaderboard_response', (response) => {
         const rankingBox = document.getElementById('lobby-ranking-list');
@@ -179,6 +176,7 @@ export function requestLobbyRanking() {
     emitSocket('get_leaderboard');
 }
 
+// Criação de Sala Online com Modos (Fresh Start vs Legacy), PIN e Limites
 export function createOnlineRoom() {
     let modal = document.getElementById('create-room-config-modal');
     if (!modal) {
@@ -194,16 +192,27 @@ export function createOnlineRoom() {
                 <h3 class="text-xs font-black text-amber-400 font-cinzel">🛠️ CRIAR SALA ONLINE</h3>
                 <button onclick="document.getElementById('create-room-config-modal').remove()" class="text-amber-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-amber-800 cursor-pointer">✕</button>
             </div>
+            
             <div class="space-y-3">
                 <div>
                     <label class="block text-[10px] text-amber-300 font-bold mb-1">Nome da Sala:</label>
                     <input id="new-room-name-input" type="text" value="Sala de Kanto" class="w-full bg-black/60 border border-amber-600/60 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400">
                 </div>
+
+                <div>
+                    <label class="block text-[10px] text-amber-300 font-bold mb-1">Modo de Jogo & Balanceamento:</label>
+                    <select id="new-room-mode-select" class="w-full bg-black/60 border border-amber-600/60 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400">
+                        <option value="fresh_start">Fresh Start (Competitivo do Zero - Com opção de salvar na PC Box)</option>
+                        <option value="legacy">Livre / Legacy (Usa as equipas e itens do Solo)</option>
+                    </select>
+                </div>
+
                 <div>
                     <label class="block text-[10px] text-amber-300 font-bold mb-1">Senha PIN (Opcional):</label>
                     <input id="new-room-pin-input" type="text" placeholder="Deixe em branco para sala pública" class="w-full bg-black/60 border border-amber-600/60 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400">
                 </div>
             </div>
+
             <div class="flex gap-2 pt-2">
                 <button onclick="document.getElementById('create-room-config-modal').remove()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs cursor-pointer">Cancelar</button>
                 <button onclick="window.submitCreateOnlineRoom()" class="flex-2 bg-amber-600 hover:bg-amber-500 text-black font-black py-2.5 rounded-xl text-xs uppercase cursor-pointer">Criar Sala</button>
@@ -215,9 +224,11 @@ export function createOnlineRoom() {
 
 window.submitCreateOnlineRoom = function() {
     const nameInput = document.getElementById('new-room-name-input');
+    const modeSelect = document.getElementById('new-room-mode-select');
     const pinInput = document.getElementById('new-room-pin-input');
     
     const roomName = nameInput ? nameInput.value.trim() : 'Sala de Kanto';
+    const gameMode = modeSelect ? modeSelect.value : 'fresh_start';
     const roomPin = pinInput ? pinInput.value.trim() : '';
 
     if (!roomName) return;
@@ -225,6 +236,7 @@ window.submitCreateOnlineRoom = function() {
 
     emitSocket('create_room', {
         roomName,
+        gameMode,
         maxPlayers: 4,
         allowEarlyStart: true,
         pin: roomPin,
@@ -272,7 +284,6 @@ export function renderRoomsListUI(rooms) {
     const container = document.getElementById('rooms-list-box') || document.getElementById('online-rooms-list-container');
     if (!container) return;
 
-    // Injeta os painéis de Chat e Ranking se não existirem
     let extraPanel = document.getElementById('lobby-extras-panel');
     if (!extraPanel) {
         const parentDiv = container.parentElement;
@@ -307,7 +318,6 @@ export function renderRoomsListUI(rooms) {
         }
     }
 
-    // Painel do Botão Iniciar Partida
     let startPanel = document.getElementById('lobby-start-game-panel');
     if (!startPanel) {
         const parentDiv = container.parentElement;
