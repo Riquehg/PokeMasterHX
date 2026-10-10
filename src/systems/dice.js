@@ -6,6 +6,7 @@ import { gameState, getCurrentPlayer, movementState } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
 import { BOARD_WAYPOINTS, getValidDestinations, renderBoardMap, renderBoardMapWithHighlights, moveTokenToWaypoint } from './map.js';
 import { openEncounterModalWithPokemon } from './encounter.js';
+import { socket } from '../core/socket.js';
 
 // ------------------------------------------------------------
 // CONFIGURAÇÃO DE EVENTOS DA HUD (Vincula o clique do dado)
@@ -24,11 +25,28 @@ export function setupDiceListeners() {
     if (passTurnBtn && !passTurnBtn.dataset.listenerAttached) {
         passTurnBtn.dataset.listenerAttached = "true";
         passTurnBtn.onclick = () => {
+            // 🛡️ TRAVA DE SEGURANÇA ONLINE: Apenas o dono do turno atual pode passá-lo
+            if (gameState.online && gameState.currentPlayerIndex !== gameState.myPlayerIndex) {
+                if (typeof showCustomPopup === 'function') {
+                    showCustomPopup("Ação Bloqueada", "Não pode passar o turno de outro jogador.", false);
+                }
+                return;
+            }
+
             resetTurnDiceState();
-            // Avança o índice do jogador atual se houver multiplayer local ou IA
+            // Avança o índice do jogador atual se houver multiplayer local ou online
             if (typeof gameState !== 'undefined' && gameState.players && Array.isArray(gameState.players)) {
                 gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
             }
+
+            // Sincroniza a mudança de turno com os outros jogadores na sala online
+            if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function') {
+                socket.emit('update_game_state', {
+                    type: 'pass_turn',
+                    gameState: gameState
+                });
+            }
+
             if (typeof showCustomPopup === 'function') {
                 showCustomPopup("Passagem de Turno", "🔄 O turno foi passado. O dado foi liberado para rolar novamente!", true);
             }
@@ -190,6 +208,14 @@ export function resetTurnDiceState() {
 // ------------------------------------------------------------
 
 export function rollDiceForMovement() {
+    // 🛡️ TRAVA DE SEGURANÇA ONLINE: Impede jogar fora do turno
+    if (gameState.online && gameState.currentPlayerIndex !== gameState.myPlayerIndex) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup("Não é o seu turno!", "Aguarde o outro jogador concluir a jogada.", false);
+        }
+        return;
+    }
+
     if (movementState.isMoving) {
         if (typeof showCustomPopup === 'function') {
             showCustomPopup(
