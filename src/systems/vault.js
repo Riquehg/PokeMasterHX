@@ -3,9 +3,11 @@
 
 import { gameState, getCurrentPlayer, ensureValidGameState } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
+import { emitSocket } from '../core/socket.js';
 
 export function saveMonsterToVault(uniqueId) {
     const cp = getCurrentPlayer();
+    if (!cp) return;
     
     let monster = cp.activeTeam ? cp.activeTeam.find(m => m.uniqueId === uniqueId) : null;
     if (!monster && cp.pcBox) {
@@ -19,25 +21,29 @@ export function saveMonsterToVault(uniqueId) {
         return;
     }
 
-    let vault = [];
-    try {
-        const rawVault = localStorage.getItem('pokemon_master_trainer_vault');
-        if (rawVault) vault = JSON.parse(rawVault);
-    } catch (e) {
-        vault = [];
+    // Inicializa o cofre global no estado se não existir
+    if (!Array.isArray(gameState.globalVault)) {
+        gameState.globalVault = [];
     }
-    
-    if (vault.some(m => m.uniqueId === monster.uniqueId)) {
+
+    if (gameState.globalVault.some(m => m.uniqueId === monster.uniqueId)) {
         if (typeof showCustomPopup === 'function') {
             showCustomPopup("Aviso", "Este Pokémon já se encontra guardado no Cofre Global!", false);
         }
         return;
     }
 
-    const vaultMon = { ...monster, currentHp: monster.maxHp || monster.hp };
-    vault.push(vaultMon);
+    const vaultMon = { ...monster, currentHp: monster.maxHp || monster.hp || 20 };
+    gameState.globalVault.push(vaultMon);
     
-    localStorage.setItem('pokemon_master_trainer_vault', JSON.stringify(vault));
+    saveGameProgress();
+    if (gameState.online) {
+        emitSocket('update_game_state', {
+            type: 'vault_updated',
+            gameState: gameState
+        });
+    }
+
     if (typeof showCustomPopup === 'function') {
         showCustomPopup("📦 Guardado no Cofre!", `O teu ${vaultMon.name} (Nv.${vaultMon.level || 1}) foi guardado com sucesso no Cofre Global! Podes resgatá-lo numa nova partida.`, true);
     }
@@ -69,8 +75,8 @@ export function closeVaultModal() {
 
 export function renderVaultModalContent(modalElement) {
     const cp = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[0] || {});
-    const activeTeam = cp.activeTeam || [];
-    const pcBox = cp.pcBox || cp.box || [];
+    const activeTeam = Array.isArray(cp.activeTeam) ? cp.activeTeam : [];
+    const pcBox = Array.isArray(cp.pcBox) ? cp.pcBox : (Array.isArray(cp.box) ? cp.box : []);
 
     // Renderiza Slots Ativos (Equipe)
     let activeSlotsHtml = '';
@@ -158,12 +164,17 @@ export function renderVaultModalContent(modalElement) {
 
 export function movePokemonToBox(teamIndex) {
     const cp = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[0] || {});
-    if (!cp.activeTeam || !cp.activeTeam[teamIndex]) return;
+    if (!cp || !cp.activeTeam || !cp.activeTeam[teamIndex]) return;
 
-    if (!cp.pcBox) cp.pcBox = [];
+    if (!Array.isArray(cp.pcBox)) cp.pcBox = [];
 
     const removedMon = cp.activeTeam.splice(teamIndex, 1)[0];
     cp.pcBox.push(removedMon);
+
+    saveGameProgress();
+    if (gameState.online) {
+        emitSocket('update_game_state', { type: 'team_updated', gameState: gameState });
+    }
 
     const modal = document.getElementById('global-vault-modal');
     if (modal) renderVaultModalContent(modal);
@@ -173,9 +184,9 @@ export function movePokemonToBox(teamIndex) {
 
 export function movePokemonToTeam(boxIndex) {
     const cp = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[0] || {});
-    if (!cp.pcBox || !cp.pcBox[boxIndex]) return;
+    if (!cp || !cp.pcBox || !cp.pcBox[boxIndex]) return;
 
-    if (!cp.activeTeam) cp.activeTeam = [];
+    if (!Array.isArray(cp.activeTeam)) cp.activeTeam = [];
     if (cp.activeTeam.length >= 6) {
         if (typeof showCustomPopup === 'function') {
             showCustomPopup('Equipe Cheia', 'Sua equipe ativa já possui 6 Pokémon. Guarde um na Box antes de adicionar outro.', false);
@@ -185,6 +196,11 @@ export function movePokemonToTeam(boxIndex) {
 
     const selectedMon = cp.pcBox.splice(boxIndex, 1)[0];
     cp.activeTeam.push(selectedMon);
+
+    saveGameProgress();
+    if (gameState.online) {
+        emitSocket('update_game_state', { type: 'team_updated', gameState: gameState });
+    }
 
     const modal = document.getElementById('global-vault-modal');
     if (modal) renderVaultModalContent(modal);
