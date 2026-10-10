@@ -1,12 +1,13 @@
 // --- src/systems/map.js ---
 // Módulo do Tabuleiro, Caminhos e Multiplayer Sincronizado (Versão Integrada e Funcional)
 
-import { SUPABASE_STORAGE_URL, FULL_MAP_IMAGE } from '../config/constants.js';
-import { gameState, getCurrentPlayer, movementState, ensureValidGameState } from '../core/state.js';
-import { saveGameProgress } from '../core/storage.js';
-import { openEncounterModalWithPokemon } from './encounter.js';
-import { MONSTER_CATALOG } from '../config/cards-data.js';
-import { initiateGymSequence, GYM_LEADERS_CATALOG } from './gym.js'; // <-- ADIÇÃO CRUCIAL: Importa o módulo de ginásios
+import { SUPABASE_STORAGE_URL, FULL_MAP_IMAGE } from '../config/constants.js';[cite: 9]
+import { gameState, getCurrentPlayer, movementState, ensureValidGameState } from '../core/state.js';[cite: 9]
+import { saveGameProgress } from '../core/storage.js';[cite: 9]
+import { openEncounterModalWithPokemon } from './encounter.js';[cite: 9]
+import { MONSTER_CATALOG } from '../config/cards-data.js';[cite: 9]
+import { initiateGymSequence, GYM_LEADERS_CATALOG } from './gym.js';[cite: 9]
+import { showOnlineGameLayout, applyOnlineRoomState } from './lobby.js'; // <-- ADIÇÃO CRUCIAL PARA INICIAR O JOGO ONLINE
 
 // ADIÇÃO CRUCIAL: Garantir que o gestor global dos Pokémon do tabuleiro existe
 if (typeof window.boardPokemonCards === 'undefined') {
@@ -16,140 +17,140 @@ const boardPokemonCards = window.boardPokemonCards;
 
 export const BOARD_WAYPOINTS = [
     // --- HEXÁGONO A ---
-    { id: 5, name: "Inicio Pallet", hexagon: "A", top: 61.2, left: 6.7, type: "city", color: "rosa", requiredType: "", connections: [6] },
-    { id: 6, name: "casa_6", hexagon: "A", top: 72.2, left: 7.7, type: "pokemon", color: "rosa", requiredType: "", connections: [7] },
-    { id: 7, name: "casa_7", hexagon: "A", top: 81.5, left: 8.2, type: "pokemon", color: "rosa", requiredType: "", connections: [8] },
-    { id: 8, name: "casa_8", hexagon: "A", top: 89.6, left: 9.9, type: "pokemon", color: "rosa", requiredType: "", connections: [9] },
-    { id: 9, name: "casa_9", hexagon: "A", top: 78.6, left: 13.3, type: "pokemon", color: "rosa", requiredType: "", connections: [10] },
-    { id: 10, name: "casa_10", hexagon: "A", top: 69.4, left: 11.4, type: "event", color: "rosa", requiredType: "", connections: [11] },
-    { id: 11, name: "casa_11", hexagon: "A", top: 65.5, left: 15.6, type: "event", color: "rosa", requiredType: "", connections: [12, 14] },
-    { id: 12, name: "casa_12", hexagon: "A", top: 74.1, left: 17.7, type: "pokemon", color: "rosa", requiredType: "", connections: [9, 11, 13] },
-    { id: 13, name: "casa_13", hexagon: "A", top: 70.3, left: 22.2, type: "event", color: "rosa", requiredType: "", connections: [12, 32] },
-    { id: 14, name: "casa_14", hexagon: "A", top: 57.5, left: 12.9, type: "pokemon", color: "rosa", requiredType: "", connections: [11, 15] },
-    { id: 15, name: "casa_15", hexagon: "A", top: 53.1, left: 17.5, type: "pokemon", color: "rosa", requiredType: "", connections: [14, 16] },
+    { id: 5, name: "Inicio Pallet", hexagon: "A", top: 61.2, left: 6.7, type: "city", color: "rosa", requiredType: "", connections: [6] },[cite: 9]
+    { id: 6, name: "casa_6", hexagon: "A", top: 72.2, left: 7.7, type: "pokemon", color: "rosa", requiredType: "", connections: [7] },[cite: 9]
+    { id: 7, name: "casa_7", hexagon: "A", top: 81.5, left: 8.2, type: "pokemon", color: "rosa", requiredType: "", connections: [8] },[cite: 9]
+    { id: 8, name: "casa_8", hexagon: "A", top: 89.6, left: 9.9, type: "pokemon", color: "rosa", requiredType: "", connections: [9] },[cite: 9]
+    { id: 9, name: "casa_9", hexagon: "A", top: 78.6, left: 13.3, type: "pokemon", color: "rosa", requiredType: "", connections: [10] },[cite: 9]
+    { id: 10, name: "casa_10", hexagon: "A", top: 69.4, left: 11.4, type: "event", color: "rosa", requiredType: "", connections: [11] },[cite: 9]
+    { id: 11, name: "casa_11", hexagon: "A", top: 65.5, left: 15.6, type: "event", color: "rosa", requiredType: "", connections: [12, 14] },[cite: 9]
+    { id: 12, name: "casa_12", hexagon: "A", top: 74.1, left: 17.7, type: "pokemon", color: "rosa", requiredType: "", connections: [9, 11, 13] },[cite: 9]
+    { id: 13, name: "casa_13", hexagon: "A", top: 70.3, left: 22.2, type: "event", color: "rosa", requiredType: "", connections: [12, 32] },[cite: 9]
+    { id: 14, name: "casa_14", hexagon: "A", top: 57.5, left: 12.9, type: "pokemon", color: "rosa", requiredType: "", connections: [11, 15] },[cite: 9]
+    { id: 15, name: "casa_15", hexagon: "A", top: 53.1, left: 17.5, type: "pokemon", color: "rosa", requiredType: "", connections: [14, 16] },[cite: 9]
 
     // --- HEXÁGONO B ---
-    { id: 16, name: "casa_16", hexagon: "B", top: 44.4, left: 19.4, type: "pokemon", color: "rosa", requiredType: "", connections: [15, 17, 30] },
-    { id: 17, name: "casa_17", hexagon: "B", top: 39.3, left: 15.3, type: "event", color: "rosa", requiredType: "", connections: [16, 18] },
-    { id: 18, name: "casa_18", hexagon: "B", top: 28.9, left: 15.4, type: "pokemon", color: "rosa", requiredType: "", connections: [17, 19] },
-    { id: 19, name: "casa_19", hexagon: "B", top: 26.5, left: 19.6, type: "pokemon", color: "verde", requiredType: "", connections: [18, 20] },
-    { id: 20, name: "Cerulean City", hexagon: "B", top: 31.7, left: 24.8, type: "city", color: "verde", requiredType: "", connections: [19, 21, 28] },
-    { id: 21, name: "casa_21", hexagon: "B", top: 21.0, left: 23.4, type: "event", color: "verde", requiredType: "", connections: [20, 22, 31] },
-    { id: 22, name: "casa_22", hexagon: "B", top: 6.7, left: 22.7, type: "pokemon", color: "verde", requiredType: "", connections: [21, 23] },
-    { id: 23, name: "casa_23", hexagon: "B", top: 8.1, left: 27.5, type: "event", color: "verde", requiredType: "", connections: [22, 24] },
-    { id: 24, name: "casa_24", hexagon: "B", top: 15.1, left: 31.5, type: "pokemon", color: "verde", requiredType: "", connections: [23, 25] },
-    { id: 25, name: "casa_25", hexagon: "B", top: 30.0, left: 29.4, type: "event", color: "verde", requiredType: "", connections: [24, 26] },
-    { id: 26, name: "casa_26", hexagon: "B", top: 36.7, left: 32.9, type: "pokemon", color: "verde", requiredType: "", connections: [25, 27, 48] },
-    { id: 27, name: "casa_27", hexagon: "B", top: 42.2, left: 30.3, type: "event", color: "verde", requiredType: "", connections: [26, 28, 43] },
-    { id: 28, name: "casa_28", hexagon: "B", top: 41.5, left: 26.4, type: "pokemon", color: "verde", requiredType: "", connections: [20, 27, 29] },
-    { id: 29, name: "casa_29", hexagon: "B", top: 49.3, left: 26.5, type: "event", color: "verde", requiredType: "", connections: [28, 30] },
-    { id: 30, name: "casa_30", hexagon: "B", top: 50.3, left: 22.6, type: "event", color: "verde", requiredType: "", connections: [16, 29] },
-    { id: 31, name: "casa_31", hexagon: "B", top: 14.1, left: 26.6, type: "pokemon", color: "azul", requiredType: "rock", connections: [21] },
+    { id: 16, name: "casa_16", hexagon: "B", top: 44.4, left: 19.4, type: "pokemon", color: "rosa", requiredType: "", connections: [15, 17, 30] },[cite: 9]
+    { id: 17, name: "casa_17", hexagon: "B", top: 39.3, left: 15.3, type: "event", color: "rosa", requiredType: "", connections: [16, 18] },[cite: 9]
+    { id: 18, name: "casa_18", hexagon: "B", top: 28.9, left: 15.4, type: "pokemon", color: "rosa", requiredType: "", connections: [17, 19] },[cite: 9]
+    { id: 19, name: "casa_19", hexagon: "B", top: 26.5, left: 19.6, type: "pokemon", color: "verde", requiredType: "", connections: [18, 20] },[cite: 9]
+    { id: 20, name: "Cerulean City", hexagon: "B", top: 31.7, left: 24.8, type: "city", color: "verde", requiredType: "", connections: [19, 21, 28] },[cite: 9]
+    { id: 21, name: "casa_21", hexagon: "B", top: 21.0, left: 23.4, type: "event", color: "verde", requiredType: "", connections: [20, 22, 31] },[cite: 9]
+    { id: 22, name: "casa_22", hexagon: "B", top: 6.7, left: 22.7, type: "pokemon", color: "verde", requiredType: "", connections: [21, 23] },[cite: 9]
+    { id: 23, name: "casa_23", hexagon: "B", top: 8.1, left: 27.5, type: "event", color: "verde", requiredType: "", connections: [22, 24] },[cite: 9]
+    { id: 24, name: "casa_24", hexagon: "B", top: 15.1, left: 31.5, type: "pokemon", color: "verde", requiredType: "", connections: [23, 25] },[cite: 9]
+    { id: 25, name: "casa_25", hexagon: "B", top: 30.0, left: 29.4, type: "event", color: "verde", requiredType: "", connections: [24, 26] },[cite: 9]
+    { id: 26, name: "casa_26", hexagon: "B", top: 36.7, left: 32.9, type: "pokemon", color: "verde", requiredType: "", connections: [25, 27, 48] },[cite: 9]
+    { id: 27, name: "casa_27", hexagon: "B", top: 42.2, left: 30.3, type: "event", color: "verde", requiredType: "", connections: [26, 28, 43] },[cite: 9]
+    { id: 28, name: "casa_28", hexagon: "B", top: 41.5, left: 26.4, type: "pokemon", color: "verde", requiredType: "", connections: [20, 27, 29] },[cite: 9]
+    { id: 29, name: "casa_29", hexagon: "B", top: 49.3, left: 26.5, type: "event", color: "verde", requiredType: "", connections: [28, 30] },[cite: 9]
+    { id: 30, name: "casa_30", hexagon: "B", top: 50.3, left: 22.6, type: "event", color: "verde", requiredType: "", connections: [16, 29] },[cite: 9]
+    { id: 31, name: "casa_31", hexagon: "B", top: 14.1, left: 26.6, type: "pokemon", color: "azul", requiredType: "rock", connections: [21] },[cite: 9]
 
     // --- HEXÁGONO C ---
-    { id: 32, name: "casa_32", hexagon: "C", top: 69.7, left: 26.1, type: "pokemon", color: "rosa", requiredType: "", connections: [13, 33, 45] },
-    { id: 33, name: "casa_33", hexagon: "C", top: 72.8, left: 30.0, type: "pokemon", color: "verde", requiredType: "", connections: [32, 34] },
-    { id: 34, name: "casa_34", hexagon: "C", top: 80.2, left: 30.1, type: "event", color: "verde", requiredType: "", connections: [33, 35, 47] },
-    { id: 35, name: "casa_35", hexagon: "C", top: 79.9, left: 34.4, type: "pokemon", color: "verde", requiredType: "", connections: [34, 36] },
-    { id: 36, name: "casa_36", hexagon: "C", top: 84.4, left: 37.5, type: "pokemon", color: "verde", requiredType: "", connections: [35, 37] },
-    { id: 37, name: "casa_37", hexagon: "C", top: 86.2, left: 41.5, type: "event", color: "verde", requiredType: "", connections: [36, 38] },
-    { id: 38, name: "casa_38", hexagon: "C", top: 79.1, left: 43.2, type: "pokemon", color: "verde", requiredType: "", connections: [37, 39, 73] },
-    { id: 39, name: "Pewter City", hexagon: "C", top: 67.6, left: 41.8, type: "city", color: "verde", requiredType: "", connections: [38, 40] },
-    { id: 40, name: "casa_40", hexagon: "C", top: 57.9, left: 42.3, type: "event", color: "verde", requiredType: "", connections: [39, 41, 58] },
-    { id: 41, name: "casa_41", hexagon: "C", top: 60.0, left: 38.3, type: "pokemon", color: "verde", requiredType: "", connections: [40, 42] },
-    { id: 42, name: "casa_42", hexagon: "C", top: 58.2, left: 35.0, type: "pokemon", color: "verde", requiredType: "", connections: [41, 43, 44] },
-    { id: 43, name: "casa_43", hexagon: "C", top: 50.3, left: 33.4, type: "event", color: "verde", requiredType: "", connections: [27, 42, 46] },
-    { id: 44, name: "casa_44", hexagon: "C", top: 64.2, left: 32.3, type: "pokemon", color: "verde", requiredType: "", connections: [42, 45] },
-    { id: 45, name: "casa_45", hexagon: "C", top: 63.7, left: 28.6, type: "event", color: "verde", requiredType: "", connections: [32, 44, 46] },
-    { id: 46, name: "casa_46", hexagon: "C", top: 54.2, left: 29.4, type: "event", color: "verde", requiredType: "flying", connections: [43, 45] },
-    { id: 47, name: "casa_47", hexagon: "C", top: 87.3, left: 30.3, type: "pokemon", color: "rosa", requiredType: "", connections: [34] },
+    { id: 32, name: "casa_32", hexagon: "C", top: 69.7, left: 26.1, type: "pokemon", color: "rosa", requiredType: "", connections: [13, 33, 45] },[cite: 9]
+    { id: 33, name: "casa_33", hexagon: "C", top: 72.8, left: 30.0, type: "pokemon", color: "verde", requiredType: "", connections: [32, 34] },[cite: 9]
+    { id: 34, name: "casa_34", hexagon: "C", top: 80.2, left: 30.1, type: "event", color: "verde", requiredType: "", connections: [33, 35, 47] },[cite: 9]
+    { id: 35, name: "casa_35", hexagon: "C", top: 79.9, left: 34.4, type: "pokemon", color: "verde", requiredType: "", connections: [34, 36] },[cite: 9]
+    { id: 36, name: "casa_36", hexagon: "C", top: 84.4, left: 37.5, type: "pokemon", color: "verde", requiredType: "", connections: [35, 37] },[cite: 9]
+    { id: 37, name: "casa_37", hexagon: "C", top: 86.2, left: 41.5, type: "event", color: "verde", requiredType: "", connections: [36, 38] },[cite: 9]
+    { id: 38, name: "casa_38", hexagon: "C", top: 79.1, left: 43.2, type: "pokemon", color: "verde", requiredType: "", connections: [37, 39, 73] },[cite: 9]
+    { id: 39, name: "Pewter City", hexagon: "C", top: 67.6, left: 41.8, type: "city", color: "verde", requiredType: "", connections: [38, 40] },[cite: 9]
+    { id: 40, name: "casa_40", hexagon: "C", top: 57.9, left: 42.3, type: "event", color: "verde", requiredType: "", connections: [39, 41, 58] },[cite: 9]
+    { id: 41, name: "casa_41", hexagon: "C", top: 60.0, left: 38.3, type: "pokemon", color: "verde", requiredType: "", connections: [40, 42] },[cite: 9]
+    { id: 42, name: "casa_42", hexagon: "C", top: 58.2, left: 35.0, type: "pokemon", color: "verde", requiredType: "", connections: [41, 43, 44] },[cite: 9]
+    { id: 43, name: "casa_43", hexagon: "C", top: 50.3, left: 33.4, type: "event", color: "verde", requiredType: "", connections: [27, 42, 46] },[cite: 9]
+    { id: 44, name: "casa_44", hexagon: "C", top: 64.2, left: 32.3, type: "pokemon", color: "verde", requiredType: "", connections: [42, 45] },[cite: 9]
+    { id: 45, name: "casa_45", hexagon: "C", top: 63.7, left: 28.6, type: "event", color: "verde", requiredType: "", connections: [32, 44, 46] },[cite: 9]
+    { id: 46, name: "casa_46", hexagon: "C", top: 54.2, left: 29.4, type: "event", color: "verde", requiredType: "flying", connections: [43, 45] },[cite: 9]
+    { id: 47, name: "casa_47", hexagon: "C", top: 87.3, left: 30.3, type: "pokemon", color: "rosa", requiredType: "", connections: [34] },[cite: 9]
 
     // --- HEXÁGONO D ---
-    { id: 48, name: "casa_48", hexagon: "D", top: 36.6, left: 37.1, type: "pokemon", color: "azul", requiredType: "", connections: [26, 49] },
-    { id: 49, name: "casa_49", hexagon: "D", top: 34.7, left: 41.9, type: "event", color: "azul", requiredType: "", connections: [48, 50, 59] },
-    { id: 50, name: "casa_50", hexagon: "D", top: 23.2, left: 40.7, type: "pokemon", color: "azul", requiredType: "", connections: [49, 51, 60] },
-    { id: 51, name: "casa_51", hexagon: "D", top: 15.6, left: 41.6, type: "event", color: "azul", requiredType: "", connections: [50, 52] },
-    { id: 52, name: "casa_52", hexagon: "D", top: 8.0, left: 42.9, type: "event", color: "azul", requiredType: "", connections: [51, 53] },
-    { id: 53, name: "casa_53", hexagon: "D", top: 8.3, left: 48.1, type: "event", color: "azul", requiredType: "", connections: [52, 54] },
-    { id: 54, name: "casa_54", hexagon: "D", top: 16.6, left: 49.4, type: "pokemon", color: "azul", requiredType: "", connections: [53, 55, 61] },
-    { id: 55, name: "casa_55", hexagon: "D", top: 26.6, left: 54.4, type: "pokemon", color: "vermelho", requiredType: "", connections: [54, 56, 79] },
-    { id: 56, name: "casa_56", hexagon: "D", top: 38.1, left: 54.7, type: "event", color: "azul", requiredType: "", connections: [55, 57] },
-    { id: 57, name: "casa_57", hexagon: "D", top: 45.5, left: 51.0, type: "pokemon", color: "azul", requiredType: "", connections: [56, 58, 62] },
-    { id: 58, name: "casa_58", hexagon: "D", top: 51.5, left: 45.0, type: "event", color: "azul", requiredType: "", connections: [40, 57, 59] },
-    { id: 59, name: "casa_59", hexagon: "D", top: 44.2, left: 43.2, type: "pokemon", color: "azul", requiredType: "", connections: [49, 58] },
-    { id: 60, name: "Vermilion City", hexagon: "D", top: 30.8, left: 46.7, type: "city", color: "azul", requiredType: "", connections: [50, 61] },
-    { id: 61, name: "casa_61", hexagon: "D", top: 20.3, left: 45.7, type: "pokemon", color: "vermelho", requiredType: "fire", connections: [54, 60] },
+    { id: 48, name: "casa_48", hexagon: "D", top: 36.6, left: 37.1, type: "pokemon", color: "azul", requiredType: "", connections: [26, 49] },[cite: 9]
+    { id: 49, name: "casa_49", hexagon: "D", top: 34.7, left: 41.9, type: "event", color: "azul", requiredType: "", connections: [48, 50, 59] },[cite: 9]
+    { id: 50, name: "casa_50", hexagon: "D", top: 23.2, left: 40.7, type: "pokemon", color: "azul", requiredType: "", connections: [49, 51, 60] },[cite: 9]
+    { id: 51, name: "casa_51", hexagon: "D", top: 15.6, left: 41.6, type: "event", color: "azul", requiredType: "", connections: [50, 52] },[cite: 9]
+    { id: 52, name: "casa_52", hexagon: "D", top: 8.0, left: 42.9, type: "event", color: "azul", requiredType: "", connections: [51, 53] },[cite: 9]
+    { id: 53, name: "casa_53", hexagon: "D", top: 8.3, left: 48.1, type: "event", color: "azul", requiredType: "", connections: [52, 54] },[cite: 9]
+    { id: 54, name: "casa_54", hexagon: "D", top: 16.6, left: 49.4, type: "pokemon", color: "azul", requiredType: "", connections: [53, 55, 61] },[cite: 9]
+    { id: 55, name: "casa_55", hexagon: "D", top: 26.6, left: 54.4, type: "pokemon", color: "vermelho", requiredType: "", connections: [54, 56, 79] },[cite: 9]
+    { id: 56, name: "casa_56", hexagon: "D", top: 38.1, left: 54.7, type: "event", color: "azul", requiredType: "", connections: [55, 57] },[cite: 9]
+    { id: 57, name: "casa_57", hexagon: "D", top: 45.5, left: 51.0, type: "pokemon", color: "azul", requiredType: "", connections: [56, 58, 62] },[cite: 9]
+    { id: 58, name: "casa_58", hexagon: "D", top: 51.5, left: 45.0, type: "event", color: "azul", requiredType: "", connections: [40, 57, 59] },[cite: 9]
+    { id: 59, name: "casa_59", hexagon: "D", top: 44.2, left: 43.2, type: "pokemon", color: "azul", requiredType: "", connections: [49, 58] },[cite: 9]
+    { id: 60, name: "Vermilion City", hexagon: "D", top: 30.8, left: 46.7, type: "city", color: "azul", requiredType: "", connections: [50, 61] },[cite: 9]
+    { id: 61, name: "casa_61", hexagon: "D", top: 20.3, left: 45.7, type: "pokemon", color: "vermelho", requiredType: "fire", connections: [54, 60] },[cite: 9]
 
     // --- HEXÁGONO E ---
-    { id: 62, name: "casa_62", hexagon: "E", top: 54.0, left: 53.5, type: "pokemon", color: "azul", requiredType: "", connections: [57, 63, 75] },
-    { id: 63, name: "casa_63", hexagon: "E", top: 54.8, left: 59.8, type: "event", color: "azul", requiredType: "", connections: [62, 64, 77] },
-    { id: 64, name: "casa_64", hexagon: "E", top: 60.6, left: 65.1, type: "event", color: "azul", requiredType: "", connections: [63, 65] },
-    { id: 65, name: "casa_65", hexagon: "E", top: 71.1, left: 65.5, type: "event", color: "azul", requiredType: "", connections: [64, 66, 104] },
-    { id: 66, name: "casa_66", hexagon: "E", top: 70.3, left: 61.9, type: "pokemon", color: "azul", requiredType: "", connections: [65, 67, 76] },
-    { id: 67, name: "casa_67", hexagon: "E", top: 80.2, left: 62.9, type: "pokemon", color: "azul", requiredType: "", connections: [66, 68] },
-    { id: 68, name: "casa_68", hexagon: "E", top: 88.1, left: 62.0, type: "event", color: "azul", requiredType: "", connections: [67, 69] },
-    { id: 69, name: "casa_69", hexagon: "E", top: 88.6, left: 58.2, type: "pokemon", color: "azul", requiredType: "", connections: [68, 70, 71] },
-    { id: 70, name: "Celadon City", hexagon: "E", top: 76.3, left: 57.7, type: "city", color: "azul", requiredType: "", connections: [69] },
-    { id: 71, name: "casa_71", hexagon: "E", top: 93.9, left: 55.6, type: "event", color: "azul", requiredType: "", connections: [69, 72] },
-    { id: 72, name: "casa_72", hexagon: "E", top: 87.1, left: 51.2, type: "pokemon", color: "azul", requiredType: "", connections: [71, 73] },
-    { id: 73, name: "casa_73", hexagon: "E", top: 79.5, left: 48.4, type: "pokemon", color: "azul", requiredType: "", connections: [38, 72, 74] },
-    { id: 74, name: "casa_74", hexagon: "E", top: 72.1, left: 51.7, type: "event", color: "azul", requiredType: "", connections: [73, 75, 76] },
-    { id: 75, name: "casa_75", hexagon: "E", top: 63.2, left: 50.7, type: "pokemon", color: "azul", requiredType: "", connections: [62, 74] },
-    { id: 76, name: "casa_76", hexagon: "E", top: 68.2, left: 56.6, type: "pokemon", color: "azul", requiredType: "grass", connections: [66, 74] },
+    { id: 62, name: "casa_62", hexagon: "E", top: 54.0, left: 53.5, type: "pokemon", color: "azul", requiredType: "", connections: [57, 63, 75] },[cite: 9]
+    { id: 63, name: "casa_63", hexagon: "E", top: 54.8, left: 59.8, type: "event", color: "azul", requiredType: "", connections: [62, 64, 77] },[cite: 9]
+    { id: 64, name: "casa_64", hexagon: "E", top: 60.6, left: 65.1, type: "event", color: "azul", requiredType: "", connections: [63, 65] },[cite: 9]
+    { id: 65, name: "casa_65", hexagon: "E", top: 71.1, left: 65.5, type: "event", color: "azul", requiredType: "", connections: [64, 66, 104] },[cite: 9]
+    { id: 66, name: "casa_66", hexagon: "E", top: 70.3, left: 61.9, type: "pokemon", color: "azul", requiredType: "", connections: [65, 67, 76] },[cite: 9]
+    { id: 67, name: "casa_67", hexagon: "E", top: 80.2, left: 62.9, type: "pokemon", color: "azul", requiredType: "", connections: [66, 68] },[cite: 9]
+    { id: 68, name: "casa_68", hexagon: "E", top: 88.1, left: 62.0, type: "event", color: "azul", requiredType: "", connections: [67, 69] },[cite: 9]
+    { id: 69, name: "casa_69", hexagon: "E", top: 88.6, left: 58.2, type: "pokemon", color: "azul", requiredType: "", connections: [68, 70, 71] },[cite: 9]
+    { id: 70, name: "Celadon City", hexagon: "E", top: 76.3, left: 57.7, type: "city", color: "azul", requiredType: "", connections: [69] },[cite: 9]
+    { id: 71, name: "casa_71", hexagon: "E", top: 93.9, left: 55.6, type: "event", color: "azul", requiredType: "", connections: [69, 72] },[cite: 9]
+    { id: 72, name: "casa_72", hexagon: "E", top: 87.1, left: 51.2, type: "pokemon", color: "azul", requiredType: "", connections: [71, 73] },[cite: 9]
+    { id: 73, name: "casa_73", hexagon: "E", top: 79.5, left: 48.4, type: "pokemon", color: "azul", requiredType: "", connections: [38, 72, 74] },[cite: 9]
+    { id: 74, name: "casa_74", hexagon: "E", top: 72.1, left: 51.7, type: "event", color: "azul", requiredType: "", connections: [73, 75, 76] },[cite: 9]
+    { id: 75, name: "casa_75", hexagon: "E", top: 63.2, left: 50.7, type: "pokemon", color: "azul", requiredType: "", connections: [62, 74] },[cite: 9]
+    { id: 76, name: "casa_76", hexagon: "E", top: 68.2, left: 56.6, type: "pokemon", color: "azul", requiredType: "grass", connections: [66, 74] },[cite: 9]
 
     // --- HEXÁGONO F ---
-    { id: 77, name: "casa_77", hexagon: "F", top: 43.8, left: 61.3, type: "event", color: "vermelho", requiredType: "", connections: [63, 78, 90] },
-    { id: 78, name: "casa_78", hexagon: "F", top: 32.6, left: 61.6, type: "pokemon", color: "vermelho", requiredType: "", connections: [77, 79] },
-    { id: 79, name: "casa_79", hexagon: "F", top: 27.7, left: 58.8, type: "pokemon", color: "vermelho", requiredType: "", connections: [55, 78, 80] },
-    { id: 80, name: "casa_80", hexagon: "F", top: 24.8, left: 63.0, type: "pokemon", color: "vermelho", requiredType: "", connections: [79, 81] },
-    { id: 81, name: "casa_81", hexagon: "F", top: 14.5, left: 61.7, type: "event", color: "vermelho", requiredType: "", connections: [80, 83] },
-    { id: 82, name: "casa_82", hexagon: "F", top: 16.0, left: 68.2, type: "pokemon", color: "vermelho", requiredType: "", connections: [83, 84] },
-    { id: 83, name: "casa_83", hexagon: "F", top: 5.9, left: 67.7, type: "pokemon", color: "vermelho", requiredType: "", connections: [81, 82] },
-    { id: 84, name: "casa_84", hexagon: "F", top: 13.1, left: 71.7, type: "event", color: "vermelho", requiredType: "", connections: [82, 85] },
-    { id: 85, name: "casa_85", hexagon: "F", top: 21.4, left: 73.1, type: "pokemon", color: "vermelho", requiredType: "", connections: [84, 86] },
-    { id: 86, name: "casa_86", hexagon: "F", top: 31.9, left: 73.6, type: "pokemon", color: "vermelho", requiredType: "", connections: [85, 87, 91] },
-    { id: 87, name: "casa_87", hexagon: "F", top: 42.4, left: 75.0, type: "event", color: "vermelho", requiredType: "", connections: [86, 88, 107] },
-    { id: 88, name: "casa_88", hexagon: "F", top: 49.1, left: 69.6, type: "pokemon", color: "vermelho", requiredType: "", connections: [87, 89, 92] },
-    { id: 89, name: "casa_89", hexagon: "F", top: 41.0, left: 69.1, type: "event", color: "vermelho", requiredType: "", connections: [88, 90] },
-    { id: 90, name: "casa_90", hexagon: "F", top: 39.8, left: 64.6, type: "event", color: "vermelho", requiredType: "", connections: [77, 89, 91] },
-    { id: 91, name: "Cinnabar Island", hexagon: "F", top: 31.5, left: 68.4, type: "city", color: "vermelho", requiredType: "", connections: [86, 90] },
+    { id: 77, name: "casa_77", hexagon: "F", top: 43.8, left: 61.3, type: "event", color: "vermelho", requiredType: "", connections: [63, 78, 90] },[cite: 9]
+    { id: 78, name: "casa_78", hexagon: "F", top: 32.6, left: 61.6, type: "pokemon", color: "vermelho", requiredType: "", connections: [77, 79] },[cite: 9]
+    { id: 79, name: "casa_79", hexagon: "F", top: 27.7, left: 58.8, type: "pokemon", color: "vermelho", requiredType: "", connections: [55, 78, 80] },[cite: 9]
+    { id: 80, name: "casa_80", hexagon: "F", top: 24.8, left: 63.0, type: "pokemon", color: "vermelho", requiredType: "", connections: [79, 81] },[cite: 9]
+    { id: 81, name: "casa_81", hexagon: "F", top: 14.5, left: 61.7, type: "event", color: "vermelho", requiredType: "", connections: [80, 83] },[cite: 9]
+    { id: 82, name: "casa_82", hexagon: "F", top: 16.0, left: 68.2, type: "pokemon", color: "vermelho", requiredType: "", connections: [83, 84] },[cite: 9]
+    { id: 83, name: "casa_83", hexagon: "F", top: 5.9, left: 67.7, type: "pokemon", color: "vermelho", requiredType: "", connections: [81, 82] },[cite: 9]
+    { id: 84, name: "casa_84", hexagon: "F", top: 13.1, left: 71.7, type: "event", color: "vermelho", requiredType: "", connections: [82, 85] },[cite: 9]
+    { id: 85, name: "casa_85", hexagon: "F", top: 21.4, left: 73.1, type: "pokemon", color: "vermelho", requiredType: "", connections: [84, 86] },[cite: 9]
+    { id: 86, name: "casa_86", hexagon: "F", top: 31.9, left: 73.6, type: "pokemon", color: "vermelho", requiredType: "", connections: [85, 87, 91] },[cite: 9]
+    { id: 87, name: "casa_87", hexagon: "F", top: 42.4, left: 75.0, type: "event", color: "vermelho", requiredType: "", connections: [86, 88, 107] },[cite: 9]
+    { id: 88, name: "casa_88", hexagon: "F", top: 49.1, left: 69.6, type: "pokemon", color: "vermelho", requiredType: "", connections: [87, 89, 92] },[cite: 9]
+    { id: 89, name: "casa_89", hexagon: "F", top: 41.0, left: 69.1, type: "event", color: "vermelho", requiredType: "", connections: [88, 90] },[cite: 9]
+    { id: 90, name: "casa_90", hexagon: "F", top: 39.8, left: 64.6, type: "event", color: "vermelho", requiredType: "", connections: [77, 89, 91] },[cite: 9]
+    { id: 91, name: "Cinnabar Island", hexagon: "F", top: 31.5, left: 68.4, type: "city", color: "vermelho", requiredType: "", connections: [86, 90] },[cite: 9]
 
     // --- HEXÁGONO G ---
-    { id: 92, name: "casa_92", hexagon: "G", top: 57.2, left: 71.6, type: "pokemon", color: "vermelho", requiredType: "", connections: [88, 93, 103] },
-    { id: 93, name: "casa_93", hexagon: "G", top: 53.9, left: 75.0, type: "event", color: "vermelho", requiredType: "", connections: [92, 94] },
-    { id: 94, name: "casa_94", hexagon: "G", top: 50.6, left: 78.1, type: "pokemon", color: "vermelho", requiredType: "", connections: [93, 95] },
-    { id: 95, name: "Fuchsia City", hexagon: "G", top: 63.4, left: 77.5, type: "city", color: "vermelho", requiredType: "", connections: [94, 96] },
-    { id: 96, name: "casa_96", hexagon: "G", top: 64.1, left: 82.9, type: "pokemon", color: "vermelho", requiredType: "", connections: [95, 97] },
-    { id: 97, name: "casa_97", hexagon: "G", top: 72.3, left: 84.6, type: "pokemon", color: "vermelho", requiredType: "", connections: [96, 98, 101] },
-    { id: 98, name: "casa_98", hexagon: "G", top: 82.8, left: 86.8, type: "event", color: "vermelho", requiredType: "", connections: [97, 99] },
-    { id: 99, name: "casa_99", hexagon: "G", top: 85.2, left: 80.5, type: "pokemon", color: "vermelho", requiredType: "", connections: [98, 100, 106] },
-    { id: 100, name: "casa_100", hexagon: "G", top: 80.9, left: 77.0, type: "event", color: "vermelho", requiredType: "", connections: [99, 101, 102] },
-    { id: 101, name: "casa_101", hexagon: "G", top: 72.0, left: 79.2, type: "event", color: "vermelho", requiredType: "", connections: [97, 100] },
-    { id: 102, name: "casa_102", hexagon: "G", top: 86.3, left: 72.5, type: "pokemon", color: "azul", requiredType: "", connections: [100, 105] },
-    { id: 103, name: "casa_103", hexagon: "G", top: 67.2, left: 72.7, type: "event", color: "vermelho", requiredType: "", connections: [92, 105] },
-    { id: 104, name: "casa_104", hexagon: "G", top: 70.2, left: 69.6, type: "pokemon", color: "vermelho", requiredType: "", connections: [65, 105] },
-    { id: 105, name: "casa_105", hexagon: "G", top: 77.1, left: 72.8, type: "pokemon", color: "vermelho", requiredType: "", connections: [102, 103, 104] },
-    { id: 106, name: "casa_106", hexagon: "G", top: 92.6, left: 80.3, type: "event", color: "vermelho", requiredType: "", connections: [99] },
+    { id: 92, name: "casa_92", hexagon: "G", top: 57.2, left: 71.6, type: "pokemon", color: "vermelho", requiredType: "", connections: [88, 93, 103] },[cite: 9]
+    { id: 93, name: "casa_93", hexagon: "G", top: 53.9, left: 75.0, type: "event", color: "vermelho", requiredType: "", connections: [92, 94] },[cite: 9]
+    { id: 94, name: "casa_94", hexagon: "G", top: 50.6, left: 78.1, type: "pokemon", color: "vermelho", requiredType: "", connections: [93, 95] },[cite: 9]
+    { id: 95, name: "Fuchsia City", hexagon: "G", top: 63.4, left: 77.5, type: "city", color: "vermelho", requiredType: "", connections: [94, 96] },[cite: 9]
+    { id: 96, name: "casa_96", hexagon: "G", top: 64.1, left: 82.9, type: "pokemon", color: "vermelho", requiredType: "", connections: [95, 97] },[cite: 9]
+    { id: 97, name: "casa_97", hexagon: "G", top: 72.3, left: 84.6, type: "pokemon", color: "vermelho", requiredType: "", connections: [96, 98, 101] },[cite: 9]
+    { id: 98, name: "casa_98", hexagon: "G", top: 82.8, left: 86.8, type: "event", color: "vermelho", requiredType: "", connections: [97, 99] },[cite: 9]
+    { id: 99, name: "casa_99", hexagon: "G", top: 85.2, left: 80.5, type: "pokemon", color: "vermelho", requiredType: "", connections: [98, 100, 106] },[cite: 9]
+    { id: 100, name: "casa_100", hexagon: "G", top: 80.9, left: 77.0, type: "event", color: "vermelho", requiredType: "", connections: [99, 101, 102] },[cite: 9]
+    { id: 101, name: "casa_101", hexagon: "G", top: 72.0, left: 79.2, type: "event", color: "vermelho", requiredType: "", connections: [97, 100] },[cite: 9]
+    { id: 102, name: "casa_102", hexagon: "G", top: 86.3, left: 72.5, type: "pokemon", color: "azul", requiredType: "", connections: [100, 105] },[cite: 9]
+    { id: 103, name: "casa_103", hexagon: "G", top: 67.2, left: 72.7, type: "event", color: "vermelho", requiredType: "", connections: [92, 105] },[cite: 9]
+    { id: 104, name: "casa_104", hexagon: "G", top: 70.2, left: 69.6, type: "pokemon", color: "vermelho", requiredType: "", connections: [65, 105] },[cite: 9]
+    { id: 105, name: "casa_105", hexagon: "G", top: 77.1, left: 72.8, type: "pokemon", color: "vermelho", requiredType: "", connections: [102, 103, 104] },[cite: 9]
+    { id: 106, name: "casa_106", hexagon: "G", top: 92.6, left: 80.3, type: "event", color: "vermelho", requiredType: "", connections: [99] },[cite: 9]
 
     // --- HEXÁGONO H ---
-    { id: 107, name: "Indigo Plateau", hexagon: "H", top: 38.4, left: 81.6, type: "city", color: "amarelo", requiredType: "", connections: [87, 108, 121] },
-    { id: 108, name: "casa_108", hexagon: "H", top: 27.1, left: 82.3, type: "event", color: "amarelo", requiredType: "", connections: [107, 109] },
-    { id: 109, name: "casa_109", hexagon: "H", top: 16.9, left: 81.0, type: "pokemon", color: "amarelo", requiredType: "", connections: [108, 110] },
-    { id: 110, name: "casa_110", hexagon: "H", top: 12.1, left: 84.8, type: "event", color: "amarelo", requiredType: "", connections: [109, 111] },
-    { id: 111, name: "casa_111", hexagon: "H", top: 14.8, left: 89.0, type: "pokemon", color: "amarelo", requiredType: "", connections: [110, 112] },
-    { id: 112, name: "casa_112", hexagon: "H", top: 14.7, left: 93.6, type: "event", color: "amarelo", requiredType: "", connections: [111, 113] },
-    { id: 113, name: "casa_113", hexagon: "H", top: 18.8, left: 97.3, type: "pokemon", color: "amarelo", requiredType: "", connections: [112, 114] },
-    { id: 114, name: "Liga Pokémon (Entrada)", hexagon: "H", top: 27.7, left: 97.0, type: "city", color: "amarelo", requiredType: "", connections: [113, 115, 124] },
-    { id: 115, name: "casa_115", hexagon: "H", top: 36.3, left: 98.6, type: "event", color: "amarelo", requiredType: "", connections: [114, 116] },
-    { id: 116, name: "casa_116", hexagon: "H", top: 43.1, left: 95.9, type: "pokemon", color: "verde", requiredType: "", connections: [115, 117] },
-    { id: 117, name: "casa_117", hexagon: "H", top: 37.0, left: 93.0, type: "pokemon", color: "amarelo", requiredType: "", connections: [116, 118] },
-    { id: 118, name: "casa_118", hexagon: "H", top: 47.9, left: 92.3, type: "event", color: "amarelo", requiredType: "", connections: [117, 119] },
-    { id: 119, name: "casa_119", hexagon: "H", top: 51.3, left: 88.6, type: "event", color: "amarelo", requiredType: "", connections: [118, 120] },
-    { id: 120, name: "casa_120", hexagon: "H", top: 45.8, left: 84.9, type: "pokemon", color: "azul", requiredType: "", connections: [119, 121] },
-    { id: 121, name: "casa_121", hexagon: "H", top: 37.6, left: 86.3, type: "pokemon", color: "amarelo", requiredType: "", connections: [107, 120, 122] },
-    { id: 122, name: "casa_122", hexagon: "H", top: 29.3, left: 87.0, type: "city", color: "amarelo", requiredType: "", connections: [121, 123, 124] },
-    { id: 123, name: "casa_123", hexagon: "H", top: 21.4, left: 85.6, type: "pokemon", color: "amarelo", requiredType: "", connections: [122] },
-    { id: 124, name: "Arena Final", hexagon: "H", top: 28.8, left: 92.1, type: "city", color: "amarelo", requiredType: "", connections: [114, 122] }
+    { id: 107, name: "Indigo Plateau", hexagon: "H", top: 38.4, left: 81.6, type: "city", color: "amarelo", requiredType: "", connections: [87, 108, 121] },[cite: 9]
+    { id: 108, name: "casa_108", hexagon: "H", top: 27.1, left: 82.3, type: "event", color: "amarelo", requiredType: "", connections: [107, 109] },[cite: 9]
+    { id: 109, name: "casa_109", hexagon: "H", top: 16.9, left: 81.0, type: "pokemon", color: "amarelo", requiredType: "", connections: [108, 110] },[cite: 9]
+    { id: 110, name: "casa_110", hexagon: "H", top: 12.1, left: 84.8, type: "event", color: "amarelo", requiredType: "", connections: [109, 111] },[cite: 9]
+    { id: 111, name: "casa_111", hexagon: "H", top: 14.8, left: 89.0, type: "pokemon", color: "amarelo", requiredType: "", connections: [110, 112] },[cite: 9]
+    { id: 112, name: "casa_112", hexagon: "H", top: 14.7, left: 93.6, type: "event", color: "amarelo", requiredType: "", connections: [111, 113] },[cite: 9]
+    { id: 113, name: "casa_113", hexagon: "H", top: 18.8, left: 97.3, type: "pokemon", color: "amarelo", requiredType: "", connections: [112, 114] },[cite: 9]
+    { id: 114, name: "Liga Pokémon (Entrada)", hexagon: "H", top: 27.7, left: 97.0, type: "city", color: "amarelo", requiredType: "", connections: [113, 115, 124] },[cite: 9]
+    { id: 115, name: "casa_115", hexagon: "H", top: 36.3, left: 98.6, type: "event", color: "amarelo", requiredType: "", connections: [114, 116] },[cite: 9]
+    { id: 116, name: "casa_116", hexagon: "H", top: 43.1, left: 95.9, type: "pokemon", color: "verde", requiredType: "", connections: [115, 117] },[cite: 9]
+    { id: 117, name: "casa_117", hexagon: "H", top: 37.0, left: 93.0, type: "pokemon", color: "amarelo", requiredType: "", connections: [116, 118] },[cite: 9]
+    { id: 118, name: "casa_118", hexagon: "H", top: 47.9, left: 92.3, type: "event", color: "amarelo", requiredType: "", connections: [117, 119] },[cite: 9]
+    { id: 119, name: "casa_119", hexagon: "H", top: 51.3, left: 88.6, type: "event", color: "amarelo", requiredType: "", connections: [118, 120] },[cite: 9]
+    { id: 120, name: "casa_120", hexagon: "H", top: 45.8, left: 84.9, type: "pokemon", color: "azul", requiredType: "", connections: [119, 121] },[cite: 9]
+    { id: 121, name: "casa_121", hexagon: "H", top: 37.6, left: 86.3, type: "pokemon", color: "amarelo", requiredType: "", connections: [107, 120, 122] },[cite: 9]
+    { id: 122, name: "casa_122", hexagon: "H", top: 29.3, left: 87.0, type: "city", color: "amarelo", requiredType: "", connections: [121, 123, 124] },[cite: 9]
+    { id: 123, name: "casa_123", hexagon: "H", top: 21.4, left: 85.6, type: "pokemon", color: "amarelo", requiredType: "", connections: [122] },[cite: 9]
+    { id: 124, name: "Arena Final", hexagon: "H", top: 28.8, left: 92.1, type: "city", color: "amarelo", requiredType: "", connections: [114, 122] }[cite: 9]
 ];
 
 export function getValidDestinations(startWaypointId, steps) {
@@ -286,7 +287,6 @@ export function tryInteractWithCity(waypointId, cityName) {
     const currentZoneId = cp ? (cp.currentZone || 5) : 5;
 
     if (currentZoneId === waypointId) {
-        // CORREÇÃO CRUCIAL: Se a cidade tiver um ginásio oficial no catálogo, dispara a sequência do ginásio diretamente!
         const hasGym = GYM_LEADERS_CATALOG.some(g => g.city.toLowerCase() === cityName.toLowerCase());
         if (hasGym && typeof initiateGymSequence === 'function') {
             initiateGymSequence(cityName);
@@ -346,7 +346,6 @@ export function handleWaypointArrival(waypointId) {
     }
 
     if (waypoint.type === 'city') {
-        // CORREÇÃO CRUCIAL AO CHEGAR À CIDADE: Abre o ginásio se existir para esta cidade, caso contrário abre a modal da cidade
         const hasGym = GYM_LEADERS_CATALOG.some(g => g.city.toLowerCase() === waypoint.name.toLowerCase());
         if (hasGym && typeof initiateGymSequence === 'function') {
             initiateGymSequence(waypoint.name);
@@ -607,6 +606,16 @@ if (typeof socket !== 'undefined' && socket) {
             if (typeof renderBoardMap === 'function') {
                 renderBoardMap();
             }
+        }
+    });
+
+    // CORREÇÃO CRUCIAL: Escuta o início da partida enviado pelo servidor e abre o tabuleiro
+    socket.off('room_game_started');
+    socket.on('room_game_started', (data) => {
+        if (applyOnlineRoomState(data)) {
+            showOnlineGameLayout();
+        } else if (typeof showCustomPopup === 'function') {
+            showCustomPopup('Erro ao Iniciar', 'Não foi possível sincronizar os dados da sala para iniciar a partida.', false);
         }
     });
 
