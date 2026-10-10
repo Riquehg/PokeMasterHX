@@ -1,21 +1,12 @@
 // --- src/core/storage.js ---
 import { gameState, getCurrentPlayer, ensureValidGameState, currentAuthenticatedAccount } from './state.js';
-import { emitSocket } from './socket.js';
+import { emitSocket, socket } from './socket.js';
 
-const SAVE_KEY = 'pokemon_master_trainer_hex_save';
-
-// Salva o progresso no localStorage e via socket com sincronização remota completa
+// Salva o progresso exclusivamente no servidor remoto via socket
 export function saveGameProgress() {
     ensureValidGameState();
     try {
         const cp = getCurrentPlayer();
-        const saveData = {
-            gameState,
-            savedAt: new Date().toISOString()
-        };
-        localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
-        
-        // Sincroniza com o backend online utilizando a conta ativa
         const activeEmail = typeof currentAuthenticatedAccount !== 'undefined' && currentAuthenticatedAccount ? currentAuthenticatedAccount : (gameState.accountEmail || null);
 
         const savePayload = {
@@ -39,9 +30,9 @@ export function saveGameProgress() {
             socket.emit('save_game_state', savePayload);
         }
 
-        console.log("💾 Jogo salvo localmente e sincronizado com o servidor remoto!");
+        console.log("💾 Progresso enviado e sincronizado com o servidor remoto!");
     } catch (e) {
-        console.error("Erro ao salvar o jogo:", e);
+        console.error("Erro ao enviar progresso para o servidor:", e);
     }
 }
 
@@ -55,55 +46,34 @@ export function loadGameProgressFromServer() {
             if (response && response.success && response.gameState) {
                 Object.assign(gameState, response.gameState);
                 ensureValidGameState();
-                localStorage.setItem(SAVE_KEY, JSON.stringify({ gameState, savedAt: new Date().toISOString() }));
                 if (typeof renderBoardMap === 'function') renderBoardMap();
                 if (typeof renderBottomPanel === 'function') renderBottomPanel();
                 if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
-                console.log("☁️ Progresso carregado com sucesso a partir da nuvem!");
+                console.log("☁️ Progresso carregado com sucesso a partir do servidor!");
             }
         });
     }
 }
 
-// Carrega o progresso salvo de forma segura sem perder propriedades (priorizando a nuvem se online)
+// Carrega o progresso pedindo diretamente ao servidor (Sem localStorage)
 export function loadGameProgress() {
     try {
         if (typeof socket !== 'undefined' && socket && socket.connected) {
             loadGameProgressFromServer();
-        }
-
-        const raw = localStorage.getItem(SAVE_KEY);
-        if (!raw) return false;
-
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.gameState) {
-            // Garante uma mesclagem profunda preservando estruturas essenciais
-            if (parsed.gameState.players && Array.isArray(parsed.gameState.players)) {
-                gameState.players = parsed.gameState.players;
-            }
-            if (parsed.gameState.currentPlayerIndex !== undefined) {
-                gameState.currentPlayerIndex = parsed.gameState.currentPlayerIndex;
-            }
-            if (parsed.gameState.globalVault) {
-                gameState.globalVault = parsed.gameState.globalVault;
-            }
-
-            ensureValidGameState();
-            console.log("📂 Jogo carregado localmente com sucesso!");
             return true;
         }
     } catch (e) {
-        console.error("Erro ao carregar o jogo:", e);
+        console.error("Erro ao solicitar carregamento do servidor:", e);
     }
     return false;
 }
 
-// Apaga o save do navegador
+// Limpeza de sessão local (já que não há saves locais)
 export function deleteGameSave() {
-    localStorage.removeItem(SAVE_KEY);
+    console.log("🗑️ Sessão limpa (dados geridos pelo servidor).");
 }
 
-// Exporta o progresso atual em formato .json para download
+// Exporta o progresso atual em formato .json para download (mantido por utilidade do jogador)
 export function exportSaveToFile() {
     ensureValidGameState();
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(gameState, null, 2));
@@ -115,7 +85,7 @@ export function exportSaveToFile() {
     downloadAnchor.remove();
 }
 
-// Importa um save de um arquivo .json externo
+// Importa um save de um arquivo .json externo e envia para o servidor
 export function importSaveFromFile(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -127,8 +97,8 @@ export function importSaveFromFile(event) {
             if (importedState && Array.isArray(importedState.players)) {
                 Object.assign(gameState, importedState);
                 ensureValidGameState();
-                saveGameProgress();
-                window.location.reload(); // Recarrega a interface com o novo estado
+                saveGameProgress(); // Envia para o servidor
+                window.location.reload();
             } else {
                 alert("Arquivo de save inválido.");
             }
@@ -140,7 +110,7 @@ export function importSaveFromFile(event) {
     reader.readAsText(file);
 }
 
-// Salva um Anima no cofre global de herança
+// Salva um Anima no cofre global de herança e sincroniza com o servidor
 export function saveMonsterToVault(uniqueId) {
     const cp = getCurrentPlayer();
     if (!cp) return;
@@ -148,7 +118,6 @@ export function saveMonsterToVault(uniqueId) {
     let targetMonster = null;
     let foundIndex = -1;
 
-    // Procura na equipe ativa
     if (cp.activeTeam && Array.isArray(cp.activeTeam)) {
         foundIndex = cp.activeTeam.findIndex(m => m && m.uniqueId === uniqueId);
         if (foundIndex > -1) {
@@ -157,7 +126,6 @@ export function saveMonsterToVault(uniqueId) {
     }
     
     if (!targetMonster && cp.pcBox && Array.isArray(cp.pcBox)) {
-        // Procura na PC Box
         foundIndex = cp.pcBox.findIndex(m => m && m.uniqueId === uniqueId);
         if (foundIndex > -1) {
             targetMonster = cp.pcBox.splice(foundIndex, 1)[0];
@@ -166,22 +134,20 @@ export function saveMonsterToVault(uniqueId) {
 
     if (!targetMonster) return;
 
-    // Inicializa o cofre global se não existir
     if (!gameState.globalVault) gameState.globalVault = [];
     gameState.globalVault.push(targetMonster);
     
     saveGameProgress();
-    console.log(`📦 ${targetMonster.name} enviado para o cofre global.`);
+    console.log(`📦 ${targetMonster.name} enviado para o cofre global na nuvem.`);
 }
 
-// Ouvinte adicional para resposta de salvamento na nuvem via socket
+// Ouvinte para resposta de salvamento na nuvem via socket
 if (typeof socket !== 'undefined' && socket) {
     socket.off('saved_game_response');
     socket.on('saved_game_response', (response) => {
         if (response && response.success && response.gameState) {
             Object.assign(gameState, response.gameState);
             ensureValidGameState();
-            localStorage.setItem(SAVE_KEY, JSON.stringify({ gameState, savedAt: new Date().toISOString() }));
             if (typeof renderBoardMap === 'function') renderBoardMap();
             if (typeof renderBottomPanel === 'function') renderBottomPanel();
             if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
