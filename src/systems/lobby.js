@@ -91,6 +91,16 @@ export function applyOnlineRoomState(data) {
         }))
     });
 
+    const myEmail = typeof currentAuthenticatedAccount !== 'undefined' ? currentAuthenticatedAccount : null;
+    const myPayload = getOnlinePlayerPayload();
+    const myIndex = gameState.players.findIndex(p => (myEmail && p.email === myEmail) || (myPayload && p.name === myPayload.name));
+    
+    if (myIndex !== -1) {
+        gameState.myPlayerIndex = myIndex;
+    } else {
+        gameState.myPlayerIndex = 0;
+    }
+
     if (sharedBoard && typeof window.boardPokemonCards !== 'undefined') {
         window.boardPokemonCards = sharedBoard;
         onlineBoardReady = true;
@@ -196,7 +206,6 @@ export function requestLobbyRanking() {
     emitSocket('get_leaderboard');
 }
 
-// Criação de Sala Online com Modos (Fresh Start vs Legacy), PIN e Limites
 export function createOnlineRoom() {
     let modal = document.getElementById('create-room-config-modal');
     if (!modal) {
