@@ -1,5 +1,5 @@
 // --- src/main.js ---
-import { gameState, setupConfig, ensureValidGameState, getCurrentPlayer, movementState } from './core/state.js';
+import { gameState, setupConfig, ensureValidGameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer, movementState } from './core/state.js';
 import { loadGameProgress, saveGameProgress } from './core/storage.js';
 import { renderBoardMap, tryInteractWithCity, onHexClick } from './systems/map.js';
 import { setupDiceListeners, rollDiceForMovement, handleWaypointClick, resetTurnDiceState } from './systems/dice.js';
@@ -32,7 +32,10 @@ window.rollDice = rollDiceForMovement;
 window.handleWaypointClick = handleWaypointClick;
 window.resetTurnDiceState = resetTurnDiceState;
 window.openSpecificTrainerCardModal = openSpecificTrainerCardModal;
-window.openTrainerCardModal = function() { openSpecificTrainerCardModal(gameState.currentPlayerIndex || 0); };
+window.openTrainerCardModal = function() { 
+    const targetIdx = gameState.online ? (gameState.myPlayerIndex || 0) : (gameState.currentPlayerIndex || 0);
+    openSpecificTrainerCardModal(targetIdx); 
+};
 window.openPokemartModal = openPokemartModal;
 window.useInventoryItem = useInventoryItem;
 window.tryInteractWithCity = tryInteractWithCity;
@@ -65,7 +68,7 @@ window.hideSetupAndShowGame = hideSetupAndShowGame;
 
 // Função de Sincronização Global do HUD do Treinador (Menu Inicial e HUD Superior)
 export function updateTrainerVisualsAndHud(trainerName, avatarId) {
-    const cp = getCurrentPlayer();
+    const cp = getCurrentOrMyPlayer();
     const name = trainerName || cp?.name || 'Ash Ketchum';
     const avId = avatarId || cp?.avatarId || 1;
     const avatarIdStr = avId < 10 ? `0${avId}` : `${avId}`;
@@ -116,7 +119,7 @@ window.setDiceButtonState = setDiceButtonState;
 
 // Função de Nova Partida / Reset Inteligente do Tabuleiro
 window.resetGameProgressKeepCollection = function() {
-    const cp = getCurrentPlayer();
+    const cp = getCurrentOrMyPlayer();
     if (!cp) {
         alert("Nenhum treinador ativo encontrado.");
         return;
@@ -128,6 +131,7 @@ window.resetGameProgressKeepCollection = function() {
 
     cp.badges = [];
     cp.position = 0;
+    cp.currentZone = 5;
     
     if (typeof movementState !== 'undefined') {
         movementState.hasRolledThisTurn = false;
@@ -204,7 +208,7 @@ window.showCustomPopup = function(title, message, isSuccess) {
 };
 
 window.triggerRandomBoardEvent = function(eventName) {
-    const cp = getCurrentPlayer();
+    const cp = getCurrentOrMyPlayer();
     if (!cp) return;
 
     const eventsList = [
@@ -266,7 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadGameProgress();
     ensureValidGameState();
 
-    const cp = getCurrentPlayer();
+    const cp = getCurrentOrMyPlayer();
     if (cp) {
         updateTrainerVisualsAndHud(cp.name, cp.avatarId);
     }
@@ -331,7 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!gameState.players || gameState.players.length === 0) {
                 ensureValidGameState();
             }
-            const player = getCurrentPlayer();
+            const player = getCurrentOrMyPlayer();
             if (player) {
                 player.name = trainerName;
                 player.avatarId = avatarId;
@@ -387,7 +391,7 @@ function setupAuthenticationListeners() {
     if (resumeBtn) {
         resumeBtn.onclick = () => {
             hideSetupAndShowGame();
-            const player = getCurrentPlayer();
+            const player = getCurrentOrMyPlayer();
             if (player) {
                 updateTrainerVisualsAndHud(player.name || 'Ash', player.avatarId || 1);
             }
@@ -441,7 +445,7 @@ window.handleLoginResponse = function(response) {
     document.getElementById('trainer-main-menu')?.classList.remove('hidden');
 
     if (response.profileData) {
-        const player = getCurrentPlayer();
+        const player = getCurrentOrMyPlayer();
         if (player) {
             Object.assign(player, response.profileData);
             updateTrainerVisualsAndHud(player.name, player.avatarId || 1);
@@ -531,7 +535,6 @@ function loadDailyPokemonPreview() {
     const nameEl = document.getElementById('daily-pokemon-name');
     const spriteEl = document.getElementById('daily-pokemon-sprite');
 
-    // Tenta obter do gameState global, localStorage ou define um padrão sincronizado
     let configuredDaily = gameState.dailyPokemon || localStorage.getItem('admin_daily_pokemon') || 'charizard';
     let dailyMon = null;
 
@@ -539,7 +542,6 @@ function loadDailyPokemonPreview() {
         dailyMon = MONSTER_CATALOG.find(m => m.id === configuredDaily || m.name.toLowerCase() === String(configuredDaily).toLowerCase());
     }
 
-    // Fallback caso não encontre pelo ID exato
     if (!dailyMon && MONSTER_CATALOG && MONSTER_CATALOG.length > 0) {
         dailyMon = MONSTER_CATALOG[0];
     }
@@ -557,7 +559,8 @@ function setupGlobalInterfaceListeners() {
     const trainerCardBtn = document.getElementById('open-trainer-card-btn') || document.getElementById('trainer-badge-btn');
     if (trainerCardBtn) {
         trainerCardBtn.onclick = () => {
-            openSpecificTrainerCardModal(gameState.currentPlayerIndex || 0);
+            const targetIdx = gameState.online ? (gameState.myPlayerIndex || 0) : (gameState.currentPlayerIndex || 0);
+            openSpecificTrainerCardModal(targetIdx);
         };
     }
 
@@ -599,7 +602,6 @@ function setupGlobalInterfaceListeners() {
     const passTurnBtn = document.getElementById('pass-turn-btn');
     if (passTurnBtn) {
         passTurnBtn.onclick = () => {
-            // 🛡️ Validação do Turno Online
             const activeIndex = gameState.currentPlayerIndex || 0;
             const myIdx = gameState.online ? (gameState.myPlayerIndex || 0) : activeIndex;
             if (gameState.online && activeIndex !== myIdx) {
@@ -616,7 +618,6 @@ function setupGlobalInterfaceListeners() {
                 movementState.isMoving = false;
             }
 
-            // Sincronização via Sala Online
             if (gameState.online) {
                 if (typeof window.broadcastOnlineAction === 'function') {
                     window.broadcastOnlineAction('turn_passed', {
