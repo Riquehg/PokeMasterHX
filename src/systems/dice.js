@@ -43,11 +43,18 @@ export function setupDiceListeners() {
             }
 
             // Sincroniza a mudança de turno com os outros jogadores na sala online
-            if (gameState.online) {
-                emitSocket('update_game_state', {
-                    type: 'pass_turn',
-                    gameState: gameState
-                });
+            if (gameState.online && currentJoinedOnlineRoomId) {
+                if (typeof window.broadcastOnlineAction === 'function') {
+                    window.broadcastOnlineAction('turn_passed', {
+                        nextPlayerIndex: gameState.currentPlayerIndex
+                    });
+                } else {
+                    emitSocket('update_game_state', {
+                        roomId: currentJoinedOnlineRoomId,
+                        type: 'pass_turn',
+                        gameState: gameState
+                    });
+                }
             }
 
             if (typeof showCustomPopup === 'function') {
@@ -432,11 +439,19 @@ export function finishMovementSession() {
             : `Local: Zona #${finalWaypointId}`
     );
 
+    // Sincronização em tempo real online com os demais jogadores
     if (gameState.online) {
-        emitSocket('update_game_state', {
-            type: 'player_movement_finished',
-            gameState: typeof gameState !== 'undefined' ? gameState : null
-        });
+        if (typeof window.broadcastOnlineAction === 'function') {
+            window.broadcastOnlineAction('player_moved', {
+                playerIndex: gameState.currentPlayerIndex,
+                newPosition: finalWaypointId
+            });
+        } else {
+            emitSocket('update_game_state', {
+                type: 'player_movement_finished',
+                gameState: typeof gameState !== 'undefined' ? gameState : null
+            });
+        }
     }
 
     if (typeof triggerWaypointEvent === 'function') {
@@ -610,6 +625,11 @@ export function triggerRandomBoardEvent(waypointName) {
 
     if (typeof saveGameProgress === 'function') {
         saveGameProgress();
+    }
+
+    // Se estiver online, sincroniza o ganho/evento com a sala
+    if (gameState.online && typeof window.broadcastOnlineAction === 'function') {
+        window.broadcastOnlineAction('board_event', { gameState: gameState });
     }
 
     if (typeof showCustomPopup === 'function') {
