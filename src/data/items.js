@@ -2,7 +2,9 @@
 // Base de dados oficial de itens (Apenas Sprites Oficiais, sem emojis)
 
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
-import { getCurrentPlayer } from '../core/state.js';
+import { getCurrentPlayer, gameState } from '../core/state.js';
+import { saveGameProgress } from '../core/storage.js';
+import { emitSocket } from '../core/socket.js';
 
 export const ITEM_CATALOG = [
     // --- ITENS COMUNS ---
@@ -420,6 +422,19 @@ window.useInventoryItem = function(itemIndex) {
         item.count--;
         if (item.count <= 0) cp.inventory.splice(itemIndex, 1);
         normalizePlayerInventory(cp);
+        saveGameProgress();
+
+        if (gameState.online && typeof emitSocket === 'function') {
+            emitSocket('save_game_state', {
+                gameState: gameState,
+                trainerName: cp.name || 'Treinador'
+            });
+            emitSocket('update_game_state', {
+                type: 'inventory_item_used',
+                gameState: gameState
+            });
+        }
+
         renderInventoryUI(cp);
 
         if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
@@ -436,6 +451,19 @@ window.useInventoryItem = function(itemIndex) {
         item.count--;
         if (item.count <= 0) cp.inventory.splice(itemIndex, 1);
         normalizePlayerInventory(cp);
+        saveGameProgress();
+
+        if (gameState.online && typeof emitSocket === 'function') {
+            emitSocket('save_game_state', {
+                gameState: gameState,
+                trainerName: cp.name || 'Treinador'
+            });
+            emitSocket('update_game_state', {
+                type: 'inventory_item_used',
+                gameState: gameState
+            });
+        }
+
         renderInventoryUI(cp);
 
         if (typeof renderBottomPanel === 'function') renderBottomPanel();
@@ -469,6 +497,19 @@ window.useInventoryItem = function(itemIndex) {
         if (item.count <= 0) cp.inventory.splice(itemIndex, 1);
 
         normalizePlayerInventory(cp);
+        saveGameProgress();
+
+        if (gameState.online && typeof emitSocket === 'function') {
+            emitSocket('save_game_state', {
+                gameState: gameState,
+                trainerName: cp.name || 'Treinador'
+            });
+            emitSocket('update_game_state', {
+                type: 'inventory_item_used',
+                gameState: gameState
+            });
+        }
+
         renderInventoryUI(cp);
 
         if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
@@ -494,6 +535,19 @@ window.useInventoryItem = function(itemIndex) {
         if (item.count <= 0) cp.inventory.splice(itemIndex, 1);
 
         normalizePlayerInventory(cp);
+        saveGameProgress();
+
+        if (gameState.online && typeof emitSocket === 'function') {
+            emitSocket('save_game_state', {
+                gameState: gameState,
+                trainerName: cp.name || 'Treinador'
+            });
+            emitSocket('update_game_state', {
+                type: 'inventory_item_used',
+                gameState: gameState
+            });
+        }
+
         renderInventoryUI(cp);
 
         if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
