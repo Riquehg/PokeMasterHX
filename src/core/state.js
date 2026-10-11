@@ -1,160 +1,133 @@
-// --- src/core/socket.js ---
-// Gestão de Conexão Socket.io, Autenticação Remota e Sincronização Online
+// --- src/core/state.js ---
 
-import { gameState, ensureValidGameState, currentAuthenticatedAccount } from './state.js';
-import { applyOnlineRoomState, showOnlineGameLayout, currentJoinedOnlineRoomId } from '../systems/lobby.js';
+export let gameState = {
+    gameMode: 'solo',
+    online: false, // Suporte para partidas online
+    roomCode: null,
+    myPlayerIndex: 0, // Índice local do jogador na sala online
+    playersCount: 1,
+    currentPlayerIndex: 0,
+    turnCounter: 1,
+    players: [],
+    player: null, // Fallback para modo solo
+    setupDone: false,
+    turn: 1,
+    currentEncounter: null,
+    chatMessages: [
+        { sender: "Sistema", text: "Bem-vindo ao Pokémon Master Trainer HEX Edition!" }
+    ],
+    currentBottomView: 'inventory',
+    pcBoxCurrentPage: 0
+};
 
-export let socket = null;
-export { currentAuthenticatedAccount };
+export let setupConfig = {
+    mode: 'solo',
+    playersCount: 1,
+    avatarId: 1,
+    starterId: 'bulbasaur',
+    playersData: [],
+    selectedAvatar: 1,
+    selectedStarter: 'bulbasaur',
+    trainerName: 'Ash Ketchum'
+};
 
-export function initializeSocketConnection() {
-    try {
-        if (typeof io !== 'undefined') {
-            socket = io('https://pokemasterhx.onrender.com', {
-                transports: ['websocket', 'polling']
-            });
+export let setupWizardState = {
+    currentConfiguringIndex: 0,
+    collectedPlayers: []
+};
 
-            // Atualiza imediatamente a referência global do window
-            window.socket = socket;
+export let movementState = {
+    isMoving: false,
+    diceRolledValue: 0,
+    hasRolledThisTurn: false,
+    validDestinations: []
+};
 
-            socket.on('connect', () => {
-                console.log("🟢 Conectado ao servidor Socket.io! ID:", socket.id);
-                if (typeof appendAdventureLog === 'function') {
-                    appendAdventureLog("🌐 Conectado com sucesso ao servidor online.");
-                }
+export let boardPokemonCards = {};
+export let currentEncounterState = {
+    wildPokemon: null,
+    selectedTeamMemberIndex: 0,
+    itemBonus: 0,
+    battlePowerBonus: 0,
+    hasAttemptedCapture: false,
+    selectedCaptureBallId: null
+};
 
-                // Tenta reconectar à sala ativa se o jogador já estiver numa
-                if (typeof currentJoinedOnlineRoomId !== 'undefined' && currentJoinedOnlineRoomId) {
-                    socket.emit('reconnect_sync', {
-                        roomId: currentJoinedOnlineRoomId,
-                        email: currentAuthenticatedAccount
-                    });
-                }
-            });
+export let selectedBallAura = null;
+export let currentAuthenticatedAccount = null;
 
-            socket.on('disconnect', () => {
-                console.warn("🔴 Desconectado do servidor Socket.io.");
-                if (typeof appendAdventureLog === 'function') {
-                    appendAdventureLog("⚠️ Conexão com o servidor online perdida.");
-                }
-            });
+export let dailyFeaturedPokemonConfig = {
+    pokemonId: 'pikachu',
+    pokemonName: 'Pikachu',
+    bonusItem: 'item_rarecandy',
+    bonusItemName: 'Rare Candy',
+    activeDate: new Date().toDateString()
+};
 
-            socket.on('login_response', (response) => {
-                if (response && response.success && (response.accountEmail || response.email)) {
-                    window.currentAuthenticatedAccount = response.accountEmail || response.email;
-                }
-                if (typeof window.handleLoginResponse === 'function') {
-                    window.handleLoginResponse(response);
-                }
-            });
-
-            socket.on('rooms_list_update', (rooms) => {
-                if (typeof window.renderRoomsList === 'function') {
-                    window.renderRoomsList(rooms);
-                }
-            });
-
-            socket.on('rooms_list_response', (rooms) => {
-                if (typeof window.renderRoomsList === 'function') {
-                    window.renderRoomsList(rooms);
-                }
-            });
-
-            // Confirmação de entrada na sala
-            socket.on('room_joined', (data) => {
-                if (data && (data.roomId || data.id)) {
-                    if (data.gameState && typeof applyOnlineRoomState === 'function') {
-                        applyOnlineRoomState(data);
-                    }
-                    if (typeof showCustomPopup === 'function') {
-                        showCustomPopup('Sala Online', 'Entraste na sala com sucesso! Aguarda o Host iniciar a partida.', true);
-                    }
-                }
-            });
-
-            // Início do jogo na sala online (Ativa o layout partilhado)
-            socket.on('room_game_started', (data) => {
-                if (applyOnlineRoomState(data)) {
-                    showOnlineGameLayout();
-                } else if (typeof showCustomPopup === 'function') {
-                    showCustomPopup('Erro ao Iniciar', 'Não foi possível sincronizar os dados da sala para iniciar a partida.', false);
-                }
-            });
-
-            // Sincronização em tempo real do estado de jogo entre os jogadores
-            socket.on('sync_game_state', (data) => {
-                if (applyOnlineRoomState(data)) {
-                    if (typeof refreshGameInterface === 'function') {
-                        refreshGameInterface();
-                    } else {
-                        if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
-                        if (typeof renderBottomPanel === 'function') renderBottomPanel();
-                        if (typeof renderBoardMap === 'function') renderBoardMap();
-                    }
-                }
-            });
-
-            // Mensagens de chat em tempo real na sala
-            socket.on('room_chat_broadcast', (msgData) => {
-                if (msgData && msgData.text) {
-                    if (!Array.isArray(gameState.chatMessages)) {
-                        gameState.chatMessages = [];
-                    }
-                    gameState.chatMessages.push({
-                        sender: msgData.sender || 'Treinador',
-                        text: msgData.text
-                    });
-                    if (gameState.chatMessages.length > 100) {
-                        gameState.chatMessages = gameState.chatMessages.slice(-100);
-                    }
-                    if (typeof renderChatMessages === 'function') {
-                        renderChatMessages();
-                    }
-                }
-            });
-
-            socket.on('trade_synchronized', (data) => {
-                if (data && data.gameState) {
-                    if (typeof gameState !== 'undefined') {
-                        Object.assign(gameState, data.gameState);
-                    }
-                    if (typeof refreshGameInterface === 'function') {
-                        refreshGameInterface();
-                    } else {
-                        if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
-                        if (typeof renderBottomPanel === 'function') renderBottomPanel();
-                    }
-                    if (typeof showCustomPopup === 'function') {
-                        showCustomPopup('🌐 Sincronização Online', 'Uma troca foi efetuada na sua sala e o estado foi atualizado!', true);
-                    }
-                }
-            });
-        } else {
-            console.warn("⚠️ Biblioteca Socket.io não encontrada no escopo global.");
-        }
-    } catch (err) {
-        console.error("Erro ao inicializar Socket.io:", err);
+// Atalho seguro para obter o jogador do turno atual
+export function getCurrentPlayer() {
+    if (gameState && Array.isArray(gameState.players) && gameState.players.length > 0) {
+        const index = gameState.currentPlayerIndex || 0;
+        return gameState.players[index] || gameState.players[0];
     }
-
-    return socket;
+    if (gameState && gameState.player) {
+        return gameState.player;
+    }
+    return null;
 }
 
-export function emitSocket(eventName, payload) {
-    // Garante fallback para window.socket caso a variável local do módulo venha a falhar
-    const activeSocket = socket || window.socket;
-    if (!activeSocket || typeof activeSocket.emit !== 'function') {
-        if (typeof showCustomPopup === 'function') {
-            showCustomPopup(
-                'Conexão indisponível',
-                'Não foi possível comunicar com o servidor online. Verifique a sua ligação.',
-                false
-            );
-        }
-        return false;
+// Retorna especificamente o jogador local da conta (essencial para modo online na HUD, Mochila e PC Box)
+export function getMyPlayer() {
+    ensureValidGameState();
+    if (!gameState.online) {
+        return getCurrentPlayer();
     }
-    activeSocket.emit(eventName, payload);
-    return true;
+    const myIndex = Math.max(0, Math.min(gameState.players.length - 1, Number(gameState.myPlayerIndex) || 0));
+    return gameState.players[myIndex] || gameState.players[0] || getCurrentPlayer();
 }
 
-window.initializeSocketConnection = initializeSocketConnection;
-window.emitSocket = emitSocket;
+// Função unificada de compatibilidade (prioriza o jogador local no online ou o atual no solo)
+export function getCurrentOrMyPlayer() {
+    return getMyPlayer();
+}
+
+// Fallback de segurança para garantir que o estado nunca fique nulo sem apagar dados existentes
+export function ensureValidGameState() {
+    if (!Array.isArray(gameState.players)) {
+        gameState.players = [];
+    }
+    
+    if (gameState.players.length === 0) {
+        gameState.players = [{
+            name: setupConfig.trainerName || 'Ash Ketchum',
+            avatarId: setupConfig.selectedAvatar || setupConfig.avatarId || 1,
+            gold: 350,
+            badges: [],
+            currentZone: 5,
+            level: 1,
+            activeTeam: [],
+            pcBox: [], // PC Box limpa inicialmente para evitar duplicações
+            inventory: [],
+            equipmentSlots: [null, null]
+        }];
+    }
+    
+    // Garante que o jogador atual possui as propriedades mínimas essenciais
+    const cp = getCurrentPlayer();
+    if (cp) {
+        if (!Array.isArray(cp.activeTeam)) cp.activeTeam = [];
+        if (!Array.isArray(cp.pcBox)) cp.pcBox = [];
+        if (!Array.isArray(cp.inventory)) cp.inventory = [];
+        if (!Array.isArray(cp.badges)) cp.badges = [];
+        if (cp.currentZone === undefined || cp.currentZone === null) cp.currentZone = 5;
+    }
+
+    gameState.currentPlayerIndex = gameState.currentPlayerIndex || 0;
+    gameState.myPlayerIndex = gameState.myPlayerIndex || 0;
+}
+
+// Exposição global opcional para depuração no console
+window.gameState = gameState;
+window.movementState = movementState;
+window.getMyPlayer = getMyPlayer;
+window.getCurrentOrMyPlayer = getCurrentOrMyPlayer;
