@@ -523,16 +523,27 @@ function loadDailyPokemonPreview() {
     const nameEl = document.getElementById('daily-pokemon-name');
     const spriteEl = document.getElementById('daily-pokemon-sprite');
 
-    if (MONSTER_CATALOG && MONSTER_CATALOG.length > 0) {
-        const randomIndex = Math.floor(Math.random() * MONSTER_CATALOG.length);
-        const dailyMon = MONSTER_CATALOG[randomIndex];
+    // Verifica primeiro se há um Pokémon do dia definido no admin/gameState ou localStorage
+    let configuredDaily = gameState.dailyPokemon || localStorage.getItem('admin_daily_pokemon');
+    let dailyMon = null;
 
+    if (configuredDaily && MONSTER_CATALOG) {
+        dailyMon = MONSTER_CATALOG.find(m => m.id === configuredDaily || m.name.toLowerCase() === String(configuredDaily).toLowerCase());
+    }
+
+    if (!dailyMon && MONSTER_CATALOG && MONSTER_CATALOG.length > 0) {
+        const randomIndex = Math.floor(Math.random() * MONSTER_CATALOG.length);
+        dailyMon = MONSTER_CATALOG[randomIndex];
+    }
+
+    if (dailyMon) {
         if (nameEl) nameEl.textContent = dailyMon.name;
         if (spriteEl && dailyMon.image) {
             spriteEl.src = dailyMon.image;
         }
     }
 }
+window.loadDailyPokemonPreview = loadDailyPokemonPreview;
 
 function setupGlobalInterfaceListeners() {
     const trainerCardBtn = document.getElementById('open-trainer-card-btn') || document.getElementById('trainer-badge-btn');
