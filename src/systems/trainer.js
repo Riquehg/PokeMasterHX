@@ -1,5 +1,5 @@
 // --- src/systems/trainer.js ---
-// Módulo do Trainer's Card, Ficha do Treinador e Detalhes do Anima
+// Módulo do Trainer's Card, Ficha do Treinador e Detalhes do Anima (Versão Sincronizada Online)
 
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 import { gameState, getCurrentPlayer } from '../core/state.js';
@@ -43,9 +43,11 @@ function updateTrainerCardBadges(cp) {
 // ------------------------------------------------------------
 export function openSpecificTrainerCardModal(playerIndex) {
     const cp = gameState.players[playerIndex] || gameState.players[0];
-    const loggedPlayer = getCurrentPlayer();
+    const loggedPlayerIndex = gameState.online ? (gameState.myPlayerIndex || 0) : (gameState.currentPlayerIndex || 0);
+    const loggedPlayer = gameState.players[loggedPlayerIndex] || getCurrentPlayer();
     
-    const areOnSameTile = (loggedPlayer.currentZone === cp.currentZone) && (loggedPlayer.name !== cp.name);
+    // Validação correta de colisão na mesma casa entre o jogador local e o alvo
+    const areOnSameTile = (Number(loggedPlayer.currentZone || 5) === Number(cp.currentZone || 5)) && (loggedPlayer.name !== cp.name);
 
     let cardModal = document.getElementById('trainer-card-modal-full');
     if (!cardModal) {
@@ -112,7 +114,7 @@ export function openSpecificTrainerCardModal(playerIndex) {
     if (areOnSameTile) {
         interactionButtonsHtml = `
             <div class="bg-purple-950/40 border-2 border-purple-600/60 p-3 rounded-xl flex flex-wrap gap-2 items-center justify-between mt-3">
-                <span class="text-[10px] text-purple-300 font-bold">📍 Estão na mesma casa! Ações disponíveis:</span>
+                <span class="text-[10px] text-purple-300 font-bold">📍 Estão na mesma casa (#${cp.currentZone})! Ações disponíveis:</span>
                 <div class="flex gap-2 w-full">
                     <button onclick="document.getElementById('trainer-card-modal-full').remove(); if(typeof triggerPvPBattleArena === 'function') triggerPvPBattleArena('${cp.name}');" class="flex-1 bg-red-700 hover:bg-red-600 text-white font-black py-2 rounded-lg text-[10px] uppercase shadow cursor-pointer">
                         ⚔ Desafiar PvP
@@ -159,7 +161,8 @@ export function openSpecificTrainerCardModal(playerIndex) {
 }
 
 export function openTrainerCardModal() {
-    openSpecificTrainerCardModal(gameState.currentPlayerIndex || 0);
+    const targetIdx = gameState.online ? (gameState.myPlayerIndex || 0) : (gameState.currentPlayerIndex || 0);
+    openSpecificTrainerCardModal(targetIdx);
 }
 
 // ------------------------------------------------------------
