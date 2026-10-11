@@ -1,5 +1,5 @@
 // --- src/systems/gym.js ---
-import { gameState, getCurrentPlayer } from '../core/state.js';
+import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer } from '../core/state.js';
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 import { saveGameProgress } from '../core/storage.js';
 import { emitSocket } from '../core/socket.js';
@@ -85,8 +85,11 @@ export const GYM_LEADERS_CATALOG = [
 ];
 
 export function initiateGymSequence(cityName) {
-    const cp = getCurrentPlayer();
-    const attemptKey = `${gameState.currentPlayerIndex || 0}_${cityName}`;
+    const cp = getCurrentOrMyPlayer();
+    if (!cp) return;
+
+    const playerIndex = gameState.online ? (gameState.myPlayerIndex || 0) : (gameState.currentPlayerIndex || 0);
+    const attemptKey = `${playerIndex}_${cityName}`;
 
     // Verifica se já tentou este ginásio neste turno
     if (window.gymAttemptedThisTurn && window.gymAttemptedThisTurn[attemptKey]) {
@@ -168,7 +171,8 @@ function showGymVsScreen(gymInfo) {
 
     document.getElementById('gym-accept-btn').onclick = () => {
         // Regista tentativa imediata para bloquear re-enfrentamento no mesmo turno
-        const attemptKey = `${gameState.currentPlayerIndex || 0}_${gymInfo.city}`;
+        const playerIndex = gameState.online ? (gameState.myPlayerIndex || 0) : (gameState.currentPlayerIndex || 0);
+        const attemptKey = `${playerIndex}_${gymInfo.city}`;
         if (!window.gymAttemptedThisTurn) window.gymAttemptedThisTurn = {};
         window.gymAttemptedThisTurn[attemptKey] = true;
 
@@ -185,7 +189,7 @@ function launchGymBattleArenaDirect(gymInfo) {
             data: gymInfo
         });
     } else {
-        console.error("ERRO CRÍtICO: window.openBattleArena não está definida!");
+        console.error("ERRO CRÍTICO: window.openBattleArena não está definida!");
         alert(`Erro: O sistema de arena de batalha TCG não foi carregado corretamente.`);
     }
 }
