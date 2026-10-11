@@ -2,7 +2,7 @@
 // Módulo do Trainer's Card, Ficha do Treinador e Detalhes do Anima (Versão Sincronizada Online)
 
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
-import { gameState, getCurrentPlayer } from '../core/state.js';
+import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer } from '../core/state.js';
 
 // ------------------------------------------------------------
 // CORES DE TIERS
@@ -42,12 +42,14 @@ function updateTrainerCardBadges(cp) {
 // ABRIR TRAINER'S CARD ESPECÍFICO (Com suporte a PvP / Troca)
 // ------------------------------------------------------------
 export function openSpecificTrainerCardModal(playerIndex) {
-    const cp = gameState.players[playerIndex] || gameState.players[0];
+    const cp = gameState.players && gameState.players[playerIndex] ? gameState.players[playerIndex] : getCurrentOrMyPlayer();
+    if (!cp) return;
+
     const loggedPlayerIndex = gameState.online ? (gameState.myPlayerIndex || 0) : (gameState.currentPlayerIndex || 0);
-    const loggedPlayer = gameState.players[loggedPlayerIndex] || getCurrentPlayer();
+    const loggedPlayer = gameState.players && gameState.players[loggedPlayerIndex] ? gameState.players[loggedPlayerIndex] : getCurrentOrMyPlayer();
     
     // Validação correta de colisão na mesma casa entre o jogador local e o alvo
-    const areOnSameTile = (Number(loggedPlayer.currentZone || 5) === Number(cp.currentZone || 5)) && (loggedPlayer.name !== cp.name);
+    const areOnSameTile = loggedPlayer && (Number(loggedPlayer.currentZone || 5) === Number(cp.currentZone || 5)) && (loggedPlayer.name !== cp.name);
 
     let cardModal = document.getElementById('trainer-card-modal-full');
     if (!cardModal) {
@@ -58,8 +60,9 @@ export function openSpecificTrainerCardModal(playerIndex) {
     }
 
     let teamSlotsHtml = '';
+    const activeTeam = Array.isArray(cp.activeTeam) ? cp.activeTeam : [];
     for (let i = 0; i < 6; i++) {
-        let mon = cp.activeTeam[i];
+        let mon = activeTeam[i];
         if (mon) {
             let curHp = mon.currentHp !== undefined ? mon.currentHp : (mon.maxHp || 20);
             let maxHp = mon.maxHp || mon.hp || 20;
@@ -111,7 +114,7 @@ export function openSpecificTrainerCardModal(playerIndex) {
     });
 
     let interactionButtonsHtml = '';
-    if (areOnSameTile) {
+    if (areOnSameTile && loggedPlayer) {
         interactionButtonsHtml = `
             <div class="bg-purple-950/40 border-2 border-purple-600/60 p-3 rounded-xl flex flex-wrap gap-2 items-center justify-between mt-3">
                 <span class="text-[10px] text-purple-300 font-bold">📍 Estão na mesma casa (#${cp.currentZone})! Ações disponíveis:</span>
@@ -178,13 +181,25 @@ const TYPE_ADVANTAGES = {
 };
 
 export function openPokemonDetailModal(monsterIdOrUniqueId, fromArea = 'team') {
-    const cp = getCurrentPlayer();
+    const cp = getCurrentOrMyPlayer();
+    if (!cp) return;
+
     let monster = null;
+    const activeTeam = Array.isArray(cp.activeTeam) ? cp.activeTeam : [];
+    const pcBox = Array.isArray(cp.pcBox) ? cp.pcBox : [];
+
     if (fromArea === 'team') {
-        monster = cp.activeTeam.find(m => m.uniqueId === monsterIdOrUniqueId || m.id === monsterIdOrUniqueId);
+        monster = activeTeam.find(m => m && (m.uniqueId === monsterIdOrUniqueId || m.id === monsterIdOrUniqueId));
     } else if (fromArea === 'pcbox') {
-        monster = cp.pcBox.find(m => m.uniqueId === monsterIdOrUniqueId || m.id === monsterIdOrUniqueId);
+        monster = pcBox.find(m => m && (m.uniqueId === monsterIdOrUniqueId || m.id === monsterIdOrUniqueId));
     }
+    
+    // Fallback de segurança se não encontrar na área especificada
+    if (!monster) {
+        monster = activeTeam.find(m => m && (m.uniqueId === monsterIdOrUniqueId || m.id === monsterIdOrUniqueId)) ||
+                  pcBox.find(m => m && (m.uniqueId === monsterIdOrUniqueId || m.id === monsterIdOrUniqueId));
+    }
+
     if (!monster) return;
 
     let detailModal = document.getElementById('pokemon-detail-modal');
@@ -237,7 +252,7 @@ export function openPokemonDetailModal(monsterIdOrUniqueId, fromArea = 'team') {
                 <div class="space-y-1.5 text-xs">
                     <div>
                         <h3 class="text-base font-black text-white">${monster.name}</h3>
-                        <p class="text-[10px] text-amber-400 font-bold uppercase">Tipo: ${monster.type || 'Normal'}</p>
+                        <p class="text-[10px] text-amber-400 font-bold uppercase">Tipo: ${Array.isArray(monster.types) ? monster.types.join('/') : (monster.type || 'Normal')}</p>
                     </div>
                     <div class="bg-black/40 p-2 rounded-lg border border-amber-900/40 space-y-0.5 text-[10px]">
                         <div class="flex justify-between"><span>Nível:</span> <span class="font-bold text-amber-300">Nv. ${monsterLevel}</span></div>
