@@ -26,11 +26,11 @@ export function setupDiceListeners() {
         passTurnBtn.dataset.listenerAttached = "true";
         passTurnBtn.onclick = () => {
             // 🛡️ TRAVA DE SEGURANÇA ONLINE: Apenas o dono do turno atual pode passá-lo
-            const activeIndex = gameState.currentPlayerIndex || 0;
-            const myIdx = gameState.online ? (gameState.myPlayerIndex || 0) : activeIndex;
+            const activeIndex = Number(gameState.currentPlayerIndex) || 0;
+            const myIdx = gameState.online ? (Number(gameState.myPlayerIndex) || 0) : activeIndex;
             if (gameState.online && activeIndex !== myIdx) {
                 if (typeof showCustomPopup === 'function') {
-                    showCustomPopup("Ação Bloqueada", "Não pode passar o turno de outro jogador.", false);
+                    showCustomPopup("Ação Bloqueada", "⏳ Não é o seu turno! Aguarde o outro jogador concluir a jogada.", false);
                 }
                 return;
             }
@@ -39,19 +39,18 @@ export function setupDiceListeners() {
             
             // Avança o índice do jogador atual
             if (typeof gameState !== 'undefined' && gameState.players && Array.isArray(gameState.players)) {
-                gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
+                gameState.currentPlayerIndex = (activeIndex + 1) % gameState.players.length;
             }
 
             // Sincroniza a mudança de turno com os outros jogadores na sala online
-            if (gameState.online && currentJoinedOnlineRoomId) {
+            if (gameState.online) {
                 if (typeof window.broadcastOnlineAction === 'function') {
                     window.broadcastOnlineAction('turn_passed', {
                         nextPlayerIndex: gameState.currentPlayerIndex
                     });
-                } else {
+                } else if (typeof emitSocket === 'function') {
                     emitSocket('update_game_state', {
-                        roomId: currentJoinedOnlineRoomId,
-                        type: 'pass_turn',
+                        type: 'turn_passed',
                         gameState: gameState
                     });
                 }
@@ -220,12 +219,13 @@ export function resetTurnDiceState() {
 // ------------------------------------------------------------
 
 export function rollDiceForMovement() {
-    // 🛡️ TRAVA DE SEGURANÇA ONLINE: Impede jogar fora do turno
-    const activeIndex = gameState.currentPlayerIndex || 0;
-    const myIdx = gameState.online ? (gameState.myPlayerIndex || 0) : activeIndex;
+    // 🛡️ TRAVA DE SEGURANÇA ONLINE RIGOROSA: Impede jogar fora do turno
+    const activeIndex = Number(gameState.currentPlayerIndex) || 0;
+    const myIdx = gameState.online ? (Number(gameState.myPlayerIndex) || 0) : activeIndex;
+    
     if (gameState.online && activeIndex !== myIdx) {
         if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Não é o seu turno!", "Aguarde o outro jogador concluir a jogada.", false);
+            showCustomPopup("Aguarde o seu Turno!", "⏳ O outro jogador está a realizar a sua jogada, combate ou evento. Aguarde a sua vez!", false);
         }
         return;
     }
@@ -361,6 +361,16 @@ export function startDirectMovementSession(steps) {
 // ------------------------------------------------------------
 
 export function handleWaypointClick(targetWaypointId) {
+    // 🛡️ TRAVA DE SEGURANÇA ONLINE RIGOROSA
+    const activeIndex = Number(gameState.currentPlayerIndex) || 0;
+    const myIdx = gameState.online ? (Number(gameState.myPlayerIndex) || 0) : activeIndex;
+    if (gameState.online && activeIndex !== myIdx) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup("Ação Bloqueada", "⏳ Não é o seu turno para se movimentar!", false);
+        }
+        return;
+    }
+
     if (!movementState.isMoving) return;
 
     const targetId = Number(targetWaypointId);
@@ -503,6 +513,20 @@ export function triggerWaypointEvent(waypointId) {
     if (!waypoint || !player) return;
 
     player.currentZone = Number(waypoint.id);
+
+    // Notificação visual informativa para o outro jogador no modo online
+    const activeIndex = Number(gameState.currentPlayerIndex) || 0;
+    const myIdx = gameState.online ? (Number(gameState.myPlayerIndex) || 0) : activeIndex;
+    if (gameState.online && activeIndex !== myIdx) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup(
+                "Ação do Adversário", 
+                `⏳ O jogador ${player.name || 'Adversário'} chegou a ${waypoint.name || 'uma zona'} e está em evento ou batalha! Aguarde a vez.`, 
+                true
+            );
+        }
+        return;
+    }
 
     if (waypoint.type === 'pokemon') {
         if (typeof boardPokemonCards === 'undefined') {
