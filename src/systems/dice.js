@@ -1,5 +1,5 @@
 // --- src/systems/dice.js ---
-// Módulo de Dados, Movimento e Eventos do Tabuleiro
+// Módulo de Dados, Movimento e Eventos do Tabuleiro (Versão Sincronizada Online)
 
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 import { gameState, getCurrentPlayer, movementState } from '../core/state.js';
@@ -26,7 +26,9 @@ export function setupDiceListeners() {
         passTurnBtn.dataset.listenerAttached = "true";
         passTurnBtn.onclick = () => {
             // 🛡️ TRAVA DE SEGURANÇA ONLINE: Apenas o dono do turno atual pode passá-lo
-            if (gameState.online && gameState.currentPlayerIndex !== gameState.myPlayerIndex) {
+            const activeIndex = gameState.currentPlayerIndex || 0;
+            const myIdx = gameState.online ? (gameState.myPlayerIndex || 0) : activeIndex;
+            if (gameState.online && activeIndex !== myIdx) {
                 if (typeof showCustomPopup === 'function') {
                     showCustomPopup("Ação Bloqueada", "Não pode passar o turno de outro jogador.", false);
                 }
@@ -212,7 +214,9 @@ export function resetTurnDiceState() {
 
 export function rollDiceForMovement() {
     // 🛡️ TRAVA DE SEGURANÇA ONLINE: Impede jogar fora do turno
-    if (gameState.online && gameState.currentPlayerIndex !== gameState.myPlayerIndex) {
+    const activeIndex = gameState.currentPlayerIndex || 0;
+    const myIdx = gameState.online ? (gameState.myPlayerIndex || 0) : activeIndex;
+    if (gameState.online && activeIndex !== myIdx) {
         if (typeof showCustomPopup === 'function') {
             showCustomPopup("Não é o seu turno!", "Aguarde o outro jogador concluir a jogada.", false);
         }
