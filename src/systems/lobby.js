@@ -143,6 +143,19 @@ export function showOnlineGameLayout() {
     }
 }
 
+// Transmite a ação e o estado atualizado para o servidor gerir a sala online em tempo real
+export function broadcastOnlineAction(actionType, extraData = {}) {
+    if (!gameState.online || !currentJoinedOnlineRoomId) return;
+
+    emitSocket('update_game_state', {
+        roomId: currentJoinedOnlineRoomId,
+        actionType: actionType,
+        gameState: gameState,
+        ...extraData
+    });
+}
+window.broadcastOnlineAction = broadcastOnlineAction;
+
 export function initLobbySocketListeners() {
     if (!socket) return;
 
