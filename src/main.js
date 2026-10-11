@@ -9,7 +9,7 @@ import { MONSTER_CATALOG } from './config/cards-data.js';
 import './systems/city.js';
 import './systems/trainer.js';
 import './systems/vault.js';
-import './systems/lobby.js';
+import { currentJoinedOnlineRoomId, broadcastOnlineAction } from './systems/lobby.js';
 import './systems/admin.js';
 import './systems/capture.js';
 import './systems/encounter.js';
@@ -138,11 +138,15 @@ window.resetGameProgressKeepCollection = function() {
 
     saveGameProgress();
 
-    if (gameState.online && typeof emitSocket === 'function') {
-        emitSocket('update_game_state', {
-            type: 'game_reset',
-            gameState: gameState
-        });
+    if (gameState.online) {
+        if (typeof window.broadcastOnlineAction === 'function') {
+            window.broadcastOnlineAction('game_reset', { gameState: gameState });
+        } else if (typeof emitSocket === 'function') {
+            emitSocket('update_game_state', {
+                type: 'game_reset',
+                gameState: gameState
+            });
+        }
     }
 
     window.showCustomPopup(
@@ -224,11 +228,15 @@ window.triggerRandomBoardEvent = function(eventName) {
     randomEvt.apply();
     saveGameProgress();
 
-    if (gameState.online && typeof emitSocket === 'function') {
-        emitSocket('update_game_state', {
-            type: 'board_event_triggered',
-            gameState: gameState
-        });
+    if (gameState.online) {
+        if (typeof window.broadcastOnlineAction === 'function') {
+            window.broadcastOnlineAction('board_event_triggered', { gameState: gameState });
+        } else if (typeof emitSocket === 'function') {
+            emitSocket('update_game_state', {
+                type: 'board_event_triggered',
+                gameState: gameState
+            });
+        }
     }
 
     window.showCustomPopup(randomEvt.title, randomEvt.text, randomEvt.success);
@@ -591,6 +599,16 @@ function setupGlobalInterfaceListeners() {
     const passTurnBtn = document.getElementById('pass-turn-btn');
     if (passTurnBtn) {
         passTurnBtn.onclick = () => {
+            // 🛡️ Validação do Turno Online
+            const activeIndex = gameState.currentPlayerIndex || 0;
+            const myIdx = gameState.online ? (gameState.myPlayerIndex || 0) : activeIndex;
+            if (gameState.online && activeIndex !== myIdx) {
+                if (typeof showCustomPopup === 'function') {
+                    showCustomPopup("Ação Bloqueada", "Não podes passar o turno de outro jogador.", false);
+                }
+                return;
+            }
+
             gameState.currentPlayerIndex = ((gameState.currentPlayerIndex || 0) + 1) % (gameState.players?.length || 1);
             
             if (typeof movementState !== 'undefined') {
@@ -598,15 +616,24 @@ function setupGlobalInterfaceListeners() {
                 movementState.isMoving = false;
             }
 
-            if (gameState.online && typeof emitSocket === 'function') {
-                emitSocket('update_game_state', {
-                    type: 'turn_passed',
-                    gameState: gameState
-                });
+            // Sincronização via Sala Online
+            if (gameState.online) {
+                if (typeof window.broadcastOnlineAction === 'function') {
+                    window.broadcastOnlineAction('turn_passed', {
+                        nextPlayerIndex: gameState.currentPlayerIndex
+                    });
+                } else if (typeof emitSocket === 'function') {
+                    emitSocket('update_game_state', {
+                        type: 'turn_passed',
+                        gameState: gameState
+                    });
+                }
             }
 
             setDiceButtonState(false);
-            alert(`🔄 Turno passado com sucesso! Agora é a vez do próximo jogador.`);
+            if (typeof showCustomPopup === 'function') {
+                showCustomPopup("🔄 Turno Passado", `Agora é a vez de ${gameState.players[gameState.currentPlayerIndex]?.name || 'outro jogador'}!`, true);
+            }
             updateTrainerVisualsAndHud();
             renderTeamCardSlots();
             renderBoardMap();
