@@ -6,6 +6,7 @@ import { renderTeamCardSlots, renderBottomPanel } from './pcbox.js';
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 import { MONSTER_CATALOG } from '../config/cards-data.js';
 import { saveGameProgress } from '../core/storage.js';
+import { emitSocket } from '../core/socket.js';
 
 export let currentEncounterState = {
     wildPokemon: null,
@@ -285,7 +286,7 @@ export function renderEncounterItemsList() {
             const count = item.count !== undefined ? item.count : (item.quantity || 0);
             if (!item || count <= 0) return;
             const isSphere = item.type === 'sphere' || item.category === 'capture' || item.id.includes('ball');
-            if (!isSphere) return; // Mostra apenas esferas no painel de combate para captura
+            if (!isSphere) return;
 
             const btn = document.createElement('button');
             const isSelected = currentEncounterState.selectedCaptureBallId === item.id;
@@ -339,7 +340,6 @@ function addExperienceAndCheckEvolution(monster, expGain) {
 
         showCustomPopup("✨ SUBIDA DE NÍVEL!", `O teu ${monster.name} subiu para o Nível ${monster.level}!\nOs seus atributos melhoraram!`, true);
 
-        // Verificação simples de evolução por nível (exemplo padrão do catálogo)
         const baseCatalogItem = MONSTER_CATALOG.find(m => m.id === monster.id || m.name.toLowerCase() === monster.name.toLowerCase());
         if (baseCatalogItem && baseCatalogItem.evolvesTo && monster.level >= (baseCatalogItem.evolveLevel || 16)) {
             const evolvedData = MONSTER_CATALOG.find(m => m.id === baseCatalogItem.evolvesTo);
@@ -371,7 +371,6 @@ window.resolveBattleAttempt = function() {
         return;
     }
 
-    // Garante animação do dado antes de atacar (igual ao movimento do tabuleiro)
     if (typeof window.rollDiceWithAnimation === 'function') {
         window.rollDiceWithAnimation((playerDice) => {
             currentEncounterState.hasAttemptedAttack = true;
@@ -426,7 +425,6 @@ export function resolveCaptureAttempt() {
         return;
     }
 
-    // Encontra e consome a Poké Ball da mochila do jogador
     const sphereItem = cp.inventory.find(i => i.id === currentEncounterState.selectedCaptureBallId && (Number(i.count) || Number(i.quantity) || 0) > 0);
     if (!sphereItem) {
         showCustomPopup("Sem Esferas", "Não tens essa Poké Ball disponível na mochila!", false);
@@ -438,7 +436,6 @@ export function resolveCaptureAttempt() {
 
     currentEncounterState.hasAttemptedCapture = true;
 
-    // Animação de dado para a captura
     if (typeof window.rollDiceWithAnimation === 'function') {
         window.rollDiceWithAnimation((roll) => {
             let requiredTarget = 4;
@@ -486,7 +483,6 @@ export function resolveCaptureAttempt() {
                 if (!Array.isArray(cp.pokedex)) cp.pokedex = [];
                 if (!cp.pokedex.includes(wild.id)) cp.pokedex.push(wild.id);
 
-                // REMOVE O POKÉMON DO MAPA DEFINITIVAMENTE
                 if (wild.waypointId && typeof boardPokemonCards !== 'undefined') {
                     delete boardPokemonCards[wild.waypointId];
                 }
@@ -496,6 +492,14 @@ export function resolveCaptureAttempt() {
                 if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
                 if (typeof renderBottomPanel === 'function') renderBottomPanel();
                 saveGameProgress();
+
+                // Sincronização online via WebSocket após captura bem-sucedida
+                if (gameState.online && typeof emitSocket === 'function') {
+                    emitSocket('update_game_state', {
+                        type: 'pokemon_captured',
+                        gameState: typeof gameState !== 'undefined' ? gameState : null
+                    });
+                }
             } else {
                 wild.weakened = true; 
                 showCustomPopup(
