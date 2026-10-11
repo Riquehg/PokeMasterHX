@@ -2,7 +2,7 @@
 // Módulo do Tabuleiro, Caminhos e Multiplayer Sincronizado (Versão Otimizada e Corrigida)
 
 import { SUPABASE_STORAGE_URL, FULL_MAP_IMAGE } from '../config/constants.js';
-import { gameState, getCurrentPlayer, movementState, ensureValidGameState } from '../core/state.js';
+import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer, movementState, ensureValidGameState } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
 import { openEncounterModalWithPokemon } from './encounter.js';
 import { MONSTER_CATALOG } from '../config/cards-data.js';
@@ -156,7 +156,7 @@ export const BOARD_WAYPOINTS = [
 
 export function getValidDestinations(startWaypointId, steps) {
     let validIds = new Set();
-    const activePlayer = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : (gameState.players ? gameState.players[gameState.currentPlayerIndex || 0] : null);
+    const activePlayer = getCurrentOrMyPlayer();
     const playerBadges = activePlayer && Array.isArray(activePlayer.badges) ? activePlayer.badges.length : 0;
 
     let adjacencyList = {};
@@ -239,7 +239,8 @@ export function rollDiceForMovement() {
 
     if (typeof rollDiceWithAnimation === 'function') {
         rollDiceWithAnimation((diceResult) => {
-            const cp = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : gameState.players[gameState.currentPlayerIndex];
+            const cp = getCurrentOrMyPlayer();
+            if (!cp) return;
             const currentZone = cp.currentZone || 5;
 
             const validNextSteps = getValidDestinations(currentZone, diceResult);
@@ -285,7 +286,7 @@ export function onHexClick(waypointId, hexName) {
         return;
     }
 
-    const cp = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : (gameState.players ? gameState.players[gameState.currentPlayerIndex || 0] : null);
+    const cp = getCurrentOrMyPlayer();
     const currentZoneId = cp ? (cp.currentZone || 5) : 5;
 
     if (currentZoneId === waypointId) {
@@ -300,7 +301,7 @@ export function onHexClick(waypointId, hexName) {
 }
 
 export function tryInteractWithCity(waypointId, cityName) {
-    const cp = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : (gameState.players ? gameState.players[gameState.currentPlayerIndex || 0] : null);
+    const cp = getCurrentOrMyPlayer();
     const currentZoneId = cp ? (cp.currentZone || 5) : 5;
 
     if (currentZoneId === waypointId) {
@@ -342,7 +343,7 @@ export function handleWaypointArrival(waypointId) {
     const waypoint = BOARD_WAYPOINTS.find(w => w.id === waypointId);
     if (!waypoint) return;
 
-    const cp = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : gameState.players[gameState.currentPlayerIndex];
+    const cp = getCurrentOrMyPlayer();
     if (cp) {
         cp.currentZone = waypointId;
     }
@@ -361,7 +362,7 @@ export function handleWaypointArrival(waypointId) {
 
     // Verificação de colisão na mesma casa para ativar o PVP / interações
     if (typeof checkPlayerCellCollision === 'function') {
-        checkPlayerCellCollision(waypointId, gameState.currentPlayerIndex || 0);
+        checkPlayerCellCollision(waypointId, gameState.online ? (gameState.myPlayerIndex || 0) : (gameState.currentPlayerIndex || 0));
     }
 
     if (waypoint.type === 'city') {
@@ -384,7 +385,6 @@ export function handleWaypointArrival(waypointId) {
             else if (color === 'vermelho') targetTier = 4;
             else if (color === 'amarelo') targetTier = 5;
 
-            // Filtro estrito rigoroso para garantir que o monstro gerado pertence exatamente à tier da cor da casa
             let tierFiltered = MONSTER_CATALOG.filter(m => Number(m.tier || 1) === targetTier);
             if (tierFiltered.length === 0) tierFiltered = MONSTER_CATALOG;
 
@@ -398,7 +398,7 @@ export function handleWaypointArrival(waypointId) {
                 ...randomMon,
                 uniqueId: 'wild_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
                 level: level,
-                tier: targetTier, // Garante que a tier fica fixa de acordo com a cor exata da casa do mapa
+                tier: targetTier,
                 currentHp: maxHp,
                 maxHp: maxHp,
                 isShiny: isShiny,
@@ -434,7 +434,7 @@ export function handleWaypointArrival(waypointId) {
 }
 
 function triggerRandomBoardEvent(eventName) {
-    const cp = getCurrentPlayer();
+    const cp = getCurrentOrMyPlayer();
     if (!cp) return;
 
     const eventsList = [
@@ -524,7 +524,6 @@ export function renderBoardMap(highlightIds = []) {
                     pokeImg = pokeCard.shinyImage;
                 }
 
-                // Identificação visual da Tier / Raridade para exibição correta no mapa
                 const tierNames = { 1: 'Comum', 2: 'Incomum', 3: 'Raro', 4: 'Épico', 5: 'Lendário' };
                 const tierBadgeText = tierNames[pokeCard.tier || 1] || 'Comum';
 
@@ -673,7 +672,7 @@ export function renderBoardMapWithHighlights(validNextSteps) {
 }
 
 function animateTokenMovement(newPositionIndex) {
-    const cp = (typeof getCurrentPlayer === 'function') ? getCurrentPlayer() : gameState.player;
+    const cp = getCurrentOrMyPlayer();
     if (cp) {
         cp.currentZone = newPositionIndex;
     }
