@@ -1,18 +1,16 @@
 // --- src/systems/inventory.js ---
 // Módulo de Gerenciamento da Mochila, Poké Mart e Itens
 
-import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer, ensureValidGameState } from '../core/state.js';
+import { gameState, getMyPlayer, ensureValidGameState } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
 import { ITEM_CATALOG, getItemDetails, normalizePlayerInventory } from '../data/items.js';
 import { MONSTER_CATALOG } from '../config/cards-data.js';
 import { emitSocket } from '../core/socket.js';
 
-// Função auxiliar unificada para obter sempre o jogador correto do Inventário/Loja (prioriza o jogador local no modo online)
+// Função auxiliar unificada: Usa estritamente o jogador local da conta (`getMyPlayer`) para garantir HUD estática e pessoal no online
 function getInventoryPlayer() {
-    if (gameState && gameState.online) {
-        return getMyPlayer() || getCurrentOrMyPlayer();
-    }
-    return getCurrentOrMyPlayer();
+    ensureValidGameState();
+    return getMyPlayer();
 }
 
 // ------------------------------------------------------------
