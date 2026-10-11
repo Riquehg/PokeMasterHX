@@ -9,6 +9,14 @@ import { emitSocket } from '../core/socket.js';
 
 const MONSTER_CATALOG_REF = Array.isArray(MONSTER_CATALOG) ? MONSTER_CATALOG : [];
 
+// Função auxiliar unificada para obter sempre o jogador correto da HUD (prioriza o jogador local no modo online)
+function getHudPlayer() {
+    if (gameState && gameState.online) {
+        return getMyPlayer() || getCurrentOrMyPlayer();
+    }
+    return getCurrentOrMyPlayer();
+}
+
 export function getTierColorClass(tier) {
     switch (tier) {
         case 2: return 'bg-gradient-to-b from-green-950 to-black border-green-600 ';
@@ -53,7 +61,7 @@ export function handleDragOver(e) {
 
 export function handleDrop(e, targetArea, targetIndex) {
     e.preventDefault();
-    const cp = getCurrentOrMyPlayer();
+    const cp = getHudPlayer();
     const dataRaw = e.dataTransfer.getData('text/plain');
     if (!dataRaw) return;
 
@@ -104,7 +112,7 @@ export function handleDrop(e, targetArea, targetIndex) {
 }
 
 export function renderTeamCardSlots() {
-    const cp = getCurrentOrMyPlayer();
+    const cp = getHudPlayer();
     for (let i = 0; i < 6; i++) {
         const slotContainer = document.getElementById(`trainer-card-slot-${i}`) || document.getElementById(`team-slot-${i}`) || document.getElementById(`team-card-slot-${i}`);
         if (!slotContainer) continue;
@@ -149,7 +157,7 @@ export function renderTeamCardSlots() {
 }
 
 export function renderBottomPanel() {
-    const cp = getCurrentOrMyPlayer();
+    const cp = getHudPlayer();
     const container = document.getElementById('bottom-dynamic-container');
     const titleElement = document.getElementById('bottom-panel-title');
     if (!container) return;
@@ -258,7 +266,7 @@ export function renderBottomPanel() {
 
 export function changePcBoxPage(direction) {
     gameState.pcBoxCurrentPage = (gameState.pcBoxCurrentPage || 0) + direction;
-    const cp = getCurrentOrMyPlayer();
+    const cp = getHudPlayer();
     const totalBoxes = cp && cp.pcBox ? cp.pcBox.length : 0;
     const maxPages = Math.max(0, Math.ceil(totalBoxes / 12) - 1);
     if (gameState.pcBoxCurrentPage < 0) gameState.pcBoxCurrentPage = 0;
@@ -267,7 +275,7 @@ export function changePcBoxPage(direction) {
 }
 
 window.openPokemonDetailModal = function(identifier, sourceArea) {
-    const cp = getCurrentOrMyPlayer();
+    const cp = getHudPlayer();
     if (!cp) return;
 
     let monster = null;
@@ -351,7 +359,7 @@ export function switchBottomView(viewName) {
 
 // Ponte unificada global para disparar o uso do item a partir do painel inferior da mochila
 window.useInventoryItemMainScreen = function(itemId) {
-    const cp = getCurrentOrMyPlayer();
+    const cp = getHudPlayer();
     if (!cp || !Array.isArray(cp.inventory)) return;
     const itemIndex = cp.inventory.findIndex(i => i && i.id === itemId);
     if (itemIndex !== -1 && typeof useInventoryItem === 'function') {
