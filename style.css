@@ -225,76 +225,68 @@
     }
 }
 
-/* --- EFEITOS VISUAIS DE SHINY E AURAS --- */
+/* --- EFEITOS VISUAIS DE SHINY (SUPER DESTAQUE DOURADO E DIAMANTE) --- */
 
 .shiny-card-glow {
-    border: 3px solid #fbbf24 !important;
+    border: 3px solid #ffdf00 !important;
     box-shadow:
-        0 0 12px rgba(251, 191, 36, 0.9),
-        0 0 28px rgba(250, 204, 21, 0.55),
-        inset 0 0 10px rgba(251, 191, 36, 0.6);
-    animation: shinyPulse 2s infinite alternate;
+        0 0 18px rgba(255, 223, 0, 0.95),
+        0 0 35px rgba(255, 170, 0, 0.7),
+        inset 0 0 14px rgba(255, 255, 128, 0.8) !important;
+    animation: shinySuperPulse 1.8s infinite alternate;
     background:
-        linear-gradient(
-            125deg,
-            rgba(255, 255, 255, 0.14),
-            transparent 26% 70%,
-            rgba(251, 191, 36, 0.18)
-        ),
-        linear-gradient(135deg, #1c1410 0%, #3d2508 50%, #1c1410 100%) !important;
+        radial-gradient(circle at 50% 20%, rgba(255, 255, 200, 0.35), transparent 60%),
+        linear-gradient(135deg, #2a1f05 0%, #54380a 50%, #1a1202 100%) !important;
 }
 
 .shiny-card-glow::before {
-    opacity: 0.75 !important;
+    opacity: 0.9 !important;
     background:
-        radial-gradient(
-            circle at 20% 15%,
-            rgba(255, 255, 255, 0.85) 0 1px,
-            transparent 2px
-        ),
-        radial-gradient(
-            circle at 80% 35%,
-            rgba(255, 231, 130, 0.75) 0 1px,
-            transparent 2px
-        ),
-        radial-gradient(
-            circle at 40% 80%,
-            rgba(255, 255, 255, 0.7) 0 1px,
-            transparent 2px
-        );
-    background-size: 75px 75px, 100px 100px, 125px 125px;
-    animation: shinySparkles 3s linear infinite;
+        radial-gradient(circle at 15% 20%, rgba(255, 255, 255, 1) 0 2px, transparent 3px),
+        radial-gradient(circle at 85% 30%, rgba(255, 220, 100, 0.9) 0 2px, transparent 3px),
+        radial-gradient(circle at 50% 85%, rgba(255, 255, 255, 0.9) 0 2px, transparent 3px),
+        linear-gradient(110deg, transparent 20%, rgba(255, 230, 100, 0.4) 50%, transparent 80%);
+    background-size: 60px 60px, 90px 90px, 120px 120px, 200% 100%;
+    animation: shinySparkles 2.5s linear infinite, shinyBeam 3s ease infinite;
 }
 
-@keyframes shinyPulse {
+@keyframes shinySuperPulse {
     0% {
         box-shadow:
-            0 0 10px rgba(251, 191, 36, 0.6),
-            0 0 18px rgba(250, 204, 21, 0.25),
-            inset 0 0 5px rgba(251, 191, 36, 0.3);
+            0 0 12px rgba(255, 215, 0, 0.7),
+            0 0 25px rgba(255, 140, 0, 0.4),
+            inset 0 0 8px rgba(255, 255, 150, 0.5);
+        filter: brightness(1.05);
     }
-
     100% {
         box-shadow:
-            0 0 25px rgba(252, 211, 77, 1),
-            0 0 45px rgba(245, 158, 11, 0.45),
-            inset 0 0 14px rgba(252, 211, 77, 0.8);
+            0 0 28px rgba(255, 235, 59, 1),
+            0 0 55px rgba(255, 152, 0, 0.8),
+            inset 0 0 20px rgba(255, 255, 200, 1);
+        filter: brightness(1.2);
     }
 }
 
 @keyframes shinySparkles {
     from {
         transform: translateY(0);
-        opacity: 0.5;
+        opacity: 0.6;
     }
-
     50% {
-        opacity: 0.95;
+        opacity: 1;
     }
-
     to {
-        transform: translateY(-12px);
-        opacity: 0.5;
+        transform: translateY(-10px);
+        opacity: 0.6;
+    }
+}
+
+@keyframes shinyBeam {
+    from {
+        background-position: 0 0, 0 0, 0 0, 200% 0;
+    }
+    to {
+        background-position: 0 0, 0 0, 0 0, -200% 0;
     }
 }
 
@@ -660,7 +652,7 @@
     }
 }
 
-/* --- TIERS DE RARIDADE --- */
+/* --- TIERS DE RARIDADE & ESTRELAS NO TOPO DO CARD --- */
 
 .tier-1,
 .tier-rosa {
@@ -696,6 +688,22 @@
         0 0 18px rgba(251, 191, 36, 0.55),
         inset 0 0 12px rgba(251, 191, 36, 0.2);
 }
+
+/* Componente visual de Estrelas no Topo do Card */
+.card-tier-stars {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
+}
+
+.tier-1-stars { color: #f472b6; } /* Rosa */
+.tier-2-stars { color: #34d399; } /* Verde */
+.tier-3-stars { color: #60a5fa; } /* Azul */
+.tier-4-stars { color: #f87171; } /* Vermelho */
+.tier-5-stars { color: #fbbf24; text-shadow: 0 0 6px rgba(251, 191, 36, 0.8); } /* Amarelo / Lendário */
 
 /* --- ESTADOS DE BATALHA --- */
 
