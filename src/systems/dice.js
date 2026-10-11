@@ -1,5 +1,5 @@
 // --- src/systems/dice.js ---
-// Módulo de Dados, Movimento e Eventos do Tabuleiro (Versão Sincronizada Online)
+// Módulo de Dados, Movimento e Eventos do Tabuleiro (Versão Sincronizada Online - Estilo Mario Party)
 
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer, movementState } from '../core/state.js';
@@ -10,19 +10,16 @@ import { socket, emitSocket } from '../core/socket.js';
 
 // Função auxiliar unificada para obter o jogador do dado (respeitando o turno ativo)
 function getDicePlayer() {
+    if (gameState && gameState.online) {
+        const activeIndex = Number(gameState.currentPlayerIndex) || 0;
+        if (gameState.players && gameState.players[activeIndex]) {
+            return gameState.players[activeIndex];
+        }
+    }
     if (typeof getCurrentPlayer === 'function') {
         return getCurrentPlayer();
     }
-    if (
-        typeof gameState === 'undefined' ||
-        !gameState ||
-        !Array.isArray(gameState.players) ||
-        gameState.players.length === 0
-    ) {
-        return null;
-    }
-    const currentIndex = Number(gameState.currentPlayerIndex) || 0;
-    return gameState.players[currentIndex] || gameState.players[0] || null;
+    return getCurrentOrMyPlayer();
 }
 
 // ------------------------------------------------------------
@@ -42,7 +39,7 @@ export function setupDiceListeners() {
     if (passTurnBtn && !passTurnBtn.dataset.listenerAttached) {
         passTurnBtn.dataset.listenerAttached = "true";
         passTurnBtn.onclick = () => {
-            // 🛡️ TRAVA DE SEGURANÇA ONLINE: Apenas o dono do turno atual pode passá-lo
+            // 🛡️ TRAVA DE SEGURANÇA ONLINE ESTILO MARIO PARTY: Apenas o dono do turno atual pode passá-lo
             const activeIndex = Number(gameState.currentPlayerIndex) || 0;
             const myIdx = gameState.online ? (Number(gameState.myPlayerIndex) || 0) : activeIndex;
             if (gameState.online && activeIndex !== myIdx) {
@@ -54,8 +51,8 @@ export function setupDiceListeners() {
 
             resetTurnDiceState();
             
-            // Avança o índice do jogador atual
-            if (typeof gameState !== 'undefined' && gameState.players && Array.isArray(gameState.players)) {
+            // Avança o índice do jogador atual de forma circular e estrita (Estilo Mario Party: 0 -> 1 -> 2 -> 0)
+            if (typeof gameState !== 'undefined' && gameState.players && Array.isArray(gameState.players) && gameState.players.length > 0) {
                 gameState.currentPlayerIndex = (activeIndex + 1) % gameState.players.length;
             }
 
@@ -73,8 +70,9 @@ export function setupDiceListeners() {
                 }
             }
 
+            const nextPlayerName = gameState.players && gameState.players[gameState.currentPlayerIndex] ? gameState.players[gameState.currentPlayerIndex].name : 'Próximo';
             if (typeof showCustomPopup === 'function') {
-                showCustomPopup("Passagem de Turno", "🔄 O turno foi passado. O dado foi liberado para rolar novamente!", true);
+                showCustomPopup("Passagem de Turno", `🔄 Turno encerrado! Agora é a vez de: ${nextPlayerName}`, true);
             }
             if (typeof renderBoardMap === 'function') {
                 renderBoardMap();
@@ -224,7 +222,7 @@ export function rollDiceForMovement() {
     
     if (gameState.online && activeIndex !== myIdx) {
         if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Aguarde o seu Turno!", "⏳ O outro jogador está a realizar a sua jogada, combate ou evento. Aguarde a sua vez!", false);
+            showCustomPopup("Aguarde o seu Turno!", "⏳ Não é a sua vez de jogar! Aguarde o outro jogador concluir a jogada.", false);
         }
         return;
     }
