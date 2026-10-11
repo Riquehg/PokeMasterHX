@@ -154,9 +154,19 @@ export const BOARD_WAYPOINTS = [
     { id: 124, name: "Arena Final", hexagon: "H", top: 28.8, left: 92.1, type: "city", color: "amarelo", requiredType: "", connections: [114, 122] }
 ];
 
+// Função auxiliar unificada para obter o jogador correto no mapa (prioriza o jogador local se estiver em jogo online)
+function getMapPlayer() {
+    if (gameState && gameState.online) {
+        if (Array.isArray(gameState.players) && gameState.players[gameState.myPlayerIndex]) {
+            return gameState.players[gameState.myPlayerIndex];
+        }
+    }
+    return getCurrentOrMyPlayer();
+}
+
 export function getValidDestinations(startWaypointId, steps) {
     let validIds = new Set();
-    const activePlayer = getCurrentOrMyPlayer();
+    const activePlayer = getMapPlayer();
     const playerBadges = activePlayer && Array.isArray(activePlayer.badges) ? activePlayer.badges.length : 0;
 
     let adjacencyList = {};
@@ -222,24 +232,27 @@ export function getValidDestinations(startWaypointId, steps) {
 }
 
 export function rollDiceForMovement() {
-    // 🛡️ TRAVA DE SEGURANÇA ONLINE: Impede rolar o dado fora do turno do próprio jogador
-    if (gameState.online && gameState.currentPlayerIndex !== (gameState.myPlayerIndex || 0)) {
+    // 🛡️ TRAVA DE SEGURANÇA ONLINE RIGOROSA: Impede rolar o dado fora do turno do próprio jogador
+    const activeIndex = Number(gameState.currentPlayerIndex) || 0;
+    const myIdx = gameState.online ? (Number(gameState.myPlayerIndex) || 0) : activeIndex;
+
+    if (gameState.online && activeIndex !== myIdx) {
         if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Não é o seu turno!", "Aguarde o outro jogador concluir a jogada.", false);
+            showCustomPopup("Não é o seu turno!", "⏳ O outro jogador está a realizar a sua jogada. Aguarde a sua vez!", false);
         }
         return;
     }
 
     if (typeof movementState !== 'undefined' && movementState.hasRolledThisTurn) {
         if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Aviso", "Já rolaste o dado neste turno! Clica numa casa destacada ou passa a vez.", false);
+            showCustomPopup("Aviso", "⚠️ Já rolaste o dado neste turno! Clica numa casa destacada ou passa a vez.", false);
         }
         return;
     }
 
     if (typeof rollDiceWithAnimation === 'function') {
         rollDiceWithAnimation((diceResult) => {
-            const cp = getCurrentOrMyPlayer();
+            const cp = getMapPlayer();
             if (!cp) return;
             const currentZone = cp.currentZone || 5;
 
@@ -270,10 +283,13 @@ export function rollDiceForMovement() {
 }
 
 export function onHexClick(waypointId, hexName) {
-    // 🛡️ TRAVA DE SEGURANÇA ONLINE: Valida vez antes de clicar no destino do mapa
-    if (gameState.online && gameState.currentPlayerIndex !== (gameState.myPlayerIndex || 0)) {
+    // 🛡️ TRAVA DE SEGURANÇA ONLINE RIGOROSA: Valida vez antes de clicar no destino do mapa
+    const activeIndex = Number(gameState.currentPlayerIndex) || 0;
+    const myIdx = gameState.online ? (Number(gameState.myPlayerIndex) || 0) : activeIndex;
+
+    if (gameState.online && activeIndex !== myIdx) {
         if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Não é o seu turno!", "Aguarde a sua vez para se movimentar.", false);
+            showCustomPopup("Não é o seu turno!", "⏳ Aguarde a sua vez para se movimentar.", false);
         }
         return;
     }
@@ -286,7 +302,7 @@ export function onHexClick(waypointId, hexName) {
         return;
     }
 
-    const cp = getCurrentOrMyPlayer();
+    const cp = getMapPlayer();
     const currentZoneId = cp ? (cp.currentZone || 5) : 5;
 
     if (currentZoneId === waypointId) {
@@ -301,7 +317,7 @@ export function onHexClick(waypointId, hexName) {
 }
 
 export function tryInteractWithCity(waypointId, cityName) {
-    const cp = getCurrentOrMyPlayer();
+    const cp = getMapPlayer();
     const currentZoneId = cp ? (cp.currentZone || 5) : 5;
 
     if (currentZoneId === waypointId) {
@@ -323,6 +339,15 @@ export function tryInteractWithCity(waypointId, cityName) {
 }
 
 export function tryInteractWithWeakenedPokemon(waypointId) {
+    const activeIndex = Number(gameState.currentPlayerIndex) || 0;
+    const myIdx = gameState.online ? (Number(gameState.myPlayerIndex) || 0) : activeIndex;
+    if (gameState.online && activeIndex !== myIdx) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup("Ação Bloqueada", "⏳ Não é o seu turno para interagir com os Pokémon selvagens!", false);
+        }
+        return;
+    }
+
     if (typeof boardPokemonCards !== 'undefined' && boardPokemonCards[waypointId]) {
         const poke = boardPokemonCards[waypointId];
         poke.revealed = true;
@@ -343,7 +368,7 @@ export function handleWaypointArrival(waypointId) {
     const waypoint = BOARD_WAYPOINTS.find(w => w.id === waypointId);
     if (!waypoint) return;
 
-    const cp = getCurrentOrMyPlayer();
+    const cp = getMapPlayer();
     if (cp) {
         cp.currentZone = waypointId;
     }
@@ -363,6 +388,20 @@ export function handleWaypointArrival(waypointId) {
     // Verificação de colisão na mesma casa para ativar o PVP / interações
     if (typeof checkPlayerCellCollision === 'function') {
         checkPlayerCellCollision(waypointId, gameState.online ? (gameState.myPlayerIndex || 0) : (gameState.currentPlayerIndex || 0));
+    }
+
+    // Se for o turno do adversário e estamos online, apenas exibe notificação informativa e não abre janelas de evento/batalha para nós
+    const activeIndex = Number(gameState.currentPlayerIndex) || 0;
+    const myIdx = gameState.online ? (Number(gameState.myPlayerIndex) || 0) : activeIndex;
+    if (gameState.online && activeIndex !== myIdx) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup(
+                "Ação do Adversário", 
+                `⏳ O jogador ${cp?.name || 'Adversário'} chegou a ${waypoint.name || 'uma zona'} e está em evento ou batalha! Aguarde a vez.`, 
+                true
+            );
+        }
+        return;
     }
 
     if (waypoint.type === 'city') {
@@ -434,7 +473,7 @@ export function handleWaypointArrival(waypointId) {
 }
 
 function triggerRandomBoardEvent(eventName) {
-    const cp = getCurrentOrMyPlayer();
+    const cp = getMapPlayer();
     if (!cp) return;
 
     const eventsList = [
@@ -672,7 +711,7 @@ export function renderBoardMapWithHighlights(validNextSteps) {
 }
 
 function animateTokenMovement(newPositionIndex) {
-    const cp = getCurrentOrMyPlayer();
+    const cp = getMapPlayer();
     if (cp) {
         cp.currentZone = newPositionIndex;
     }
