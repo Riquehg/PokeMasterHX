@@ -417,6 +417,12 @@ function syncGameStateToCloud() {
             gameState: gameState,
             trainerName: getCurrentPlayer()?.name || 'Treinador'
         });
+        if (gameState.online) {
+            emitSocket('update_game_state', {
+                type: 'encounter_updated',
+                gameState: gameState
+            });
+        }
     }
 }
 
@@ -603,7 +609,7 @@ export function resolveCaptureAttempt() {
                 cp.activeTeam.push(caughtMonster);
             } else {
                 cp.pcBox.push(caughtMonster);
-                showCustomPopup("PC Box", `📦 Equipa cheia! O ${wild.name} foi enviado para a PC Box.`, t => true);
+                showCustomPopup("PC Box", `📦 Equipa cheia! O ${wild.name} foi enviado para a PC Box.`, true);
             }
 
             if (!Array.isArray(cp.pokedex)) cp.pokedex = [];
