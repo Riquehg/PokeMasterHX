@@ -74,7 +74,7 @@ export function closeVaultModal() {
 }
 
 export function renderVaultModalContent(modalElement) {
-    const cp = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[0] || {});
+    const cp = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[gameState.myPlayerIndex || 0] || gameState?.players?.[0] || {});
     const activeTeam = Array.isArray(cp.activeTeam) ? cp.activeTeam : [];
     const pcBox = Array.isArray(cp.pcBox) ? cp.pcBox : (Array.isArray(cp.box) ? cp.box : []);
 
@@ -163,7 +163,7 @@ export function renderVaultModalContent(modalElement) {
 }
 
 export function movePokemonToBox(teamIndex) {
-    const cp = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[0] || {});
+    const cp = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[gameState.myPlayerIndex || 0] || gameState?.players?.[0] || {});
     if (!cp || !cp.activeTeam || !cp.activeTeam[teamIndex]) return;
 
     if (!Array.isArray(cp.pcBox)) cp.pcBox = [];
@@ -180,10 +180,11 @@ export function movePokemonToBox(teamIndex) {
     if (modal) renderVaultModalContent(modal);
     if (typeof window.renderHubActiveTeam === 'function') window.renderHubActiveTeam(cp);
     if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+    if (typeof renderBottomPanel === 'function') renderBottomPanel();
 }
 
 export function movePokemonToTeam(boxIndex) {
-    const cp = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[0] || {});
+    const cp = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[gameState.myPlayerIndex || 0] || gameState?.players?.[0] || {});
     if (!cp || !cp.pcBox || !cp.pcBox[boxIndex]) return;
 
     if (!Array.isArray(cp.activeTeam)) cp.activeTeam = [];
@@ -206,6 +207,7 @@ export function movePokemonToTeam(boxIndex) {
     if (modal) renderVaultModalContent(modal);
     if (typeof window.renderHubActiveTeam === 'function') window.renderHubActiveTeam(cp);
     if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+    if (typeof renderBottomPanel === 'function') renderBottomPanel();
 }
 
 // --- EXPOSIÇÃO GLOBAL PARA O HTML E EVENTOS DO MOTOR ---
