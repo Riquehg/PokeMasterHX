@@ -65,7 +65,7 @@ export let dailyFeaturedPokemonConfig = {
     activeDate: new Date().toDateString()
 };
 
-// Atalho seguro para obter o jogador da vez
+// Atalho seguro para obter o jogador da vez (focado no turno atual)
 export function getCurrentPlayer() {
     if (gameState && Array.isArray(gameState.players) && gameState.players.length > 0) {
         const index = Number.isFinite(gameState.currentPlayerIndex) ? gameState.currentPlayerIndex : 0;
@@ -76,6 +76,27 @@ export function getCurrentPlayer() {
         return gameState.player;
     }
     return null;
+}
+
+// Atalho para obter estritamente o jogador LOCAL (essencial para o modo online para evitar puxar dados de outro jogador)
+export function getMyPlayer() {
+    if (gameState && Array.isArray(gameState.players) && gameState.players.length > 0) {
+        const index = Number.isFinite(gameState.myPlayerIndex) ? gameState.myPlayerIndex : 0;
+        const safeIndex = Math.max(0, Math.min(index, gameState.players.length - 1));
+        return gameState.players[safeIndex] || gameState.players[0];
+    }
+    if (gameState && gameState.player) {
+        return gameState.player;
+    }
+    return null;
+}
+
+// Atalho inteligente: se estiver online, devolve o jogador local; senão, devolve o jogador da vez
+export function getCurrentOrMyPlayer() {
+    if (gameState && gameState.online) {
+        return getMyPlayer();
+    }
+    return getCurrentPlayer();
 }
 
 // Fallback de segurança para garantir integridade estrutural do estado gerido pelo servidor
@@ -114,5 +135,9 @@ export function ensureValidGameState() {
 
     if (gameState.currentPlayerIndex === undefined || gameState.currentPlayerIndex === null || gameState.currentPlayerIndex >= gameState.players.length) {
         gameState.currentPlayerIndex = 0;
+    }
+
+    if (gameState.myPlayerIndex === undefined || gameState.myPlayerIndex === null || gameState.myPlayerIndex >= gameState.players.length) {
+        gameState.myPlayerIndex = 0;
     }
 }
