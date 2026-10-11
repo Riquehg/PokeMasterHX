@@ -1,7 +1,7 @@
 // --- src/systems/encounter.js ---
 // Subsistema Unificado de Batalhas TCG Selvagens, Captura, XP, Evolução e Sincronização Cloud
 
-import { gameState, getCurrentPlayer } from '../core/state.js';
+import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer } from '../core/state.js';
 import { renderTeamCardSlots, renderBottomPanel } from './pcbox.js';
 import { SUPABASE_STORAGE_URL, TYPE_ADVANTAGES } from '../config/constants.js';
 import { MONSTER_CATALOG } from '../config/cards-data.js';
@@ -124,7 +124,7 @@ export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa
 }
 
 export function openEncounterModalWithPokemon(pokemon) {
-    const cp = getCurrentPlayer();
+    const cp = getCurrentOrMyPlayer();
     
     let modal = document.getElementById('wild-encounter-modal') || document.getElementById('encounter-modal');
     if (!modal) {
@@ -134,7 +134,7 @@ export function openEncounterModalWithPokemon(pokemon) {
         document.body.appendChild(modal);
     }
 
-    if (!cp.activeTeam || cp.activeTeam.length === 0) {
+    if (!cp || !cp.activeTeam || cp.activeTeam.length === 0) {
         showCustomPopup("Aviso", "🚫 Precisas de pelo menos um Pokémon na Equipa Ativa!", false);
         return;
     }
@@ -195,10 +195,11 @@ export function openEncounterModalWithPokemon(pokemon) {
 }
 
 export function updateEncounterUIInfo() {
-    const cp = getCurrentPlayer();
+    const cp = getCurrentOrMyPlayer();
     const wild = currentEncounterState.wildPokemon;
+    if (!cp || !wild) return;
     const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex] || cp.activeTeam[0];
-    if (!wild || !activeMon) return;
+    if (!activeMon) return;
 
     if (activeMon.level && (!activeMon.str || activeMon.str < (4 + activeMon.level))) {
         const stats = calculatePokemonStats(activeMon, activeMon.level, activeMon.isShiny);
@@ -239,7 +240,6 @@ export function updateEncounterUIInfo() {
     const playerCardBg = getTierColorClass(activeMon.tier || 1);
     const enemyCardBg = getTierColorClass(wild.tier || 1);
 
-    // Nomes de Tier / Raridade para exibição nos cards
     const playerTierLabel = tierNamesMap[activeMon.tier || 1] || 'Comum';
     const wildTierLabel = tierNamesMap[wild.tier || 1] || 'Comum';
 
@@ -317,7 +317,7 @@ export function updateEncounterUIInfo() {
 }
 
 export function cyclePlayerEncounterPokemon() {
-    const cp = getCurrentPlayer();
+    const cp = getCurrentOrMyPlayer();
     if (!cp || !Array.isArray(cp.activeTeam) || cp.activeTeam.length <= 1) {
         showCustomPopup("Aviso", "Só tens este Pokémon na equipa ativa!", false);
         return;
@@ -340,9 +340,9 @@ export function cyclePlayerEncounterPokemon() {
 }
 
 export function renderEncounterItemsList() {
-    const cp = getCurrentPlayer();
+    const cp = getCurrentOrMyPlayer();
     const container = document.getElementById('encounter-items-container');
-    if (!container) return;
+    if (!container || !cp) return;
     container.innerHTML = '';
 
     if (cp.inventory) {
@@ -421,9 +421,10 @@ function playAttackAnimation() {
 function syncGameStateToCloud() {
     saveGameProgress();
     if (typeof emitSocket === 'function') {
+        const cp = getCurrentOrMyPlayer();
         emitSocket('save_game_state', {
             gameState: gameState,
-            trainerName: getCurrentPlayer()?.name || 'Treinador'
+            trainerName: cp?.name || 'Treinador'
         });
         if (gameState.online) {
             emitSocket('update_game_state', {
@@ -492,10 +493,11 @@ export function evolveMonsterWithStone(monster, stoneItemId) {
 }
 
 export function resolveBattleAttempt() {
-    const cp = getCurrentPlayer();
+    const cp = getCurrentOrMyPlayer();
     const wild = currentEncounterState.wildPokemon;
+    if (!cp || !wild) return;
     const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex];
-    if (!wild || !activeMon) return;
+    if (!activeMon) return;
 
     if (currentEncounterState.wildDefeated) {
         showCustomPopup("Pokémon Derrotado", "⚠ O Pokémon selvagem já foi derrotado! Usa a opção de Capturar ou foge.", false);
@@ -553,9 +555,9 @@ export function resolveBattleAttempt() {
 }
 
 export function resolveCaptureAttempt() {
-    const cp = getCurrentPlayer();
+    const cp = getCurrentOrMyPlayer();
     const wild = currentEncounterState.wildPokemon;
-    if (!wild) return;
+    if (!cp || !wild) return;
 
     if (!currentEncounterState.selectedCaptureBallId) {
         showCustomPopup("Esfera Necessária", "⚠ Deves selecionar primeiro uma Poké Ball na tua mochila de combate em baixo para tentar capturar!", false);
@@ -593,12 +595,10 @@ export function resolveCaptureAttempt() {
 
         if (totalCaptureValue >= requiredTarget || currentEncounterState.selectedCaptureBallId.includes('master')) {
             
-            // --- VERIFICAÇÃO AUTOMÁTICA DO POKÉMON DO DIA ---
             let dailyBonusMessage = "";
             const isDailyFeatured = dailyFeaturedPokemonConfig && (wild.id.toLowerCase() === dailyFeaturedPokemonConfig.pokemonId.toLowerCase());
             
             if (isDailyFeatured) {
-                // Adiciona o item bónus à mochila
                 if (!Array.isArray(cp.inventory)) cp.inventory = [];
                 const existingItem = cp.inventory.find(i => i.id === dailyFeaturedPokemonConfig.bonusItem);
                 if (existingItem) {
@@ -607,7 +607,6 @@ export function resolveCaptureAttempt() {
                     cp.inventory.push({ id: dailyFeaturedPokemonConfig.bonusItem, count: 1 });
                 }
 
-                // Adiciona o ouro bónus
                 cp.gold = (Number(cp.gold) || 350) + (Number(dailyFeaturedPokemonConfig.goldBonus) || 500);
                 
                 dailyBonusMessage = `\n\n🌟 BÓNUS DO POKÉMON DO DIA!\nGanhaste +${dailyFeaturedPokemonConfig.goldBonus} 🪙 e 1x ${dailyFeaturedPokemonConfig.bonusItemName}!`;
