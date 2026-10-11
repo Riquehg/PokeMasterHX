@@ -3,6 +3,7 @@
 
 import { gameState } from '../core/state.js';
 import { emitSocket } from '../core/socket.js';
+import { MONSTER_CATALOG } from '../config/cards-data.js';
 
 let adminUsersListenerRegistered = false;
 let adminTimeoutTimer = null;
@@ -14,6 +15,35 @@ export let dailyFeaturedPokemonConfig = {
     bonusItemName: 'ULTRA BALL',
     goldBonus: 500
 };
+
+// Função para sincronizar o Pokémon do Dia recebido do servidor/Supabase com a HUD
+export function applyDailyFeaturedPokemonConfig(serverConfig) {
+    if (!serverConfig) return;
+    
+    if (serverConfig.pokemonId || serverConfig.pokemon_id) {
+        dailyFeaturedPokemonConfig.pokemonId = (serverConfig.pokemonId || serverConfig.pokemon_id).toLowerCase();
+        dailyFeaturedPokemonConfig.pokemonName = serverConfig.pokemonName || serverConfig.pokemon_name || (dailyFeaturedPokemonConfig.pokemonId.charAt(0).toUpperCase() + dailyFeaturedPokemonConfig.pokemonId.slice(1));
+    }
+    if (serverConfig.bonusItem || serverConfig.bonus_item) {
+        dailyFeaturedPokemonConfig.bonusItem = serverConfig.bonusItem || serverConfig.bonus_item;
+        dailyFeaturedPokemonConfig.bonusItemName = serverConfig.bonusItemName || serverConfig.bonus_item_name || 'Item Bónus';
+    }
+    if (serverConfig.goldBonus !== undefined || serverConfig.gold_bonus !== undefined) {
+        dailyFeaturedPokemonConfig.goldBonus = Number(serverConfig.goldBonus || serverConfig.gold_bonus || 500);
+    }
+
+    // Atualiza imediatamente a HUD / Banner do Pokémon do Dia se os elementos existirem
+    const nameEl = document.getElementById('daily-pokemon-name');
+    const spriteEl = document.getElementById('daily-pokemon-sprite');
+    const labelEl = document.getElementById('admin-current-daily-label');
+
+    const monData = MONSTER_CATALOG.find(m => m.id === dailyFeaturedPokemonConfig.pokemonId);
+    const spriteUrl = monData ? monData.image : `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/006.png`;
+
+    if (nameEl) nameEl.textContent = `${dailyFeaturedPokemonConfig.pokemonName} (+${dailyFeaturedPokemonConfig.bonusItemName})`;
+    if (spriteEl) spriteEl.src = spriteUrl;
+    if (labelEl) labelEl.textContent = `${dailyFeaturedPokemonConfig.pokemonName} (Bónus: ${dailyFeaturedPokemonConfig.bonusItemName} + ${dailyFeaturedPokemonConfig.goldBonus} 🪙)`;
+}
 
 export function handleAdminUsersList(users) {
     if (adminTimeoutTimer) {
@@ -53,6 +83,9 @@ export function openAdminPanelModal() {
     const sock = typeof window.socket !== 'undefined' ? window.socket : null;
     if (sock && typeof sock.on === 'function' && !adminUsersListenerRegistered) {
         sock.on('admin_users_list', handleAdminUsersList);
+        sock.on('daily_pokemon_update', (config) => {
+            applyDailyFeaturedPokemonConfig(config);
+        });
         sock.on('admin_action_response', (res) => {
             if (res && res.message) {
                 alert(res.message);
@@ -128,7 +161,7 @@ export function renderAdminDashboard(modalElement, users) {
             <div class="bg-black/60 p-3 rounded-xl border border-red-900/60 flex items-center justify-between">
                 <div>
                     <span class="text-[10px] text-amber-400 font-bold block">🌟 Pokémon de Destaque Atual (Sincronizado)</span>
-                    <span class="text-xs font-black text-white" id="admin-current-daily-label">${dailyFeaturedPokemonConfig.pokemonName} (Item: ${dailyFeaturedPokemonConfig.bonusItemName})</span>
+                    <span class="text-xs font-black text-white" id="admin-current-daily-label">${dailyFeaturedPokemonConfig.pokemonName} (Item Bónus: ${dailyFeaturedPokemonConfig.bonusItemName} + ${dailyFeaturedPokemonConfig.goldBonus} 🪙)</span>
                 </div>
                 <button type="button" id="configure-daily-pokemon-btn" class="bg-amber-600 hover:bg-amber-500 text-black px-3 py-1.5 rounded-lg text-xs font-black cursor-pointer">⚙️ Configurar Destaque</button>
             </div>
@@ -165,16 +198,32 @@ export function renderAdminDashboard(modalElement, users) {
     });
 
     document.getElementById('configure-daily-pokemon-btn')?.addEventListener('click', () => {
-        const newMon = window.prompt('Insira o nome ou ID do novo Pokémon de Destaque do Dia:', dailyFeaturedPokemonConfig.pokemonId);
+        const newMon = window.prompt('Insira o ID ou nome do novo Pokémon de Destaque do Dia (ex: charizard, pikachu):', dailyFeaturedPokemonConfig.pokemonId);
         if (!newMon) return;
+        const newItem = window.prompt('Insira o ID do item bónus ao capturar (ex: ball_ultra, item_rarecandy):', dailyFeaturedPokemonConfig.bonusItem);
+        if (!newItem) return;
+        const newGold = window.prompt('Insira a quantidade de ouro bónus:', String(dailyFeaturedPokemonConfig.goldBonus));
+
         dailyFeaturedPokemonConfig.pokemonId = newMon.trim().toLowerCase();
         dailyFeaturedPokemonConfig.pokemonName = newMon.charAt(0).toUpperCase() + newMon.slice(1);
+        dailyFeaturedPokemonConfig.bonusItem = newItem.trim().toLowerCase();
+        dailyFeaturedPokemonConfig.bonusItemName = newItem.trim().toUpperCase();
+        dailyFeaturedPokemonConfig.goldBonus = Math.max(0, Number(newGold) || 500);
         
-        // Envia a configuração do Pokémon do dia para o servidor manter fixo
-        emitSocket('admin_set_daily_pokemon', { dailyConfig: dailyFeaturedPokemonConfig });
+        // Envia a configuração exata para a tabela game_config (chave 'pokemon_do_dia') no Supabase
+        emitSocket('admin_set_daily_pokemon', { 
+            configKey: 'pokemon_do_dia',
+            dailyConfig: {
+                pokemonId: dailyFeaturedPokemonConfig.pokemonId,
+                pokemonName: dailyFeaturedPokemonConfig.pokemonName,
+                bonusItem: dailyFeaturedPokemonConfig.bonusItem,
+                bonusItemName: dailyFeaturedPokemonConfig.bonusItemName,
+                goldBonus: dailyFeaturedPokemonConfig.goldBonus
+            } 
+        });
         
-        alert(`✅ Pokémon de Destaque fixado como ${dailyFeaturedPokemonConfig.pokemonName} no servidor!`);
-        document.getElementById('admin-current-daily-label').textContent = `${dailyFeaturedPokemonConfig.pokemonName} (Item: ${dailyFeaturedPokemonConfig.bonusItemName})`;
+        alert(`✅ Pokémon de Destaque fixado como ${dailyFeaturedPokemonConfig.pokemonName} na base de dados!`);
+        applyDailyFeaturedPokemonConfig(dailyFeaturedPokemonConfig);
     });
 
     modalElement.querySelectorAll('[data-admin-action]').forEach(button => {
@@ -234,3 +283,4 @@ export function adminDeleteAccount(email) {
 }
 
 window.openAdminPanelModal = openAdminPanelModal;
+window.applyDailyFeaturedPokemonConfig = applyDailyFeaturedPokemonConfig;
