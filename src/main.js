@@ -523,17 +523,17 @@ function loadDailyPokemonPreview() {
     const nameEl = document.getElementById('daily-pokemon-name');
     const spriteEl = document.getElementById('daily-pokemon-sprite');
 
-    // Verifica primeiro se há um Pokémon do dia definido no admin/gameState ou localStorage
-    let configuredDaily = gameState.dailyPokemon || localStorage.getItem('admin_daily_pokemon');
+    // Tenta obter do gameState global, localStorage ou define um padrão sincronizado
+    let configuredDaily = gameState.dailyPokemon || localStorage.getItem('admin_daily_pokemon') || 'charizard';
     let dailyMon = null;
 
-    if (configuredDaily && MONSTER_CATALOG) {
+    if (MONSTER_CATALOG && MONSTER_CATALOG.length > 0) {
         dailyMon = MONSTER_CATALOG.find(m => m.id === configuredDaily || m.name.toLowerCase() === String(configuredDaily).toLowerCase());
     }
 
+    // Fallback caso não encontre pelo ID exato
     if (!dailyMon && MONSTER_CATALOG && MONSTER_CATALOG.length > 0) {
-        const randomIndex = Math.floor(Math.random() * MONSTER_CATALOG.length);
-        dailyMon = MONSTER_CATALOG[randomIndex];
+        dailyMon = MONSTER_CATALOG[0];
     }
 
     if (dailyMon) {
