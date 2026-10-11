@@ -371,6 +371,7 @@ export function handleWaypointArrival(waypointId) {
         } else if (typeof openCityModal === 'function') {
             openCityModal(waypoint.name);
         }
+    // --- Substituir na função handleWaypointArrival em src/systems/map.js ---
     } else if (waypoint.type === 'pokemon') {
         if (typeof window.boardPokemonCards === 'undefined') {
             window.boardPokemonCards = {};
@@ -384,6 +385,7 @@ export function handleWaypointArrival(waypointId) {
             else if (color === 'vermelho') targetTier = 4;
             else if (color === 'amarelo') targetTier = 5;
 
+            // Filtro estrito rigoroso para garantir que o monstro pertence exatamente à tier da cor da casa
             let tierFiltered = MONSTER_CATALOG.filter(m => Number(m.tier || 1) === targetTier);
             if (tierFiltered.length === 0) tierFiltered = MONSTER_CATALOG;
 
@@ -397,7 +399,7 @@ export function handleWaypointArrival(waypointId) {
                 ...randomMon,
                 uniqueId: 'wild_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
                 level: level,
-                tier: targetTier,
+                tier: targetTier, // Garante que a tier fica fixa de acordo com a cor da casa do mapa
                 currentHp: maxHp,
                 maxHp: maxHp,
                 isShiny: isShiny,
