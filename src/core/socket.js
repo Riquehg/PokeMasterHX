@@ -83,6 +83,13 @@ export function initializeSocketConnection() {
 
             // Sincronização em tempo real do estado de jogo entre os jogadores
             socket.on('sync_game_state', (data) => {
+                if (data && data.gameState && typeof gameState !== 'undefined') {
+                    Object.assign(gameState, data.gameState);
+                    if (typeof ensureValidGameState === 'function') {
+                        ensureValidGameState();
+                    }
+                }
+
                 if (applyOnlineRoomState(data)) {
                     if (typeof refreshGameInterface === 'function') {
                         refreshGameInterface();
@@ -158,3 +165,4 @@ export function emitSocket(eventName, payload) {
 
 window.initializeSocketConnection = initializeSocketConnection;
 window.emitSocket = emitSocket;
+window.socket = socket;
