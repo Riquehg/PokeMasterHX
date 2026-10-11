@@ -60,6 +60,11 @@ export function openPokedexModal() {
         if (m.id) capturedIds.add(m.id.toLowerCase());
         if (m.name) capturedIds.add(m.name.toLowerCase());
     });
+    if (cp && Array.isArray(cp.pokedex)) {
+        cp.pokedex.forEach(id => {
+            if (id) capturedIds.add(String(id).toLowerCase());
+        });
+    }
 
     let dexModal = document.getElementById('pokedex-modal');
     if (!dexModal) {
@@ -157,7 +162,6 @@ export function openPokedexDetailCard(monsterId) {
     const dexIndex = MONSTER_CATALOG.findIndex(m => m.id === monsterId);
     const dexNumStr = String(baseMon.dexNumber || (dexIndex !== -1 ? dexIndex + 1 : 1)).padStart(3, '0');
 
-    // Cálculo das barras de estatísticas estilo a referência visual
     const maxStat = 150;
     const hpPercent = Math.min(100, Math.round((currentHp / maxStat) * 100));
     const strPercent = Math.min(100, Math.round((currentStr * 10 / maxStat) * 100));
@@ -169,7 +173,6 @@ export function openPokedexDetailCard(monsterId) {
 
     detailModal.innerHTML = `
         <div class="trainer-card max-w-sm w-full p-0 overflow-hidden border-4 border-red-500 rounded-3xl bg-gradient-to-b from-[#16110d] to-black shadow-2xl text-white relative">
-            <!-- Cabeçalho colorido estilo app de pokedex -->
             <div class="bg-gradient-to-r from-red-600 to-amber-600 p-5 flex flex-col items-center relative shadow-lg">
                 <button onclick="document.getElementById('pokedex-detail-modal').remove()" class="absolute top-3 right-3 text-white font-bold bg-black/40 hover:bg-black/70 px-2.5 py-1 rounded-full text-xs cursor-pointer">✕</button>
                 <span class="absolute top-3 left-3 text-xs font-black font-mono text-amber-200">#${dexNumStr}</span>
@@ -185,7 +188,6 @@ export function openPokedexDetailCard(monsterId) {
                 </div>
             </div>
 
-            <!-- Corpo dos Detalhes / Base Stats -->
             <div class="p-5 space-y-4">
                 <div class="grid grid-cols-2 gap-2 bg-black/60 p-3 rounded-2xl border border-red-900/50 text-center text-xs">
                     <div>
