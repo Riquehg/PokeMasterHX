@@ -31,6 +31,9 @@ function getTierColorClass(tier) {
     }
 }
 
+// Dicionário de Tiers para exibição visual nos cards
+const tierNamesMap = { 1: 'Comum', 2: 'Incomum', 3: 'Raro', 4: 'Épico', 5: 'Lendário' };
+
 // Cálculo dinâmico de atributos por Nível com bónus garantido para Pokémon Shiny
 export function calculatePokemonStats(baseMonster, level, isShiny = false) {
     const baseStr = baseMonster.str || Math.floor(5 + (level * 1.5));
@@ -236,6 +239,10 @@ export function updateEncounterUIInfo() {
     const playerCardBg = getTierColorClass(activeMon.tier || 1);
     const enemyCardBg = getTierColorClass(wild.tier || 1);
 
+    // Nomes de Tier / Raridade para exibição nos cards
+    const playerTierLabel = tierNamesMap[activeMon.tier || 1] || 'Comum';
+    const wildTierLabel = tierNamesMap[wild.tier || 1] || 'Comum';
+
     const playerVisual = document.getElementById('player-card-visual');
     if (playerVisual) {
         const activeMonTypeDisplay = Array.isArray(activeMon.types) ? activeMon.types.join('/') : (activeMon.type || 'Normal');
@@ -243,7 +250,7 @@ export function updateEncounterUIInfo() {
         playerVisual.className = `relative flex flex-col justify-between p-4 rounded-3xl border-4 ${playerCardBg} shadow-2xl w-72 h-[420px] text-white ${activeMon.isShiny ? 'shiny-card-glow' : ''}`;
         playerVisual.innerHTML = `
             <div class="flex justify-between items-center font-black text-xs border-b-2 border-amber-400 pb-2">
-                <span class="text-amber-300 font-bold uppercase">NV. ${activeMon.level || 1} (EXP: ${activeMon.exp || 0})</span>
+                <span class="text-amber-300 font-bold uppercase">NV. ${activeMon.level || 1} (${playerTierLabel})</span>
                 ${shinyBadgePlayer}
                 ${advantageBadgeHtml}
                 <span class="text-amber-900 bg-amber-200 px-2 py-0.5 rounded font-bold uppercase text-[10px] border border-amber-400">${activeMonTypeDisplay}</span>
@@ -278,7 +285,7 @@ export function updateEncounterUIInfo() {
         
         encVisual.innerHTML = `
             <div class="flex justify-between items-center font-black text-xs border-b-2 border-red-900 pb-2">
-                <span class="text-red-400 font-bold uppercase">NV. ${wild.level || 1}</span>
+                <span class="text-red-400 font-bold uppercase">NV. ${wild.level || 1} (${wildTierLabel})</span>
                 ${shinyWildBadge}
                 <span class="text-red-300 bg-red-950 px-2 py-0.5 rounded font-bold uppercase text-[10px] border border-red-800">${wildTypeDisplay}</span>
             </div>
