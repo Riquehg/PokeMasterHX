@@ -138,6 +138,13 @@ window.resetGameProgressKeepCollection = function() {
 
     saveGameProgress();
 
+    if (gameState.online && typeof emitSocket === 'function') {
+        emitSocket('update_game_state', {
+            type: 'game_reset',
+            gameState: gameState
+        });
+    }
+
     window.showCustomPopup(
         "🔄 Nova Partida Iniciada!",
         "O tabuleiro e as insígnias foram reiniciados com sucesso.\nA tua coleção de Animas e itens foi preservada!",
@@ -216,6 +223,13 @@ window.triggerRandomBoardEvent = function(eventName) {
     const randomEvt = eventsList[Math.floor(Math.random() * eventsList.length)];
     randomEvt.apply();
     saveGameProgress();
+
+    if (gameState.online && typeof emitSocket === 'function') {
+        emitSocket('update_game_state', {
+            type: 'board_event_triggered',
+            gameState: gameState
+        });
+    }
 
     window.showCustomPopup(randomEvt.title, randomEvt.text, randomEvt.success);
 
@@ -571,6 +585,13 @@ function setupGlobalInterfaceListeners() {
             if (typeof movementState !== 'undefined') {
                 movementState.hasRolledThisTurn = false;
                 movementState.isMoving = false;
+            }
+
+            if (gameState.online && typeof emitSocket === 'function') {
+                emitSocket('update_game_state', {
+                    type: 'turn_passed',
+                    gameState: gameState
+                });
             }
 
             setDiceButtonState(false);
