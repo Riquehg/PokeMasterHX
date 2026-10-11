@@ -4,6 +4,8 @@
 import { gameState, getCurrentPlayer } from '../core/state.js';
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 import { MONSTER_CATALOG } from '../config/cards-data.js';
+import { saveGameProgress } from '../core/storage.js';
+import { emitSocket } from '../core/socket.js';
 
 const MONSTER_CATALOG_REF = Array.isArray(MONSTER_CATALOG) ? MONSTER_CATALOG : [];
 
@@ -87,6 +89,14 @@ export function handleDrop(e, targetArea, targetIndex) {
         sourceList.splice(data.index, 1);
         if (targetArea === 'team') targetList.push(movedMonster);
         else targetList.splice(targetIndex, 0, movedMonster);
+
+        saveGameProgress();
+        if (gameState.online && typeof emitSocket === 'function') {
+            emitSocket('update_game_state', {
+                type: 'team_pc_updated',
+                gameState: gameState
+            });
+        }
 
         renderTeamCardSlots();
         renderBottomPanel();
