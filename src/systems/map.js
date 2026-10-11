@@ -371,7 +371,6 @@ export function handleWaypointArrival(waypointId) {
         } else if (typeof openCityModal === 'function') {
             openCityModal(waypoint.name);
         }
-    // --- Substituir na função handleWaypointArrival em src/systems/map.js ---
     } else if (waypoint.type === 'pokemon') {
         if (typeof window.boardPokemonCards === 'undefined') {
             window.boardPokemonCards = {};
@@ -385,7 +384,7 @@ export function handleWaypointArrival(waypointId) {
             else if (color === 'vermelho') targetTier = 4;
             else if (color === 'amarelo') targetTier = 5;
 
-            // Filtro estrito rigoroso para garantir que o monstro pertence exatamente à tier da cor da casa
+            // Filtro estrito rigoroso para garantir que o monstro gerado pertence exatamente à tier da cor da casa
             let tierFiltered = MONSTER_CATALOG.filter(m => Number(m.tier || 1) === targetTier);
             if (tierFiltered.length === 0) tierFiltered = MONSTER_CATALOG;
 
@@ -399,7 +398,7 @@ export function handleWaypointArrival(waypointId) {
                 ...randomMon,
                 uniqueId: 'wild_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
                 level: level,
-                tier: targetTier, // Garante que a tier fica fixa de acordo com a cor da casa do mapa
+                tier: targetTier, // Garante que a tier fica fixa de acordo com a cor exata da casa do mapa
                 currentHp: maxHp,
                 maxHp: maxHp,
                 isShiny: isShiny,
@@ -525,15 +524,19 @@ export function renderBoardMap(highlightIds = []) {
                     pokeImg = pokeCard.shinyImage;
                 }
 
+                // Identificação visual da Tier / Raridade para exibição correta no mapa
+                const tierNames = { 1: 'Comum', 2: 'Incomum', 3: 'Raro', 4: 'Épico', 5: 'Lendário' };
+                const tierBadgeText = tierNames[pokeCard.tier || 1] || 'Comum';
+
                 const featuredClass = isFeaturedDaily ? 'border-amber-400 animate-bounce bg-amber-950/90 shiny-card-glow shadow-[0_0_15px_rgba(255,215,0,0.8)]' : 'border-amber-400 bg-red-950/90 animate-pulse';
 
                 mapOverlayHtml += `
-                    <div onclick="tryInteractWithWeakenedPokemon(${wp.id})" class="absolute -translate-x-1/2 -translate-y-1/2 z-30 cursor-pointer group" style="top: ${wp.top - 3}%; left: ${wp.left}%;" title="${pokeCard.name} ${isFeaturedDaily ? '(Pokémon do Dia ⭐)' : ''}">
+                    <div onclick="tryInteractWithWeakenedPokemon(${wp.id})" class="absolute -translate-x-1/2 -translate-y-1/2 z-30 cursor-pointer group" style="top: ${wp.top - 3}%; left: ${wp.left}%;" title="${pokeCard.name} (${tierBadgeText})">
                         <div class="${featuredClass} border-2 rounded-lg p-1.5 shadow-2xl flex items-center gap-1.5 hover:scale-110 transition-transform">
                             <img src="${pokeImg}" class="w-7 h-7 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                             <div class="text-left">
                                 <p class="text-[9px] font-black text-white leading-none">${pokeCard.name}</p>
-                                <span class="text-[8px] font-bold text-amber-300">${isFeaturedDaily ? '⭐ DIA' : '🩹 Nv.' + pokeCard.level}</span>
+                                <span class="text-[8px] font-bold text-amber-300">${isFeaturedDaily ? '⭐ DIA' : tierBadgeText + ' Nv.' + pokeCard.level}</span>
                             </div>
                         </div>
                     </div>
@@ -569,7 +572,6 @@ export function renderBoardMap(highlightIds = []) {
         const offsetLeft = waypoint.left + (idx * 1.2) - 1.5;
         const offsetTop = waypoint.top + (idx * 1.2) - 1.5;
 
-        // Ao clicar num jogador na mesma casa (ou outro jogador), abre a HUD/Painel de PVP ou carta do treinador
         mapOverlayHtml += `
             <div id="player-token-${idx}" onclick="openSpecificTrainerCardModal(${idx})" class="absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2 transition-all duration-500 z-50 cursor-pointer group" style="top: ${offsetTop}%; left: ${offsetLeft}%;" title="${player.name || 'Treinador'} ${isSelf ? '(Você)' : ''}">
                 <div class="relative flex flex-col items-center">
