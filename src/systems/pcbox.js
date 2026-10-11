@@ -1,7 +1,7 @@
 // --- src/systems/pcbox.js ---
 // Subsistema de Gestão de Equipa, PC Box, Paginação, Drag-and-Drop, XP e Evoluções
 
-import { gameState, getCurrentPlayer } from '../core/state.js';
+import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer } from '../core/state.js';
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 import { MONSTER_CATALOG } from '../config/cards-data.js';
 import { saveGameProgress } from '../core/storage.js';
@@ -53,7 +53,7 @@ export function handleDragOver(e) {
 
 export function handleDrop(e, targetArea, targetIndex) {
     e.preventDefault();
-    const cp = getCurrentPlayer();
+    const cp = getCurrentOrMyPlayer();
     const dataRaw = e.dataTransfer.getData('text/plain');
     if (!dataRaw) return;
 
@@ -104,12 +104,12 @@ export function handleDrop(e, targetArea, targetIndex) {
 }
 
 export function renderTeamCardSlots() {
-    const cp = getCurrentPlayer();
+    const cp = getCurrentOrMyPlayer();
     for (let i = 0; i < 6; i++) {
         const slotContainer = document.getElementById(`trainer-card-slot-${i}`) || document.getElementById(`team-slot-${i}`) || document.getElementById(`team-card-slot-${i}`);
         if (!slotContainer) continue;
 
-        const monster = cp.activeTeam ? cp.activeTeam[i] : null;
+        const monster = cp && cp.activeTeam ? cp.activeTeam[i] : null;
         if (monster) {
             const activeImg = getMonsterSprite(monster);
             const visualContent = activeImg 
@@ -149,11 +149,13 @@ export function renderTeamCardSlots() {
 }
 
 export function renderBottomPanel() {
-    const cp = getCurrentPlayer();
+    const cp = getCurrentOrMyPlayer();
     const container = document.getElementById('bottom-dynamic-container');
     const titleElement = document.getElementById('bottom-panel-title');
     if (!container) return;
     container.innerHTML = '';
+
+    if (!cp) return;
 
     if (gameState.currentBottomView === 'inventory') {
         if (titleElement) titleElement.innerText = 'Mochila (Itens & Orbes)';
@@ -256,8 +258,8 @@ export function renderBottomPanel() {
 
 export function changePcBoxPage(direction) {
     gameState.pcBoxCurrentPage = (gameState.pcBoxCurrentPage || 0) + direction;
-    const cp = getCurrentPlayer();
-    const totalBoxes = cp.pcBox ? cp.pcBox.length : 0;
+    const cp = getCurrentOrMyPlayer();
+    const totalBoxes = cp && cp.pcBox ? cp.pcBox.length : 0;
     const maxPages = Math.max(0, Math.ceil(totalBoxes / 12) - 1);
     if (gameState.pcBoxCurrentPage < 0) gameState.pcBoxCurrentPage = 0;
     if (gameState.pcBoxCurrentPage > maxPages) gameState.pcBoxCurrentPage = maxPages;
@@ -265,7 +267,7 @@ export function changePcBoxPage(direction) {
 }
 
 window.openPokemonDetailModal = function(identifier, sourceArea) {
-    const cp = getCurrentPlayer();
+    const cp = getCurrentOrMyPlayer();
     if (!cp) return;
 
     let monster = null;
@@ -349,7 +351,7 @@ export function switchBottomView(viewName) {
 
 // Ponte unificada global para disparar o uso do item a partir do painel inferior da mochila
 window.useInventoryItemMainScreen = function(itemId) {
-    const cp = getCurrentPlayer();
+    const cp = getCurrentOrMyPlayer();
     if (!cp || !Array.isArray(cp.inventory)) return;
     const itemIndex = cp.inventory.findIndex(i => i && i.id === itemId);
     if (itemIndex !== -1 && typeof useInventoryItem === 'function') {
