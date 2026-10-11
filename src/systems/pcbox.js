@@ -1,7 +1,7 @@
 // --- src/systems/pcbox.js ---
 // Subsistema de Gestão de Equipa, PC Box, Paginação, Drag-and-Drop, XP e Evoluções
 
-import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer } from '../core/state.js';
+import { gameState, getMyPlayer } from '../core/state.js';
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 import { MONSTER_CATALOG } from '../config/cards-data.js';
 import { saveGameProgress } from '../core/storage.js';
@@ -9,12 +9,9 @@ import { emitSocket } from '../core/socket.js';
 
 const MONSTER_CATALOG_REF = Array.isArray(MONSTER_CATALOG) ? MONSTER_CATALOG : [];
 
-// Função auxiliar unificada para obter sempre o jogador correto da HUD (prioriza o jogador local no modo online)
+// Função auxiliar unificada: Usa estritamente o jogador local da conta (`getMyPlayer`) para garantir HUD estática e pessoal no online
 function getHudPlayer() {
-    if (gameState && gameState.online) {
-        return getMyPlayer() || getCurrentOrMyPlayer();
-    }
-    return getCurrentOrMyPlayer();
+    return getMyPlayer();
 }
 
 export function getTierColorClass(tier) {
