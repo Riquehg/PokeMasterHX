@@ -7,13 +7,21 @@ import { ITEM_CATALOG, getItemDetails, normalizePlayerInventory } from '../data/
 import { MONSTER_CATALOG } from '../config/cards-data.js';
 import { emitSocket } from '../core/socket.js';
 
+// Função auxiliar unificada para obter sempre o jogador correto do Inventário/Loja (prioriza o jogador local no modo online)
+function getInventoryPlayer() {
+    if (gameState && gameState.online) {
+        return getMyPlayer() || getCurrentOrMyPlayer();
+    }
+    return getCurrentOrMyPlayer();
+}
+
 // ------------------------------------------------------------
 // POKÉ MART (LOJA DE ITENS)
 // ------------------------------------------------------------
 
 export function openPokemartModal(cityName = '') {
     ensureValidGameState();
-    const cp = getCurrentOrMyPlayer();
+    const cp = getInventoryPlayer();
     if (!cp) return;
 
     let modal = document.getElementById('pokemart-modal');
@@ -30,7 +38,7 @@ export function openPokemartModal(cityName = '') {
 }
 
 function renderMartContent(modalEl, cityName = '') {
-    const cp = getCurrentOrMyPlayer();
+    const cp = getInventoryPlayer();
     
     // Filtra os itens vendíveis no Poké Mart a partir do catálogo oficial
     const sellableIds = ['poke_ball', 'ball_great', 'ball_ultra', 'item_potion', 'item_revive', 'item_rarecandy', 'evolution_stone', 'item_vitamin'];
@@ -102,7 +110,7 @@ window.changeMartQuantity = function(itemId, amount) {
 
 // Executa a compra de um ou mais itens no Poké Mart
 window.buyItemFromPokemart = function(itemId, unitPrice, requestedQuantity = 1, cityName = '') {
-    const cp = getCurrentOrMyPlayer();
+    const cp = getInventoryPlayer();
     if (!cp) return;
 
     const quantity = Math.max(1, Math.min(999, Math.floor(Number(requestedQuantity) || 1)));
@@ -172,7 +180,7 @@ window.buyItemFromPokemart = function(itemId, unitPrice, requestedQuantity = 1, 
 // ------------------------------------------------------------
 
 export function useInventoryItem(itemUniqueIdOrIndex) {
-    const cp = getCurrentOrMyPlayer();
+    const cp = getInventoryPlayer();
     if (!cp || !Array.isArray(cp.inventory)) return;
 
     normalizePlayerInventory(cp);
@@ -412,7 +420,7 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
 // CONFIRMAÇÃO DE EVOLUÇÃO POR PEDRA
 // ------------------------------------------------------------
 window.confirmPokemonEvolution = function(itemIndex, teamIndex) {
-    const cp = getCurrentOrMyPlayer();
+    const cp = getInventoryPlayer();
     if (!cp || !cp.activeTeam || !cp.activeTeam[teamIndex]) return;
 
     const targetMon = cp.activeTeam[teamIndex];
