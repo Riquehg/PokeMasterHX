@@ -284,9 +284,9 @@ function getSocketPlayerData(socket, payloadPlayer = null) {
         email: payloadPlayer?.email || socket.data.email || '',
         name: payloadPlayer?.name || socket.data.trainerName || 'Treinador',
         avatarId: payloadPlayer?.avatarId || socket.data.avatarId || 1,
-        gold: payloadPlayer?.gold || 350,
+        gold: Number.isFinite(Number(payloadPlayer?.gold)) ? Number(payloadPlayer.gold) : 350,
         currentZone: 5,
-        activeTeam: safeArray(payloadPlayer?.activeTeam),
+        activeTeam: safeArray(payloadPlayer?.activeTeam), // Sem Eevee automático
         pcBox: safeArray(payloadPlayer?.pcBox),
         inventory: safeArray(payloadPlayer?.inventory),
         badges: safeArray(payloadPlayer?.badges),
@@ -786,11 +786,13 @@ io.on('connection', socket => {
 
         room.status = 'playing';
         const preparedPlayers = room.players.map(p => ({
+            socketId: p.socketId,
+            email: p.email,
             name: p.name,
             avatarId: p.avatarId,
             gold: p.gold || 350,
             currentZone: 5,
-            activeTeam: safeArray(p.activeTeam),
+            activeTeam: safeArray(p.activeTeam), // Vazio, sem Eevee automático
             pcBox: safeArray(p.pcBox),
             inventory: safeArray(p.inventory),
             badges: safeArray(p.badges)
@@ -809,6 +811,63 @@ io.on('connection', socket => {
         });
 
         emitRoomsList();
+    });
+
+    // ========================================================
+    // GESTÃO DE TURNOS E SINCRONIZAÇÃO MULTIPLAYER RIGOROSA
+    // ========================================================
+
+    socket.on('update_game_state', data => {
+        const room = getRoomBySocketId(socket.id);
+        const safeData = safeObject(data);
+
+        if (room && room.gameState) {
+            const currentIdx = room.gameState.currentPlayerIndex || 0;
+            const activePlayer = room.gameState.players[currentIdx];
+
+            // Valida se quem está a enviar a ação é o dono da vez atual
+            if (activePlayer && activePlayer.socketId && activePlayer.socketId !== socket.id) {
+                socket.emit('action_rejected', { message: 'Não é o seu turno de jogar!' });
+                return;
+            }
+
+            if (safeData.gameState) {
+                room.gameState = safeData.gameState;
+            }
+
+            // Transmite o novo estado para todos na sala
+            io.to(room.id).emit('sync_game_state', {
+                ...safeData,
+                gameState: room.gameState,
+                sender: socket.data.trainerName,
+                updatedAt: new Date().toISOString()
+            });
+        }
+    });
+
+    socket.on('next_turn', () => {
+        const room = getRoomBySocketId(socket.id);
+        if (!room || !room.gameState) return;
+
+        const currentIdx = room.gameState.currentPlayerIndex || 0;
+        const activePlayer = room.gameState.players[currentIdx];
+
+        if (activePlayer && activePlayer.socketId && activePlayer.socketId !== socket.id) {
+            socket.emit('action_rejected', { message: 'Apenas o jogador ativo pode passar o turno!' });
+            return;
+        }
+
+        // Avança para o próximo jogador de forma circular
+        room.gameState.currentPlayerIndex = (currentIdx + 1) % room.gameState.players.length;
+        if (room.gameState.currentPlayerIndex === 0) {
+            room.gameState.turn = (room.gameState.turn || 1) + 1;
+        }
+
+        io.to(room.id).emit('sync_game_state', {
+            gameState: room.gameState,
+            sender: socket.data.trainerName,
+            updatedAt: new Date().toISOString()
+        });
     });
 
     socket.on('get_leaderboard', async () => {
@@ -855,23 +914,6 @@ io.on('connection', socket => {
             text: message,
             createdAt: new Date().toISOString()
         });
-    });
-
-    socket.on('update_game_state', data => {
-        const room = getRoomBySocketId(socket.id);
-        const safeData = safeObject(data);
-
-        if (room) {
-            if (safeData.gameState) {
-                room.gameState = safeData.gameState;
-            }
-            socket.to(room.id).emit('sync_game_state', {
-                ...safeData,
-                gameState: room.gameState,
-                sender: socket.data.trainerName,
-                updatedAt: new Date().toISOString()
-            });
-        }
     });
 
     socket.on('disconnect', reason => {
