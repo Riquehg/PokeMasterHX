@@ -91,13 +91,21 @@ export function applyOnlineRoomState(data) {
         }))
     });
 
+    // 🛡️ IDENTIFICAÇÃO RIGOROSA DO JOGADOR LOCAL (Estilo Mario Party): Associa o index correto ao cliente atual
     const myEmail = typeof currentAuthenticatedAccount !== 'undefined' ? currentAuthenticatedAccount : null;
     const myPayload = getOnlinePlayerPayload();
-    const myIndex = gameState.players.findIndex(p => (myEmail && p.email === myEmail) || (myPayload && p.name === myPayload.name));
     
+    let myIndex = -1;
+    if (myEmail && Array.isArray(gameState.players)) {
+        myIndex = gameState.players.findIndex(p => p && (p.email === myEmail || p.accountEmail === myEmail));
+    }
+    if (myIndex === -1 && myPayload && Array.isArray(gameState.players)) {
+        myIndex = gameState.players.findIndex(p => p && p.name === myPayload.name);
+    }
+
     if (myIndex !== -1) {
         gameState.myPlayerIndex = myIndex;
-    } else {
+    } else if (typeof gameState.myPlayerIndex !== 'number') {
         gameState.myPlayerIndex = 0;
     }
 
