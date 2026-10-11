@@ -2,11 +2,28 @@
 // Módulo de Dados, Movimento e Eventos do Tabuleiro (Versão Sincronizada Online)
 
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
-import { gameState, getCurrentPlayer, movementState } from '../core/state.js';
+import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer, movementState } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
 import { BOARD_WAYPOINTS, getValidDestinations, renderBoardMap, renderBoardMapWithHighlights, moveTokenToWaypoint } from './map.js';
 import { openEncounterModalWithPokemon } from './encounter.js';
 import { socket, emitSocket } from '../core/socket.js';
+
+// Função auxiliar unificada para obter o jogador do dado (respeitando o turno ativo)
+function getDicePlayer() {
+    if (typeof getCurrentPlayer === 'function') {
+        return getCurrentPlayer();
+    }
+    if (
+        typeof gameState === 'undefined' ||
+        !gameState ||
+        !Array.isArray(gameState.players) ||
+        gameState.players.length === 0
+    ) {
+        return null;
+    }
+    const currentIndex = Number(gameState.currentPlayerIndex) || 0;
+    return gameState.players[currentIndex] || gameState.players[0] || null;
+}
 
 // ------------------------------------------------------------
 // CONFIGURAÇÃO DE EVENTOS DA HUD (Vincula o clique do dado)
@@ -85,24 +102,6 @@ function getWaypointById(waypointId) {
     ) || null;
 }
 
-function getMovementPlayer() {
-    if (typeof getCurrentPlayer === 'function') {
-        return getCurrentPlayer();
-    }
-
-    if (
-        typeof gameState === 'undefined' ||
-        !gameState ||
-        !Array.isArray(gameState.players) ||
-        gameState.players.length === 0
-    ) {
-        return null;
-    }
-
-    const currentIndex = Number(gameState.currentPlayerIndex) || 0;
-    return gameState.players[currentIndex] || gameState.players[0] || null;
-}
-
 function normalizeWaypointType(value) {
     const aliases = {
         rock: ['rock', 'pedra'],
@@ -174,7 +173,7 @@ function playerCanAccessWaypoint(player, waypoint) {
 // ------------------------------------------------------------
 
 export function getCurrentPlayerWaypointId() {
-    const player = getMovementPlayer();
+    const player = getDicePlayer();
     const defaultWaypoint = getWaypointById(5);
 
     if (!player) {
@@ -194,7 +193,7 @@ export function setCurrentPlayerWaypointId(newWaypointId) {
     const waypoint = getWaypointById(newWaypointId);
     if (!waypoint) return false;
 
-    const player = getMovementPlayer();
+    const player = getDicePlayer();
     if (!player) return false;
 
     player.currentZone = Number(waypoint.id);
@@ -312,7 +311,7 @@ export function rollDice() {
 
 export function startDirectMovementSession(steps) {
     const normalizedSteps = Math.max(1, Math.min(6, Number(steps) || 1));
-    const player = getMovementPlayer();
+    const player = getDicePlayer();
     const currentWaypointId = getCurrentPlayerWaypointId();
 
     movementState.isMoving = true;
@@ -399,7 +398,7 @@ export function handleWaypointClick(targetWaypointId) {
         return;
     }
 
-    const player = getMovementPlayer();
+    const player = getDicePlayer();
     if (!playerCanAccessWaypoint(player, targetWaypoint)) {
         if (typeof showCustomPopup === 'function') {
             showCustomPopup(
@@ -442,7 +441,7 @@ export function finishMovementSession() {
         moveTokenToWaypoint(finalWaypointId);
     }
 
-    const player = getMovementPlayer();
+    const player = getDicePlayer();
     updateMovementHUD(
         player
             ? `Local: Zona #${finalWaypointId} (${player.name || 'Treinador'})`
@@ -494,7 +493,7 @@ function updatePlayerLocationUI(waypointId) {
     const waypoint = getWaypointById(waypointId);
     if (!waypoint) return;
 
-    const player = getMovementPlayer();
+    const player = getDicePlayer();
     if (typeof appendAdventureLog === 'function') {
         appendAdventureLog(
             `${player?.name || 'Treinador'} deslocou-se para ${waypoint.name || `Zona #${waypoint.id}`}.`
@@ -508,7 +507,7 @@ function updatePlayerLocationUI(waypointId) {
 
 export function triggerWaypointEvent(waypointId) {
     const waypoint = getWaypointById(waypointId);
-    const player = getMovementPlayer();
+    const player = getDicePlayer();
 
     if (!waypoint || !player) return;
 
@@ -611,7 +610,7 @@ function ensurePotionInInventory(player) {
 }
 
 export function triggerRandomBoardEvent(waypointName) {
-    const player = getMovementPlayer();
+    const player = getDicePlayer();
     if (!player) return;
 
     const roll = Math.floor(Math.random() * 4) + 1;
