@@ -1,5 +1,5 @@
 // --- src/systems/map.js ---
-// Módulo do Tabuleiro, Caminhos e Multiplayer Sincronizado (Versão Integrada e Funcional)
+// Módulo do Tabuleiro, Caminhos e Multiplayer Sincronizado (Versão Otimizada e Corrigida)
 
 import { SUPABASE_STORAGE_URL, FULL_MAP_IMAGE } from '../config/constants.js';
 import { gameState, getCurrentPlayer, movementState, ensureValidGameState } from '../core/state.js';
@@ -222,8 +222,8 @@ export function getValidDestinations(startWaypointId, steps) {
 }
 
 export function rollDiceForMovement() {
-    // 🛡️ TRAVA DE SEGURANÇA ONLINE: Impede rolar o dado fora do turno
-    if (gameState.online && gameState.currentPlayerIndex !== gameState.myPlayerIndex) {
+    // 🛡️ TRAVA DE SEGURANÇA ONLINE: Impede rolar o dado fora do turno do próprio jogador
+    if (gameState.online && gameState.currentPlayerIndex !== (gameState.myPlayerIndex || 0)) {
         if (typeof showCustomPopup === 'function') {
             showCustomPopup("Não é o seu turno!", "Aguarde o outro jogador concluir a jogada.", false);
         }
@@ -269,8 +269,8 @@ export function rollDiceForMovement() {
 }
 
 export function onHexClick(waypointId, hexName) {
-    // 🛡️ TRAVA DE SEGURANÇA ONLINE: Impede clicar no mapa fora da vez do jogador
-    if (gameState.online && gameState.currentPlayerIndex !== gameState.myPlayerIndex) {
+    // 🛡️ TRAVA DE SEGURANÇA ONLINE: Valida vez antes de clicar no destino do mapa
+    if (gameState.online && gameState.currentPlayerIndex !== (gameState.myPlayerIndex || 0)) {
         if (typeof showCustomPopup === 'function') {
             showCustomPopup("Não é o seu turno!", "Aguarde a sua vez para se movimentar.", false);
         }
@@ -351,7 +351,7 @@ export function handleWaypointArrival(waypointId) {
         appendAdventureLog(`${cp?.name || 'Treinador'} chegou a ${waypoint.name} (Zona #${waypoint.id}).`);
     }
 
-    // Envia o estado atualizado da partida para o servidor sincronizar com os outros jogadores
+    // Sincronização rigorosa via WebSocket informando o servidor do novo estado
     if (gameState.online) {
         emitSocket('update_game_state', {
             type: 'player_move',
@@ -359,6 +359,7 @@ export function handleWaypointArrival(waypointId) {
         });
     }
 
+    // Verificação de colisão na mesma casa para ativar o PVP / interações
     if (typeof checkPlayerCellCollision === 'function') {
         checkPlayerCellCollision(waypointId, gameState.currentPlayerIndex || 0);
     }
@@ -561,12 +562,14 @@ export function renderBoardMap(highlightIds = []) {
 
         const avatarId = player.avatarId || 1;
         const isCurrentTurn = idx === activePlayerIndex;
+        const isSelf = gameState.online && idx === (gameState.myPlayerIndex || 0);
 
         const offsetLeft = waypoint.left + (idx * 1.2) - 1.5;
         const offsetTop = waypoint.top + (idx * 1.2) - 1.5;
 
+        // Ao clicar num jogador na mesma casa (ou outro jogador), abre a HUD/Painel de PVP ou carta do treinador
         mapOverlayHtml += `
-            <div id="player-token-${idx}" onclick="openSpecificTrainerCardModal(${idx})" class="absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2 transition-all duration-500 z-50 cursor-pointer group" style="top: ${offsetTop}%; left: ${offsetLeft}%;" title="${player.name || 'Treinador'}">
+            <div id="player-token-${idx}" onclick="openSpecificTrainerCardModal(${idx})" class="absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2 transition-all duration-500 z-50 cursor-pointer group" style="top: ${offsetTop}%; left: ${offsetLeft}%;" title="${player.name || 'Treinador'} ${isSelf ? '(Você)' : ''}">
                 <div class="relative flex flex-col items-center">
                     ${isCurrentTurn ? '<span class="absolute -top-3 bg-amber-400 text-black text-[8px] font-black px-1.5 rounded-full shadow animate-bounce">VEZ</span>' : ''}
                     <img src="${SUPABASE_STORAGE_URL}player_0${avatarId}.png" alt="${player.name || 'Avatar'}" class="w-7 h-7 object-contain ${isCurrentTurn ? 'animate-bounce drop-shadow-[0_0_12px_rgba(255,215,0,0.9)]' : 'opacity-80'} group-hover:scale-125 transition-transform" onerror="this.src='https://api.iconify.design/noto:boy.svg'">
@@ -630,6 +633,9 @@ if (typeof socket !== 'undefined' && socket) {
             }
             if (typeof renderBottomPanel === 'function') {
                 renderBottomPanel();
+            }
+            if (typeof renderTeamCardSlots === 'function') {
+                renderTeamCardSlots();
             }
         }
     });
