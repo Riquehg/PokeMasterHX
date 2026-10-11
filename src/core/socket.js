@@ -14,6 +14,9 @@ export function initializeSocketConnection() {
                 transports: ['websocket', 'polling']
             });
 
+            // Atualiza imediatamente a referência global do window
+            window.socket = socket;
+
             socket.on('connect', () => {
                 console.log("🟢 Conectado ao servidor Socket.io! ID:", socket.id);
                 if (typeof appendAdventureLog === 'function') {
@@ -137,7 +140,9 @@ export function initializeSocketConnection() {
 }
 
 export function emitSocket(eventName, payload) {
-    if (!socket || typeof socket.emit !== 'function') {
+    // Garante fallback para window.socket caso a variável local do módulo venha a falhar
+    const activeSocket = socket || window.socket;
+    if (!activeSocket || typeof activeSocket.emit !== 'function') {
         if (typeof showCustomPopup === 'function') {
             showCustomPopup(
                 'Conexão indisponível',
@@ -147,10 +152,9 @@ export function emitSocket(eventName, payload) {
         }
         return false;
     }
-    socket.emit(eventName, payload);
+    activeSocket.emit(eventName, payload);
     return true;
 }
 
-window.socket = socket;
 window.initializeSocketConnection = initializeSocketConnection;
 window.emitSocket = emitSocket;
