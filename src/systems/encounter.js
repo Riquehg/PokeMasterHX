@@ -8,6 +8,7 @@ import { MONSTER_CATALOG } from '../config/cards-data.js';
 import { getItemDetails } from '../data/items.js';
 import { saveGameProgress } from '../core/storage.js';
 import { emitSocket } from '../core/socket.js';
+import { dailyFeaturedPokemonConfig } from './admin.js';
 
 export let currentEncounterState = {
     wildPokemon: null,
@@ -584,9 +585,30 @@ export function resolveCaptureAttempt() {
         }
 
         if (totalCaptureValue >= requiredTarget || currentEncounterState.selectedCaptureBallId.includes('master')) {
+            
+            // --- VERIFICAÇÃO AUTOMÁTICA DO POKÉMON DO DIA ---
+            let dailyBonusMessage = "";
+            const isDailyFeatured = dailyFeaturedPokemonConfig && (wild.id.toLowerCase() === dailyFeaturedPokemonConfig.pokemonId.toLowerCase());
+            
+            if (isDailyFeatured) {
+                // Adiciona o item bónus à mochila
+                if (!Array.isArray(cp.inventory)) cp.inventory = [];
+                const existingItem = cp.inventory.find(i => i.id === dailyFeaturedPokemonConfig.bonusItem);
+                if (existingItem) {
+                    existingItem.count = (Number(existingItem.count) || 0) + 1;
+                } else {
+                    cp.inventory.push({ id: dailyFeaturedPokemonConfig.bonusItem, count: 1 });
+                }
+
+                // Adiciona o ouro bónus
+                cp.gold = (Number(cp.gold) || 350) + (Number(dailyFeaturedPokemonConfig.goldBonus) || 500);
+                
+                dailyBonusMessage = `\n\n🌟 BÓNUS DO POKÉMON DO DIA!\nGanhaste +${dailyFeaturedPokemonConfig.goldBonus} 🪙 e 1x ${dailyFeaturedPokemonConfig.bonusItemName}!`;
+            }
+
             showCustomPopup(
                 "🎉 CAPTURA BEM-SUCEDIDA!",
-                `Capturaste com sucesso o ${wild.name} (Nv.${wild.level || 1})!\n[Dado: ${roll} + Bónus: ${captureBonus + weakenedBonus} = ${totalCaptureValue} / Alvo: ${requiredTarget}+]`,
+                `Capturaste com sucesso o ${wild.name} (Nv.${wild.level || 1})!\n[Dado: ${roll} + Bónus: ${captureBonus + weakenedBonus} = ${totalCaptureValue} / Alvo: ${requiredTarget}+]${dailyBonusMessage}`,
                 true
             );
 
