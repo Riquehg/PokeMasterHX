@@ -427,49 +427,6 @@ function closePreBattleAndLaunchArena() {
     launchMainArenaCombatInterface();
 }
 
-function useItemInPreBattle(itemId, itemIndex) {
-    const cp = getCurrentPlayer();
-    let item = cp.inventory.find(i => i.id === itemId);
-    let activeMon = currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
-
-    if (!item || item.count <= 0) return;
-
-    if (item.type === 'heal') {
-        if (activeMon.currentHp >= activeMon.maxHp) {
-            if (typeof showCustomPopup === 'function') {
-                showCustomPopup("Aviso", "O Pokémon já está com HP máximo!", false);
-            }
-            return;
-        }
-        item.count--;
-        activeMon.currentHp = Math.min(activeMon.maxHp, activeMon.currentHp + item.value);
-        if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Sucesso", `💊 ${item.name} aplicada! HP atual: ${activeMon.currentHp}/${activeMon.maxHp}`, true);
-        }
-    } else if (item.type === 'battle') {
-        item.count--;
-        activeMon.str = (activeMon.str || 4) + (item.value || 2);
-        if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Sucesso", `🧪 ${item.name} aplicada! STR aumentada para ${activeMon.str}`, true);
-        }
-    } else if (item.type === 'revive') {
-        if (activeMon.currentHp > 0) {
-            if (typeof showCustomPopup === 'function') {
-                showCustomPopup("Bloqueado", "⚠ O Revive só pode ser aplicado se o Pokémon ativo estiver desmaiado (HP 0)!", false);
-            }
-            return;
-        }
-        item.count--;
-        activeMon.currentHp = Math.floor(activeMon.maxHp / 2);
-        if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Sucesso", `🌟 Revive aplicado! Anima revivido com ${activeMon.currentHp} HP.`, true);
-        }
-    }
-
-    const preModal = document.getElementById('arena-prebattle-modal');
-    if (preModal) renderPreBattleContent(preModal);
-}
-
 function launchMainArenaCombatInterface() {
     let arenaModal = document.getElementById('main-battle-arena-modal');
     if (!arenaModal) {
