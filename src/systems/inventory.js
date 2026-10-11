@@ -5,6 +5,7 @@ import { gameState, getCurrentPlayer, ensureValidGameState } from '../core/state
 import { saveGameProgress } from '../core/storage.js';
 import { ITEM_CATALOG, getItemDetails, normalizePlayerInventory } from '../data/items.js';
 import { MONSTER_CATALOG } from '../config/cards-data.js';
+import { emitSocket } from '../core/socket.js';
 
 // ------------------------------------------------------------
 // POKÉ MART (LOJA DE ITENS)
@@ -139,6 +140,17 @@ window.buyItemFromPokemart = function(itemId, unitPrice, requestedQuantity = 1, 
     normalizePlayerInventory(cp);
     saveGameProgress();
 
+    if (gameState.online && typeof emitSocket === 'function') {
+        emitSocket('save_game_state', {
+            gameState: gameState,
+            trainerName: cp.name || 'Treinador'
+        });
+        emitSocket('update_game_state', {
+            type: 'inventory_updated',
+            gameState: gameState
+        });
+    }
+
     const goldSpan = document.getElementById('mart-player-gold');
     if (goldSpan) goldSpan.innerText = cp.gold;
 
@@ -214,6 +226,17 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
         normalizePlayerInventory(cp);
         saveGameProgress();
 
+        if (gameState.online && typeof emitSocket === 'function') {
+            emitSocket('save_game_state', {
+                gameState: gameState,
+                trainerName: cp.name || 'Treinador'
+            });
+            emitSocket('update_game_state', {
+                type: 'inventory_updated',
+                gameState: gameState
+            });
+        }
+
         if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
         if (typeof renderBottomPanel === 'function') renderBottomPanel();
 
@@ -230,6 +253,18 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
 
         normalizePlayerInventory(cp);
         saveGameProgress();
+
+        if (gameState.online && typeof emitSocket === 'function') {
+            emitSocket('save_game_state', {
+                gameState: gameState,
+                trainerName: cp.name || 'Treinador'
+            });
+            emitSocket('update_game_state', {
+                type: 'inventory_updated',
+                gameState: gameState
+            });
+        }
+
         if (typeof renderBottomPanel === 'function') renderBottomPanel();
 
         if (typeof showCustomPopup === 'function') {
@@ -263,6 +298,17 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
         normalizePlayerInventory(cp);
         saveGameProgress();
 
+        if (gameState.online && typeof emitSocket === 'function') {
+            emitSocket('save_game_state', {
+                gameState: gameState,
+                trainerName: cp.name || 'Treinador'
+            });
+            emitSocket('update_game_state', {
+                type: 'inventory_updated',
+                gameState: gameState
+            });
+        }
+
         if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
         if (typeof renderBottomPanel === 'function') renderBottomPanel();
 
@@ -287,6 +333,17 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
 
         normalizePlayerInventory(cp);
         saveGameProgress();
+
+        if (gameState.online && typeof emitSocket === 'function') {
+            emitSocket('save_game_state', {
+                gameState: gameState,
+                trainerName: cp.name || 'Treinador'
+            });
+            emitSocket('update_game_state', {
+                type: 'inventory_updated',
+                gameState: gameState
+            });
+        }
 
         if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
         if (typeof renderBottomPanel === 'function') renderBottomPanel();
@@ -360,7 +417,6 @@ window.confirmPokemonEvolution = function(itemIndex, teamIndex) {
 
     const targetMon = cp.activeTeam[teamIndex];
     
-    // Procura no catálogo se este Pokémon tem evolução definida
     const catalogItem = MONSTER_CATALOG.find(m => m.id === (targetMon.catalogId || targetMon.id) || m.name.toLowerCase() === targetMon.name.toLowerCase());
     
     if (!catalogItem || !catalogItem.evolvesTo) {
@@ -380,7 +436,6 @@ window.confirmPokemonEvolution = function(itemIndex, teamIndex) {
         return;
     }
 
-    // Aplica a evolução ao Pokémon
     const oldName = targetMon.name;
     targetMon.name = evolvedData.name;
     targetMon.id = evolvedData.id;
@@ -391,7 +446,6 @@ window.confirmPokemonEvolution = function(itemIndex, teamIndex) {
     targetMon.currentHp = targetMon.maxHp;
     targetMon.str = (Number(targetMon.str) || 4) + 4;
 
-    // Consome o item da mochila
     const item = cp.inventory[itemIndex];
     if (item) {
         item.count = (Number(item.count) || 1) - 1;
@@ -401,7 +455,17 @@ window.confirmPokemonEvolution = function(itemIndex, teamIndex) {
     normalizePlayerInventory(cp);
     saveGameProgress();
 
-    // Atualiza a interface
+    if (gameState.online && typeof emitSocket === 'function') {
+        emitSocket('save_game_state', {
+            gameState: gameState,
+            trainerName: cp.name || 'Treinador'
+        });
+        emitSocket('update_game_state', {
+            type: 'pokemon_evolved',
+            gameState: gameState
+        });
+    }
+
     if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
     if (typeof renderBottomPanel === 'function') renderBottomPanel();
 
