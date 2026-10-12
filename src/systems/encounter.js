@@ -643,7 +643,7 @@ export function resolveCaptureAttempt() {
             if (!Array.isArray(cp.pokedex)) cp.pokedex = [];
             if (!cp.pokedex.includes(wild.id)) cp.pokedex.push(wild.id);
 
-            // 🧹 REMOVE O POKÉMON CAPTURADO DO MAPA (RESPAWN GARANTIDO)
+            // 🧹 SÓ REMOVE DO MAPA SE FOR CAPTURADO COM SUCESSO
             if (wild.waypointId && typeof boardPokemonCards !== 'undefined') {
                 delete boardPokemonCards[wild.waypointId];
             }
@@ -667,13 +667,8 @@ export function resolveCaptureAttempt() {
 }
 
 export function fleeEncounter() {
-    // 🧹 REMOVE O POKÉMON DO MAPA AO FUGIR OU RECUSAR (LIBerta A ZONA PARA NOVO RESPAWN)
-    const wild = currentEncounterState.wildPokemon;
-    if (wild && wild.waypointId && typeof boardPokemonCards !== 'undefined') {
-        delete boardPokemonCards[wild.waypointId];
-    }
-
-    showCustomPopup("Fuga", "🏃‍♂️ Afastaste-te do Pokémon selvagem. O caminho foi liberado!", true);
+    // 🧹 AO FUGIR OU FECHAR, O POKÉMON PERMANECE NO MAPA PARA FUTUROS ENCONTROS
+    showCustomPopup("Fuga", "🏃‍♂️ Afastaste-te do Pokémon selvagem. Ele continuará no mapa.", true);
     closeEncounterModalUI();
     if (typeof renderBoardMap === 'function') renderBoardMap();
 }
