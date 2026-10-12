@@ -9,6 +9,16 @@ if (typeof window.gymAttemptedThisTurn === 'undefined') {
     window.gymAttemptedThisTurn = {};
 }
 
+// Função auxiliar para resetar as tentativas de ginásio ao mudar de turno
+export function resetGymAttemptsForTurn(playerIndex) {
+    if (!window.gymAttemptedThisTurn) return;
+    Object.keys(window.gymAttemptedThisTurn).forEach(key => {
+        if (key.startsWith(`${playerIndex}_`)) {
+            delete window.gymAttemptedThisTurn[key];
+        }
+    });
+}
+
 export const GYM_LEADERS_CATALOG = [
     {
         city: 'Pewter City',
@@ -91,21 +101,21 @@ export function initiateGymSequence(cityName) {
     const playerIndex = gameState.online ? (gameState.myPlayerIndex || 0) : (gameState.currentPlayerIndex || 0);
     const attemptKey = `${playerIndex}_${cityName}`;
 
+    // Verifica se já tem a insígnia deste ginásio (torna-o inativo permanentemente)
+    const gymInfo = GYM_LEADERS_CATALOG.find(g => g.city.toLowerCase() === cityName.toLowerCase()) || GYM_LEADERS_CATALOG[0];
+    if (cp && Array.isArray(cp.badges) && gymInfo.badgeKey && cp.badges.includes(gymInfo.badgeKey)) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup("Ginásio Conquistado", "🛡️ Já conquistaste a insígnia deste ginásio! O Líder reconhece a tua superioridade e descansa.", true);
+        }
+        return;
+    }
+
     // Verifica se já tentou este ginásio neste turno
     if (window.gymAttemptedThisTurn && window.gymAttemptedThisTurn[attemptKey]) {
         if (typeof showCustomPopup === 'function') {
             showCustomPopup("Ginásio Indisponível", "⏳ Já desafiaste este ginásio neste turno. Avança para o próximo turno para tentar novamente.", false);
         } else {
             alert("⏳ Já desafiaste este ginásio neste turno.");
-        }
-        return;
-    }
-
-    // Verifica se já tem a insígnia deste ginásio (torna-o inativo permanentemente)
-    const gymInfo = GYM_LEADERS_CATALOG.find(g => g.city.toLowerCase() === cityName.toLowerCase()) || GYM_LEADERS_CATALOG[0];
-    if (cp && Array.isArray(cp.badges) && gymInfo.badgeKey && cp.badges.includes(gymInfo.badgeKey)) {
-        if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Ginásio Conquistado", "🛡️ Já conquistaste a insígnia deste ginásio! O Líder reconhece a tua superioridade e descansa.", true);
         }
         return;
     }
@@ -196,3 +206,4 @@ function launchGymBattleArenaDirect(gymInfo) {
 
 window.initiateGymSequence = initiateGymSequence;
 window.GYM_LEADERS_CATALOG = GYM_LEADERS_CATALOG;
+window.resetGymAttemptsForTurn = resetGymAttemptsForTurn;
