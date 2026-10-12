@@ -6,6 +6,20 @@ if (typeof SUPABASE_STORAGE_URL === 'undefined') {
     var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
 }
 
+// Ouvintes de Socket para ativar o PvP e eventos de batalha em tempo real
+if (socket) {
+    socket.off('start_pvp_battle');
+    socket.on('start_pvp_battle', (data) => {
+        if (typeof openBattleArena === 'function') {
+            openBattleArena({
+                type: 'pvp',
+                format: data.format || 1,
+                opponent: data.opponent
+            });
+        }
+    });
+}
+
 let currentBattleSession = {
     mode: 'gym',
     challenger: null,
@@ -189,6 +203,7 @@ function openBattleArena(config = {}) {
             name: opponent.name || 'Treinador adversário',
             isGymLeader: false,
             isWild: false,
+            isPvp: true,
             opponentRef: opponent,
             team: opponentTeam
         };
