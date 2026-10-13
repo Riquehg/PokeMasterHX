@@ -36,29 +36,31 @@ const tierNamesMap = { 1: 'Comum', 2: 'Incomum', 3: 'Raro', 4: 'Épico', 5: 'Len
 export function calculatePokemonStats(baseMonster, level, isShiny = false) {
     const tier = Number(baseMonster.tier || 1);
     
+    // Fatores de escala muito mais suaves por tier
     let tierMultiplier = 1.0;
-    if (tier === 2) tierMultiplier = 1.25;
-    else if (tier === 3) tierMultiplier = 1.5;
-    else if (tier === 4) tierMultiplier = 1.85;
-    else if (tier === 5) tierMultiplier = 2.3;
+    if (tier === 2) tierMultiplier = 1.15;
+    else if (tier === 3) tierMultiplier = 1.3;
+    else if (tier === 4) tierMultiplier = 1.5;
+    else if (tier === 5) tierMultiplier = 1.8;
 
-    const rawBaseStr = Number(baseMonster.str || baseMonster.attack || 8);
-    const rawBaseHp = Number(baseMonster.maxHp || baseMonster.hp || 30);
+    // Atributos base padrão do catálogo (garantindo valores seguros se vierem vazios)
+    const rawBaseStr = Number(baseMonster.str || baseMonster.attack || 10);
+    const rawBaseHp = Number(baseMonster.maxHp || baseMonster.hp || 35);
 
-    const scaledStr = Math.floor((rawBaseStr + (level * 2.5)) * tierMultiplier);
-    const scaledHp = Math.floor((rawBaseHp + (level * 10)) * tierMultiplier);
+    // Fórmula linear equilibrada: Base + (Nível * fator de crescimento)
+    const scaledStr = Math.floor((rawBaseStr + (level * 2)) * tierMultiplier);
+    const scaledHp = Math.floor((rawBaseHp + (level * 5)) * tierMultiplier);
 
-    const shinyStrBonus = isShiny ? Math.floor(scaledStr * 0.15) : 0;
-    const shinyHpBonus = isShiny ? Math.floor(scaledHp * 0.15) : 0;
-    const shinyMultiplier = isShiny ? 1.2 : 1.0;
+    const shinyStrBonus = isShiny ? Math.floor(scaledStr * 0.1) : 0;
+    const shinyHpBonus = isShiny ? Math.floor(scaledHp * 0.1) : 0;
 
-    const finalStr = Math.floor((scaledStr + shinyStrBonus));
-    const finalHp = Math.floor((scaledHp + shinyHpBonus) * shinyMultiplier);
+    const finalStr = scaledStr + shinyStrBonus;
+    const finalHp = scaledHp + shinyHpBonus;
 
     return {
-        str: Math.max(6, finalStr),
-        maxHp: Math.max(25, finalHp),
-        currentHp: Math.max(25, finalHp)
+        str: Math.max(5, finalStr),
+        maxHp: Math.max(20, finalHp),
+        currentHp: Math.max(20, finalHp)
     };
 }
 
