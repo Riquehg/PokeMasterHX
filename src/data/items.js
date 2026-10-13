@@ -13,63 +13,63 @@ export const ITEM_CATALOG = [
         name: 'Bicycle',
         category: 'common',
         image: `${SUPABASE_STORAGE_URL}items/bicycle.png`,
-        desc: 'Permite jogar um turno extra após o seu turno atual.'[cite: 1]
+        desc: 'Permite jogar um turno extra após o seu turno atual.'
     },
     {
         id: 'escape_rope',
         name: 'Escape Rope',
         category: 'common',
         image: `${SUPABASE_STORAGE_URL}items/escape_rope.png`,
-        desc: 'Permite ativar o espaço em que você está ou um adjacente.'[cite: 1]
+        desc: 'Permite ativar o espaço em que você está ou um adjacente.'
     },
     {
         id: 'fly',
         name: 'Fly',
         category: 'common',
         image: `${SUPABASE_STORAGE_URL}items/fly.png`,
-        desc: 'Move seu peão para qualquer espaço no hexágono atual.'[cite: 1]
+        desc: 'Move seu peão para qualquer espaço no hexágono atual.'
     },
     {
         id: 'fishing_rod',
         name: 'Fishing Rod',
         category: 'common',
         image: `${SUPABASE_STORAGE_URL}items/fishing_rod.png`,
-        desc: 'Equipamento para interagir com áreas de pesca ou água.'[cite: 1]
+        desc: 'Equipamento para interagir com áreas de pesca ou água.'
     },
     {
         id: 'honey',
         name: 'Honey',
         category: 'common',
         image: `${SUPABASE_STORAGE_URL}items/honey.png`,
-        desc: 'Tenta capturar um Pokémon no mesmo hexágono.'[cite: 1]
+        desc: 'Tenta capturar um Pokémon no mesmo hexágono.'
     },
     {
         id: 'pokenav_plus',
         name: 'PokéNav Plus',
         category: 'common',
         image: `${SUPABASE_STORAGE_URL}items/pokenav.png`,
-        desc: 'Força um oponente a descartar o Card de Treinador.'[cite: 1]
+        desc: 'Força um oponente a descartar o Card de Treinador.'
     },
     {
         id: 'rare_candy',
         name: 'Rare Candy',
         category: 'common',
         image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`,
-        desc: 'Concede XP imediato e sobe de nível o Anima.'[cite: 1]
+        desc: 'Concede XP imediato e sobe de nível o Anima.'
     },
     {
         id: 'repel',
         name: 'Repel',
         category: 'common',
         image: `${SUPABASE_STORAGE_URL}items/repel.png`,
-        desc: 'Troca um Pokémon revelado no tabuleiro.'[cite: 1]
+        desc: 'Troca um Pokémon revelado no tabuleiro.'
     },
     {
         id: 'rocket_attack',
         name: 'Rocket Attack',
         category: 'common',
         image: `${SUPABASE_STORAGE_URL}items/rocket_attack.png`,
-        desc: 'Rouba aleatoriamente um Item da mão de um oponente.'[cite: 1]
+        desc: 'Rouba aleatoriamente um Item da mão de um oponente.'
     },
 
     // --- ITENS RÁPIDOS ---
@@ -78,35 +78,35 @@ export const ITEM_CATALOG = [
         name: 'Poké Doll',
         category: 'quick',
         image: `${SUPABASE_STORAGE_URL}items/poke_doll.png`,
-        desc: 'Bloqueia efeitos diretos causados a você.'[cite: 1]
+        desc: 'Bloqueia efeitos diretos causados a você.'
     },
     {
         id: 'time_travel',
         name: 'Time Travel',
         category: 'quick',
         image: `${SUPABASE_STORAGE_URL}items/time_travel.png`,
-        desc: 'Força a rerrolagem de qualquer dado.'[cite: 1]
+        desc: 'Força a rerrolagem de qualquer dado.'
     },
     {
         id: 'exp_share',
         name: 'Exp. Share',
         category: 'quick',
         image: `${SUPABASE_STORAGE_URL}items/exp_share.png`,
-        desc: 'Copia os efeitos de Eventos ativados por oponentes.'[cite: 1]
+        desc: 'Copia os efeitos de Eventos ativados por oponentes.'
     },
     {
         id: 'lure_module',
         name: 'Lure Module',
         category: 'quick',
         image: `${SUPABASE_STORAGE_URL}items/lure_module.png`,
-        desc: 'Troca posições de dois Pokémon no tabuleiro.'[cite: 1]
+        desc: 'Troca posições de dois Pokémon no tabuleiro.'
     },
     {
         id: 'poke_flute',
         name: 'Poké Flute',
         category: 'quick',
         image: `${SUPABASE_STORAGE_URL}items/poke_flute.png`,
-        desc: 'Cancela um Evento e puxa outro em seu lugar.'[cite: 1]
+        desc: 'Cancela um Evento e puxa outro em seu lugar.'
     },
 
     // --- POKÉ BALLS E CAPTURA ---
@@ -118,7 +118,7 @@ export const ITEM_CATALOG = [
         value: 0,
         cost: 50,
         image: `${SUPABASE_STORAGE_URL}items/poke_ball.png`,
-        desc: 'Esfera clássica padrão.'[cite: 1]
+        desc: 'Esfera clássica padrão.'
     },
     {
         id: 'ball_great',
@@ -128,7 +128,7 @@ export const ITEM_CATALOG = [
         value: 1,
         cost: 100,
         image: `${SUPABASE_STORAGE_URL}items/great_ball.png`,
-        desc: 'Adiciona +1 na captura.'[cite: 1]
+        desc: 'Adiciona +1 na captura.'
     },
     {
         id: 'ball_ultra',
@@ -138,7 +138,7 @@ export const ITEM_CATALOG = [
         value: 2,
         cost: 200,
         image: `${SUPABASE_STORAGE_URL}items/ultra_ball.png`,
-        desc: 'Adiciona +2 na captura.'[cite: 1]
+        desc: 'Adiciona +2 na captura.'
     },
     {
         id: 'master_ball',
@@ -148,7 +148,7 @@ export const ITEM_CATALOG = [
         value: 4,
         cost: 1000,
         image: `${SUPABASE_STORAGE_URL}items/master_ball.png`,
-        desc: 'Adiciona +4 na captura.'[cite: 1]
+        desc: 'Adiciona +4 na captura.'
     },
     {
         id: 'ball_mystic',
@@ -160,7 +160,7 @@ export const ITEM_CATALOG = [
         image: `${SUPABASE_STORAGE_URL}items/mystic_ball.png`,
         aura: 'aura-mystic',
         visualClass: 'aura-mystic',
-        desc: 'Adiciona +2 e aplica Aura Mística.'[cite: 1]
+        desc: 'Adiciona +2 e aplica Aura Mística.'
     },
     {
         id: 'ball_flame',
@@ -172,7 +172,7 @@ export const ITEM_CATALOG = [
         image: `${SUPABASE_STORAGE_URL}items/flame_ball.png`,
         aura: 'aura-flame',
         visualClass: 'aura-flame',
-        desc: 'Adiciona +2 e aplica Aura Flamejante.'[cite: 1]
+        desc: 'Adiciona +2 e aplica Aura Flamejante.'
     },
     {
         id: 'ball_aqua',
@@ -184,7 +184,7 @@ export const ITEM_CATALOG = [
         image: `${SUPABASE_STORAGE_URL}items/aqua_ball.png`,
         aura: 'aura-aqua',
         visualClass: 'aura-aqua',
-        desc: 'Adiciona +2 e aplica Aura Aquática.'[cite: 1]
+        desc: 'Adiciona +2 e aplica Aura Aquática.'
     },
     {
         id: 'ball_electric',
@@ -196,7 +196,7 @@ export const ITEM_CATALOG = [
         image: `${SUPABASE_STORAGE_URL}items/electric_ball.png`,
         aura: 'aura-electric',
         visualClass: 'aura-electric',
-        desc: 'Adiciona +3 e aplica Aura Elétrica.'[cite: 1]
+        desc: 'Adiciona +3 e aplica Aura Elétrica.'
     },
     {
         id: 'ball_shadow',
@@ -208,7 +208,7 @@ export const ITEM_CATALOG = [
         image: `${SUPABASE_STORAGE_URL}items/shadow_ball.png`,
         aura: 'aura-shadow',
         visualClass: 'aura-shadow',
-        desc: 'Adiciona +3 e aplica Aura Sombria.'[cite: 1]
+        desc: 'Adiciona +3 e aplica Aura Sombria.'
     },
     {
         id: 'ball_rainbow',
@@ -220,7 +220,7 @@ export const ITEM_CATALOG = [
         image: `${SUPABASE_STORAGE_URL}items/rainbow_ball.png`,
         aura: 'aura-rainbow',
         visualClass: 'aura-rainbow',
-        desc: 'Adiciona +4 e aplica Aura Prismática.'[cite: 1]
+        desc: 'Adiciona +4 e aplica Aura Prismática.'
     },
 
     // --- ITENS DE EVOLUÇÃO, CURA E BATALHA ---
@@ -232,7 +232,7 @@ export const ITEM_CATALOG = [
         value: 1,
         cost: 500,
         image: `${SUPABASE_STORAGE_URL}items/evolution_stone.png`,
-        desc: 'Força a evolução imediata de um Pokémon compatível.'[cite: 1]
+        desc: 'Força a evolução imediata de um Pokémon compatível.'
     },
     {
         id: 'item_vitamin',
@@ -242,7 +242,7 @@ export const ITEM_CATALOG = [
         value: 2,
         cost: 150,
         image: `${SUPABASE_STORAGE_URL}items/vitamin.png`,
-        desc: 'Aumenta o bônus de combate em +2.'[cite: 1]
+        desc: 'Aumenta o bônus de combate em +2.'
     },
     {
         id: 'x_attack',
@@ -252,7 +252,7 @@ export const ITEM_CATALOG = [
         value: 2,
         cost: 150,
         image: `${SUPABASE_STORAGE_URL}items/x_attack.png`,
-        desc: 'Aumenta o bônus temporário de combate.'[cite: 1]
+        desc: 'Aumenta o bônus temporário de combate.'
     },
     {
         id: 'item_potion',
@@ -262,7 +262,7 @@ export const ITEM_CATALOG = [
         value: 20,
         cost: 50,
         image: `${SUPABASE_STORAGE_URL}items/potion.png`,
-        desc: 'Restaura 20 HP do Pokémon ativo.'[cite: 1]
+        desc: 'Restaura 20 HP do Pokémon ativo.'
     },
     {
         id: 'item_revive',
@@ -272,7 +272,7 @@ export const ITEM_CATALOG = [
         value: 50,
         cost: 250,
         image: `${SUPABASE_STORAGE_URL}items/revive.png`,
-        desc: 'Revive um Pokémon desmaiado.'[cite: 1]
+        desc: 'Revive um Pokémon desmaiado.'
     },
     {
         id: 'item_rarecandy',
@@ -282,7 +282,7 @@ export const ITEM_CATALOG = [
         value: 100,
         cost: 300,
         image: `${SUPABASE_STORAGE_URL}items/rare_candy.png`,
-        desc: 'Concede 100 XP ao Pokémon selecionado.'[cite: 1]
+        desc: 'Concede 100 XP ao Pokémon selecionado.'
     }
 ];
 
@@ -321,7 +321,7 @@ export function normalizeInventoryItem(itemEntry) {
 
     if (!itemInfo) {
         return typeof itemEntry === 'string'
-            ? { id: normalizeItemId(itemEntry), name: itemEntry, count: 1, category: 'common', type: 'common', desc: 'Item não catalogado.' }[cite: 1]
+            ? { id: normalizeItemId(itemEntry), name: itemEntry, count: 1, category: 'common', type: 'common', desc: 'Item não catalogado.' }
             : itemEntry;
     }
 
@@ -395,7 +395,7 @@ window.useInventoryItem = function(itemIndex) {
         const wild = typeof currentEncounterState !== 'undefined' ? currentEncounterState.wildPokemon : null;
         if (!wild) {
             if (typeof showCustomPopup === 'function') {
-                showCustomPopup('Nenhum Pokémon em combate', 'Abra um encontro com um Pokémon selvagem antes de usar uma Poké Ball.', false);[cite: 1]
+                showCustomPopup('Nenhum Pokémon em combate', 'Abra um encontro com um Pokémon selvagem antes de usar uma Poké Ball.', false);
             }
             return;
         }
@@ -410,7 +410,7 @@ window.useInventoryItem = function(itemIndex) {
         const targetMon = cp.activeTeam?.[0] || cp.team?.[0];
         if (!targetMon) {
             if (typeof showCustomPopup === 'function') {
-                showCustomPopup('Aviso', 'Não tens nenhum Pokémon na equipa ativa para receber o Rare Candy.', false);[cite: 1]
+                showCustomPopup('Aviso', 'Não tens nenhum Pokémon na equipa ativa para receber o Rare Candy.', false);
             }
             return;
         }
@@ -441,7 +441,7 @@ window.useInventoryItem = function(itemIndex) {
         if (typeof renderBottomPanel === 'function') renderBottomPanel();
 
         if (typeof showCustomPopup === 'function') {
-            showCustomPopup('🌟 Rare Candy Usado!', `${targetMon.name} subiu para o Nv.${targetMon.level}!\nOs seus atributos melhoraram.`, true);[cite: 1]
+            showCustomPopup('🌟 Rare Candy Usado!', `${targetMon.name} subiu para o Nv.${targetMon.level}!\nOs seus atributos melhoraram.`, true);
         }
         return;
     }
@@ -469,7 +469,7 @@ window.useInventoryItem = function(itemIndex) {
         if (typeof renderBottomPanel === 'function') renderBottomPanel();
 
         if (typeof showCustomPopup === 'function') {
-            showCustomPopup('🧪 Item Aplicado!', `${itemInfo.name} aplicado com sucesso! Bónus de força garantido.`, true);[cite: 1]
+            showCustomPopup('🧪 Item Aplicado!', `${itemInfo.name} aplicado com sucesso! Bónus de força garantido.`, true);
         }
         return;
     }
@@ -477,7 +477,7 @@ window.useInventoryItem = function(itemIndex) {
     // 4. Poção / Cura
     if (itemInfo.type === 'heal' || item.id.includes('potion')) {
         if (!cp.activeTeam || cp.activeTeam.length === 0) {
-            alert("Não tens nenhum Pokémon na equipa ativa para curar!");[cite: 1]
+            alert("Não tens nenhum Pokémon na equipa ativa para curar!");
             return;
         }
 
@@ -487,7 +487,7 @@ window.useInventoryItem = function(itemIndex) {
         const maxHp = targetMon.maxHp || targetMon.hp || 20;
         if (targetMon.currentHp >= maxHp) {
             if (typeof showCustomPopup === 'function') {
-                showCustomPopup('Aviso', 'O Pokémon ativo já está com HP máximo.', false);[cite: 1]
+                showCustomPopup('Aviso', 'O Pokémon ativo já está com HP máximo.', false);
             }
             return;
         }
@@ -516,7 +516,7 @@ window.useInventoryItem = function(itemIndex) {
         if (typeof renderBottomPanel === 'function') renderBottomPanel();
 
         if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Item Utilizado", `✨ Usaste ${itemInfo.name} em ${targetMon.name}! HP recuperado para ${targetMon.currentHp}/${maxHp}.`, true);[cite: 1]
+            showCustomPopup("Item Utilizado", `✨ Usaste ${itemInfo.name} em ${targetMon.name}! HP recuperado para ${targetMon.currentHp}/${maxHp}.`, true);
         }
         return;
     }
@@ -526,7 +526,7 @@ window.useInventoryItem = function(itemIndex) {
         const faintedMon = cp.activeTeam?.find(m => m && (m.currentHp !== undefined ? m.currentHp : m.maxHp) <= 0);
         if (!faintedMon) {
             if (typeof showCustomPopup === 'function') {
-                showCustomPopup('Aviso', 'Não há nenhum Pokémon desmaiado na equipa ativa.', false);[cite: 1]
+                showCustomPopup('Aviso', 'Não há nenhum Pokémon desmaiado na equipa ativa.', false);
             }
             return;
         }
@@ -554,14 +554,14 @@ window.useInventoryItem = function(itemIndex) {
         if (typeof renderBottomPanel === 'function') renderBottomPanel();
 
         if (typeof showCustomPopup === 'function') {
-            showCustomPopup('🌟 Revive Usado!', `${faintedMon.name} foi revivido com ${faintedMon.currentHp} HP.`, true);[cite: 1]
+            showCustomPopup('🌟 Revive Usado!', `${faintedMon.name} foi revivido com ${faintedMon.currentHp} HP.`, true);
         }
         return;
     }
 
     // Genérico para outros itens
     if (typeof showCustomPopup === 'function') {
-        showCustomPopup('Item', `Usaste ${itemInfo.name}.`, true);[cite: 1]
+        showCustomPopup('Item', `Usaste ${itemInfo.name}.`, true);
     }
 };
 
