@@ -300,6 +300,10 @@ function removeSocketFromRooms(socketId) {
         const wasInside = room.players.some(player => player.socketId === socketId);
         room.players = room.players.filter(player => player.socketId !== socketId);
 
+        if (wasInside && room.gameState && Array.isArray(room.gameState.players)) {
+            room.gameState.players = room.gameState.players.filter(p => p.socketId !== socketId);
+        }
+
         if (wasInside && room.players.length === 0) {
             removedRooms.push(room.id);
             return false;
@@ -334,6 +338,12 @@ io.on('connection', socket => {
                 const existingPlayer = room.players.find(p => normalizeEmail(p.email) === email);
                 if (existingPlayer) {
                     existingPlayer.socketId = socket.id;
+                }
+                if (room.gameState && Array.isArray(room.gameState.players)) {
+                    const gamePlayer = room.gameState.players.find(p => normalizeEmail(p.email) === email);
+                    if (gamePlayer) {
+                        gamePlayer.socketId = socket.id;
+                    }
                 }
             }
             socket.emit('room_joined', {
@@ -625,9 +635,10 @@ io.on('connection', socket => {
                         id: pokemon.id,
                         name: pokemon.name || pokemon.id,
                         level: pokemon.level || 5,
-                        currentHp: 30,
-                        maxHp: 30,
-                        image: `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/001.png`
+                        currentHp: pokemon.hp || 30,
+                        maxHp: pokemon.hp || 30,
+                        str: pokemon.str || 5,
+                        image: pokemon.image || `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/monsters/001.png`
                     };
                     if (!gameState.players) gameState.players = [{}];
                     if (!gameState.players[0].pcBox) gameState.players[0].pcBox = [];
@@ -842,16 +853,13 @@ io.on('connection', socket => {
             const currentIdx = room.gameState.currentPlayerIndex || 0;
             const activePlayer = room.gameState.players[currentIdx];
 
-            // 🛡️ Segurança: Apenas o jogador cujo turno é atual pode atualizar o seu estado na mesa
             if (activePlayer && activePlayer.socketId && activePlayer.socketId !== socket.id) {
                 socket.emit('action_rejected', { message: 'Não é o seu turno de jogar!' });
                 return;
             }
 
-            // Encontra o jogador remetente na lista da sala pelo socketId
             const senderPlayerIndex = room.gameState.players.findIndex(p => p.socketId === socket.id);
             if (senderPlayerIndex !== -1 && safeData.playerState) {
-                // Atualiza APENAS os dados do jogador remetente, evitando sobrescrever os dados dos outros
                 const targetPlayer = room.gameState.players[senderPlayerIndex];
                 const incomingState = safeObject(safeData.playerState);
 
@@ -863,12 +871,10 @@ io.on('connection', socket => {
                 if (incomingState.currentZone !== undefined) targetPlayer.currentZone = incomingState.currentZone;
             }
 
-            // Se houver atualizações globais no tabuleiro (como pokemons selvagens no mapa), atualiza de forma segura
             if (safeData.boardPokemonCards) {
                 room.boardPokemonCards = safeData.boardPokemonCards;
             }
 
-            // Transmite o estado rigoroso e isolado para todos na sala
             io.to(room.id).emit('sync_game_state', {
                 gameState: room.gameState,
                 boardPokemonCards: room.boardPokemonCards || {},
@@ -890,7 +896,6 @@ io.on('connection', socket => {
             return;
         }
 
-        // Avança de forma perfeitamente circular para o próximo jogador
         room.gameState.currentPlayerIndex = (currentIdx + 1) % room.gameState.players.length;
         if (room.gameState.currentPlayerIndex === 0) {
             room.gameState.turn = (room.gameState.turn || 1) + 1;
@@ -901,6 +906,17 @@ io.on('connection', socket => {
             boardPokemonCards: room.boardPokemonCards || {},
             sender: socket.data.trainerName,
             updatedAt: new Date().toISOString()
+        });
+    });
+
+    // 🌐 Sincronização em tempo real de logs de aventura entre jogadores na sala
+    socket.on('game_log_action', payload => {
+        const room = getRoomBySocketId(socket.id);
+        if (!room) return;
+        io.to(room.id).emit('game_log_broadcast', {
+            text: sanitizeText(payload?.text, 300),
+            sender: socket.data.trainerName || 'Treinador',
+            createdAt: new Date().toISOString()
         });
     });
 
