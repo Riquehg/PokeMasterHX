@@ -57,6 +57,83 @@ window.openVaultModal = openVaultModal;
 window.updateTurnIndicatorUI = updateTurnIndicatorUI;
 window.setDiceButtonState = setDiceButtonState;
 
+// ==========================================
+// SISTEMA DE CONVITES PvP E TROCAS EM TEMPO REAL
+// ==========================================
+window.proposePvPWithTrainer = function(targetPlayerName, targetIndex) {
+    if (typeof emitSocket === 'function') {
+        emitSocket('send_pvp_invite', { targetIndex, targetName: targetPlayerName });
+        window.showCustomPopup("⚔️ Convite Enviado", `A aguardar que ${targetPlayerName} aceite o desafio de Batalha PvP...`, true);
+    }
+};
+
+window.showPvPAcceptModal = function(challengerName, challengerIndex) {
+    let modal = document.getElementById('pvp-invite-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'pvp-invite-modal';
+        modal.className = 'fixed inset-0 bg-black/85 z-[900] flex items-center justify-center p-4 backdrop-blur-md';
+        document.body.appendChild(modal);
+    }
+    modal.innerHTML = `
+        <div class="trainer-card max-w-xs w-full p-5 space-y-4 border-4 border-red-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white text-center">
+            <h3 class="text-sm font-black text-red-400 font-cinzel">⚔️ Desafio PvP!</h3>
+            <p class="text-xs text-slate-200">O treinador <strong class="text-amber-300">${challengerName}</strong> desafiou-te para uma Batalha Pokémon!</p>
+            <div class="flex gap-2 pt-2">
+                <button onclick="document.getElementById('pvp-invite-modal').remove()" class="flex-1 bg-slate-800 text-slate-300 font-bold py-2 rounded-xl text-xs cursor-pointer">Recusar</button>
+                <button onclick="document.getElementById('pvp-invite-modal').remove(); window.acceptPvPInvite(${challengerIndex})" class="flex-1 bg-red-600 text-white font-black py-2 rounded-xl text-xs cursor-pointer shadow">Aceitar!</button>
+            </div>
+        </div>
+    `;
+    modal.classList.remove('hidden');
+};
+
+window.acceptPvPInvite = function(challengerIndex) {
+    if (typeof emitSocket === 'function') {
+        emitSocket('accept_pvp_invite', { challengerIndex });
+    }
+    if (typeof window.triggerPvPBattleArena === 'function') {
+        window.triggerPvPBattleArena();
+    }
+};
+
+window.proposeTradeWithTrainer = function(targetPlayerName, targetIndex) {
+    if (typeof emitSocket === 'function') {
+        emitSocket('send_trade_invite', { targetIndex, targetName: targetPlayerName });
+        window.showCustomPopup("🤝 Proposta Enviada", `A aguardar que ${targetPlayerName} aceite a proposta de troca...`, true);
+    }
+};
+
+window.showTradeAcceptModal = function(challengerName, challengerIndex) {
+    let modal = document.getElementById('trade-invite-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'trade-invite-modal';
+        modal.className = 'fixed inset-0 bg-black/85 z-[900] flex items-center justify-center p-4 backdrop-blur-md';
+        document.body.appendChild(modal);
+    }
+    modal.innerHTML = `
+        <div class="trainer-card max-w-xs w-full p-5 space-y-4 border-4 border-emerald-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white text-center">
+            <h3 class="text-sm font-black text-emerald-400 font-cinzel">🤝 Proposta de Troca!</h3>
+            <p class="text-xs text-slate-200">O treinador <strong class="text-amber-300">${challengerName}</strong> quer trocar Animas contigo!</p>
+            <div class="flex gap-2 pt-2">
+                <button onclick="document.getElementById('trade-invite-modal').remove()" class="flex-1 bg-slate-800 text-slate-300 font-bold py-2 rounded-xl text-xs cursor-pointer">Recusar</button>
+                <button onclick="document.getElementById('trade-invite-modal').remove(); window.acceptTradeInvite(${challengerIndex})" class="flex-1 bg-emerald-600 text-white font-black py-2 rounded-xl text-xs cursor-pointer shadow">Aceitar!</button>
+            </div>
+        </div>
+    `;
+    modal.classList.remove('hidden');
+};
+
+window.acceptTradeInvite = function(challengerIndex) {
+    if (typeof emitSocket === 'function') {
+        emitSocket('accept_trade_invite', { challengerIndex });
+    }
+    if (typeof window.openTradeModal === 'function') {
+        window.openTradeModal();
+    }
+};
+
 // Função auxiliar centralizada para transitar para o jogo e ocultar menus
 export function hideSetupAndShowGame() {
     document.getElementById('setup-screen')?.classList.add('hidden');
@@ -74,7 +151,7 @@ export function hideSetupAndShowGame() {
 }
 window.hideSetupAndShowGame = hideSetupAndShowGame;
 
-// === NOVA FUNÇÃO: Indicador Visual de Turno na Interface do Dado ===
+// === Indicador Visual de Turno na Interface do Dado ===
 export function updateTurnIndicatorUI() {
     let container = document.getElementById('pass-turn-btn-container');
     if (!container) return;
@@ -92,7 +169,6 @@ export function updateTurnIndicatorUI() {
     const activePlayer = players[activeIndex];
     const activeName = activePlayer ? activePlayer.name : `Jogador ${activeIndex + 1}`;
     
-    // Identificar de forma segura se o índice ativo corresponde ao nosso jogador local na sala
     const myIdx = gameState.online && gameState.myPlayerIndex !== undefined ? Number(gameState.myPlayerIndex) : activeIndex;
     const isMyTurn = (activeIndex === myIdx);
 
@@ -106,7 +182,7 @@ export function updateTurnIndicatorUI() {
 }
 window.updateTurnIndicatorUI = updateTurnIndicatorUI;
 
-// Função de Sincronização Global do HUD do Treinador (Menu Inicial e HUD Superior)
+// Sincronização Global do HUD do Treinador
 export function updateTrainerVisualsAndHud(trainerName, avatarId) {
     const cp = getCurrentOrMyPlayer();
     const name = trainerName || cp?.name || 'Ash Ketchum';
@@ -140,7 +216,6 @@ export function updateTrainerVisualsAndHud(trainerName, avatarId) {
 }
 window.updateTrainerVisualsAndHud = updateTrainerVisualsAndHud;
 
-// Controlo visual do botão do dado
 export function setDiceButtonState(hasRolled) {
     const diceBtn = document.getElementById('roll-dice-btn');
     if (!diceBtn) return;
@@ -157,7 +232,6 @@ export function setDiceButtonState(hasRolled) {
 }
 window.setDiceButtonState = setDiceButtonState;
 
-// Função de Nova Partida / Reset Inteligente do Tabuleiro com Sincronização Cloud
 window.resetGameProgressKeepCollection = function() {
     const cp = getCurrentOrMyPlayer();
     if (!cp) {
