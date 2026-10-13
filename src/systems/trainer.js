@@ -3,6 +3,7 @@
 
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer } from '../core/state.js';
+import { emitSocket } from '../core/socket.js';
 
 // ------------------------------------------------------------
 // CORES DE TIERS
@@ -37,6 +38,50 @@ function updateTrainerCardBadges(cp) {
         }
     });
 }
+
+// ------------------------------------------------------------
+// GATILHOS ROBUSTOS PARA PVP E TROCA ONLINE
+// ------------------------------------------------------------
+window.triggerPvPBattleArena = function(targetTrainerName) {
+    if (typeof showCustomPopup === 'function') {
+        showCustomPopup("Desafio PvP", `⚔️ A enviar convite de duelo PvP para ${targetTrainerName}...`, true);
+    }
+
+    if (gameState.online && typeof emitSocket === 'function') {
+        emitSocket('request_pvp_duel', {
+            targetTrainerName: targetTrainerName,
+            roomId: gameState.onlineRoomId
+        });
+    } else {
+        // Simulação local ou fallback se o servidor socket não estiver ativo
+        if (typeof openBattleArena === 'function') {
+            const targetPlayer = gameState.players?.find(p => p && p.name === targetTrainerName);
+            if (targetPlayer) {
+                openBattleArena({
+                    type: 'pvp',
+                    format: 1,
+                    opponent: targetPlayer
+                });
+            }
+        }
+    }
+};
+
+window.proposeTradeWithTrainer = function(targetTrainerName) {
+    if (typeof showCustomPopup === 'function') {
+        showCustomPopup("Proposta de Troca", `🔄 A iniciar sessão de trocas com ${targetTrainerName}...`, true);
+    }
+
+    if (gameState.online && typeof emitSocket === 'function') {
+        emitSocket('request_trade_session', {
+            targetTrainerName: targetTrainerName,
+            roomId: gameState.onlineRoomId
+        });
+    } else if (typeof openTradeModal === 'function') {
+        const localPlayer = getCurrentOrMyPlayer();
+        openTradeModal(localPlayer?.name || 'Treinador', targetTrainerName);
+    }
+};
 
 // ------------------------------------------------------------
 // ABRIR TRAINER'S CARD ESPECÍFICO (Com suporte a PvP / Troca)
@@ -119,10 +164,10 @@ export function openSpecificTrainerCardModal(playerIndex) {
             <div class="bg-purple-950/40 border-2 border-purple-600/60 p-3 rounded-xl flex flex-wrap gap-2 items-center justify-between mt-3">
                 <span class="text-[10px] text-purple-300 font-bold">📍 Estão na mesma casa (#${cp.currentZone})! Ações disponíveis:</span>
                 <div class="flex gap-2 w-full">
-                    <button onclick="document.getElementById('trainer-card-modal-full').remove(); if(typeof triggerPvPBattleArena === 'function') triggerPvPBattleArena('${cp.name}');" class="flex-1 bg-red-700 hover:bg-red-600 text-white font-black py-2 rounded-lg text-[10px] uppercase shadow cursor-pointer">
+                    <button onclick="document.getElementById('trainer-card-modal-full').remove(); window.triggerPvPBattleArena('${cp.name}');" class="flex-1 bg-red-700 hover:bg-red-600 text-white font-black py-2 rounded-lg text-[10px] uppercase shadow cursor-pointer">
                         ⚔ Desafiar PvP
                     </button>
-                    <button onclick="document.getElementById('trainer-card-modal-full').remove(); if(typeof openTradeModal === 'function') openTradeModal('${loggedPlayer.name}', '${cp.name}');" class="flex-1 bg-blue-700 hover:bg-blue-600 text-white font-black py-2 rounded-lg text-[10px] uppercase shadow cursor-pointer">
+                    <button onclick="document.getElementById('trainer-card-modal-full').remove(); window.proposeTradeWithTrainer('${cp.name}');" class="flex-1 bg-blue-700 hover:bg-blue-600 text-white font-black py-2 rounded-lg text-[10px] uppercase shadow cursor-pointer">
                         🔄 Propor Troca
                     </button>
                 </div>
