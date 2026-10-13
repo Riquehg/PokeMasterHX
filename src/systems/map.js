@@ -17,7 +17,7 @@ if (typeof window.boardPokemonCards === 'undefined') {
 }
 const boardPokemonCards = window.boardPokemonCards;
 
-// Função auxiliar robusta para adicionar mensagens ao Log de Aventura e garantir visibilidade
+// Função auxiliar robusta para adicionar mensagens ao Log de Aventura e garantir visibilidade com scroll interno
 function pushAdventureLog(message) {
     const timestamp = new Date().toLocaleTimeString();
     const formattedMsg = `[${timestamp}] ${message}`;
@@ -236,8 +236,8 @@ export function getValidDestinations(startWaypointId, steps) {
             }
 
             const isIndigoPlateauOrEnd = neighborWp.name.toLowerCase().includes("indigo plateau") || 
-                                       neighborWp.name.toLowerCase().includes("liga pokémon") || 
-                                       neighborWp.name.toLowerCase().includes("arena final");
+                                     neighborWp.name.toLowerCase().includes("liga pokémon") || 
+                                     neighborWp.name.toLowerCase().includes("arena final");
             if (isIndigoPlateauOrEnd && playerBadges < 6) return;
 
             let nextVisited = new Set(current.visitedInPath);
@@ -278,7 +278,6 @@ export function rollDiceForMovement() {
             if (!cp) return;
             const currentZone = cp.currentZone || 5;
 
-            // Log de Rolagem de Dados
             pushAdventureLog(`🎲 ${cp.name || 'Treinador'} rolou o dado e tirou [${diceResult}].`);
 
             const validNextSteps = getValidDestinations(currentZone, diceResult);
@@ -738,11 +737,10 @@ function setupMapChatListeners() {
             const text = chatInput.value.trim();
             if (!text) return;
             
-            // Envio seguro via socket global
             const currentSock = window.socket || (typeof getSocket === 'function' ? getSocket() : null);
             if (currentSock && typeof currentSock.emit === 'function') {
                 currentSock.emit('room_chat_message', { message: text });
-                currentSock.emit('chat_message', { message: text }); // Fallback para compatibilidade de servidores
+                currentSock.emit('chat_message', { message: text }); 
             } else {
                 console.warn("Socket de chat não detetado.");
             }
@@ -759,7 +757,6 @@ function setupMapChatListeners() {
         };
     }
 
-    // Configurar escuta global para receber mensagens do chat na sala online (evita duplicações)
     const activeSock = window.socket || (typeof getSocket === 'function' ? getSocket() : null);
     if (activeSock && !activeSock.hasChatListenerSetup) {
         activeSock.hasChatListenerSetup = true;
@@ -777,7 +774,6 @@ function setupMapChatListeners() {
                 targetChatBox.scrollTop = targetChatBox.scrollHeight;
             }
             
-            // Adicionar mensagens do chat também ao log de aventura
             pushAdventureLog(`💬 [Chat] ${senderName}: ${messageText}`);
         };
 
