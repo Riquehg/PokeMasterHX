@@ -10,7 +10,7 @@ import { updateBoardWeatherUI, weatherState } from './systems/weather.js';
 import './systems/city.js';
 import './systems/trainer.js';
 import './systems/vault.js';
-import { currentJoinedOnlineRoomId, broadcastOnlineAction } from './systems/lobby.js';
+import { currentJoinedOnlineRoomId } from './systems/lobby.js';
 import './systems/admin.js';
 import './systems/encounter.js';
 import './systems/battle-arena.js';
@@ -64,12 +64,44 @@ export function hideSetupAndShowGame() {
     document.getElementById('auth-container')?.classList.add('hidden');
     document.getElementById('main-game-layout')?.classList.remove('hidden');
 
-    // Assegura que o clima visual é renderizado ao entrar no tabuleiro
+    updateTurnIndicatorUI();
+
     setTimeout(() => {
         updateBoardWeatherUI();
     }, 100);
 }
 window.hideSetupAndShowGame = hideSetupAndShowGame;
+
+// === NOVA FUNÇÃO: Indicador Visual de Turno na Interface do Dado ===
+export function updateTurnIndicatorUI() {
+    let container = document.getElementById('pass-turn-btn-container');
+    if (!container) return;
+
+    let indicator = document.getElementById('turn-indicator-badge');
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'turn-indicator-badge';
+        indicator.className = 'text-[10px] font-black px-2.5 py-1 rounded-xl uppercase tracking-wider shadow border transition-all flex items-center gap-1';
+        container.insertBefore(indicator, container.firstChild);
+    }
+
+    const activeIndex = Number(gameState.currentPlayerIndex) || 0;
+    const players = gameState.players || [];
+    const activePlayer = players[activeIndex];
+    const activeName = activePlayer ? activePlayer.name : `Jogador ${activeIndex + 1}`;
+    
+    const myIdx = gameState.online ? (Number(gameState.myPlayerIndex) || 0) : activeIndex;
+    const isMyTurn = activeIndex === myIdx;
+
+    if (isMyTurn) {
+        indicator.className = 'text-[10px] font-black px-2.5 py-1 rounded-xl uppercase tracking-wider shadow border bg-emerald-950/80 text-emerald-300 border-emerald-500/60 animate-pulse';
+        indicator.innerHTML = `<i class="fa-solid fa-user-check"></i> Sua Vez (${activeName})`;
+    } else {
+        indicator.className = 'text-[10px] font-black px-2.5 py-1 rounded-xl uppercase tracking-wider shadow border bg-amber-950/80 text-amber-300 border-amber-500/60';
+        indicator.innerHTML = `<i class="fa-solid fa-hourglass-half animate-spin"></i> Vez de: ${activeName}`;
+    }
+}
+window.updateTurnIndicatorUI = updateTurnIndicatorUI;
 
 // Função de Sincronização Global do HUD do Treinador (Menu Inicial e HUD Superior)
 export function updateTrainerVisualsAndHud(trainerName, avatarId) {
@@ -79,14 +111,12 @@ export function updateTrainerVisualsAndHud(trainerName, avatarId) {
     const avatarIdStr = avId < 10 ? `0${avId}` : `${avId}`;
     const avatarUrl = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_${avatarIdStr}.png`;
 
-    // 1. Elementos do HUD Superior
     const hudAvatar = document.getElementById('hud-trainer-avatar');
     if (hudAvatar) hudAvatar.src = avatarUrl;
 
     const hudName = document.getElementById('hud-trainer-name');
     if (hudName) hudName.textContent = name;
 
-    // 2. Elementos do Hub / Menu Inicial
     const hubAvatarImg = document.getElementById('hub-avatar-img');
     if (hubAvatarImg) hubAvatarImg.src = avatarUrl;
 
@@ -102,6 +132,8 @@ export function updateTrainerVisualsAndHud(trainerName, avatarId) {
     const badgesCounter = document.getElementById('badges-counter');
     const badgesVal = Array.isArray(cp?.badges) ? cp.badges.length : 0;
     if (badgesCounter) badgesCounter.textContent = `${badgesVal} / 6`;
+
+    updateTurnIndicatorUI();
 }
 window.updateTrainerVisualsAndHud = updateTrainerVisualsAndHud;
 
@@ -160,9 +192,7 @@ window.resetGameProgressKeepCollection = function() {
             },
             gameState: gameState
         };
-        if (typeof window.broadcastOnlineAction === 'function') {
-            window.broadcastOnlineAction('game_reset', payload);
-        } else if (typeof emitSocket === 'function') {
+        if (typeof emitSocket === 'function') {
             emitSocket('update_game_state', payload);
         }
     }
@@ -243,6 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupAuthenticationListeners();
     loadDailyPokemonPreview();
     updateBoardWeatherUI();
+    updateTurnIndicatorUI();
 
     document.addEventListener('click', (event) => {
         const target = event.target;
@@ -317,7 +348,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             saveGameProgress();
             
-            // 🌐 Sincronização em tempo real do novo perfil criado no modo online
             if (gameState.online && typeof emitSocket === 'function') {
                 emitSocket('update_game_state', {
                     type: 'player_profile_created',
