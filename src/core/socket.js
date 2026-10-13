@@ -24,8 +24,8 @@ export function initializeSocketConnection() {
 
             socket.on('connect', () => {
                 console.log("🟢 Conectado ao servidor Socket.io! ID:", socket.id);
-                if (typeof appendAdventureLog === 'function') {
-                    appendAdventureLog("🌐 Conectado com sucesso ao servidor online.");
+                if (typeof window.pushAdventureLog === 'function') {
+                    window.pushAdventureLog("🌐 Conectado com sucesso ao servidor online.");
                 }
 
                 if (typeof currentJoinedOnlineRoomId !== 'undefined' && currentJoinedOnlineRoomId) {
@@ -38,8 +38,48 @@ export function initializeSocketConnection() {
 
             socket.on('disconnect', () => {
                 console.warn("🔴 Desconectado do servidor Socket.io.");
-                if (typeof appendAdventureLog === 'function') {
-                    appendAdventureLog("⚠️ Conexão com o servidor online perdida.");
+                if (typeof window.pushAdventureLog === 'function') {
+                    window.pushAdventureLog("⚠️ Conexão com o servidor online perdida.");
+                }
+            });
+
+            // Tratamento de desconexão de jogadores da sala (Remove o peão congelado do tabuleiro)
+            socket.off('player_disconnected');
+            socket.on('player_disconnected', (data) => {
+                const disconnectedIndex = data && (data.playerIndex !== undefined ? data.playerIndex : data.index);
+                if (gameState && Array.isArray(gameState.players)) {
+                    if (disconnectedIndex !== undefined && gameState.players[disconnectedIndex]) {
+                        const removedPlayer = gameState.players[disconnectedIndex];
+                        gameState.players.splice(disconnectedIndex, 1);
+                        if (typeof window.pushAdventureLog === 'function') {
+                            window.pushAdventureLog(`⚠️ O treinador ${removedPlayer.name || 'Adversário'} desconectou-se da partida.`);
+                        }
+                        if (typeof showCustomPopup === 'function') {
+                            showCustomPopup("Treinador Desconectado", `O jogador ${removedPlayer.name || 'Adversário'} abandonou a sala.`, false);
+                        }
+                    }
+                    if (typeof renderBoardMap === 'function') {
+                        renderBoardMap();
+                    }
+                }
+            });
+
+            // === SISTEMA DE CONVITES POKÉMON (PvP e Trocas com Confirmação Real) ===
+            socket.off('receive_pvp_invite');
+            socket.on('receive_pvp_invite', (data) => {
+                const challengerName = data.challengerName || data.name || 'Treinador';
+                const challengerIndex = data.challengerIndex !== undefined ? data.challengerIndex : 0;
+                if (typeof window.showPvPAcceptModal === 'function') {
+                    window.showPvPAcceptModal(challengerName, challengerIndex);
+                }
+            });
+
+            socket.off('receive_trade_invite');
+            socket.on('receive_trade_invite', (data) => {
+                const challengerName = data.challengerName || data.name || 'Treinador';
+                const challengerIndex = data.challengerIndex !== undefined ? data.challengerIndex : 0;
+                if (typeof window.showTradeAcceptModal === 'function') {
+                    window.showTradeAcceptModal(challengerName, challengerIndex);
                 }
             });
 
@@ -97,12 +137,12 @@ export function initializeSocketConnection() {
                 }
             });
 
-            // === NOVO: Sincronização em tempo real dos Logs de Jogo Globais (Eventos, Batalhas, Capturas e Dados) ===
+            // Sincronização em tempo real dos Logs de Jogo Globais
             socket.off('game_log_broadcast');
             socket.on('game_log_broadcast', (logData) => {
                 if (logData && logData.message) {
-                    if (typeof appendAdventureLog === 'function') {
-                        appendAdventureLog(`[Global] ${logData.message}`);
+                    if (typeof window.pushAdventureLog === 'function') {
+                        window.pushAdventureLog(`[Global] ${logData.message}`);
                     }
                 }
             });
@@ -129,21 +169,40 @@ export function initializeSocketConnection() {
                 }
             });
 
+            // Sincronização do Chat Online em tempo real
             socket.off('room_chat_broadcast');
             socket.on('room_chat_broadcast', (msgData) => {
-                if (msgData && msgData.text) {
+                if (msgData && (msgData.text || msgData.message)) {
+                    const messageText = msgData.text || msgData.message;
+                    const senderName = msgData.sender || msgData.senderName || 'Treinador';
+
                     if (!Array.isArray(gameState.chatMessages)) {
                         gameState.chatMessages = [];
                     }
                     gameState.chatMessages.push({
-                        sender: msgData.sender || 'Treinador',
-                        text: msgData.text
+                        sender: senderName,
+                        text: messageText
                     });
                     if (gameState.chatMessages.length > 100) {
                         gameState.chatMessages = gameState.chatMessages.slice(-100);
                     }
+
+                    // Renderizar diretamente na UI de chat se estiver ativa
+                    const targetChatBox = document.getElementById('chat-messages-container') || document.getElementById('room-chat-box');
+                    if (targetChatBox) {
+                        const msgEl = document.createElement('div');
+                        msgEl.className = 'text-[10px] text-slate-200 py-0.5 px-1 rounded bg-black/40 mb-1';
+                        msgEl.innerHTML = `<strong class="text-amber-400">${senderName}:</strong> ${messageText}`;
+                        targetChatBox.appendChild(msgEl);
+                        targetChatBox.scrollTop = targetChatBox.scrollHeight;
+                    }
+
                     if (typeof renderChatMessages === 'function') {
                         renderChatMessages();
+                    }
+
+                    if (typeof window.pushAdventureLog === 'function') {
+                        window.pushAdventureLog(`💬 [Chat] ${senderName}: ${messageText}`);
                     }
                 }
             });
