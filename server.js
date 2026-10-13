@@ -1,5 +1,5 @@
 // --- SERVIDOR NODE.JS, SOCKET.IO E SUPABASE ---
-// Pokémon Master Trainer HEX Edition
+// Pokémon Master Trainer HEX Edition - Modo Turnos Robusto
 
 'use strict';
 
@@ -281,12 +281,12 @@ function getRoomById(roomId) {
 function getSocketPlayerData(socket, payloadPlayer = null) {
     return {
         socketId: socket.id,
-        email: payloadPlayer?.email || socket.data.email || '',
-        name: payloadPlayer?.name || socket.data.trainerName || 'Treinador',
-        avatarId: payloadPlayer?.avatarId || socket.data.avatarId || 1,
+        email: normalizeEmail(payloadPlayer?.email || socket.data.email),
+        name: sanitizeText(payloadPlayer?.name || socket.data.trainerName, 80) || 'Treinador',
+        avatarId: Number(payloadPlayer?.avatarId || socket.data.avatarId || 1),
         gold: Number.isFinite(Number(payloadPlayer?.gold)) ? Number(payloadPlayer.gold) : 350,
-        currentZone: 5,
-        activeTeam: safeArray(payloadPlayer?.activeTeam), // Sem Eevee automático
+        currentZone: Number(payloadPlayer?.currentZone || 5),
+        activeTeam: safeArray(payloadPlayer?.activeTeam),
         pcBox: safeArray(payloadPlayer?.pcBox),
         inventory: safeArray(payloadPlayer?.inventory),
         badges: safeArray(payloadPlayer?.badges),
@@ -801,17 +801,18 @@ io.on('connection', socket => {
         if (!room || room.hostSocketId !== socket.id) return;
 
         room.status = 'playing';
-        const preparedPlayers = room.players.map(p => ({
+        const preparedPlayers = room.players.map((p, index) => ({
             socketId: p.socketId,
             email: p.email,
             name: p.name,
             avatarId: p.avatarId,
             gold: p.gold || 350,
             currentZone: 5,
-            activeTeam: safeArray(p.activeTeam), // Vazio, sem Eevee automático
+            activeTeam: safeArray(p.activeTeam),
             pcBox: safeArray(p.pcBox),
             inventory: safeArray(p.inventory),
-            badges: safeArray(p.badges)
+            badges: safeArray(p.badges),
+            playerIndex: index
         }));
 
         room.gameState = {
@@ -830,31 +831,47 @@ io.on('connection', socket => {
     });
 
     // ========================================================
-    // GESTÃO DE TURNOS E SINCRONIZAÇÃO MULTIPLAYER RIGOROSA
+    // GESTÃO DE TURNOS BLINDADA E ISOLADA POR JOGADOR
     // ========================================================
 
     socket.on('update_game_state', data => {
         const room = getRoomBySocketId(socket.id);
         const safeData = safeObject(data);
 
-        if (room && room.gameState) {
+        if (room && room.gameState && Array.isArray(room.gameState.players)) {
             const currentIdx = room.gameState.currentPlayerIndex || 0;
             const activePlayer = room.gameState.players[currentIdx];
 
-            // Valida se quem está a enviar a ação é o dono da vez atual
+            // 🛡️ Segurança: Apenas o jogador cujo turno é atual pode atualizar o seu estado na mesa
             if (activePlayer && activePlayer.socketId && activePlayer.socketId !== socket.id) {
                 socket.emit('action_rejected', { message: 'Não é o seu turno de jogar!' });
                 return;
             }
 
-            if (safeData.gameState) {
-                room.gameState = safeData.gameState;
+            // Encontra o jogador remetente na lista da sala pelo socketId
+            const senderPlayerIndex = room.gameState.players.findIndex(p => p.socketId === socket.id);
+            if (senderPlayerIndex !== -1 && safeData.playerState) {
+                // Atualiza APENAS os dados do jogador remetente, evitando sobrescrever os dados dos outros
+                const targetPlayer = room.gameState.players[senderPlayerIndex];
+                const incomingState = safeObject(safeData.playerState);
+
+                if (incomingState.activeTeam) targetPlayer.activeTeam = incomingState.activeTeam;
+                if (incomingState.inventory) targetPlayer.inventory = incomingState.inventory;
+                if (incomingState.gold !== undefined) targetPlayer.gold = incomingState.gold;
+                if (incomingState.pcBox) targetPlayer.pcBox = incomingState.pcBox;
+                if (incomingState.badges) targetPlayer.badges = incomingState.badges;
+                if (incomingState.currentZone !== undefined) targetPlayer.currentZone = incomingState.currentZone;
             }
 
-            // Transmite o novo estado para todos na sala
+            // Se houver atualizações globais no tabuleiro (como pokemons selvagens no mapa), atualiza de forma segura
+            if (safeData.boardPokemonCards) {
+                room.boardPokemonCards = safeData.boardPokemonCards;
+            }
+
+            // Transmite o estado rigoroso e isolado para todos na sala
             io.to(room.id).emit('sync_game_state', {
-                ...safeData,
                 gameState: room.gameState,
+                boardPokemonCards: room.boardPokemonCards || {},
                 sender: socket.data.trainerName,
                 updatedAt: new Date().toISOString()
             });
@@ -863,7 +880,7 @@ io.on('connection', socket => {
 
     socket.on('next_turn', () => {
         const room = getRoomBySocketId(socket.id);
-        if (!room || !room.gameState) return;
+        if (!room || !room.gameState || !Array.isArray(room.gameState.players)) return;
 
         const currentIdx = room.gameState.currentPlayerIndex || 0;
         const activePlayer = room.gameState.players[currentIdx];
@@ -873,7 +890,7 @@ io.on('connection', socket => {
             return;
         }
 
-        // Avança para o próximo jogador de forma circular
+        // Avança de forma perfeitamente circular para o próximo jogador
         room.gameState.currentPlayerIndex = (currentIdx + 1) % room.gameState.players.length;
         if (room.gameState.currentPlayerIndex === 0) {
             room.gameState.turn = (room.gameState.turn || 1) + 1;
@@ -881,6 +898,7 @@ io.on('connection', socket => {
 
         io.to(room.id).emit('sync_game_state', {
             gameState: room.gameState,
+            boardPokemonCards: room.boardPokemonCards || {},
             sender: socket.data.trainerName,
             updatedAt: new Date().toISOString()
         });
