@@ -152,7 +152,13 @@ export function openPokemartModal(cityName = '') {
 function renderMartContent(modalEl, cityName = '') {
     const cp = getCurrentPlayer();
     
-    const sellableIds = ['poke_ball', 'ball_great', 'ball_ultra', 'item_rarecandy', 'evolution_stone', 'item_potion', 'item_revive', 'item_vitamin'];
+    // Lista completa de itens à venda no Poké Mart, incluindo todas as esferas de captura e auras
+    const sellableIds = [
+        'poke_ball', 'ball_great', 'ball_ultra', 'master_ball', 
+        'ball_mystic', 'ball_flame', 'ball_aqua', 'ball_electric', 
+        'ball_shadow', 'ball_rainbow', 'item_rarecandy', 'evolution_stone', 
+        'item_potion', 'item_revive', 'item_vitamin'
+    ];
     let itemsForSale = ITEM_CATALOG.filter(item => sellableIds.includes(item.id));
 
     let shopHTML = `
@@ -161,7 +167,7 @@ function renderMartContent(modalEl, cityName = '') {
                 <span class="text-xs font-black text-blue-400 font-cinzel tracking-wider">POKÉ MART (${cp.name})</span>
                 <span class="bg-amber-500 text-black font-black text-[10px] px-2 py-0.5 rounded">Ouro: ${cp.gold}</span>
             </div>
-            <div class="space-y-2 max-h-60 overflow-y-auto pr-1">
+            <div class="space-y-2 max-h-72 overflow-y-auto pr-1">
     `;
 
     itemsForSale.forEach(item => {
