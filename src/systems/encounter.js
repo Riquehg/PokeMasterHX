@@ -216,7 +216,6 @@ export function updateEncounterUIInfo() {
     const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex] || cp.activeTeam[0];
     if (!activeMon) return;
 
-    // Recalcula os stats do Pokémon do jogador caso estejam desatualizados
     const freshPlayerStats = calculatePokemonStats(activeMon, activeMon.level || 1, activeMon.isShiny);
     activeMon.str = freshPlayerStats.str;
     activeMon.maxHp = freshPlayerStats.maxHp;
@@ -447,6 +446,7 @@ function syncGameStateToCloud() {
         if (gameState.online) {
             emitSocket('update_game_state', {
                 type: 'encounter_updated',
+                playerIndex: gameState.myPlayerIndex,
                 gameState: gameState
             });
         }
@@ -766,19 +766,30 @@ export function resolveCaptureAttempt() {
 
         if (totalCaptureValue >= requiredTarget || currentEncounterState.selectedCaptureBallId.includes('master')) {
             let dailyBonusMessage = "";
-            const isDailyFeatured = dailyFeaturedPokemonConfig && (wild.id.toLowerCase() === dailyFeaturedPokemonConfig.pokemonId.toLowerCase());
+            const wildCatalogId = String(wild.catalogId || wild.id || '').toLowerCase();
+            const featuredId = String(dailyFeaturedPokemonConfig?.pokemonId || '').toLowerCase();
+            const isDailyFeatured = featuredId && (wildCatalogId === featuredId || String(wild.name || '').toLowerCase() === featuredId);
             
             if (isDailyFeatured) {
                 if (!Array.isArray(cp.inventory)) cp.inventory = [];
-                const existingItem = cp.inventory.find(i => i.id === dailyFeaturedPokemonConfig.bonusItem);
+                const bonusItemId = dailyFeaturedPokemonConfig.bonusItem || 'ball_ultra';
+                const existingItem = cp.inventory.find(i => i && i.id === bonusItemId);
+                
                 if (existingItem) {
-                    existingItem.count = (Number(existingItem.count) || 0) + 1;
+                    existingItem.count = (Number(existingItem.count) || Number(existingItem.quantity) || 0) + 1;
+                    if (existingItem.quantity) delete existingItem.quantity;
                 } else {
-                    cp.inventory.push({ id: dailyFeaturedPokemonConfig.bonusItem, count: 1 });
+                    const itemTemplate = getItemDetails(bonusItemId) || { name: dailyFeaturedPokemonConfig.bonusItemName || 'Item Bónus', type: 'item' };
+                    cp.inventory.push({
+                        ...itemTemplate,
+                        id: bonusItemId,
+                        count: 1
+                    });
                 }
 
-                cp.gold = (Number(cp.gold) || 350) + (Number(dailyFeaturedPokemonConfig.goldBonus) || 500);
-                dailyBonusMessage = `\n\n🌟 BÓNUS DO POKÉMON DO DIA!\nGanhaste +${dailyFeaturedPokemonConfig.goldBonus} 🪙 e 1x ${dailyFeaturedPokemonConfig.bonusItemName}!`;
+                const goldAdd = Number(dailyFeaturedPokemonConfig.goldBonus) || 500;
+                cp.gold = (Number(cp.gold) || 350) + goldAdd;
+                dailyBonusMessage = `\n\n🌟 BÓNUS DO POKÉMON DO DIA!\nGanhaste +${goldAdd} 🪙 e 1x ${dailyFeaturedPokemonConfig.bonusItemName || 'Item Bónus'}!`;
             }
 
             showCustomPopup(
