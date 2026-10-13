@@ -67,8 +67,8 @@ export function initializeSocketConnection() {
             // === SISTEMA DE CONVITES POKÉMON (PvP e Trocas com Confirmação Real) ===
             socket.off('receive_pvp_invite');
             socket.on('receive_pvp_invite', (data) => {
-                const challengerName = data.challengerName || data.name || 'Treinador';
-                const challengerIndex = data.challengerIndex !== undefined ? data.challengerIndex : 0;
+                const challengerName = data.challengerName || data.name || data.targetName || 'Treinador';
+                const challengerIndex = data.challengerIndex !== undefined ? data.challengerIndex : (data.targetIndex !== undefined ? data.targetIndex : 0);
                 if (typeof window.showPvPAcceptModal === 'function') {
                     window.showPvPAcceptModal(challengerName, challengerIndex);
                 }
@@ -76,8 +76,8 @@ export function initializeSocketConnection() {
 
             socket.off('receive_trade_invite');
             socket.on('receive_trade_invite', (data) => {
-                const challengerName = data.challengerName || data.name || 'Treinador';
-                const challengerIndex = data.challengerIndex !== undefined ? data.challengerIndex : 0;
+                const challengerName = data.challengerName || data.name || data.targetName || 'Treinador';
+                const challengerIndex = data.challengerIndex !== undefined ? data.challengerIndex : (data.targetIndex !== undefined ? data.targetIndex : 0);
                 if (typeof window.showTradeAcceptModal === 'function') {
                     window.showTradeAcceptModal(challengerName, challengerIndex);
                 }
