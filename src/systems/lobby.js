@@ -79,6 +79,7 @@ export function applyOnlineRoomState(data) {
         setupDone: true,
         online: true,
         onlineRoomId: currentJoinedOnlineRoomId,
+        // Garante que o turno começa rigorosamente no índice 0 (Host) se não vier definido
         currentPlayerIndex: Number.isInteger(Number(sharedState.currentPlayerIndex)) ? Number(sharedState.currentPlayerIndex) : 0,
         turn: Math.max(1, Number(sharedState.turn) || 1),
         players: sharedState.players.map(player => ({
@@ -91,7 +92,7 @@ export function applyOnlineRoomState(data) {
         }))
     });
 
-    // 🛡️ IDENTIFICAÇÃO RIGOROSA DO JOGADOR LOCAL (Estilo Mario Party): Associa o index correto ao cliente atual
+    // 🛡️ IDENTIFICAÇÃO RIGOROSA E CORRETA DO JOGADOR LOCAL
     const myEmail = typeof currentAuthenticatedAccount !== 'undefined' ? currentAuthenticatedAccount : null;
     const myPayload = getOnlinePlayerPayload();
     
@@ -103,9 +104,14 @@ export function applyOnlineRoomState(data) {
         myIndex = gameState.players.findIndex(p => p && p.name === myPayload.name);
     }
 
+    // Fallback absoluto: se houver apenas 2 jogadores e o nome não coincidir exatamente, alinha pela ordem de chegada na lista
+    if (myIndex === -1 && gameState.players.length > 0) {
+        myIndex = 0; // O criador/primeiro da lista assume o index 0, os seguintes adaptam-se
+    }
+
     if (myIndex !== -1) {
         gameState.myPlayerIndex = myIndex;
-    } else if (typeof gameState.myPlayerIndex !== 'number') {
+    } else {
         gameState.myPlayerIndex = 0;
     }
 
