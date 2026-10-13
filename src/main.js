@@ -449,17 +449,29 @@ function setupAuthenticationListeners() {
     const submitBtn = document.getElementById('auth-submit-btn');
     if (submitBtn) {
         submitBtn.onclick = () => {
-            const emailInput = document.getElementById('auth-email-input');
-            const passwordInput = document.getElementById('auth-password-input');
+            const emailInput = document.getElementById('auth-email-input') || document.querySelector('#auth-container input[type="email"]') || document.querySelector('input[type="email"]');
+            const passwordInput = document.getElementById('auth-password-input') || document.querySelector('#auth-container input[type="password"]') || document.querySelector('input[type="password"]');
+            
             const email = emailInput ? emailInput.value.trim() : '';
             const password = passwordInput ? passwordInput.value.trim() : '';
 
             if (!email || !password) {
-                alert("Por favor, preencha o e-mail e a senha do treinador.");
+                if (typeof showCustomPopup === 'function') {
+                    showCustomPopup("Aviso de Login", "⚠️ Por favor, preencha o e-mail e a senha do treinador.", false);
+                } else {
+                    alert("Por favor, preencha o e-mail e a senha do treinador.");
+                }
                 return;
             }
 
-            emitSocket('login_request', { email, password });
+            if (typeof emitSocket === 'function') {
+                emitSocket('login_request', { email, password });
+                if (typeof showCustomPopup === 'function') {
+                    showCustomPopup("Autenticação", "⏳ A contactar o servidor para iniciar sessão...", true);
+                }
+            } else {
+                console.warn("⚠️ Socket não inicializado para autenticação.");
+            }
         };
     }
 
