@@ -1,5 +1,5 @@
 // --- src/systems/map.js ---
-// Módulo do Tabuleiro, Caminhos e Multiplayer Sincronizado (Versão Otimizada e Corrigida com Clima Dinâmico)
+// Módulo do Tabuleiro, Caminhos e Multiplayer Sincronizado (Versão Otimizada e Corrigida com Clima Dinâmico e Interações de PvP/Trocas)
 
 import { SUPABASE_STORAGE_URL, FULL_MAP_IMAGE } from '../config/constants.js';
 import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer, movementState, ensureValidGameState } from '../core/state.js';
@@ -9,9 +9,8 @@ import { MONSTER_CATALOG } from '../config/cards-data.js';
 import { initiateGymSequence, GYM_LEADERS_CATALOG } from './gym.js';
 import { showOnlineGameLayout, applyOnlineRoomState } from './lobby.js';
 import { socket, emitSocket } from '../core/socket.js';
-import { advanceGlobalWeather, updateBoardWeatherUI } from './weather.js'; // Importação do sistema de clima
+import { advanceGlobalWeather, updateBoardWeatherUI } from './weather.js';
 
-// Garantir que o gestor global dos Pokémon do tabuleiro existe
 if (typeof window.boardPokemonCards === 'undefined') {
     window.boardPokemonCards = {};
 }
@@ -275,7 +274,6 @@ export function rollDiceForMovement() {
                 }
                 cp.currentZone = Math.min(currentZone + diceResult, BOARD_WAYPOINTS.length);
                 
-                // Avança o clima global ao finalizar um turno completo de movimento
                 advanceGlobalWeather();
 
                 renderBoardMap();
@@ -501,6 +499,55 @@ function triggerRandomBoardEvent(eventName) {
     }
 }
 
+// Interação ao clicar no peão de um jogador no mapa (Suporta Visualizar, Desafiar PvP ou Propor Troca)
+window.openPlayerTokenInteractionModal = function(playerIndex) {
+    const players = gameState.players || [];
+    const targetPlayer = players[playerIndex];
+    if (!targetPlayer) return;
+
+    const myIdx = gameState.online ? (gameState.myPlayerIndex || 0) : 0;
+    const isSelf = playerIndex === myIdx;
+
+    let modal = document.getElementById('player-token-interaction-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'player-token-interaction-modal';
+        modal.className = 'fixed inset-0 bg-black/80 z-[750] flex items-center justify-center p-4 backdrop-blur-sm';
+        document.body.appendChild(modal);
+    }
+
+    const avatarUrl = `${SUPABASE_STORAGE_URL}player_0${targetPlayer.avatarId || 1}.png`;
+
+    modal.innerHTML = `
+        <div class="trainer-card max-w-sm w-full p-5 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white text-center">
+            <div class="flex justify-between items-center border-b border-amber-900/60 pb-2">
+                <h3 class="text-xs font-black text-amber-400 font-cinzel">👤 Treinador: ${targetPlayer.name}</h3>
+                <button onclick="document.getElementById('player-token-interaction-modal').remove()" class="text-amber-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-amber-800 cursor-pointer">✕</button>
+            </div>
+
+            <div class="flex flex-col items-center space-y-2">
+                <img src="${avatarUrl}" class="w-16 h-16 object-contain bg-black/50 p-2 rounded-2xl border-2 border-amber-500" onerror="this.src='https://api.iconify.design/noto:boy.svg'">
+                <p class="text-[10px] text-slate-300">Insígnias: ${Array.isArray(targetPlayer.badges) ? targetPlayer.badges.length : 0} / 6 &nbsp;|&nbsp; Ouro: ${targetPlayer.gold || 350} G</p>
+            </div>
+
+            <div class="space-y-2 pt-2">
+                <button onclick="document.getElementById('player-token-interaction-modal').remove(); if(typeof openSpecificTrainerCardModal === 'function') openSpecificTrainerCardModal(${playerIndex});" class="w-full bg-blue-700 hover:bg-blue-600 text-white font-bold py-2 rounded-xl text-xs cursor-pointer shadow">
+                    📜 Ver Cartão de Treinador
+                </button>
+                ${!isSelf ? `
+                    <button onclick="document.getElementById('player-token-interaction-modal').remove(); if(typeof window.initiatePlayerPvP === 'function') window.initiatePlayerPvP(${playerIndex}); else alert('Desafio PvP enviado a${targetPlayer.name}!');" class="w-full bg-red-700 hover:bg-red-600 text-white font-bold py-2 rounded-xl text-xs cursor-pointer shadow">
+                        ⚔️ Desafiar para Batalha PvP
+                    </button>
+                    <button onclick="document.getElementById('player-token-interaction-modal').remove(); if(typeof window.initiatePlayerTrade === 'function') window.initiatePlayerTrade(${playerIndex}); else alert('Proposta de troca enviada a${targetPlayer.name}!');" class="w-full bg-emerald-700 hover:bg-emerald-600 text-white font-bold py-2 rounded-xl text-xs cursor-pointer shadow">
+                        🤝 Propor Troca de Anima
+                    </button>
+                ` : ''}
+            </div>
+        </div>
+    `;
+    modal.classList.remove('hidden');
+};
+
 export function renderBoardMap(highlightIds = []) {
     const container = document.getElementById('board-path');
     if (!container) return;
@@ -608,8 +655,9 @@ export function renderBoardMap(highlightIds = []) {
         const offsetLeft = waypoint.left + (idx * 1.2) - 1.5;
         const offsetTop = waypoint.top + (idx * 1.2) - 1.5;
 
+        // CORRIGIDO: Agora o clique no peão abre o menu interativo com PvP, Trocas e Cartão
         mapOverlayHtml += `
-            <div id="player-token-${idx}" onclick="openSpecificTrainerCardModal(${idx})" class="absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2 transition-all duration-500 z-50 cursor-pointer group" style="top: ${offsetTop}%; left: ${offsetLeft}%;" title="${player.name || 'Treinador'} ${isSelf ? '(Você)' : ''}">
+            <div id="player-token-${idx}" onclick="window.openPlayerTokenInteractionModal(${idx})" class="absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2 transition-all duration-500 z-50 cursor-pointer group" style="top: ${offsetTop}%; left: ${offsetLeft}%;" title="${player.name || 'Treinador'} ${isSelf ? '(Você)' : ''}">
                 <div class="relative flex flex-col items-center">
                     ${isCurrentTurn ? '<span class="absolute -top-3 bg-amber-400 text-black text-[8px] font-black px-1.5 rounded-full shadow animate-bounce">VEZ</span>' : ''}
                     <img src="${SUPABASE_STORAGE_URL}player_0${avatarId}.png" alt="${player.name || 'Avatar'}" class="w-7 h-7 object-contain ${isCurrentTurn ? 'animate-bounce drop-shadow-[0_0_12px_rgba(255,215,0,0.9)]' : 'opacity-80'} group-hover:scale-125 transition-transform" onerror="this.src='https://api.iconify.design/noto:boy.svg'">
@@ -633,12 +681,12 @@ export function renderBoardMap(highlightIds = []) {
 
     setupMapChatListeners();
 
-    // Garante que o feedback visual do clima é renderizado e atualizado no mapa
     setTimeout(() => {
         updateBoardWeatherUI();
     }, 50);
 }
 
+// CORRIGIDO: Ouvintes robustos para o chat no mapa transmitirem para a sala online
 function setupMapChatListeners() {
     const sendBtn = document.getElementById('send-chat-btn') || document.getElementById('map-send-chat-btn');
     const chatInput = document.getElementById('chat-input-field') || document.getElementById('map-chat-input');
@@ -697,11 +745,13 @@ if (typeof socket !== 'undefined' && socket) {
     socket.on('room_chat_broadcast', (data) => {
         const chatBoxes = [
             document.getElementById('chat-messages-box'),
+            document.getElementById('map-chat-messages-box'),
             document.getElementById('lobby-chat-messages')
         ];
         chatBoxes.forEach(box => {
             if (box) {
-                box.innerHTML += `<p class="text-[9px] text-amber-300"><strong>[${data.sender}]:</strong> ${data.text}</p>`;
+                const time = new Date(data.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                box.innerHTML += `<div class="mb-1"><span class="text-slate-500">[${time}]</span> <strong class="text-amber-300">${data.sender}:</strong> <span class="text-white">${data.text}</span></div>`;
                 box.scrollTop = box.scrollHeight;
             }
         });
