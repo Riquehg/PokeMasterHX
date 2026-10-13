@@ -1,5 +1,5 @@
 // --- src/systems/map.js ---
-// Módulo do Tabuleiro, Caminhos e Multiplayer Sincronizado (Com Logs Dinâmicos de Aventura)
+// Módulo do Tabuleiro, Caminhos e Multiplayer Sincronizado (Com Logs Dinâmicos de Aventura e Chat)
 
 import { SUPABASE_STORAGE_URL, FULL_MAP_IMAGE } from '../config/constants.js';
 import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer, movementState, ensureValidGameState } from '../core/state.js';
@@ -17,21 +17,28 @@ if (typeof window.boardPokemonCards === 'undefined') {
 }
 const boardPokemonCards = window.boardPokemonCards;
 
-// Função auxiliar segura para adicionar mensagens ao Log de Aventura
+// Função auxiliar robusta para adicionar mensagens ao Log de Aventura e garantir visibilidade
 function pushAdventureLog(message) {
-    if (typeof appendAdventureLog === 'function') {
-        appendAdventureLog(message);
+    const timestamp = new Date().toLocaleTimeString();
+    const formattedMsg = `[${timestamp}] ${message}`;
+    
+    if (typeof window.appendAdventureLog === 'function') {
+        window.appendAdventureLog(formattedMsg);
+    }
+    
+    // Tenta encontrar múltiplos seletores possíveis para a caixa de log na HUD
+    const logBox = document.getElementById('adventure-log-box') || document.getElementById('game-adventure-log') || document.getElementById('log-container');
+    if (logBox) {
+        const p = document.createElement('p');
+        p.className = 'text-[9px] text-amber-200/90 leading-tight mb-1 font-mono';
+        p.textContent = formattedMsg;
+        logBox.appendChild(p);
+        logBox.scrollTop = logBox.scrollHeight;
     } else {
-        const logBox = document.getElementById('adventure-log-box');
-        if (logBox) {
-            const p = document.createElement('p');
-            p.className = 'text-[9px] text-amber-200/90 leading-tight';
-            p.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-            logBox.appendChild(p);
-            logBox.scrollTop = logBox.scrollHeight;
-        }
+        console.warn("Log Box não encontrada no DOM:", formattedMsg);
     }
 }
+window.pushAdventureLog = pushAdventureLog;
 
 export const BOARD_WAYPOINTS = [
     // --- HEXÁGONO A ---
@@ -722,25 +729,60 @@ export function renderBoardMap(highlightIds = []) {
 function setupMapChatListeners() {
     const sendBtn = document.getElementById('send-chat-btn') || document.getElementById('map-send-chat-btn');
     const chatInput = document.getElementById('chat-input-field') || document.getElementById('map-chat-input');
+    const chatBoxMessages = document.getElementById('chat-messages-container') || document.getElementById('room-chat-box');
 
     if (sendBtn && chatInput && !sendBtn.dataset.listenerAttached) {
         sendBtn.dataset.listenerAttached = "true";
-        sendBtn.onclick = () => {
+        
+        const executeSend = () => {
             const text = chatInput.value.trim();
             if (!text) return;
             
-            if (typeof window.socket !== 'undefined' && window.socket && typeof window.socket.emit === 'function') {
-                window.socket.emit('room_chat_message', { message: text });
+            // Envio seguro via socket global
+            const currentSock = window.socket || (typeof getSocket === 'function' ? getSocket() : null);
+            if (currentSock && typeof currentSock.emit === 'function') {
+                currentSock.emit('room_chat_message', { message: text });
+                currentSock.emit('chat_message', { message: text }); // Fallback para compatibilidade de servidores
+            } else {
+                console.warn("Socket de chat não detetado.");
             }
 
             chatInput.value = '';
         };
 
+        sendBtn.onclick = executeSend;
         chatInput.onkeydown = (e) => {
             if (e.key === 'Enter') {
-                sendBtn.click();
+                e.preventDefault();
+                executeSend();
             }
         };
+    }
+
+    // Configurar escuta global para receber mensagens do chat na sala online (evita duplicações)
+    const activeSock = window.socket || (typeof getSocket === 'function' ? getSocket() : null);
+    if (activeSock && !activeSock.hasChatListenerSetup) {
+        activeSock.hasChatListenerSetup = true;
+        
+        const handleIncomingChat = (data) => {
+            const senderName = data.senderName || data.name || 'Jogador';
+            const messageText = data.message || data.text || '';
+            const targetChatBox = document.getElementById('chat-messages-container') || document.getElementById('room-chat-box');
+            
+            if (targetChatBox) {
+                const msgEl = document.createElement('div');
+                msgEl.className = 'text-[10px] text-slate-200 py-0.5 px-1 rounded bg-black/40 mb-1';
+                msgEl.innerHTML = `<strong class="text-amber-400">${senderName}:</strong> ${messageText}`;
+                targetChatBox.appendChild(msgEl);
+                targetChatBox.scrollTop = targetChatBox.scrollHeight;
+            }
+            
+            // Adicionar mensagens do chat também ao log de aventura
+            pushAdventureLog(`💬 [Chat] ${senderName}: ${messageText}`);
+        };
+
+        activeSock.on('room_chat_message', handleIncomingChat);
+        activeSock.on('chat_message', handleIncomingChat);
     }
 }
 
