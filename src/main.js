@@ -11,7 +11,6 @@ import './systems/trainer.js';
 import './systems/vault.js';
 import { currentJoinedOnlineRoomId, broadcastOnlineAction } from './systems/lobby.js';
 import './systems/admin.js';
-import './systems/capture.js';
 import './systems/encounter.js';
 import './systems/battle-arena.js';
 import { openPokemartModal, useInventoryItem } from './systems/inventory.js';
