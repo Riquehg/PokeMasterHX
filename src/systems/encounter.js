@@ -529,7 +529,26 @@ export function resolveBattleAttempt() {
             if (wild.currentHp <= 0) {
                 currentEncounterState.wildDefeated = true;
                 addExperienceAndCheckEvolution(activeMon, 85);
-                showCustomPopup("🏆 VITÓRIA NO COMBATE TCG!", `O teu ${activeMon.name} (Soma: ${playerPower} | Dado: ${playerDice}) derrotou o ${wild.name} (Soma: ${wildPower})!\n\n✨ Ganhou XP e o selvagem ficou enfraquecido (+2 Bónus de Captura)!\n\n🔴 Podes agora clicar em 'Tentar Capturar'!`, true);
+                
+                // Pergunta imediata ao zerar o HP se deseja jogar a Poké Ball
+                if (confirm(`🏆 VITÓRIA NO COMBATE TCG!\nO ${wild.name} foi derrotado e enfraquecido (+2 Bónus de Captura)!\n\nDesejas jogar uma Poké Ball para tentar a captura agora?`)) {
+                    if (!currentEncounterState.selectedCaptureBallId && cp.inventory) {
+                        const defaultSphere = cp.inventory.find(i => i.type === 'sphere' || i.id.includes('ball'));
+                        if (defaultSphere) {
+                            currentEncounterState.selectedCaptureBallId = defaultSphere.id;
+                            currentEncounterState.itemBonus = Number(defaultSphere.value) || 1;
+                        }
+                    }
+                    resolveCaptureAttempt();
+                } else {
+                    // Se recusar, o Pokémon derrotado some do mapa
+                    if (wild.waypointId && typeof boardPokemonCards !== 'undefined') {
+                        delete boardPokemonCards[wild.waypointId];
+                    }
+                    closeEncounterModalUI();
+                    if (typeof renderBoardMap === 'function') renderBoardMap();
+                    showCustomPopup("Fuga", "Deixaste o Pokémon para trás e ele desapareceu do mapa.", true);
+                }
             } else {
                 showCustomPopup("⚔️ ATAQUE EFICAZ!", `O teu ${activeMon.name} (Dado: ${playerDice}) causou ${damageToWild} de dano!\n\n(Ataque: ${playerPower} vs Defesa: ${wildPower})\nHP do Selvagem: ${wild.currentHp}/${wild.maxHp}`, true);
             }
@@ -596,7 +615,6 @@ export function resolveCaptureAttempt() {
         }
 
         if (totalCaptureValue >= requiredTarget || currentEncounterState.selectedCaptureBallId.includes('master')) {
-            
             let dailyBonusMessage = "";
             const isDailyFeatured = dailyFeaturedPokemonConfig && (wild.id.toLowerCase() === dailyFeaturedPokemonConfig.pokemonId.toLowerCase());
             
@@ -610,7 +628,6 @@ export function resolveCaptureAttempt() {
                 }
 
                 cp.gold = (Number(cp.gold) || 350) + (Number(dailyFeaturedPokemonConfig.goldBonus) || 500);
-                
                 dailyBonusMessage = `\n\n🌟 BÓNUS DO POKÉMON DO DIA!\nGanhaste +${dailyFeaturedPokemonConfig.goldBonus} 🪙 e 1x ${dailyFeaturedPokemonConfig.bonusItemName}!`;
             }
 
@@ -645,6 +662,7 @@ export function resolveCaptureAttempt() {
             if (!Array.isArray(cp.pokedex)) cp.pokedex = [];
             if (!cp.pokedex.includes(wild.id)) cp.pokedex.push(wild.id);
 
+            // Remove do mapa se capturado com sucesso
             if (wild.waypointId && typeof boardPokemonCards !== 'undefined') {
                 delete boardPokemonCards[wild.waypointId];
             }
@@ -655,20 +673,38 @@ export function resolveCaptureAttempt() {
             if (typeof renderBottomPanel === 'function') renderBottomPanel();
             syncGameStateToCloud();
         } else {
-            showCustomPopup(
-                "❌ FALHA NA CAPTURA",
-                `O ${wild.name} resistiu e escapou da esfera! [Dado: ${roll} + Bónus: ${captureBonus + weakenedBonus} = ${totalCaptureValue} / Alvo: ${requiredTarget}+].\n\nPodes tentar novamente com outra esfera.`,
-                false
-            );
-            renderEncounterItemsList();
-            updateEncounterUIInfo();
+            // Se a captura falhar e o Pokémon já estava derrotado, ele some do mapa obrigatoriamente
+            if (currentEncounterState.wildDefeated) {
+                if (wild.waypointId && typeof boardPokemonCards !== 'undefined') {
+                    delete boardPokemonCards[wild.waypointId];
+                }
+                closeEncounterModalUI();
+                if (typeof renderBoardMap === 'function') renderBoardMap();
+                showCustomPopup("❌ FUGA APÓS FALHA", `O ${wild.name} escapou da esfera e fugiu definitivamente do mapa!`, false);
+            } else {
+                showCustomPopup(
+                    "❌ FALHA NA CAPTURA",
+                    `O ${wild.name} resistiu e escapou da esfera! [Dado: ${roll} + Bónus: ${captureBonus + weakenedBonus} = ${totalCaptureValue} / Alvo: ${requiredTarget}+].\n\nPodes tentar novamente com outra esfera.`,
+                    false
+                );
+                renderEncounterItemsList();
+                updateEncounterUIInfo();
+            }
             syncGameStateToCloud();
         }
     });
 }
 
 export function fleeEncounter() {
-    showCustomPopup("Fuga", "🏃‍♂️ Afastaste-te do Pokémon selvagem. Ele continuará no mapa.", true);
+    // Se o Pokémon já estava derrotado e o jogador decide fugir, ele também desaparece do mapa
+    const wild = currentEncounterState.wildPokemon;
+    if (currentEncounterState.wildDefeated && wild && wild.waypointId && typeof boardPokemonCards !== 'undefined') {
+        delete boardPokemonCards[wild.waypointId];
+        showCustomPopup("Fuga", "O Pokémon derrotado fugiu para longe e desapareceu do mapa.", true);
+    } else {
+        showCustomPopup("Fuga", "🏃‍♂️ Afastaste-te do Pokémon selvagem.", true);
+    }
+
     closeEncounterModalUI();
     if (typeof renderBoardMap === 'function') renderBoardMap();
 }
