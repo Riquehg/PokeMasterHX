@@ -54,6 +54,8 @@ window.switchBottomView = switchBottomView;
 window.openPokedexModal = openPokedexModal;
 window.openPokedexDetailCard = openPokedexDetailCard;
 window.openVaultModal = openVaultModal;
+window.updateTurnIndicatorUI = updateTurnIndicatorUI;
+window.setDiceButtonState = setDiceButtonState;
 
 // Função auxiliar centralizada para transitar para o jogo e ocultar menus
 export function hideSetupAndShowGame() {
