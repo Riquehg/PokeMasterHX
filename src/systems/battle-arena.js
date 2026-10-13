@@ -661,8 +661,10 @@ function arenaResolveEnemyResponse() {
         const enemyRoll = Math.floor(Math.random() * 6) + 1;
 
         const typeMultiplier = arenaTypeMultiplier(eMon, pMon);
-        const playerPower = (Number(pMon.str) || 4) + Number(currentBattleSession.combatBonus) + Number(playerRoll || 0);
-        const enemyPower = Math.round(((Number(eMon.str) || 5) + Number(enemyRoll || 0)) * typeMultiplier);
+        // Poder ajustado incluindo a força, o nível, o bónus de combate, o dado e a vantagem de tipo
+        const playerPower = Math.round(((((Number(pMon.str) || 4) + (Number(pMon.level) || 1)) + Number(currentBattleSession.combatBonus) + Number(playerRoll || 0))));
+        const enemyPower = Math.round(((((Number(eMon.str) || 5) + (Number(eMon.level) || 5)) + Number(enemyRoll || 0)) * typeMultiplier));
+        
         const enemyWon = enemyPower >= playerPower;
         const damage = enemyWon ? Math.max(6, enemyPower - playerPower + 8) : Math.max(4, Math.floor((enemyPower - playerPower + 8) / 2));
 
@@ -843,8 +845,10 @@ function executeArenaTurn() {
         const enemyRoll = Math.floor(Math.random() * 6) + 1;
 
         const typeMult = typeof calculateTypeAdvantageMultiplier === 'function' ? calculateTypeAdvantageMultiplier(pMon.type, eMon.type) : 1;
-        const playerPower = Math.round(((Number(pMon.str) || 4) + Number(currentBattleSession.combatBonus) + Number(playerRoll || 0)) * typeMult);
-        const enemyPower = (Number(eMon.str) || 5) + Number(enemyRoll || 0);
+        
+        // Poder ajustado incluindo a força, o nível, o bónus de combate, o dado e a vantagem de tipo
+        const playerPower = Math.round((((Number(pMon.str) || 4) + (Number(pMon.level) || 1)) + Number(currentBattleSession.combatBonus) + Number(playerRoll || 0)) * typeMult);
+        const enemyPower = (Number(eMon.str) || 5) + (Number(eMon.level) || 5) + Number(enemyRoll || 0);
 
         if (playerPower >= enemyPower) {
             const damage = Math.max(8, playerPower - enemyPower + 10);
