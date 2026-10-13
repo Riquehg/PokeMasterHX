@@ -33,21 +33,19 @@ function getTierColorClass(tier) {
 
 const tierNamesMap = { 1: 'Comum', 2: 'Incomum', 3: 'Raro', 4: 'Épico', 5: 'Lendário' };
 
+// Fórmula unificada e balanceada de status para Jogadores e Selvagens
 export function calculatePokemonStats(baseMonster, level, isShiny = false) {
     const tier = Number(baseMonster.tier || 1);
     
-    // Fatores de escala muito mais suaves por tier
     let tierMultiplier = 1.0;
     if (tier === 2) tierMultiplier = 1.15;
     else if (tier === 3) tierMultiplier = 1.3;
     else if (tier === 4) tierMultiplier = 1.5;
     else if (tier === 5) tierMultiplier = 1.8;
 
-    // Atributos base padrão do catálogo (garantindo valores seguros se vierem vazios)
     const rawBaseStr = Number(baseMonster.str || baseMonster.attack || 10);
     const rawBaseHp = Number(baseMonster.maxHp || baseMonster.hp || 35);
 
-    // Fórmula linear equilibrada: Base + (Nível * fator de crescimento)
     const scaledStr = Math.floor((rawBaseStr + (level * 2)) * tierMultiplier);
     const scaledHp = Math.floor((rawBaseHp + (level * 5)) * tierMultiplier);
 
@@ -92,7 +90,6 @@ export function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
     return bestMultiplier;
 }
 
-// === GERAÇÃO BALANCEADA DE POKÉMON SELVAGEM (Baseada no Nível da Equipa do Jogador) ===
 export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa') {
     if (!Array.isArray(MONSTER_CATALOG) || MONSTER_CATALOG.length === 0) return null;
 
@@ -109,7 +106,6 @@ export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa
     const baseMon = tierFiltered[Math.floor(Math.random() * tierFiltered.length)];
     const tier = baseMon.tier || targetTier;
 
-    // Calcular a média de nível da equipa ativa dos jogadores para balanceamento dinâmico
     const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentOrMyPlayer();
     let playerTeam = cp && (cp.activeTeam || cp.team) ? (cp.activeTeam || cp.team) : [];
     
@@ -119,12 +115,11 @@ export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa
         avgLevel = Math.max(1, Math.round(totalLvl / playerTeam.length));
     }
 
-    // O nível selvagem acompanha a equipa do jogador com uma ligeira variação baseada no tier da zona
     let tierBaseOffset = (tier - 1) * 4;
     let minLevel = Math.max(1, avgLevel - 2 + tierBaseOffset);
     let maxLevel = avgLevel + 3 + tierBaseOffset;
     
-    if (tier === 5) { // Lendários
+    if (tier === 5) {
         minLevel = Math.max(avgLevel, 35);
         maxLevel = Math.max(avgLevel + 5, 50);
     }
@@ -226,10 +221,13 @@ export function updateEncounterUIInfo() {
     const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex] || cp.activeTeam[0];
     if (!activeMon) return;
 
+    // Recálculo e sincronização forçada dos stats do Pokémon do jogador usando a mesma regra
     const freshPlayerStats = calculatePokemonStats(activeMon, activeMon.level || 1, activeMon.isShiny);
     activeMon.str = freshPlayerStats.str;
     activeMon.maxHp = freshPlayerStats.maxHp;
-    if (activeMon.currentHp === undefined) activeMon.currentHp = activeMon.maxHp;
+    if (activeMon.currentHp === undefined || activeMon.currentHp > activeMon.maxHp) {
+        activeMon.currentHp = activeMon.maxHp;
+    }
 
     const activeHp = activeMon.currentHp;
     const activeMaxHp = activeMon.maxHp;
