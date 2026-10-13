@@ -1,8 +1,10 @@
-// --- src/core/socket.js ---
+// --- src/systems/socket.js ---
 // Gestão de Conexão Socket.io, Autenticação Remota e Sincronização Online
 
-import { gameState, ensureValidGameState, currentAuthenticatedAccount } from './state.js';
+import { gameState, ensureValidGameState, currentAuthenticatedAccount, getCurrentOrMyPlayer } from '../core/state.js';
 import { applyOnlineRoomState, showOnlineGameLayout, currentJoinedOnlineRoomId } from '../systems/lobby.js';
+import { renderTeamCardSlots, renderBottomPanel } from './pcbox.js';
+import { renderBoardMap } from './map.js';
 
 export let socket = null;
 export { currentAuthenticatedAccount };
@@ -10,7 +12,6 @@ export { currentAuthenticatedAccount };
 export function initializeSocketConnection() {
     try {
         if (typeof io !== 'undefined') {
-            // Evita múltiplas instâncias de conexão desnecessárias
             if (socket && socket.connected) {
                 return socket;
             }
@@ -19,7 +20,6 @@ export function initializeSocketConnection() {
                 transports: ['websocket', 'polling']
             });
 
-            // Atualiza imediatamente a referência global do window
             window.socket = socket;
 
             socket.on('connect', () => {
@@ -28,7 +28,6 @@ export function initializeSocketConnection() {
                     appendAdventureLog("🌐 Conectado com sucesso ao servidor online.");
                 }
 
-                // Tenta reconectar à sala ativa se o jogador já estiver numa
                 if (typeof currentJoinedOnlineRoomId !== 'undefined' && currentJoinedOnlineRoomId) {
                     socket.emit('reconnect_sync', {
                         roomId: currentJoinedOnlineRoomId,
@@ -41,6 +40,15 @@ export function initializeSocketConnection() {
                 console.warn("🔴 Desconectado do servidor Socket.io.");
                 if (typeof appendAdventureLog === 'function') {
                     appendAdventureLog("⚠️ Conexão com o servidor online perdida.");
+                }
+            });
+
+            // Tratamento de ações rejeitadas pelo servidor (ex: jogar fora de turno)
+            socket.off('action_rejected');
+            socket.on('action_rejected', (data) => {
+                const msg = data && data.message ? data.message : 'Ação rejeitada pelo servidor.';
+                if (typeof showCustomPopup === 'function') {
+                    showCustomPopup('Aviso de Turno', `⚠ ${msg}`, false);
                 }
             });
 
@@ -68,7 +76,6 @@ export function initializeSocketConnection() {
                 }
             });
 
-            // Confirmação de entrada na sala
             socket.off('room_joined');
             socket.on('room_joined', (data) => {
                 if (data && (data.roomId || data.id)) {
@@ -81,7 +88,6 @@ export function initializeSocketConnection() {
                 }
             });
 
-            // Início do jogo na sala online (Ativa o layout partilhado)
             socket.off('room_game_started');
             socket.on('room_game_started', (data) => {
                 if (applyOnlineRoomState(data)) {
@@ -91,10 +97,11 @@ export function initializeSocketConnection() {
                 }
             });
 
-            // Sincronização em tempo real do estado de jogo entre os jogadores
+            // Sincronização estrita de estado entre os jogadores da sala
             socket.off('sync_game_state');
             socket.on('sync_game_state', (data) => {
                 if (data && data.gameState && typeof gameState !== 'undefined') {
+                    // Atualiza de forma segura preservando a estrutura local do jogador
                     Object.assign(gameState, data.gameState);
                     if (typeof ensureValidGameState === 'function') {
                         ensureValidGameState();
@@ -112,7 +119,6 @@ export function initializeSocketConnection() {
                 }
             });
 
-            // Mensagens de chat em tempo real na sala
             socket.off('room_chat_broadcast');
             socket.on('room_chat_broadcast', (msgData) => {
                 if (msgData && msgData.text) {
@@ -160,7 +166,6 @@ export function initializeSocketConnection() {
 }
 
 export function emitSocket(eventName, payload) {
-    // Garante fallback dinâmico para window.socket caso a variável local do módulo venha a falhar
     const activeSocket = socket || window.socket;
     if (!activeSocket || typeof activeSocket.emit !== 'function') {
         if (typeof showCustomPopup === 'function') {
