@@ -1,5 +1,5 @@
 // --- src/systems/encounter.js ---
-// Subsistema Unificado de Batalhas TCG Selvagens, Captura, XP, Evolução e Sincronização Cloud (Balanceado)
+// Subsistema Unificado de Batalhas TCG Selvagens, Captura, XP, Evolução e Sincronização Cloud (Balanceado e Dinâmico)
 
 import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer } from '../core/state.js';
 import { renderTeamCardSlots, renderBottomPanel } from './pcbox.js';
@@ -20,7 +20,6 @@ export let currentEncounterState = {
     wildDefeated: false
 };
 
-// Mapeamento otimizado com o novo Sistema de Tiers (1 a 5) em CSS
 function getTierColorClass(tier) {
     switch (Number(tier)) {
         case 1: return 'card-tier-comum tier-1';
@@ -32,14 +31,11 @@ function getTierColorClass(tier) {
     }
 }
 
-// Dicionário de Tiers para exibição visual nos cards
 const tierNamesMap = { 1: 'Comum', 2: 'Incomum', 3: 'Raro', 4: 'Épico', 5: 'Lendário' };
 
-// Cálculo dinâmico, rigoroso e balanceado de atributos por Nível e Tier (Alinhado com a progressão dos jogadores)
 export function calculatePokemonStats(baseMonster, level, isShiny = false) {
     const tier = Number(baseMonster.tier || 1);
     
-    // Multiplicadores base por tier equilibrados
     let tierMultiplier = 1.0;
     if (tier === 2) tierMultiplier = 1.25;
     else if (tier === 3) tierMultiplier = 1.5;
@@ -49,7 +45,6 @@ export function calculatePokemonStats(baseMonster, level, isShiny = false) {
     const rawBaseStr = Number(baseMonster.str || baseMonster.attack || 8);
     const rawBaseHp = Number(baseMonster.maxHp || baseMonster.hp || 30);
 
-    // Fórmula progressiva balanceada idêntica à escala dos jogadores
     const scaledStr = Math.floor((rawBaseStr + (level * 2.5)) * tierMultiplier);
     const scaledHp = Math.floor((rawBaseHp + (level * 10)) * tierMultiplier);
 
@@ -67,7 +62,6 @@ export function calculatePokemonStats(baseMonster, level, isShiny = false) {
     };
 }
 
-// Detetora integrada com a tabela centralizada TYPE_ADVANTAGES de src/config/constants.js
 export function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
     if (!attackerType || !defenderType) return 1.0;
     
@@ -96,6 +90,7 @@ export function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
     return bestMultiplier;
 }
 
+// === GERAÇÃO BALANCEADA DE POKÉMON SELVAGEM (Baseada no Nível da Equipa do Jogador) ===
 export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa') {
     if (!Array.isArray(MONSTER_CATALOG) || MONSTER_CATALOG.length === 0) return null;
 
@@ -112,11 +107,25 @@ export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa
     const baseMon = tierFiltered[Math.floor(Math.random() * tierFiltered.length)];
     const tier = baseMon.tier || targetTier;
 
-    let minLevel = 3, maxLevel = 6;
-    if (tier === 2) { minLevel = 8; maxLevel = 14; }
-    else if (tier === 3) { minLevel = 15; maxLevel = 24; }
-    else if (tier === 4) { minLevel = 25; maxLevel = 36; }
-    else if (tier === 5) { minLevel = 40; maxLevel = 55; }
+    // Calcular a média de nível da equipa ativa dos jogadores para balanceamento dinâmico
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentOrMyPlayer();
+    let playerTeam = cp && (cp.activeTeam || cp.team) ? (cp.activeTeam || cp.team) : [];
+    
+    let avgLevel = 3;
+    if (playerTeam.length > 0) {
+        const totalLvl = playerTeam.reduce((sum, mon) => sum + Number(mon.level || 1), 0);
+        avgLevel = Math.max(1, Math.round(totalLvl / playerTeam.length));
+    }
+
+    // O nível selvagem acompanha a equipa do jogador com uma ligeira variação baseada no tier da zona
+    let tierBaseOffset = (tier - 1) * 4;
+    let minLevel = Math.max(1, avgLevel - 2 + tierBaseOffset);
+    let maxLevel = avgLevel + 3 + tierBaseOffset;
+    
+    if (tier === 5) { // Lendários
+        minLevel = Math.max(avgLevel, 35);
+        maxLevel = Math.max(avgLevel + 5, 50);
+    }
 
     const level = Math.floor(Math.random() * (maxLevel - minLevel + 1)) + minLevel;
     const isShiny = Math.random() < 0.06;
@@ -439,7 +448,6 @@ function syncGameStateToCloud() {
     if (typeof emitSocket === 'function') {
         const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentOrMyPlayer();
         
-        // 🌐 Sincronização isolada e blindada via socket do playerState
         if (gameState.online) {
             emitSocket('update_game_state', {
                 playerState: {
