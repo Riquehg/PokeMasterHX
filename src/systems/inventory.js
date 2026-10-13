@@ -91,7 +91,6 @@ function renderMartContent(modalEl, cityName = '') {
     `;
 }
 
-// Funções auxiliares globais para controlo de quantidade na loja
 window.normalizeMartQuantity = function(input) {
     if (!input) return 1;
     const normalized = Math.max(1, Math.min(999, Math.floor(Number(input.value) || 1)));
@@ -106,7 +105,6 @@ window.changeMartQuantity = function(itemId, amount) {
     input.value = Math.max(1, Math.min(999, currentValue + Number(amount || 0)));
 };
 
-// Executa a compra de um ou mais itens no Poké Mart
 window.buyItemFromPokemart = function(itemId, unitPrice, requestedQuantity = 1, cityName = '') {
     const cp = getInventoryPlayer();
     if (!cp) return;
@@ -147,12 +145,9 @@ window.buyItemFromPokemart = function(itemId, unitPrice, requestedQuantity = 1, 
     saveGameProgress();
 
     if (gameState.online && typeof emitSocket === 'function') {
-        emitSocket('save_game_state', {
-            gameState: gameState,
-            trainerName: cp.name || 'Treinador'
-        });
         emitSocket('update_game_state', {
             type: 'inventory_updated',
+            playerIndex: gameState.myPlayerIndex,
             gameState: gameState
         });
     }
@@ -233,12 +228,9 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
         saveGameProgress();
 
         if (gameState.online && typeof emitSocket === 'function') {
-            emitSocket('save_game_state', {
-                gameState: gameState,
-                trainerName: cp.name || 'Treinador'
-            });
             emitSocket('update_game_state', {
                 type: 'inventory_updated',
+                playerIndex: gameState.myPlayerIndex,
                 gameState: gameState
             });
         }
@@ -261,12 +253,9 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
         saveGameProgress();
 
         if (gameState.online && typeof emitSocket === 'function') {
-            emitSocket('save_game_state', {
-                gameState: gameState,
-                trainerName: cp.name || 'Treinador'
-            });
             emitSocket('update_game_state', {
                 type: 'inventory_updated',
+                playerIndex: gameState.myPlayerIndex,
                 gameState: gameState
             });
         }
@@ -305,12 +294,9 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
         saveGameProgress();
 
         if (gameState.online && typeof emitSocket === 'function') {
-            emitSocket('save_game_state', {
-                gameState: gameState,
-                trainerName: cp.name || 'Treinador'
-            });
             emitSocket('update_game_state', {
                 type: 'inventory_updated',
+                playerIndex: gameState.myPlayerIndex,
                 gameState: gameState
             });
         }
@@ -341,12 +327,9 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
         saveGameProgress();
 
         if (gameState.online && typeof emitSocket === 'function') {
-            emitSocket('save_game_state', {
-                gameState: gameState,
-                trainerName: cp.name || 'Treinador'
-            });
             emitSocket('update_game_state', {
                 type: 'inventory_updated',
+                playerIndex: gameState.myPlayerIndex,
                 gameState: gameState
             });
         }
@@ -408,15 +391,11 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
         return;
     }
 
-    // Genérico para outros itens
     if (typeof showCustomPopup === 'function') {
         showCustomPopup('Item Utilizado', `🎒 Usaste o item ${itemInfo.name} com sucesso.`, true);
     }
 }
 
-// ------------------------------------------------------------
-// CONFIRMAÇÃO DE EVOLUÇÃO POR PEDRA
-// ------------------------------------------------------------
 window.confirmPokemonEvolution = function(itemIndex, teamIndex) {
     const cp = getInventoryPlayer();
     if (!cp || !cp.activeTeam || !cp.activeTeam[teamIndex]) return;
@@ -462,12 +441,9 @@ window.confirmPokemonEvolution = function(itemIndex, teamIndex) {
     saveGameProgress();
 
     if (gameState.online && typeof emitSocket === 'function') {
-        emitSocket('save_game_state', {
-            gameState: gameState,
-            trainerName: cp.name || 'Treinador'
-        });
         emitSocket('update_game_state', {
             type: 'pokemon_evolved',
+            playerIndex: gameState.myPlayerIndex,
             gameState: gameState
         });
     }
@@ -482,8 +458,5 @@ window.confirmPokemonEvolution = function(itemIndex, teamIndex) {
     }
 };
 
-// ------------------------------------------------------------
-// EXPOSIÇÃO GLOBAL OBRIGATÓRIA
-// ------------------------------------------------------------
 window.openPokemartModal = openPokemartModal;
 window.useInventoryItem = useInventoryItem;
