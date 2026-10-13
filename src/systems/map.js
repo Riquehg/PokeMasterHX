@@ -1,5 +1,5 @@
 // --- src/systems/map.js ---
-// Módulo do Tabuleiro, Caminhos e Multiplayer Sincronizado (Versão Otimizada e Corrigida)
+// Módulo do Tabuleiro, Caminhos e Multiplayer Sincronizado (Versão Otimizada e Corrigida com Clima Dinâmico)
 
 import { SUPABASE_STORAGE_URL, FULL_MAP_IMAGE } from '../config/constants.js';
 import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer, movementState, ensureValidGameState } from '../core/state.js';
@@ -9,6 +9,7 @@ import { MONSTER_CATALOG } from '../config/cards-data.js';
 import { initiateGymSequence, GYM_LEADERS_CATALOG } from './gym.js';
 import { showOnlineGameLayout, applyOnlineRoomState } from './lobby.js';
 import { socket, emitSocket } from '../core/socket.js';
+import { advanceGlobalWeather, updateBoardWeatherUI } from './weather.js'; // Importação do sistema de clima
 
 // Garantir que o gestor global dos Pokémon do tabuleiro existe
 if (typeof window.boardPokemonCards === 'undefined') {
@@ -273,6 +274,10 @@ export function rollDiceForMovement() {
                     movementState.isMoving = false;
                 }
                 cp.currentZone = Math.min(currentZone + diceResult, BOARD_WAYPOINTS.length);
+                
+                // Avança o clima global ao finalizar um turno completo de movimento
+                advanceGlobalWeather();
+
                 renderBoardMap();
                 handleWaypointArrival(cp.currentZone);
             }
@@ -411,7 +416,6 @@ export function handleWaypointArrival(waypointId) {
         }
 
         if (!boardPokemonCards[waypointId]) {
-            // Utiliza o gerador oficial de encounter.js para respeitar estritamente o tier correto por cor de casa (ex: rosa = tier 1)
             if (typeof generateWildPokemonForWaypoint === 'function') {
                 boardPokemonCards[waypointId] = generateWildPokemonForWaypoint(waypointId, waypoint.color || 'rosa');
             } else {
@@ -628,6 +632,11 @@ export function renderBoardMap(highlightIds = []) {
     `;
 
     setupMapChatListeners();
+
+    // Garante que o feedback visual do clima é renderizado e atualizado no mapa
+    setTimeout(() => {
+        updateBoardWeatherUI();
+    }, 50);
 }
 
 function setupMapChatListeners() {
