@@ -45,6 +45,20 @@ export function applyDailyFeaturedPokemonConfig(serverConfig) {
     if (labelEl) labelEl.textContent = `${dailyFeaturedPokemonConfig.pokemonName} (Bónus: ${dailyFeaturedPokemonConfig.bonusItemName} + ${dailyFeaturedPokemonConfig.goldBonus} 🪙)`;
 }
 
+// Inicializa os ouvintes globais de socket para o Pokémon do Dia em todos os clientes
+export function initGlobalDailyPokemonListener() {
+    const sock = typeof window.socket !== 'undefined' ? window.socket : null;
+    if (sock && typeof sock.on === 'function') {
+        sock.off('daily_pokemon_updated');
+        sock.on('daily_pokemon_updated', (config) => {
+            applyDailyFeaturedPokemonConfig(config);
+        });
+
+        // Solicita ao servidor a configuração atual assim que conecta
+        emitSocket('get_daily_pokemon');
+    }
+}
+
 export function handleAdminUsersList(users) {
     if (adminTimeoutTimer) {
         clearTimeout(adminTimeoutTimer);
@@ -85,11 +99,6 @@ export function openAdminPanelModal() {
         sock.off('admin_users_list', handleAdminUsersList);
         sock.on('admin_users_list', handleAdminUsersList);
         
-        sock.off('daily_pokemon_updated');
-        sock.on('daily_pokemon_updated', (config) => {
-            applyDailyFeaturedPokemonConfig(config);
-        });
-
         sock.off('admin_action_response');
         sock.on('admin_action_response', (res) => {
             if (res && res.message) {
@@ -107,6 +116,9 @@ export function openAdminPanelModal() {
 
         adminUsersListenerRegistered = true;
     }
+
+    // Garante que o ouvinte global do Pokémon do dia também está ativo
+    initGlobalDailyPokemonListener();
 
     // Temporizador de fallback caso o servidor demore a responder
     adminTimeoutTimer = setTimeout(() => {
@@ -285,5 +297,13 @@ export function adminDeleteAccount(email) {
     alert(`🗑️ Comando enviado para remover a conta.`);
 }
 
+// Inicializa o ouvinte global automaticamente ao carregar o módulo para que todos os clientes recebam atualizações
+if (typeof window !== 'undefined') {
+    setTimeout(() => {
+        initGlobalDailyPokemonListener();
+    }, 1000);
+}
+
 window.openAdminPanelModal = openAdminPanelModal;
 window.applyDailyFeaturedPokemonConfig = applyDailyFeaturedPokemonConfig;
+window.initGlobalDailyPokemonListener = initGlobalDailyPokemonListener;
