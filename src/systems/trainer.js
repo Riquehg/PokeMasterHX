@@ -39,21 +39,21 @@ function updateTrainerCardBadges(cp) {
     });
 }
 
-// ------------------------------------------------------------
-// GATILHOS ROBUSTOS PARA PVP E TROCA ONLINE
-// ------------------------------------------------------------
-window.triggerPvPBattleArena = function(targetTrainerName) {
+// --- src/systems/trainer.js ---
+// (Mete isto na secção correspondente do trainer.js)
+
+window.triggerPvPBattleArena = function(targetTrainerName, targetIndex) {
     if (typeof showCustomPopup === 'function') {
         showCustomPopup("Desafio PvP", `⚔️ A enviar convite de duelo PvP para ${targetTrainerName}...`, true);
     }
 
     if (gameState.online && typeof emitSocket === 'function') {
-        emitSocket('request_pvp_duel', {
-            targetTrainerName: targetTrainerName,
-            roomId: gameState.onlineRoomId
+        emitSocket('send_pvp_invite', { 
+            targetIndex: targetIndex !== undefined ? targetIndex : 0, 
+            targetName: targetTrainerName,
+            roomId: gameState.onlineRoomId 
         });
     } else {
-        // Simulação local ou fallback se o servidor socket não estiver ativo
         if (typeof openBattleArena === 'function') {
             const targetPlayer = gameState.players?.find(p => p && p.name === targetTrainerName);
             if (targetPlayer) {
@@ -67,15 +67,16 @@ window.triggerPvPBattleArena = function(targetTrainerName) {
     }
 };
 
-window.proposeTradeWithTrainer = function(targetTrainerName) {
+window.proposeTradeWithTrainer = function(targetTrainerName, targetIndex) {
     if (typeof showCustomPopup === 'function') {
         showCustomPopup("Proposta de Troca", `🔄 A iniciar sessão de trocas com ${targetTrainerName}...`, true);
     }
 
     if (gameState.online && typeof emitSocket === 'function') {
-        emitSocket('request_trade_session', {
-            targetTrainerName: targetTrainerName,
-            roomId: gameState.onlineRoomId
+        emitSocket('send_trade_invite', { 
+            targetIndex: targetIndex !== undefined ? targetIndex : 0, 
+            targetName: targetTrainerName,
+            roomId: gameState.onlineRoomId 
         });
     } else if (typeof openTradeModal === 'function') {
         const localPlayer = getCurrentOrMyPlayer();
