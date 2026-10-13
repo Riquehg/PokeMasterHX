@@ -1,6 +1,32 @@
 // --- src/core/storage.js ---
 import { gameState, getCurrentPlayer, getMyPlayer, ensureValidGameState, currentAuthenticatedAccount } from './state.js';
 import { emitSocket, socket } from './socket.js';
+import { calculatePokemonStats } from '../systems/encounter.js';
+
+// Função auxiliar para normalizar e atualizar os stats de todos os Pokémon de um jogador
+function sanitizePlayerMonstersStats(player) {
+    if (!player) return;
+    
+    const recalculateList = (list) => {
+        if (!Array.isArray(list)) return;
+        list.forEach(mon => {
+            if (mon && typeof mon === 'object') {
+                const lvl = Number(mon.level) || 1;
+                const isShinyFlag = Boolean(mon.isShiny);
+                const stats = calculatePokemonStats(mon, lvl, isShinyFlag);
+                
+                mon.str = stats.str;
+                mon.maxHp = stats.maxHp;
+                if (mon.currentHp === undefined || mon.currentHp > stats.maxHp || mon.currentHp < 0) {
+                    mon.currentHp = stats.maxHp;
+                }
+            }
+        });
+    };
+
+    if (player.activeTeam) recalculateList(player.activeTeam);
+    if (player.pcBox) recalculateList(player.pcBox);
+}
 
 // Salva o progresso exclusivamente no servidor remoto via socket (Isolando para o jogador local)
 export function saveGameProgress() {
@@ -92,6 +118,12 @@ export function importSaveFromFile(event) {
             if (importedState && Array.isArray(importedState.players)) {
                 Object.assign(gameState, importedState);
                 ensureValidGameState();
+                
+                // Recalcula stats de todos os jogadores importados
+                if (Array.isArray(gameState.players)) {
+                    gameState.players.forEach(p => sanitizePlayerMonstersStats(p));
+                }
+
                 saveGameProgress(); // Envia para o servidor
                 window.location.reload();
             } else {
@@ -147,6 +179,11 @@ export function setupStorageSocketListeners() {
                     Object.assign(gameState, response.gameState);
                 }
                 ensureValidGameState();
+                
+                // Normaliza os stats de todos os jogadores recebidos da nuvem
+                if (Array.isArray(gameState.players)) {
+                    gameState.players.forEach(p => sanitizePlayerMonstersStats(p));
+                }
                 
                 const cp = getMyPlayer();
                 if (cp && typeof window.updateTrainerVisualsAndHud === 'function') {
