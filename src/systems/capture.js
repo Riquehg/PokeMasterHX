@@ -15,7 +15,7 @@ export let currentEncounterState = {
     selectedTeamMemberIndex: 0,
     selectedCaptureBallId: null,
     hasAttemptedCapture: false,
-    hasAttemptedAttack: false
+    wildDefeated: false
 };
 
 function getTierColorClass(tier) {
@@ -114,7 +114,7 @@ export function openEncounterModalWithPokemon(pokemon) {
     currentEncounterState.selectedTeamMemberIndex = validIndex;
     currentEncounterState.selectedCaptureBallId = null;
     currentEncounterState.hasAttemptedCapture = false;
-    currentEncounterState.hasAttemptedAttack = false;
+    currentEncounterState.wildDefeated = (pokemon.currentHp <= 0);
 
     modal.innerHTML = `
         <div class="trainer-card max-w-4xl w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white relative">
@@ -178,7 +178,7 @@ export function updateEncounterUIInfo() {
     const estimatedPlayerPower = Math.round(baseStr * typeMult); 
     
     const isLegendary = (wild.tier === 5) || (wild.color && wild.color.toLowerCase() === 'amarelo');
-    const weakenedBonus = (wild.weakened && !isLegendary) ? 1 : 0;
+    const weakenedBonus = currentEncounterState.wildDefeated ? 2 : 0;
     const totalCaptureBonusSoFar = currentEncounterState.itemBonus + weakenedBonus;
 
     let displayTarget = 4;
@@ -222,7 +222,9 @@ export function updateEncounterUIInfo() {
     const encVisual = document.getElementById('enc-card-visual');
     if (encVisual) {
         encVisual.className = `relative flex flex-col justify-between p-4 rounded-3xl border-4 ${enemyCardBg} shadow-2xl w-72 h-[420px] text-white ${wild.isShiny ? 'shiny-card-glow' : ''}`;
-        const weakenedBadge = wild.weakened ? `<span class="bg-red-600 text-white text-[9px] px-2 py-0.5 rounded-md font-bold shadow animate-pulse">🩹 Enfraquecido (+1 Cap.)</span>` : '';
+        const statusBadge = currentEncounterState.wildDefeated 
+            ? `<span class="bg-emerald-600 text-white text-[9px] px-2 py-0.5 rounded-md font-bold shadow animate-bounce">🏆 ENFRAQUECIDO (Bónus +2 Ativo!)</span>`
+            : `<span class="bg-blue-600 text-white text-[9px] px-2 py-0.5 rounded-md font-bold shadow">🔴 Pronto para Captura Direta</span>`;
         const shinyWildBadge = wild.isShiny ? `<span class="bg-amber-400 text-black text-[9px] px-2 py-0.5 rounded-md font-black shadow animate-bounce">✨ SHINY</span>` : '';
         
         encVisual.innerHTML = `
@@ -240,9 +242,9 @@ export function updateEncounterUIInfo() {
             </div>
 
             <div class="w-full bg-black/90 text-red-300 rounded-2xl p-3 text-center space-y-1.5 shadow-md border border-red-600/40">
-                <p class="text-xs font-bold tracking-wide">HP: ${wild.currentHp || wild.hp || 15} / ${wild.maxHp || 20} &nbsp;|&nbsp; STR: ${wild.str || 3}</p>
+                <p class="text-xs font-bold tracking-wide">HP: ${wild.currentHp !== undefined ? wild.currentHp : (wild.maxHp || 20)} / ${wild.maxHp || 20} &nbsp;|&nbsp; STR: ${wild.str || 3}</p>
                 <p class="text-[11px] font-black text-amber-300 bg-amber-950/90 rounded-xl px-2.5 py-1 border border-amber-600">🎯 Alvo Cap.: ${displayTarget}+ (Bónus: +${totalCaptureBonusSoFar})</p>
-                ${weakenedBadge}
+                ${statusBadge}
             </div>
 
             <div class="absolute -bottom-3.5 left-1/2 -translate-x-1/2 bg-red-900 text-amber-300 font-black text-[10px] px-3.5 py-1 rounded-full shadow border border-red-500 uppercase tracking-wider pointer-events-none">
@@ -282,7 +284,7 @@ export function renderEncounterItemsList() {
     container.innerHTML = '';
 
     if (cp.inventory) {
-        cp.inventory.forEach((item, index) => {
+        cp.inventory.forEach((item) => {
             const count = item.count !== undefined ? item.count : (item.quantity || 0);
             if (!item || count <= 0) return;
             const isSphere = item.type === 'sphere' || item.category === 'capture' || item.id.includes('ball');
@@ -307,7 +309,7 @@ export function selectCaptureBall(item) {
     }
     currentEncounterState.itemBonus = Number(item.value) || 1;
     currentEncounterState.selectedCaptureBallId = item.id;
-    showCustomPopup("Esfera Selecionada", `🔴 Selecionaste ${item.name} (+${item.value} Bónus de Captura). Poca agora em 'Tentar Capturar'!`, true);
+    showCustomPopup("Esfera Selecionada", `🔴 Selecionaste ${item.name} (+${item.value} Bónus de Captura). Podes agora tentar capturar!`, true);
     renderEncounterItemsList();
     updateEncounterUIInfo();
 }
@@ -325,7 +327,6 @@ function playAttackAnimation() {
     }
 }
 
-// Sistema de Experiência e Evolução Automática
 function addExperienceAndCheckEvolution(monster, expGain) {
     if (!monster) return;
     monster.exp = (monster.exp || 0) + expGain;
@@ -361,19 +362,18 @@ window.resolveBattleAttempt = function() {
     const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex];
     if (!wild || !activeMon) return;
 
+    if (currentEncounterState.wildDefeated) {
+        showCustomPopup("Pokémon Derrotado", "⚠ O Pokémon selvagem já foi derrotado! Usa a opção de Capturar ou foge.", false);
+        return;
+    }
+
     if ((activeMon.currentHp !== undefined ? activeMon.currentHp : activeMon.maxHp) <= 0) {
         showCustomPopup("Pokémon Desmaiado", "⚠ O teu Anima atual está com 0 de HP e não pode lutar!", false);
         return;
     }
 
-    if (currentEncounterState.hasAttemptedAttack) {
-        showCustomPopup("Ação Esgotada", "⚠ Já realizaste uma ação de ataque nesta ronda. Passa o turno ou tenta capturar.", false);
-        return;
-    }
-
     if (typeof window.rollDiceWithAnimation === 'function') {
         window.rollDiceWithAnimation((playerDice) => {
-            currentEncounterState.hasAttemptedAttack = true;
             playAttackAnimation();
 
             const wildDice = Math.floor(Math.random() * 6) + 1;
@@ -386,11 +386,28 @@ window.resolveBattleAttempt = function() {
                 wild.currentHp = Math.max(0, (wild.currentHp !== undefined ? wild.currentHp : wild.maxHp) - damageToWild);
 
                 if (wild.currentHp <= 0) {
+                    currentEncounterState.wildDefeated = true;
                     addExperienceAndCheckEvolution(activeMon, 75);
-                    showCustomPopup("🏆 VITÓRIA NO COMBATE TCG!", `O teu ${activeMon.name} (Soma: ${playerPower}) derrotou o ${wild.name} (Soma: ${wildPower})!\n\n✨ Ganhou XP e o selvagem ficou enfraquecido para captura!`, true);
-                    wild.weakened = true;
+                    
+                    if (confirm(`🏆 VITÓRIA! O ${wild.name} foi derrotado e enfraquecido (+2 Bónus)!\n\nDesejas jogar uma Poké Ball para tentar a captura agora?`)) {
+                        if (!currentEncounterState.selectedCaptureBallId && cp.inventory) {
+                            const defaultSphere = cp.inventory.find(i => i.type === 'sphere' || i.id.includes('ball'));
+                            if (defaultSphere) {
+                                currentEncounterState.selectedCaptureBallId = defaultSphere.id;
+                                currentEncounterState.itemBonus = Number(defaultSphere.value) || 1;
+                            }
+                        }
+                        resolveCaptureAttempt();
+                    } else {
+                        if (wild.waypointId && typeof boardPokemonCards !== 'undefined') {
+                            delete boardPokemonCards[wild.waypointId];
+                        }
+                        closeEncounterModalUI();
+                        if (typeof renderBoardMap === 'function') renderBoardMap();
+                        showCustomPopup("Fuga", "Deixaste o Pokémon para trás e ele desapareceu do mapa.", true);
+                    }
                 } else {
-                    showCustomPopup("⚔️ ATAQUE EFICAZ!", `O teu ${activeMon.name} causou ${damageToWild} de dano!\n\n(Ataque: ${playerPower} vs Defesa: ${wildPower})`, true);
+                    showCustomPopup("⚔️ ATAQUE EFICAZ!", `O teu ${activeMon.name} causou ${damageToWild} de dano!\nHP do Selvagem: ${wild.currentHp}/${wild.maxHp}`, true);
                 }
                 updateEncounterUIInfo();
             } else {
@@ -398,14 +415,15 @@ window.resolveBattleAttempt = function() {
                 activeMon.currentHp = Math.max(0, (activeMon.currentHp || activeMon.maxHp) - damageToPlayer);
                 
                 if (activeMon.currentHp <= 0) {
-                    showCustomPopup("💀 O TEU POKÉMON DESMAIOU", `O ${wild.name} contra-atacou com força (Soma: ${wildPower} vs ${playerPower})!\n\n💔 ${activeMon.name} desmaiou.`, false);
+                    showCustomPopup("💀 O TEU POKÉMON DESMAIOU", `O ${wild.name} contra-atacou e o teu ${activeMon.name} desmaiou.`, false);
                     closeEncounterModalUI();
                 } else {
-                    showCustomPopup("💥 CONTRA-ATAQUE SOFRIDO", `O ${wild.name} selvagem defendeu-se!\n\n💔 ${activeMon.name} sofreu ${damageToPlayer} de dano.`, false);
+                    showCustomPopup("💥 CONTRA-ATAQUE SOFRIDO", `Sofreste ${damageToPlayer} de dano.\nHP Restante: ${activeMon.currentHp}/${activeMon.maxHp}`, false);
                 }
                 renderTeamCardSlots();
                 updateEncounterUIInfo();
             }
+            saveGameProgress();
         });
     }
 };
@@ -414,11 +432,6 @@ export function resolveCaptureAttempt() {
     const cp = getCurrentPlayer();
     const wild = currentEncounterState.wildPokemon;
     if (!wild) return;
-
-    if (currentEncounterState.hasAttemptedCapture) {
-        showCustomPopup("Limite Atingido", "⚠ Já fizeste uma tentativa de captura neste turno!", false);
-        return;
-    }
 
     if (!currentEncounterState.selectedCaptureBallId) {
         showCustomPopup("Esfera Necessária", "⚠ Deves selecionar primeiro uma Poké Ball na tua mochila de combate em baixo para tentar capturar!", false);
@@ -434,8 +447,6 @@ export function resolveCaptureAttempt() {
     if (sphereItem.count !== undefined) sphereItem.count--;
     else if (sphereItem.quantity !== undefined) sphereItem.quantity--;
 
-    currentEncounterState.hasAttemptedCapture = true;
-
     if (typeof window.rollDiceWithAnimation === 'function') {
         window.rollDiceWithAnimation((roll) => {
             let requiredTarget = 4;
@@ -447,7 +458,7 @@ export function resolveCaptureAttempt() {
             if (isLegendary) requiredTarget = 7;
             if (wild.isShiny) requiredTarget++;
 
-            const weakenedBonus = wild.weakened ? 1 : 0;
+            const weakenedBonus = currentEncounterState.wildDefeated ? 2 : 0;
             const captureBonus = Number(currentEncounterState.itemBonus) || 0;
             const totalCaptureValue = roll + captureBonus + weakenedBonus;
 
@@ -493,7 +504,6 @@ export function resolveCaptureAttempt() {
                 if (typeof renderBottomPanel === 'function') renderBottomPanel();
                 saveGameProgress();
 
-                // Sincronização online via WebSocket após captura bem-sucedida
                 if (gameState.online && typeof emitSocket === 'function') {
                     emitSocket('update_game_state', {
                         type: 'pokemon_captured',
@@ -501,21 +511,36 @@ export function resolveCaptureAttempt() {
                     });
                 }
             } else {
-                wild.weakened = true; 
-                showCustomPopup(
-                    "❌ FALHA NA CAPTURA",
-                    `O ${wild.name} escapou da esfera! [Dado: ${roll} + Bónus: ${captureBonus + weakenedBonus} = ${totalCaptureValue} / Alvo: ${requiredTarget}+].\n\n🩹 O Pokémon ficou enfraquecido!`,
-                    false
-                );
-                renderEncounterItemsList();
-                updateEncounterUIInfo();
+                if (currentEncounterState.wildDefeated) {
+                    if (wild.waypointId && typeof boardPokemonCards !== 'undefined') {
+                        delete boardPokemonCards[wild.waypointId];
+                    }
+                    closeEncounterModalUI();
+                    if (typeof renderBoardMap === 'function') renderBoardMap();
+                    showCustomPopup("❌ FUGA APÓS FALHA", `O ${wild.name} escapou da esfera e fugiu definitivamente do mapa!`, false);
+                } else {
+                    showCustomPopup(
+                        "❌ FALHA NA CAPTURA",
+                        `O ${wild.name} resistiu e escapou da esfera! [Dado: ${roll} + Bónus: ${captureBonus + weakenedBonus} = ${totalCaptureValue} / Alvo: ${requiredTarget}+].\n\nPodes tentar novamente com outra esfera.`,
+                        false
+                    );
+                    renderEncounterItemsList();
+                    updateEncounterUIInfo();
+                }
             }
         });
     }
 }
 
 export function fleeEncounter() {
-    showCustomPopup("Fuga", "🏃‍♂️ Afastaste-te do Pokémon selvagem com sucesso!", true);
+    const wild = currentEncounterState.wildPokemon;
+    if (currentEncounterState.wildDefeated && wild && wild.waypointId && typeof boardPokemonCards !== 'undefined') {
+        delete boardPokemonCards[wild.waypointId];
+        showCustomPopup("Fuga", "O Pokémon derrotado fugiu para longe e desapareceu do mapa.", true);
+    } else {
+        showCustomPopup("Fuga", "🏃‍♂️ Afastaste-te do Pokémon selvagem.", true);
+    }
+
     closeEncounterModalUI();
     if (typeof renderBoardMap === 'function') renderBoardMap();
 }
