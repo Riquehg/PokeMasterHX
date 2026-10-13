@@ -512,8 +512,17 @@ function setupAuthenticationListeners() {
 }
 
 window.handleLoginResponse = function(response) {
+    // Fecha o popup de carregamento se estiver aberto
+    const popup = document.getElementById('global-custom-popup');
+    if (popup) popup.remove();
+
     if (!response || response.success !== true) {
-        alert(response?.message || 'Erro ao autenticar no servidor.');
+        const errorMsg = response?.message || 'Erro desconhecido ao autenticar no servidor. Verifica o teu e-mail e senha.';
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup("Falha no Login", `❌ ${errorMsg}`, false);
+        } else {
+            alert(errorMsg);
+        }
         return;
     }
 
