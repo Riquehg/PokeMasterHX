@@ -4,6 +4,7 @@ import { loadGameProgress, saveGameProgress } from './core/storage.js';
 import { renderBoardMap, tryInteractWithCity, onHexClick } from './systems/map.js';
 import { setupDiceListeners, rollDiceForMovement, handleWaypointClick, resetTurnDiceState } from './systems/dice.js';
 import { MONSTER_CATALOG } from './config/cards-data.js';
+import { updateBoardWeatherUI, weatherState } from './systems/weather.js'; // Importação do sistema de clima
 
 // Importação dos Módulos dos Sistemas
 import './systems/city.js';
@@ -62,6 +63,11 @@ export function hideSetupAndShowGame() {
     document.getElementById('trainer-main-menu')?.classList.add('hidden');
     document.getElementById('auth-container')?.classList.add('hidden');
     document.getElementById('main-game-layout')?.classList.remove('hidden');
+
+    // Assegura que o clima visual é renderizado ao entrar no tabuleiro
+    setTimeout(() => {
+        updateBoardWeatherUI();
+    }, 100);
 }
 window.hideSetupAndShowGame = hideSetupAndShowGame;
 
@@ -206,60 +212,6 @@ window.showCustomPopup = function(title, message, isSuccess) {
     popup.classList.remove('hidden');
 };
 
-window.triggerRandomBoardEvent = function(eventName) {
-    const cp = getCurrentOrMyPlayer();
-    if (!cp) return;
-
-    const eventsList = [
-        { title: "🎁 Tesouro na Rota!", text: `Encontraste uma algibeira perdida em ${eventName}!\nGanhaste +150 Ouro.`, apply: () => { cp.gold = (cp.gold || 0) + 150; }, success: true },
-        { title: "💊 Sorte no Caminho!", text: `Um viajante bondoso ofereceu-te suprimentos em ${eventName}!\nGanhaste +2 Poções e +1 Poké Ball.`, apply: () => { 
-            if (!Array.isArray(cp.inventory)) cp.inventory = [];
-            cp.inventory.push({ id: 'potion', name: 'Poção', count: 2, type: 'heal', value: 20 });
-            cp.inventory.push({ id: 'ball_poke', name: 'Poké Ball', count: 1, type: 'sphere', value: 1 });
-        }, success: true },
-        { title: "⚡ Tempestade Elétrica!", text: `Uma forte tempestade surpreendeu-te em ${eventName}!\nOs teus Pokémon cansaram-se e perdeste a vez de avançar.`, apply: () => {}, success: false },
-        { title: "🍃 Encontro Calmo", text: `Descansaste à sombra de uma árvore em ${eventName}.\nOs teus Pokémon recuperaram um pouco de energia.`, apply: () => {
-            if (Array.isArray(cp.activeTeam)) {
-                cp.activeTeam.forEach(m => {
-                    if (m && m.currentHp < m.maxHp) m.currentHp = Math.min(m.maxHp, m.currentHp + 10);
-                });
-            }
-        }, success: true }
-    ];
-
-    const randomEvt = eventsList[Math.floor(Math.random() * eventsList.length)];
-    randomEvt.apply();
-    saveGameProgress();
-
-    if (gameState.online) {
-        if (typeof window.broadcastOnlineAction === 'function') {
-            window.broadcastOnlineAction('board_event_triggered', { gameState: gameState });
-        } else if (typeof emitSocket === 'function') {
-            emitSocket('update_game_state', {
-                type: 'board_event_triggered',
-                gameState: gameState
-            });
-        }
-    }
-
-    window.showCustomPopup(randomEvt.title, randomEvt.text, randomEvt.success);
-
-    const banner = document.getElementById('global-map-notification-banner');
-    const bannerText = document.getElementById('global-map-notification-text');
-    if (banner && bannerText) {
-        bannerText.textContent = `${eventName}: ${randomEvt.title}`;
-        banner.classList.remove('hidden');
-        setTimeout(() => {
-            banner.classList.add('hidden');
-        }, 5000);
-    }
-
-    updateTrainerVisualsAndHud();
-    if (typeof renderBoardMap === 'function') renderBoardMap();
-    if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
-    if (typeof renderBottomPanel === 'function') renderBottomPanel();
-};
-
 document.addEventListener('DOMContentLoaded', () => {
     console.log("🚀 Inicializando o Motor Modular do Jogo (Modo Nuvem/Servidor)...");
 
@@ -281,6 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupGlobalInterfaceListeners();
     setupAuthenticationListeners();
     loadDailyPokemonPreview();
+    updateBoardWeatherUI(); // Ativa o estado inicial do clima no mapa
 
     document.addEventListener('click', (event) => {
         const target = event.target;
