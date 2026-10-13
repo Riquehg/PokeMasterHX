@@ -17,7 +17,7 @@ if (typeof window.boardPokemonCards === 'undefined') {
 }
 const boardPokemonCards = window.boardPokemonCards;
 
-// Função auxiliar robusta para adicionar mensagens ao Log de Aventura e garantir visibilidade com scroll interno
+// Função auxiliar robusta para adicionar mensagens ao Log de Aventura com scroll interno e limite de itens
 function pushAdventureLog(message) {
     const timestamp = new Date().toLocaleTimeString();
     const formattedMsg = `[${timestamp}] ${message}`;
@@ -33,6 +33,12 @@ function pushAdventureLog(message) {
         p.className = 'text-[9px] text-amber-200/90 leading-tight mb-1 font-mono';
         p.textContent = formattedMsg;
         logBox.appendChild(p);
+        
+        // Mantém no máximo 100 mensagens para evitar acumulação excessiva e estouro visual
+        while (logBox.children.length > 100) {
+            logBox.removeChild(logBox.firstChild);
+        }
+
         logBox.scrollTop = logBox.scrollHeight;
     } else {
         console.warn("Log Box não encontrada no DOM:", formattedMsg);
@@ -540,52 +546,13 @@ function triggerRandomBoardEvent(eventName) {
     }
 }
 
+// Abre diretamente o Cartão de Treinador completo ao clicar no token, eliminando o pop-up intermediário duplicado
 window.openPlayerTokenInteractionModal = function(playerIndex) {
-    const players = gameState.players || [];
-    const targetPlayer = players[playerIndex];
-    if (!targetPlayer) return;
-
-    const myIdx = gameState.online ? (gameState.myPlayerIndex || 0) : 0;
-    const isSelf = playerIndex === myIdx;
-
-    let modal = document.getElementById('player-token-interaction-modal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'player-token-interaction-modal';
-        modal.className = 'fixed inset-0 bg-black/80 z-[750] flex items-center justify-center p-4 backdrop-blur-sm';
-        document.body.appendChild(modal);
+    if (typeof openSpecificTrainerCardModal === 'function') {
+        openSpecificTrainerCardModal(playerIndex);
+    } else {
+        console.warn("⚠️ A função openSpecificTrainerCardModal não está disponível.");
     }
-
-    const avatarUrl = `${SUPABASE_STORAGE_URL}player_0${targetPlayer.avatarId || 1}.png`;
-
-    modal.innerHTML = `
-        <div class="trainer-card max-w-sm w-full p-5 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white text-center">
-            <div class="flex justify-between items-center border-b border-amber-900/60 pb-2">
-                <h3 class="text-xs font-black text-amber-400 font-cinzel">👤 Treinador: ${targetPlayer.name}</h3>
-                <button onclick="document.getElementById('player-token-interaction-modal').remove()" class="text-amber-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-amber-800 cursor-pointer">✕</button>
-            </div>
-
-            <div class="flex flex-col items-center space-y-2">
-                <img src="${avatarUrl}" class="w-16 h-16 object-contain bg-black/50 p-2 rounded-2xl border-2 border-amber-500" onerror="this.src='https://api.iconify.design/noto:boy.svg'">
-                <p class="text-[10px] text-slate-300">Insígnias: ${Array.isArray(targetPlayer.badges) ? targetPlayer.badges.length : 0} / 6 &nbsp;|&nbsp; Ouro: ${targetPlayer.gold || 350} G</p>
-            </div>
-
-            <div class="space-y-2 pt-2">
-                <button onclick="document.getElementById('player-token-interaction-modal').remove(); if(typeof openSpecificTrainerCardModal === 'function') openSpecificTrainerCardModal(${playerIndex});" class="w-full bg-blue-700 hover:bg-blue-600 text-white font-bold py-2 rounded-xl text-xs cursor-pointer shadow">
-                    📜 Ver Cartão de Treinador
-                </button>
-                ${!isSelf ? `
-                    <button onclick="document.getElementById('player-token-interaction-modal').remove(); if(typeof window.triggerPvPBattleArena === 'function') window.triggerPvPBattleArena('${targetPlayer.name}');" class="w-full bg-red-700 hover:bg-red-600 text-white font-bold py-2 rounded-xl text-xs cursor-pointer shadow">
-                        ⚔️ Desafiar para Batalha PvP
-                    </button>
-                    <button onclick="document.getElementById('player-token-interaction-modal').remove(); if(typeof window.proposeTradeWithTrainer === 'function') window.proposeTradeWithTrainer('${targetPlayer.name}');" class="w-full bg-emerald-700 hover:bg-emerald-600 text-white font-bold py-2 rounded-xl text-xs cursor-pointer shadow">
-                        🤝 Propor Troca de Anima
-                    </button>
-                ` : ''}
-            </div>
-        </div>
-    `;
-    modal.classList.remove('hidden');
 };
 
 export function renderBoardMap(highlightIds = []) {
