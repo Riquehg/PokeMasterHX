@@ -909,6 +909,49 @@ io.on('connection', socket => {
         });
     });
 
+    // ========================================================
+    // SISTEMA DE CONVITES DE PVP E TROCAS ONLINE
+    // ========================================================
+    socket.on('send_pvp_invite', payload => {
+        const room = getRoomBySocketId(socket.id);
+        if (!room) return;
+
+        const targetIndex = Number(payload?.targetIndex);
+        const targetPlayer = room.players.find((p, idx) => idx === targetIndex || p.socketId === payload?.targetSocketId);
+
+        if (targetPlayer && targetPlayer.socketId !== socket.id) {
+            io.to(targetPlayer.socketId).emit('receive_pvp_invite', {
+                challengerName: socket.data.trainerName || 'Treinador',
+                challengerIndex: room.players.findIndex(p => p.socketId === socket.id)
+            });
+        }
+    });
+
+    socket.on('send_trade_invite', payload => {
+        const room = getRoomBySocketId(socket.id);
+        if (!room) return;
+
+        const targetIndex = Number(payload?.targetIndex);
+        const targetPlayer = room.players.find((p, idx) => idx === targetIndex || p.socketId === payload?.targetSocketId);
+
+        if (targetPlayer && targetPlayer.socketId !== socket.id) {
+            io.to(targetPlayer.socketId).emit('receive_trade_invite', {
+                challengerName: socket.data.trainerName || 'Treinador',
+                challengerIndex: room.players.findIndex(p => p.socketId === socket.id)
+            });
+        }
+    });
+
+    socket.on('accept_pvp_invite', payload => {
+        const room = getRoomBySocketId(socket.id);
+        if (!room) return;
+
+        io.to(room.id).emit('start_pvp_battle', {
+            format: payload?.format || 1,
+            opponent: room.players.find(p => p.socketId !== socket.id)
+        });
+    });
+
     // 🌐 Sincronização em tempo real de logs de aventura entre jogadores na sala
     socket.on('game_log_action', payload => {
         const room = getRoomBySocketId(socket.id);
