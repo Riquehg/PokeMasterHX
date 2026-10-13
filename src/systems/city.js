@@ -116,6 +116,24 @@ export function openPokemonCenterModal(cityName = '') {
     if (cp.activeTeam) cp.activeTeam.forEach(mon => { mon.currentHp = mon.maxHp || mon.hp || 20; });
     if (cp.pcBox) cp.pcBox.forEach(mon => { mon.currentHp = mon.maxHp || mon.hp || 20; });
 
+    // Salva o progresso localmente para reter a cura
+    if (typeof saveGameProgress === 'function') {
+        saveGameProgress();
+    }
+
+    // Se estiver online, envia imediatamente o estado atualizado do jogador para o servidor
+    if (typeof gameState !== 'undefined' && gameState.online && typeof emitSocket === 'function') {
+        emitSocket('update_game_state', {
+            playerState: {
+                activeTeam: cp.activeTeam,
+                pcBox: cp.pcBox,
+                gold: cp.gold,
+                badges: cp.badges,
+                inventory: cp.inventory
+            }
+        });
+    }
+
     if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
     if (typeof renderBottomPanel === 'function') renderBottomPanel();
     if (typeof updatePlayerUI === 'function') updatePlayerUI();
@@ -131,7 +149,6 @@ export function openPokemonCenterModal(cityName = '') {
         openCityModal(cityName);
     }
 }
-
 // ------------------------------------------------------------
 // POKÉ MART (LOJA DE ITENS COM QUANTIDADE E SPRITES)
 // ------------------------------------------------------------
