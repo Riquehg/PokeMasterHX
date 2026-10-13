@@ -103,9 +103,11 @@ export function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
 export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa') {
     if (!Array.isArray(MONSTER_CATALOG) || MONSTER_CATALOG.length === 0) return null;
 
+    // 1. Mapeia estritamente o Tier com base na cor da casa do mapa
     let targetTier = 1;
     const color = String(waypointColor).toLowerCase();
-    if (color === 'verde') targetTier = 2;
+    if (color === 'rosa') targetTier = 1;
+    else if (color === 'verde') targetTier = 2;
     else if (color === 'azul') targetTier = 3;
     else if (color === 'vermelho') targetTier = 4;
     else if (color === 'amarelo') targetTier = 5;
@@ -116,22 +118,25 @@ export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa
     const baseMon = tierFiltered[Math.floor(Math.random() * tierFiltered.length)];
     const tier = baseMon.tier || targetTier;
 
-    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentOrMyPlayer();
-    let playerTeam = cp && (cp.activeTeam || cp.team) ? (cp.activeTeam || cp.team) : [];
-    
-    let avgLevel = 3;
-    if (playerTeam.length > 0) {
-        const totalLvl = playerTeam.reduce((sum, mon) => sum + Number(mon.level || 1), 0);
-        avgLevel = Math.max(1, Math.round(totalLvl / playerTeam.length));
-    }
+    // 2. Define limites de nível restritos e justos baseados estritamente no Tier da zona
+    let minLevel = 2;
+    let maxLevel = 5;
 
-    let tierBaseOffset = (tier - 1) * 4;
-    let minLevel = Math.max(1, avgLevel - 2 + tierBaseOffset);
-    let maxLevel = avgLevel + 3 + tierBaseOffset;
-    
-    if (tier === 5) {
-        minLevel = Math.max(avgLevel, 35);
-        maxLevel = Math.max(avgLevel + 5, 50);
+    if (tier === 1) {
+        minLevel = 2;
+        maxLevel = 5;     // Casas rosas: Níveis inicias (2 a 5)
+    } else if (tier === 2) {
+        minLevel = 6;
+        maxLevel = 12;    // Casas verdes: Níveis intermediários baixos
+    } else if (tier === 3) {
+        minLevel = 13;
+        maxLevel = 20;    // Casas azuis: Níveis intermediários altos
+    } else if (tier === 4) {
+        minLevel = 21;
+        maxLevel = 30;    // Casas vermelhas: Níveis avançados
+    } else if (tier === 5) {
+        minLevel = 35;
+        maxLevel = 50;    // Casas amarelas (Lendárias/Liga): Níveis máximos
     }
 
     const level = Math.floor(Math.random() * (maxLevel - minLevel + 1)) + minLevel;
