@@ -596,5 +596,4 @@ function setupGlobalInterfaceListeners() {
             }
         };
     }
-    // Nota: O listener do pass-turn-btn está centralizado em setupDiceListeners() no ficheiro dice.js para evitar duplicação e conflitos.
 }
