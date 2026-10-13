@@ -532,23 +532,77 @@ export function resolveBattleAttempt() {
                 currentEncounterState.wildDefeated = true;
                 addExperienceAndCheckEvolution(activeMon, 85);
                 
-                if (confirm(`🏆 VITÓRIA NO COMBATE TCG!\nO ${wild.name} foi derrotado e enfraquecido (+2 Bónus de Captura)!\n\nDesejas jogar uma Poké Ball para tentar a captura agora?`)) {
-                    if (!currentEncounterState.selectedCaptureBallId && cp.inventory) {
-                        const defaultSphere = cp.inventory.find(i => i.type === 'sphere' || i.id.includes('ball'));
-                        if (defaultSphere) {
-                            currentEncounterState.selectedCaptureBallId = defaultSphere.id;
-                            currentEncounterState.itemBonus = Number(defaultSphere.value) || 1;
-                        }
-                    }
-                    resolveCaptureAttempt();
-                } else {
-                    if (wild.waypointId && typeof boardPokemonCards !== 'undefined') {
-                        delete boardPokemonCards[wild.waypointId];
-                    }
-                    closeEncounterModalUI();
-                    if (typeof renderBoardMap === 'function') renderBoardMap();
-                    showCustomPopup("Fuga", "Deixaste o Pokémon para trás e ele desapareceu do mapa.", true);
+                // Fecha o modal de combate atual
+                closeEncounterModalUI();
+
+                // Cria o Modal Customizado de Vitória e Escolha de Poké Ball para Captura no centro da tela
+                let victoryModal = document.getElementById('wild-victory-capture-modal');
+                if (!victoryModal) {
+                    victoryModal = document.createElement('div');
+                    victoryModal.id = 'wild-victory-capture-modal';
+                    victoryModal.className = 'fixed inset-0 bg-black/90 z-[700] flex items-center justify-center p-4 backdrop-blur-md';
+                    document.body.appendChild(victoryModal);
                 }
+
+                let ballsHtml = '';
+                if (cp.inventory && Array.isArray(cp.inventory)) {
+                    cp.inventory.forEach(item => {
+                        const count = Number(item.count) || Number(item.quantity) || 0;
+                        const isSphere = item.type === 'sphere' || item.category === 'capture' || (item.id && item.id.includes('ball'));
+                        if (isSphere && count > 0) {
+                            const bonusVal = Number(item.value) || 0;
+                            const isSelected = currentEncounterState.selectedCaptureBallId === item.id;
+                            ballsHtml += `
+                                <div onclick="window.selectVictoryModalBall('${item.id}')" class="flex items-center justify-between p-3 rounded-2xl border-2 cursor-pointer transition-all ${isSelected ? 'bg-emerald-950/80 border-emerald-400 ring-2 ring-emerald-500 scale-102' : 'bg-black/60 border-amber-900/60 hover:border-amber-500'}">
+                                    <div class="flex items-center gap-3">
+                                        <img src="${item.image || 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/items/poke_ball.png'}" class="w-10 h-10 object-contain drop-shadow" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                                        <div>
+                                            <p class="text-xs font-bold text-white">${item.name} <span class="text-amber-400 text-[10px]">(${count}x)</span></p>
+                                            <p class="text-[10px] text-emerald-400">Bónus de Captura: +${bonusVal}</p>
+                                        </div>
+                                    </div>
+                                    <span class="text-xs font-black ${isSelected ? 'text-emerald-400' : 'text-slate-500'}">${isSelected ? '✓ Selecionada' : 'Escolher'}</span>
+                                </div>
+                            `;
+                        }
+                    });
+                }
+
+                if (!ballsHtml) {
+                    ballsHtml = `<p class="text-xs text-red-400 text-center py-4">Não tens nenhuma Poké Ball na mochila para efetuar a captura!</p>`;
+                }
+
+                victoryModal.innerHTML = `
+                    <div class="trainer-card max-w-md w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white text-center">
+                        <div class="flex items-center justify-center gap-2 border-b border-amber-900/60 pb-2">
+                            <span class="text-xl">🏆</span>
+                            <h3 class="text-sm font-black text-amber-400 font-cinzel tracking-wider">VITÓRIA NO COMBATE TCG!</h3>
+                        </div>
+                        
+                        <p class="text-xs text-slate-200 leading-relaxed">
+                            O <strong class="text-amber-300">${wild.name}</strong> foi derrotado e enfraquecido! 
+                            <br><span class="text-emerald-400 font-bold">(+2 Bónus de Captura Ativo)</span>
+                        </p>
+
+                        <div class="space-y-2 text-left bg-black/40 p-3 rounded-2xl border border-amber-900/40">
+                            <p class="text-[10px] text-amber-300 font-bold uppercase tracking-wider mb-2">Seleciona a Esfera de Captura:</p>
+                            <div class="max-h-48 overflow-y-auto space-y-2 pr-1" id="victory-balls-container">
+                                ${ballsHtml}
+                            </div>
+                        </div>
+
+                        <div class="flex gap-2 pt-2">
+                            <button onclick="document.getElementById('wild-victory-capture-modal').remove(); if(typeof renderBoardMap === 'function') renderBoardMap(); showCustomPopup('Fuga', 'Deixaste o Pokémon para trás e ele desapareceu do mapa.', true);" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer">
+                                Fugir / Ignorar
+                            </button>
+                            <button onclick="window.confirmVictoryCaptureAttempt()" class="flex-2 bg-gradient-to-r from-emerald-600 to-green-700 hover:from-emerald-500 hover:to-green-600 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-lg cursor-pointer transition-all">
+                                Jogar Poké Ball! 🔴
+                            </button>
+                        </div>
+                    </div>
+                `;
+                victoryModal.classList.remove('hidden');
+
             } else {
                 showCustomPopup("⚔️ ATAQUE EFICAZ!", `O teu ${activeMon.name} (Dado: ${playerDice}) causou ${damageToWild} de dano!\n\n(Ataque: ${playerPower} vs Defesa: ${wildPower})\nHP do Selvagem: ${wild.currentHp}/${wild.maxHp}`, true);
             }
@@ -574,6 +628,92 @@ export function resolveBattleAttempt() {
         syncGameStateToCloud();
     });
 }
+
+window.selectVictoryModalBall = function(ballId) {
+    currentEncounterState.selectedCaptureBallId = ballId;
+    const itemInfo = getItemDetails(ballId);
+    if (itemInfo) {
+        currentEncounterState.itemBonus = Number(itemInfo.value) || 0;
+    }
+    // Reabre o modal atualizado para destacar a bola escolhida
+    if (currentEncounterState.wildPokemon) {
+        const modal = document.getElementById('wild-victory-capture-modal');
+        if (modal) modal.remove();
+        resolveBattleAttemptTriggerRedraw();
+    }
+};
+
+function resolveBattleAttemptTriggerRedraw() {
+    // Helper para redesenhar o modal de vitória com a seleção atualizada
+    const cp = getCurrentOrMyPlayer();
+    const wild = currentEncounterState.wildPokemon;
+    if (!cp || !wild) return;
+
+    let victoryModal = document.createElement('div');
+    victoryModal.id = 'wild-victory-capture-modal';
+    victoryModal.className = 'fixed inset-0 bg-black/90 z-[700] flex items-center justify-center p-4 backdrop-blur-md';
+    document.body.appendChild(victoryModal);
+
+    let ballsHtml = '';
+    cp.inventory.forEach(item => {
+        const count = Number(item.count) || Number(item.quantity) || 0;
+        const isSphere = item.type === 'sphere' || item.category === 'capture' || (item.id && item.id.includes('ball'));
+        if (isSphere && count > 0) {
+            const bonusVal = Number(item.value) || 0;
+            const isSelected = currentEncounterState.selectedCaptureBallId === item.id;
+            ballsHtml += `
+                <div onclick="window.selectVictoryModalBall('${item.id}')" class="flex items-center justify-between p-3 rounded-2xl border-2 cursor-pointer transition-all ${isSelected ? 'bg-emerald-950/80 border-emerald-400 ring-2 ring-emerald-500 scale-102' : 'bg-black/60 border-amber-900/60 hover:border-amber-500'}">
+                    <div class="flex items-center gap-3">
+                        <img src="${item.image || 'https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/items/poke_ball.png'}" class="w-10 h-10 object-contain drop-shadow" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
+                        <div>
+                            <p class="text-xs font-bold text-white">${item.name} <span class="text-amber-400 text-[10px]">(${count}x)</span></p>
+                            <p class="text-[10px] text-emerald-400">Bónus de Captura: +${bonusVal}</p>
+                        </div>
+                    </div>
+                    <span class="text-xs font-black ${isSelected ? 'text-emerald-400' : 'text-slate-500'}">${isSelected ? '✓ Selecionada' : 'Escolher'}</span>
+                </div>
+            `;
+        }
+    });
+
+    victoryModal.innerHTML = `
+        <div class="trainer-card max-w-md w-full p-6 space-y-4 border-4 border-amber-500 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white text-center">
+            <div class="flex items-center justify-center gap-2 border-b border-amber-900/60 pb-2">
+                <span class="text-xl">🏆</span>
+                <h3 class="text-sm font-black text-amber-400 font-cinzel tracking-wider">VITÓRIA NO COMBATE TCG!</h3>
+            </div>
+            <p class="text-xs text-slate-200 leading-relaxed">
+                O <strong class="text-amber-300">${wild.name}</strong> foi derrotado e enfraquecido! 
+                <br><span class="text-emerald-400 font-bold">(+2 Bónus de Captura Ativo)</span>
+            </p>
+            <div class="space-y-2 text-left bg-black/40 p-3 rounded-2xl border border-amber-900/40">
+                <p class="text-[10px] text-amber-300 font-bold uppercase tracking-wider mb-2">Seleciona a Esfera de Captura:</p>
+                <div class="max-h-48 overflow-y-auto space-y-2 pr-1">
+                    ${ballsHtml}
+                </div>
+            </div>
+            <div class="flex gap-2 pt-2">
+                <button onclick="document.getElementById('wild-victory-capture-modal').remove(); if(typeof renderBoardMap === 'function') renderBoardMap(); showCustomPopup('Fuga', 'Deixaste o Pokémon para trás e ele desapareceu do mapa.', true);" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer">
+                    Fugir / Ignorar
+                </button>
+                <button onclick="window.confirmVictoryCaptureAttempt()" class="flex-2 bg-gradient-to-r from-emerald-600 to-green-700 hover:from-emerald-500 hover:to-green-600 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-lg cursor-pointer transition-all">
+                    Jogar Poké Ball! 🔴
+                </button>
+            </div>
+        </div>
+    `;
+    victoryModal.classList.remove('hidden');
+}
+
+window.confirmVictoryCaptureAttempt = function() {
+    if (!currentEncounterState.selectedCaptureBallId) {
+        showCustomPopup("Esfera Necessária", "Por favor, seleciona uma Poké Ball da lista antes de tentar a captura!", false);
+        return;
+    }
+    const modal = document.getElementById('wild-victory-capture-modal');
+    if (modal) modal.remove();
+    resolveCaptureAttempt();
+};
 
 export function resolveCaptureAttempt() {
     const cp = getCurrentOrMyPlayer();
