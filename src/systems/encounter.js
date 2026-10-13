@@ -35,24 +35,23 @@ function getTierColorClass(tier) {
 // Dicionário de Tiers para exibição visual nos cards
 const tierNamesMap = { 1: 'Comum', 2: 'Incomum', 3: 'Raro', 4: 'Épico', 5: 'Lendário' };
 
-// Cálculo dinâmico e balanceado de atributos por Nível e Tier
+// Cálculo dinâmico, rigoroso e balanceado de atributos por Nível e Tier (Alinhado com a progressão dos jogadores)
 export function calculatePokemonStats(baseMonster, level, isShiny = false) {
     const tier = Number(baseMonster.tier || 1);
     
-    // Multiplicadores base por tier para diferenciar monstros comuns de lendários/épicos
+    // Multiplicadores base por tier equilibrados
     let tierMultiplier = 1.0;
     if (tier === 2) tierMultiplier = 1.25;
     else if (tier === 3) tierMultiplier = 1.5;
     else if (tier === 4) tierMultiplier = 1.85;
     else if (tier === 5) tierMultiplier = 2.3;
 
-    // Valores base padrão caso o catálogo não traga definidos
     const rawBaseStr = Number(baseMonster.str || baseMonster.attack || 8);
     const rawBaseHp = Number(baseMonster.maxHp || baseMonster.hp || 30);
 
-    // Fórmula progressiva balanceada (O nível agora escala fortemente os atributos)
-    const scaledStr = Math.floor((rawBaseStr + (level * 2.2)) * tierMultiplier);
-    const scaledHp = Math.floor((rawBaseHp + (level * 8)) * tierMultiplier);
+    // Fórmula progressiva balanceada idêntica à escala dos jogadores
+    const scaledStr = Math.floor((rawBaseStr + (level * 2.5)) * tierMultiplier);
+    const scaledHp = Math.floor((rawBaseHp + (level * 10)) * tierMultiplier);
 
     const shinyStrBonus = isShiny ? Math.floor(scaledStr * 0.15) : 0;
     const shinyHpBonus = isShiny ? Math.floor(scaledHp * 0.15) : 0;
@@ -62,9 +61,9 @@ export function calculatePokemonStats(baseMonster, level, isShiny = false) {
     const finalHp = Math.floor((scaledHp + shinyHpBonus) * shinyMultiplier);
 
     return {
-        str: Math.max(5, finalStr),
-        maxHp: Math.max(20, finalHp),
-        currentHp: Math.max(20, finalHp)
+        str: Math.max(6, finalStr),
+        maxHp: Math.max(25, finalHp),
+        currentHp: Math.max(25, finalHp)
     };
 }
 
@@ -139,7 +138,7 @@ export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa
 }
 
 export function openEncounterModalWithPokemon(pokemon) {
-    const cp = getCurrentOrMyPlayer();
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentOrMyPlayer();
     
     let modal = document.getElementById('wild-encounter-modal') || document.getElementById('encounter-modal');
     if (!modal) {
@@ -210,7 +209,7 @@ export function openEncounterModalWithPokemon(pokemon) {
 }
 
 export function updateEncounterUIInfo() {
-    const cp = getCurrentOrMyPlayer();
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentOrMyPlayer();
     const wild = currentEncounterState.wildPokemon;
     if (!cp || !wild) return;
     const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex] || cp.activeTeam[0];
@@ -334,7 +333,7 @@ export function updateEncounterUIInfo() {
 }
 
 export function cyclePlayerEncounterPokemon() {
-    const cp = getCurrentOrMyPlayer();
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentOrMyPlayer();
     if (!cp || !Array.isArray(cp.activeTeam) || cp.activeTeam.length <= 1) {
         showCustomPopup("Aviso", "Só tens este Pokémon na equipa ativa!", false);
         return;
@@ -357,7 +356,7 @@ export function cyclePlayerEncounterPokemon() {
 }
 
 export function renderEncounterItemsList() {
-    const cp = getCurrentOrMyPlayer();
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentOrMyPlayer();
     const container = document.getElementById('encounter-items-container');
     if (!container || !cp) return;
     container.innerHTML = '';
@@ -438,16 +437,18 @@ function playAttackAnimation() {
 function syncGameStateToCloud() {
     saveGameProgress();
     if (typeof emitSocket === 'function') {
-        const cp = getCurrentOrMyPlayer();
-        emitSocket('save_game_state', {
-            gameState: gameState,
-            trainerName: cp?.name || 'Treinador'
-        });
+        const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentOrMyPlayer();
+        
+        // 🌐 Sincronização isolada e blindada via socket do playerState
         if (gameState.online) {
             emitSocket('update_game_state', {
-                type: 'encounter_updated',
-                playerIndex: gameState.myPlayerIndex,
-                gameState: gameState
+                playerState: {
+                    activeTeam: cp?.activeTeam,
+                    pcBox: cp?.pcBox,
+                    inventory: cp?.inventory,
+                    gold: cp?.gold,
+                    pokedex: cp?.pokedex
+                }
             });
         }
     }
@@ -511,7 +512,7 @@ export function evolveMonsterWithStone(monster, stoneItemId) {
 }
 
 export function resolveBattleAttempt() {
-    const cp = getCurrentOrMyPlayer();
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentOrMyPlayer();
     const wild = currentEncounterState.wildPokemon;
     if (!cp || !wild) return;
     const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex];
@@ -655,7 +656,7 @@ window.selectVictoryModalBall = function(ballId) {
 };
 
 function resolveBattleAttemptTriggerRedraw() {
-    const cp = getCurrentOrMyPlayer();
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentOrMyPlayer();
     const wild = currentEncounterState.wildPokemon;
     if (!cp || !wild) return;
 
@@ -726,7 +727,7 @@ window.confirmVictoryCaptureAttempt = function() {
 };
 
 export function resolveCaptureAttempt() {
-    const cp = getCurrentOrMyPlayer();
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentOrMyPlayer();
     const wild = currentEncounterState.wildPokemon;
     if (!cp || !wild) return;
 
