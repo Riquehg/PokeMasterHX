@@ -8,7 +8,7 @@ import { openEncounterModalWithPokemon, generateWildPokemonForWaypoint } from '.
 import { MONSTER_CATALOG } from '../config/cards-data.js';
 import { initiateGymSequence, GYM_LEADERS_CATALOG } from './gym.js';
 import { showOnlineGameLayout, applyOnlineRoomState } from './lobby.js';
-import { socket, emitSocket } from '../core/socket.js';
+import { emitSocket } from '../core/socket.js';
 import { advanceGlobalWeather, updateBoardWeatherUI } from './weather.js';
 
 if (typeof window.boardPokemonCards === 'undefined') {
@@ -499,7 +499,6 @@ function triggerRandomBoardEvent(eventName) {
     }
 }
 
-// Interação ao clicar no peão de um jogador no mapa (Suporta Visualizar, Desafiar PvP ou Propor Troca)
 window.openPlayerTokenInteractionModal = function(playerIndex) {
     const players = gameState.players || [];
     const targetPlayer = players[playerIndex];
@@ -655,7 +654,6 @@ export function renderBoardMap(highlightIds = []) {
         const offsetLeft = waypoint.left + (idx * 1.2) - 1.5;
         const offsetTop = waypoint.top + (idx * 1.2) - 1.5;
 
-        // CORRIGIDO: Agora o clique no peão abre o menu interativo com PvP, Trocas e Cartão
         mapOverlayHtml += `
             <div id="player-token-${idx}" onclick="window.openPlayerTokenInteractionModal(${idx})" class="absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2 transition-all duration-500 z-50 cursor-pointer group" style="top: ${offsetTop}%; left: ${offsetLeft}%;" title="${player.name || 'Treinador'} ${isSelf ? '(Você)' : ''}">
                 <div class="relative flex flex-col items-center">
@@ -686,7 +684,6 @@ export function renderBoardMap(highlightIds = []) {
     }, 50);
 }
 
-// CORRIGIDO: Ouvintes robustos para o chat no mapa transmitirem para a sala online
 function setupMapChatListeners() {
     const sendBtn = document.getElementById('send-chat-btn') || document.getElementById('map-send-chat-btn');
     const chatInput = document.getElementById('chat-input-field') || document.getElementById('map-chat-input');
@@ -697,8 +694,8 @@ function setupMapChatListeners() {
             const text = chatInput.value.trim();
             if (!text) return;
             
-            if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function') {
-                socket.emit('room_chat_message', { message: text });
+            if (typeof window.socket !== 'undefined' && window.socket && typeof window.socket.emit === 'function') {
+                window.socket.emit('room_chat_message', { message: text });
             }
 
             chatInput.value = '';
@@ -712,66 +709,8 @@ function setupMapChatListeners() {
     }
 }
 
-if (typeof socket !== 'undefined' && socket) {
-    socket.off('sync_game_state');
-    socket.on('sync_game_state', (data) => {
-        if (data && data.gameState && typeof gameState !== 'undefined') {
-            Object.assign(gameState, data.gameState);
-            if (typeof ensureValidGameState === 'function') {
-                ensureValidGameState();
-            }
-            if (typeof renderBoardMap === 'function') {
-                renderBoardMap();
-            }
-            if (typeof renderBottomPanel === 'function') {
-                renderBottomPanel();
-            }
-            if (typeof renderTeamCardSlots === 'function') {
-                renderTeamCardSlots();
-            }
-        }
-    });
-
-    socket.off('room_game_started');
-    socket.on('room_game_started', (data) => {
-        if (applyOnlineRoomState(data)) {
-            showOnlineGameLayout();
-        } else if (typeof showCustomPopup === 'function') {
-            showCustomPopup('Erro ao Iniciar', 'Não foi possível sincronizar os dados da sala para iniciar a partida.', false);
-        }
-    });
-
-    socket.off('room_chat_broadcast');
-    socket.on('room_chat_broadcast', (data) => {
-        const chatBoxes = [
-            document.getElementById('chat-messages-box'),
-            document.getElementById('map-chat-messages-box'),
-            document.getElementById('lobby-chat-messages')
-        ];
-        chatBoxes.forEach(box => {
-            if (box) {
-                const time = new Date(data.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                box.innerHTML += `<div class="mb-1"><span class="text-slate-500">[${time}]</span> <strong class="text-amber-300">${data.sender}:</strong> <span class="text-white">${data.text}</span></div>`;
-                box.scrollTop = box.scrollHeight;
-            }
-        });
-    });
-}
-
 export function renderBoardMapWithHighlights(validNextSteps) {
     renderBoardMap(validNextSteps);
-}
-
-function animateTokenMovement(newPositionIndex) {
-    const cp = getMapPlayer();
-    if (cp) {
-        cp.currentZone = newPositionIndex;
-    }
-    renderBoardMap();
-}
-
-export function moveTokenToWaypoint(waypointId) {
-    renderBoardMap();
 }
 
 window.onHexClick = onHexClick;
