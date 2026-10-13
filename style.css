@@ -1,3 +1,77 @@
+/* --- SISTEMA DE CLIMA DINÂMICO NO TABULEIRO --- */
+#board-weather-overlay {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    overflow: hidden;
+    border-radius: inherit;
+    transition: all 0.5s ease-in-out;
+}
+
+/* Clima: Chuva */
+.weather-rain {
+    background: linear-gradient(to bottom, rgba(0, 0, 50, 0.15), rgba(0, 0, 30, 0.3));
+}
+.weather-rain::before {
+    content: "";
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    right: -50%;
+    bottom: -50%;
+    background-image: linear-gradient(transparent, rgba(255, 255, 255, 0.3));
+    transform: rotate(20deg);
+    animation: rainFall 0.4s linear infinite;
+}
+@keyframes rainFall {
+    0% { transform: translateY(-50%) rotate(20deg); }
+    100% { transform: translateY(50%) rotate(20deg); }
+}
+
+/* Clima: Sol Intenso */
+.weather-sunny {
+    background: radial-gradient(circle, rgba(255, 215, 0, 0.25) 0%, rgba(255, 140, 0, 0.1) 70%, transparent 100%);
+    box-shadow: inset 0 0 50px rgba(255, 200, 0, 0.4);
+    animation: sunPulse 3s ease-in-out infinite alternate;
+}
+@keyframes sunPulse {
+    0% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+/* Clima: Tempestade de Areia */
+.weather-sandstorm {
+    background: linear-gradient(135deg, rgba(184, 134, 11, 0.3), rgba(139, 69, 19, 0.3));
+    backdrop-filter: blur(1px);
+}
+
+/* Clima: Nevoeiro */
+.weather-fog {
+    background: rgba(200, 200, 200, 0.2);
+    backdrop-filter: blur(2.5px);
+}
+
+/* Widget indicador de clima no UI */
+.weather-widget-badge {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    z-index: 50;
+    background: rgba(0, 0, 0, 0.8);
+    border: 2px solid #d97706;
+    padding: 6px 12px;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #fde047;
+    font-size: 11px;
+    font-weight: 900;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+}
+
+
 /* --- ESTILOS DO MAPA E LAYOUT LATERAL --- */
 
 .map-viewport {
