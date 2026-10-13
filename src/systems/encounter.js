@@ -20,6 +20,14 @@ export let currentEncounterState = {
     wildDefeated: false
 };
 
+function pushAdventureLog(text) {
+    if (typeof window.pushAdventureLog === 'function') {
+        window.pushAdventureLog(text);
+    } else {
+        console.log(`[Log] ${text}`);
+    }
+}
+
 function getTierColorClass(tier) {
     switch (Number(tier)) {
         case 1: return 'card-tier-comum tier-1';
@@ -35,7 +43,6 @@ const tierNamesMap = { 1: 'Comum', 2: 'Incomum', 3: 'Raro', 4: 'Épico', 5: 'Len
 
 // Fórmula unificada e balanceada de status para Jogadores e Selvagens
 export function calculatePokemonStats(baseMonster, level = 1, isShiny = false) {
-    // Procura os dados originais no catálogo base para evitar cálculos em cima de valores já modificados
     const originalCatalogData = MONSTER_CATALOG.find(m => m.id === (baseMonster.catalogId || baseMonster.id)) || baseMonster;
     
     const tier = Number(originalCatalogData.tier || 1);
@@ -46,11 +53,9 @@ export function calculatePokemonStats(baseMonster, level = 1, isShiny = false) {
     else if (tier === 4) tierMultiplier = 1.5;
     else if (tier === 5) tierMultiplier = 1.8;
 
-    // Valores base originais estritos do catálogo (ex: Charmander = 4 str, 16 hp)
     const rawBaseStr = Number(originalCatalogData.str || originalCatalogData.attack || 4);
     const rawBaseHp = Number(originalCatalogData.maxHp || originalCatalogData.hp || 16);
 
-    // Progressão linear equilibrada por nível (evita saltos absurdos no Nível 1)
     const lvl = Math.max(1, Number(level) || 1);
     const scaledStr = Math.floor((rawBaseStr + ((lvl - 1) * 1.5)) * tierMultiplier);
     const scaledHp = Math.floor((rawBaseHp + ((lvl - 1) * 4)) * tierMultiplier);
@@ -135,7 +140,7 @@ export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa
     
     const stats = calculatePokemonStats(baseMon, level, isShiny);
 
-    return {
+    const wildInstance = {
         ...baseMon,
         uniqueId: 'wild_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
         level: level,
@@ -147,6 +152,9 @@ export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa
         waypointId: waypointId,
         weakened: false
     };
+
+    pushAdventureLog(`✨ Um ${wildInstance.name} selvagem (Nv. ${level}) apareceu no mapa!`);
+    return wildInstance;
 }
 
 export function openEncounterModalWithPokemon(pokemon) {
@@ -227,7 +235,6 @@ export function updateEncounterUIInfo() {
     const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex] || cp.activeTeam[0];
     if (!activeMon) return;
 
-    // Recálculo e sincronização forçada dos stats do Pokémon do jogador usando a mesma regra
     const freshPlayerStats = calculatePokemonStats(activeMon, activeMon.level || 1, activeMon.isShiny);
     activeMon.str = freshPlayerStats.str;
     activeMon.maxHp = freshPlayerStats.maxHp;
@@ -366,6 +373,7 @@ export function cyclePlayerEncounterPokemon() {
 
     currentEncounterState.selectedTeamMemberIndex = nextIndex;
     const switchedMon = cp.activeTeam[nextIndex];
+    pushAdventureLog(`🔄 O treinador trocou para o ${switchedMon.name}.`);
     showCustomPopup("Troca de Anima", `🔄 Enviaste para a frente de batalha o ${switchedMon.name}!`, true);
     updateEncounterUIInfo();
 }
@@ -482,6 +490,7 @@ function addExperienceAndCheckEvolution(monster, expGain) {
         monster.currentHp = stats.maxHp;
         monster.str = stats.str;
 
+        pushAdventureLog(`✨ O ${monster.name} subiu para o Nível ${monster.level}!`);
         showCustomPopup("✨ SUBIDA DE NÍVEL!", `O teu ${monster.name} subiu para o Nível ${monster.level}!\nOs seus atributos melhoraram consideravelmente!`, true);
 
         const baseCatalogItem = MONSTER_CATALOG.find(m => m.id === monster.catalogId || m.id === monster.id || m.name.toLowerCase() === monster.name.toLowerCase());
@@ -495,6 +504,7 @@ function addExperienceAndCheckEvolution(monster, expGain) {
                 monster.catalogId = evolvedData.id;
                 if (evolvedData.image) monster.image = evolvedData.image;
                 if (evolvedData.types) monster.types = evolvedData.types;
+                pushAdventureLog(`🧬 O ${oldName} evoluiu para ${monster.name}!`);
                 showCustomPopup("🧬 EVOLUÇÃO POR NÍVEL!", `Incrível! O teu ${oldName} evoluiu para ${monster.name}!`, true);
             }
         }
@@ -518,6 +528,7 @@ export function evolveMonsterWithStone(monster, stoneItemId) {
         monster.catalogId = evolvedData.id;
         if (evolvedData.image) monster.image = evolvedData.image;
         if (evolvedData.types) monster.types = evolvedData.types;
+        pushAdventureLog(`🧬 O ${oldName} evoluiu com item para ${monster.name}!`);
         showCustomPopup("🧬 EVOLUÇÃO POR ITEM!", `A pedra reage! O teu ${oldName} evoluiu para ${monster.name}!`, true);
         syncGameStateToCloud();
         return true;
@@ -557,9 +568,12 @@ export function resolveBattleAttempt() {
             const damageToWild = Math.max(15, playerPower - wildPower + 10);
             wild.currentHp = Math.max(0, (wild.currentHp !== undefined ? wild.currentHp : wild.maxHp) - damageToWild);
 
+            pushAdventureLog(`⚔️ Batalha: ${activeMon.name} (Dado: ${playerDice}, Poder: ${playerPower}) causou ${damageToWild} de dano em ${wild.name} (Dado: ${wildDice}, Poder: ${wildPower}).`);
+
             if (wild.currentHp <= 0) {
                 currentEncounterState.wildDefeated = true;
                 addExperienceAndCheckEvolution(activeMon, 100);
+                pushAdventureLog(`🏆 O ${wild.name} selvagem foi derrotado e enfraquecido pelo ${activeMon.name}!`);
                 
                 closeEncounterModalUI();
 
@@ -638,11 +652,15 @@ export function resolveBattleAttempt() {
             const damageToPlayer = 12 + Math.floor(wild.level * 0.6);
             activeMon.currentHp = Math.max(0, activeMon.currentHp - damageToPlayer);
             
+            pushAdventureLog(`💥 Batalha: ${wild.name} (Dado: ${wildDice}, Poder: ${wildPower}) contra-atacou e causou ${damageToPlayer} de dano em ${activeMon.name} (Dado: ${playerDice}, Poder: ${playerPower}).`);
+
             if (activeMon.currentHp <= 0) {
+                pushAdventureLog(`💀 O Pokémon ${activeMon.name} desmaiou em combate contra o ${wild.name}!`);
                 showCustomPopup("💀 O TEU POKÉMON DESMAIOU", `O ${wild.name} contra-atacou com força (Soma: ${wildPower} vs ${playerPower})!\n\n💔 ${activeMon.name} desmaiou. Troca para outro Pokémon se tiveres disponíveis.`, false);
                 
                 const healthyRemaining = cp.activeTeam.some(m => (m.currentHp !== undefined ? m.currentHp : m.maxHp) > 0);
                 if (!healthyRemaining) {
+                    pushAdventureLog(`💀 Derrota total da equipa de ${cp.name}.`);
                     showCustomPopup("Derrota Total", "⚠ Toda a tua equipa ativa desmaiou!", false);
                     closeEncounterModalUI();
                 }
@@ -807,6 +825,7 @@ export function resolveCaptureAttempt() {
                 dailyBonusMessage = `\n\n🌟 BÓNUS DO POKÉMON DO DIA!\nGanhaste +${goldAdd} 🪙 e 1x ${dailyFeaturedPokemonConfig.bonusItemName || 'Item Bónus'}!`;
             }
 
+            pushAdventureLog(`🎉 Sucesso: O treinador capturou o ${wild.name} selvagem! [Dado: ${roll} + Bónus: ${captureBonus + weakenedBonus} = ${totalCaptureValue} / Alvo: ${requiredTarget}+]`);
             showCustomPopup(
                 "🎉 CAPTURA BEM-SUCEDIDA!",
                 `Capturaste com sucesso o ${wild.name} (Nv.${wild.level || 1})!\n[Dado: ${roll} + Bónus: ${captureBonus + weakenedBonus} = ${totalCaptureValue} / Alvo: ${requiredTarget}+]${dailyBonusMessage}`,
@@ -842,12 +861,17 @@ export function resolveCaptureAttempt() {
                 delete boardPokemonCards[wild.waypointId];
             }
 
-            closeEncounterModalUI();
-            if (typeof renderBoardMap === 'function') renderBoardMap();
-            if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
-            if (typeof renderBottomPanel === 'function') renderBottomPanel();
-            syncGameStateToCloud();
+            // Aguarda o utilizador ler o resultado antes de fechar e atualizar o tabuleiro
+            setTimeout(() => {
+                closeEncounterModalUI();
+                if (typeof renderBoardMap === 'function') renderBoardMap();
+                if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+                if (typeof renderBottomPanel === 'function') renderBottomPanel();
+                syncGameStateToCloud();
+            }, 1200);
+
         } else {
+            pushAdventureLog(`❌ Falha: O treinador tentou capturar o ${wild.name}, mas falhou! [Dado: ${roll} + Bónus: ${captureBonus + weakenedBonus} = ${totalCaptureValue} / Alvo: ${requiredTarget}+]`);
             if (currentEncounterState.wildDefeated) {
                 if (wild.waypointId && typeof boardPokemonCards !== 'undefined') {
                     delete boardPokemonCards[wild.waypointId];
@@ -871,6 +895,7 @@ export function resolveCaptureAttempt() {
 
 export function fleeEncounter() {
     const wild = currentEncounterState.wildPokemon;
+    pushAdventureLog(`🏃‍♂️ O treinador fugiu do encontro com o ${wild?.name || 'Pokémon selvagem'}.`);
     if (currentEncounterState.wildDefeated && wild && wild.waypointId && typeof boardPokemonCards !== 'undefined') {
         delete boardPokemonCards[wild.waypointId];
         showCustomPopup("Fuga", "O Pokémon derrotado fugiu para longe e desapareceu do mapa.", true);
