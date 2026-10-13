@@ -34,8 +34,11 @@ function getTierColorClass(tier) {
 const tierNamesMap = { 1: 'Comum', 2: 'Incomum', 3: 'Raro', 4: 'Épico', 5: 'Lendário' };
 
 // Fórmula unificada e balanceada de status para Jogadores e Selvagens
-export function calculatePokemonStats(baseMonster, level, isShiny = false) {
-    const tier = Number(baseMonster.tier || 1);
+export function calculatePokemonStats(baseMonster, level = 1, isShiny = false) {
+    // Procura os dados originais no catálogo base para evitar cálculos em cima de valores já modificados
+    const originalCatalogData = MONSTER_CATALOG.find(m => m.id === (baseMonster.catalogId || baseMonster.id)) || baseMonster;
+    
+    const tier = Number(originalCatalogData.tier || 1);
     
     let tierMultiplier = 1.0;
     if (tier === 2) tierMultiplier = 1.15;
@@ -43,11 +46,14 @@ export function calculatePokemonStats(baseMonster, level, isShiny = false) {
     else if (tier === 4) tierMultiplier = 1.5;
     else if (tier === 5) tierMultiplier = 1.8;
 
-    const rawBaseStr = Number(baseMonster.str || baseMonster.attack || 10);
-    const rawBaseHp = Number(baseMonster.maxHp || baseMonster.hp || 35);
+    // Valores base originais estritos do catálogo (ex: Charmander = 4 str, 16 hp)
+    const rawBaseStr = Number(originalCatalogData.str || originalCatalogData.attack || 4);
+    const rawBaseHp = Number(originalCatalogData.maxHp || originalCatalogData.hp || 16);
 
-    const scaledStr = Math.floor((rawBaseStr + (level * 2)) * tierMultiplier);
-    const scaledHp = Math.floor((rawBaseHp + (level * 5)) * tierMultiplier);
+    // Progressão linear equilibrada por nível (evita saltos absurdos no Nível 1)
+    const lvl = Math.max(1, Number(level) || 1);
+    const scaledStr = Math.floor((rawBaseStr + ((lvl - 1) * 1.5)) * tierMultiplier);
+    const scaledHp = Math.floor((rawBaseHp + ((lvl - 1) * 4)) * tierMultiplier);
 
     const shinyStrBonus = isShiny ? Math.floor(scaledStr * 0.1) : 0;
     const shinyHpBonus = isShiny ? Math.floor(scaledHp * 0.1) : 0;
@@ -56,9 +62,9 @@ export function calculatePokemonStats(baseMonster, level, isShiny = false) {
     const finalHp = scaledHp + shinyHpBonus;
 
     return {
-        str: Math.max(5, finalStr),
-        maxHp: Math.max(20, finalHp),
-        currentHp: Math.max(20, finalHp)
+        str: Math.max(3, finalStr),
+        maxHp: Math.max(15, finalHp),
+        currentHp: Math.max(15, finalHp)
     };
 }
 
