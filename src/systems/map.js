@@ -553,7 +553,6 @@ export function renderBoardMap(highlightIds = []) {
                 const tierNames = { 1: 'Comum', 2: 'Incomum', 3: 'Raro', 4: 'Épico', 5: 'Lendário' };
                 const tierBadgeText = tierNames[pokeCard.tier || 1] || 'Comum';
 
-                // Aplicação das classes TCG e bordas de raridade refinadas
                 const tCat = Number(pokeCard.tier || 1);
                 let tierCssClass = 'card-tier-comum tier-1';
                 if (tCat === 2) tierCssClass = 'card-tier-incomum tier-2';
