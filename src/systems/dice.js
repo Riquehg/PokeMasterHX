@@ -24,7 +24,7 @@ function getDicePlayer() {
 }
 
 // ------------------------------------------------------------
-// CONFIGURAÇÃO DE EVENTOS DA HUD (Vincula o clique do dado)
+// CONFIGURAÇÃO DE EVENTOS DA HUD E SOCKETS EM TEMPO REAL
 // ------------------------------------------------------------
 
 export function setupDiceListeners() {
@@ -84,14 +84,63 @@ export function setupDiceListeners() {
             if (typeof showCustomPopup === 'function') {
                 showCustomPopup("Passagem de Turno", `🔄 Turno encerrado! Agora é a vez de: ${nextPlayerName}`, true);
             }
-            if (typeof renderBoardMap === 'function') {
-                renderBoardMap();
-            }
-            if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
-            if (typeof renderBottomPanel === 'function') renderBottomPanel();
+            updateTurnIndicatorUI();
         };
     }
+
+    // 🌐 Sincronização em tempo real de turnos e estado global via Socket (Evita travamentos)
+    const activeSock = window.socket || (typeof getSocket === 'function' ? getSocket() : null) || socket;
+    if (activeSock && !activeSock.hasTurnSyncListener) {
+        activeSock.hasTurnSyncListener = true;
+
+        activeSock.on('game_state_updated', (data) => {
+            if (data) {
+                if (data.gameState) {
+                    Object.assign(gameState, data.gameState);
+                }
+                if (data.currentPlayerIndex !== undefined) {
+                    gameState.currentPlayerIndex = data.currentPlayerIndex;
+                }
+                updateTurnIndicatorUI();
+            }
+        });
+
+        activeSock.on('turn_changed', (data) => {
+            if (data && data.currentPlayerIndex !== undefined) {
+                gameState.currentPlayerIndex = data.currentPlayerIndex;
+            }
+            if (data && data.turn !== undefined) {
+                gameState.turn = data.turn;
+            }
+            resetTurnDiceState();
+            updateTurnIndicatorUI();
+            if (typeof showCustomPopup === 'function') {
+                const cp = getDicePlayer();
+                showCustomPopup("Mudança de Turno", `⏳ Agora é a vez de: ${cp?.name || 'Treinador'}`, true);
+            }
+        });
+    }
 }
+
+// Atualiza a HUD e o indicador visual de turnos (VEZ DE: ...)
+function updateTurnIndicatorUI() {
+    const cp = getDicePlayer();
+    const turnIndicator = document.getElementById('turn-indicator-text') || document.querySelector('.turn-indicator');
+    if (turnIndicator) {
+        turnIndicator.textContent = `VEZ DE: ${cp?.name ? cp.name.toUpperCase() : 'TREINADOR'}`;
+    }
+
+    // Atualiza também elementos de texto genéricos de vez
+    const altTurnEl = document.getElementById('current-turn-player-name');
+    if (altTurnEl) {
+        altTurnEl.textContent = cp?.name || '';
+    }
+
+    if (typeof renderBoardMap === 'function') renderBoardMap();
+    if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+    if (typeof renderBottomPanel === 'function') renderBottomPanel();
+}
+window.updateTurnIndicatorUI = updateTurnIndicatorUI;
 
 // ------------------------------------------------------------
 // FUNÇÕES AUXILIARES
@@ -659,7 +708,6 @@ export function triggerRandomBoardEvent(waypointName) {
         saveGameProgress();
     }
 
-    // Se estiver online, sincroniza o estado atualizado do jogador via socket
     if (gameState.online && typeof emitSocket === 'function') {
         emitSocket('update_game_state', {
             playerState: {
@@ -675,7 +723,6 @@ export function triggerRandomBoardEvent(waypointName) {
     }
 }
 
-// Exposição Global Essencial para o HTML e outros scripts
 window.rollDiceForMovement = rollDiceForMovement;
 window.rollDice = rollDice;
 window.handleWaypointClick = handleWaypointClick;
