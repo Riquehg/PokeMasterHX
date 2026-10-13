@@ -1,12 +1,12 @@
 // --- src/core/storage.js ---
-import { gameState, getCurrentPlayer, ensureValidGameState, currentAuthenticatedAccount } from './state.js';
+import { gameState, getCurrentPlayer, getMyPlayer, ensureValidGameState, currentAuthenticatedAccount } from './state.js';
 import { emitSocket, socket } from './socket.js';
 
-// Salva o progresso exclusivamente no servidor remoto via socket
+// Salva o progresso exclusivamente no servidor remoto via socket (Isolando para o jogador local)
 export function saveGameProgress() {
     ensureValidGameState();
     try {
-        const cp = getCurrentPlayer();
+        const cp = getMyPlayer(); // Usa getMyPlayer para garantir que salvamos os dados do próprio jogador local e não do adversário da vez
         const activeEmail = typeof currentAuthenticatedAccount !== 'undefined' && currentAuthenticatedAccount ? currentAuthenticatedAccount : (gameState.accountEmail || null);
 
         const savePayload = {
@@ -107,7 +107,7 @@ export function importSaveFromFile(event) {
 
 // Salva um Anima no cofre global de herança e sincroniza com o servidor
 export function saveMonsterToVault(uniqueId) {
-    const cp = getCurrentPlayer();
+    const cp = getMyPlayer(); // Usa o jogador local
     if (!cp) return;
 
     let targetMonster = null;
@@ -148,7 +148,7 @@ export function setupStorageSocketListeners() {
                 }
                 ensureValidGameState();
                 
-                const cp = getCurrentPlayer();
+                const cp = getMyPlayer();
                 if (cp && typeof updateTrainerVisualsAndHud === 'function') {
                     updateTrainerVisualsAndHud(cp.name, cp.avatarId);
                 }
