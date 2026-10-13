@@ -67,7 +67,7 @@ export let dailyFeaturedPokemonConfig = {
 // Atalho seguro para obter o jogador do turno atual
 export function getCurrentPlayer() {
     if (gameState && Array.isArray(gameState.players) && gameState.players.length > 0) {
-        const index = gameState.currentPlayerIndex || 0;
+        const index = Math.max(0, Math.min(gameState.players.length - 1, Number(gameState.currentPlayerIndex) || 0));
         return gameState.players[index] || gameState.players[0];
     }
     if (gameState && gameState.player) {
@@ -112,6 +112,10 @@ export function ensureValidGameState() {
         }];
     }
     
+    // Assegura que o índice atual e o local estão dentro dos limites válidos
+    gameState.currentPlayerIndex = Math.max(0, Math.min(gameState.players.length - 1, Number(gameState.currentPlayerIndex) || 0));
+    gameState.myPlayerIndex = Math.max(0, Math.min(gameState.players.length - 1, Number(gameState.myPlayerIndex) || 0));
+
     // Garante que o jogador atual possui as propriedades mínimas essenciais
     const cp = getCurrentPlayer();
     if (cp) {
@@ -121,9 +125,6 @@ export function ensureValidGameState() {
         if (!Array.isArray(cp.badges)) cp.badges = [];
         if (cp.currentZone === undefined || cp.currentZone === null) cp.currentZone = 5;
     }
-
-    gameState.currentPlayerIndex = gameState.currentPlayerIndex || 0;
-    gameState.myPlayerIndex = gameState.myPlayerIndex || 0;
 }
 
 // Exposição global opcional para depuração no console
