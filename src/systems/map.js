@@ -160,7 +160,7 @@ function getMapPlayer() {
             return gameState.players[gameState.myPlayerIndex];
         }
     }
-    return getCurrentOrMyPlayer();
+    return typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentOrMyPlayer();
 }
 
 export function getValidDestinations(startWaypointId, steps) {
@@ -377,10 +377,19 @@ export function handleWaypointArrival(waypointId) {
         appendAdventureLog(`${cp?.name || 'Treinador'} chegou a ${waypoint.name} (Zona #${waypoint.id}).`);
     }
 
-    if (gameState.online) {
+    // 🌐 Emissão blindada e unificada de atualização de movimento online via socket
+    if (gameState.online && typeof emitSocket === 'function') {
         emitSocket('update_game_state', {
             type: 'player_move',
-            gameState: typeof gameState !== 'undefined' ? gameState : null
+            playerIndex: gameState.myPlayerIndex,
+            playerState: {
+                currentZone: cp?.currentZone,
+                activeTeam: cp?.activeTeam,
+                pcBox: cp?.pcBox,
+                inventory: cp?.inventory,
+                gold: cp?.gold,
+                badges: cp?.badges
+            }
         });
     }
 
@@ -534,10 +543,10 @@ window.openPlayerTokenInteractionModal = function(playerIndex) {
                     📜 Ver Cartão de Treinador
                 </button>
                 ${!isSelf ? `
-                    <button onclick="document.getElementById('player-token-interaction-modal').remove(); if(typeof window.initiatePlayerPvP === 'function') window.initiatePlayerPvP(${playerIndex}); else alert('Desafio PvP enviado a${targetPlayer.name}!');" class="w-full bg-red-700 hover:bg-red-600 text-white font-bold py-2 rounded-xl text-xs cursor-pointer shadow">
+                    <button onclick="document.getElementById('player-token-interaction-modal').remove(); if(typeof window.triggerPvPBattleArena === 'function') window.triggerPvPBattleArena('${targetPlayer.name}');" class="w-full bg-red-700 hover:bg-red-600 text-white font-bold py-2 rounded-xl text-xs cursor-pointer shadow">
                         ⚔️ Desafiar para Batalha PvP
                     </button>
-                    <button onclick="document.getElementById('player-token-interaction-modal').remove(); if(typeof window.initiatePlayerTrade === 'function') window.initiatePlayerTrade(${playerIndex}); else alert('Proposta de troca enviada a${targetPlayer.name}!');" class="w-full bg-emerald-700 hover:bg-emerald-600 text-white font-bold py-2 rounded-xl text-xs cursor-pointer shadow">
+                    <button onclick="document.getElementById('player-token-interaction-modal').remove(); if(typeof window.proposeTradeWithTrainer === 'function') window.proposeTradeWithTrainer('${targetPlayer.name}');" class="w-full bg-emerald-700 hover:bg-emerald-600 text-white font-bold py-2 rounded-xl text-xs cursor-pointer shadow">
                         🤝 Propor Troca de Anima
                     </button>
                 ` : ''}
