@@ -144,11 +144,13 @@ window.buyItemFromPokemart = function(itemId, unitPrice, requestedQuantity = 1, 
     normalizePlayerInventory(cp);
     saveGameProgress();
 
+    // 🌐 Sincronização isolada do jogador ativo no online
     if (gameState.online && typeof emitSocket === 'function') {
         emitSocket('update_game_state', {
-            type: 'inventory_updated',
-            playerIndex: gameState.myPlayerIndex,
-            gameState: gameState
+            playerState: {
+                gold: cp.gold,
+                inventory: cp.inventory
+            }
         });
     }
 
@@ -229,9 +231,10 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
 
         if (gameState.online && typeof emitSocket === 'function') {
             emitSocket('update_game_state', {
-                type: 'inventory_updated',
-                playerIndex: gameState.myPlayerIndex,
-                gameState: gameState
+                playerState: {
+                    activeTeam: cp.activeTeam,
+                    inventory: cp.inventory
+                }
             });
         }
 
@@ -254,9 +257,9 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
 
         if (gameState.online && typeof emitSocket === 'function') {
             emitSocket('update_game_state', {
-                type: 'inventory_updated',
-                playerIndex: gameState.myPlayerIndex,
-                gameState: gameState
+                playerState: {
+                    inventory: cp.inventory
+                }
             });
         }
 
@@ -295,9 +298,10 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
 
         if (gameState.online && typeof emitSocket === 'function') {
             emitSocket('update_game_state', {
-                type: 'inventory_updated',
-                playerIndex: gameState.myPlayerIndex,
-                gameState: gameState
+                playerState: {
+                    activeTeam: cp.activeTeam,
+                    inventory: cp.inventory
+                }
             });
         }
 
@@ -328,9 +332,10 @@ export function useInventoryItem(itemUniqueIdOrIndex) {
 
         if (gameState.online && typeof emitSocket === 'function') {
             emitSocket('update_game_state', {
-                type: 'inventory_updated',
-                playerIndex: gameState.myPlayerIndex,
-                gameState: gameState
+                playerState: {
+                    activeTeam: cp.activeTeam,
+                    inventory: cp.inventory
+                }
             });
         }
 
@@ -442,9 +447,10 @@ window.confirmPokemonEvolution = function(itemIndex, teamIndex) {
 
     if (gameState.online && typeof emitSocket === 'function') {
         emitSocket('update_game_state', {
-            type: 'pokemon_evolved',
-            playerIndex: gameState.myPlayerIndex,
-            gameState: gameState
+            playerState: {
+                activeTeam: cp.activeTeam,
+                inventory: cp.inventory
+            }
         });
     }
 
