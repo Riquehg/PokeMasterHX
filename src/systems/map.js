@@ -4,7 +4,7 @@
 import { SUPABASE_STORAGE_URL, FULL_MAP_IMAGE } from '../config/constants.js';
 import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer, movementState, ensureValidGameState } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
-import { openEncounterModalWithPokemon } from './encounter.js';
+import { openEncounterModalWithPokemon, generateWildPokemonForWaypoint } from './encounter.js';
 import { MONSTER_CATALOG } from '../config/cards-data.js';
 import { initiateGymSequence, GYM_LEADERS_CATALOG } from './gym.js';
 import { showOnlineGameLayout, applyOnlineRoomState } from './lobby.js';
@@ -411,34 +411,27 @@ export function handleWaypointArrival(waypointId) {
         }
 
         if (!boardPokemonCards[waypointId]) {
-            let targetTier = 1;
-            const color = String(waypoint.color || 'rosa').toLowerCase();
-            if (color === 'verde') targetTier = 2;
-            else if (color === 'azul') targetTier = 3;
-            else if (color === 'vermelho') targetTier = 4;
-            else if (color === 'amarelo') targetTier = 5;
-
-            let tierFiltered = MONSTER_CATALOG.filter(m => Number(m.tier || 1) === targetTier);
-            if (tierFiltered.length === 0) tierFiltered = MONSTER_CATALOG;
-
-            const randomMon = tierFiltered[Math.floor(Math.random() * tierFiltered.length)];
-            const isShiny = Math.random() < 0.06;
-            const minLvl = targetTier === 1 ? 3 : targetTier === 2 ? 8 : targetTier === 3 ? 15 : targetTier === 4 ? 25 : 40;
-            const level = Math.floor(Math.random() * 4) + minLvl;
-            const maxHp = 20 + (level * 3);
-
-            boardPokemonCards[waypointId] = {
-                ...randomMon,
-                uniqueId: 'wild_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-                level: level,
-                tier: targetTier,
-                currentHp: maxHp,
-                maxHp: maxHp,
-                isShiny: isShiny,
-                waypointId: waypointId,
-                revealed: true,
-                weakened: false
-            };
+            // Utiliza o gerador oficial de encounter.js para respeitar estritamente o tier correto por cor de casa (ex: rosa = tier 1)
+            if (typeof generateWildPokemonForWaypoint === 'function') {
+                boardPokemonCards[waypointId] = generateWildPokemonForWaypoint(waypointId, waypoint.color || 'rosa');
+            } else {
+                let tierFiltered = MONSTER_CATALOG.filter(m => Number(m.tier || 1) === 1);
+                if (tierFiltered.length === 0) tierFiltered = MONSTER_CATALOG;
+                const randomMon = tierFiltered[Math.floor(Math.random() * tierFiltered.length)];
+                
+                boardPokemonCards[waypointId] = {
+                    ...randomMon,
+                    uniqueId: 'wild_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                    level: 3,
+                    tier: 1,
+                    currentHp: 23,
+                    maxHp: 23,
+                    isShiny: Math.random() < 0.06,
+                    waypointId: waypointId,
+                    revealed: true,
+                    weakened: false
+                };
+            }
 
             if (typeof saveGameProgress === 'function') {
                 saveGameProgress();
