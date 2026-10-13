@@ -6,8 +6,8 @@ import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer, movemen
 import { saveGameProgress } from '../core/storage.js';
 import { BOARD_WAYPOINTS, getValidDestinations, renderBoardMap, renderBoardMapWithHighlights, moveTokenToWaypoint } from './map.js';
 import { openEncounterModalWithPokemon } from './encounter.js';
-import { socket, emitSocket } from '../core/socket.js';
 import { resetGymAttemptsForTurn } from './gym.js';
+import { socket, emitSocket } from '../core/socket.js';
 
 // Função auxiliar unificada para obter o jogador do dado (respeitando o turno ativo)
 function getDicePlayer() {
@@ -51,6 +51,11 @@ export function setupDiceListeners() {
             }
 
             resetTurnDiceState();
+            
+            // Reseta as tentativas de ginásio para o jogador atual ao passar o turno
+            if (typeof resetGymAttemptsForTurn === 'function') {
+                resetGymAttemptsForTurn(activeIndex);
+            }
             
             // Avança o índice do jogador atual de forma circular e estrita (Estilo Mario Party: 0 -> 1 -> 2 -> 0)
             if (typeof gameState !== 'undefined' && gameState.players && Array.isArray(gameState.players) && gameState.players.length > 0) {
