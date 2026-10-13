@@ -204,26 +204,22 @@ export function renderAdminDashboard(modalElement, users) {
         if (!newItem) return;
         const newGold = window.prompt('Insira a quantidade de ouro bónus:', String(dailyFeaturedPokemonConfig.goldBonus));
 
-        dailyFeaturedPokemonConfig.pokemonId = newMon.trim().toLowerCase();
-        dailyFeaturedPokemonConfig.pokemonName = newMon.charAt(0).toUpperCase() + newMon.slice(1);
-        dailyFeaturedPokemonConfig.bonusItem = newItem.trim().toLowerCase();
-        dailyFeaturedPokemonConfig.bonusItemName = newItem.trim().toUpperCase();
-        dailyFeaturedPokemonConfig.goldBonus = Math.max(0, Number(newGold) || 500);
+        const updatedConfig = {
+            pokemonId: newMon.trim().toLowerCase(),
+            pokemonName: newMon.charAt(0).toUpperCase() + newMon.slice(1),
+            bonusItem: newItem.trim().toLowerCase(),
+            bonusItemName: newItem.trim().toUpperCase(),
+            goldBonus: Math.max(0, Number(newGold) || 500)
+        };
         
-        // Envia a configuração exata para a tabela game_config (chave 'pokemon_do_dia') no Supabase
+        // Envia a configuração exata para o servidor persistir no Supabase
         emitSocket('admin_set_daily_pokemon', { 
             configKey: 'pokemon_do_dia',
-            dailyConfig: {
-                pokemonId: dailyFeaturedPokemonConfig.pokemonId,
-                pokemonName: dailyFeaturedPokemonConfig.pokemonName,
-                bonusItem: dailyFeaturedPokemonConfig.bonusItem,
-                bonusItemName: dailyFeaturedPokemonConfig.bonusItemName,
-                goldBonus: dailyFeaturedPokemonConfig.goldBonus
-            } 
+            dailyConfig: updatedConfig 
         });
         
-        alert(`✅ Pokémon de Destaque fixado como ${dailyFeaturedPokemonConfig.pokemonName} na base de dados!`);
-        applyDailyFeaturedPokemonConfig(dailyFeaturedPokemonConfig);
+        applyDailyFeaturedPokemonConfig(updatedConfig);
+        alert(`✅ Pokémon de Destaque fixado como ${updatedConfig.pokemonName} na base de dados!`);
     });
 
     modalElement.querySelectorAll('[data-admin-action]').forEach(button => {
