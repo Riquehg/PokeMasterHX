@@ -18,6 +18,34 @@ if (socket) {
             });
         }
     });
+
+    // Sincroniza a ação executada pelo oponente no PvP em tempo real
+    socket.off('pvp_action_performed');
+    socket.on('pvp_action_performed', (data) => {
+        if (currentBattleSession.mode === 'pvp') {
+            if (data.activeEnemyIndex !== undefined) {
+                currentBattleSession.activeEnemyIndex = data.activeEnemyIndex;
+            }
+            if (data.enemyTeam) {
+                currentBattleSession.enemyTeam = data.enemyTeam;
+            }
+            if (data.lastAction) {
+                currentBattleSession.lastAction = data.lastAction;
+            }
+            
+            currentBattleSession.turnNumber = data.turnNumber || (currentBattleSession.turnNumber + 1);
+            currentBattleSession.turnBusy = false;
+
+            const modal = document.getElementById('main-battle-arena-modal');
+            if (modal) {
+                renderArenaCombatUI(modal);
+            }
+
+            if (typeof showCustomPopup === 'function') {
+                showCustomPopup("🔄 Turno do Oponente", data.lastAction || "O oponente realizou a jogada.", true);
+            }
+        }
+    });
 }
 
 let currentBattleSession = {
@@ -661,7 +689,6 @@ function arenaResolveEnemyResponse() {
         const enemyRoll = Math.floor(Math.random() * 6) + 1;
 
         const typeMultiplier = arenaTypeMultiplier(eMon, pMon);
-        // Poder ajustado incluindo a força, o nível, o bónus de combate, o dado e a vantagem de tipo
         const playerPower = Math.round(((((Number(pMon.str) || 4) + (Number(pMon.level) || 1)) + Number(currentBattleSession.combatBonus) + Number(playerRoll || 0))));
         const enemyPower = Math.round(((((Number(eMon.str) || 5) + (Number(eMon.level) || 5)) + Number(enemyRoll || 0)) * typeMultiplier));
         
@@ -711,10 +738,23 @@ function switchArenaPlayerPokemon(index) {
     currentBattleSession.turnBusy = true;
     currentBattleSession.lastAction = `${target.name} entrou em campo. A troca encerrou o turno.`;
 
-    if (typeof showCustomPopup === 'function') {
-        showCustomPopup("Troca de Pokémon", `🔄 ${target.name} entrou em campo.\n\nA troca encerra o teu turno. O adversário poderá responder agora.`, true);
+    if (currentBattleSession.mode === 'pvp' && typeof emitSocket === 'function') {
+        emitSocket('submit_pvp_action', {
+            activeEnemyIndex: targetIndex,
+            enemyTeam: currentBattleSession.playerTeam,
+            playerTeam: currentBattleSession.enemyTeam,
+            turnNumber: currentBattleSession.turnNumber + 1,
+            lastAction: currentBattleSession.lastAction
+        });
     }
-    arenaResolveEnemyResponse();
+
+    if (typeof showCustomPopup === 'function') {
+        showCustomPopup("Troca de Pokémon", `🔄 ${target.name} entrou em campo.\n\nA troca encerra o teu turno.`, true);
+    }
+    
+    if (currentBattleSession.mode !== 'pvp') {
+        arenaResolveEnemyResponse();
+    }
 }
 
 function useItemInPreBattle(itemId, itemIndex) {
@@ -846,14 +886,16 @@ function executeArenaTurn() {
 
         const typeMult = typeof calculateTypeAdvantageMultiplier === 'function' ? calculateTypeAdvantageMultiplier(pMon.type, eMon.type) : 1;
         
-        // Poder ajustado incluindo a força, o nível, o bónus de combate, o dado e a vantagem de tipo
         const playerPower = Math.round((((Number(pMon.str) || 4) + (Number(pMon.level) || 1)) + Number(currentBattleSession.combatBonus) + Number(playerRoll || 0)) * typeMult);
         const enemyPower = (Number(eMon.str) || 5) + (Number(eMon.level) || 5) + Number(enemyRoll || 0);
+
+        let actionDescription = "";
 
         if (playerPower >= enemyPower) {
             const damage = Math.max(8, playerPower - enemyPower + 10);
             eMon.currentHp = Math.max(0, arenaHp(eMon) - damage);
-            currentBattleSession.lastAction = `${pMon.name} causou ${damage} de dano em ${eMon.name} (Dado: ${playerRoll} vs ${enemyRoll}).`;
+            actionDescription = `${pMon.name} causou ${damage} de dano em ${eMon.name} (Dado: ${playerRoll} vs ${enemyRoll}).`;
+            
             if (typeof showCustomPopup === 'function') {
                 showCustomPopup("Ataque Bem-Sucedido!", `⚔️ ${pMon.name} venceu!\n🎲 [Tu: ${playerRoll} | Adv: ${enemyRoll}]\n\n💥 ${eMon.name} sofreu ${damage} de dano.\n\nHP adversário: ${eMon.currentHp}/${eMon.maxHp}`, true);
             }
@@ -864,7 +906,8 @@ function executeArenaTurn() {
         } else {
             const damage = Math.max(8, enemyPower - playerPower + 8);
             pMon.currentHp = Math.max(0, arenaHp(pMon) - damage);
-            currentBattleSession.lastAction = `${eMon.name} causou ${damage} de dano em ${pMon.name} (Dado: ${playerRoll} vs ${enemyRoll}).`;
+            actionDescription = `${eMon.name} causou ${damage} de dano em ${pMon.name} (Dado: ${playerRoll} vs ${enemyRoll}).`;
+            
             if (typeof showCustomPopup === 'function') {
                 showCustomPopup("Contra-ataque do Adversário!", `💥 ${eMon.name} venceu!\n🎲 [Tu: ${playerRoll} | Adv: ${enemyRoll}]\n\n💔 ${pMon.name} sofreu ${damage} de dano.\n\nHP: ${pMon.currentHp}/${pMon.maxHp}`, false);
             }
@@ -873,7 +916,27 @@ function executeArenaTurn() {
                 if (!arenaForcePlayerReplacement()) return;
             }
         }
-        arenaFinishTurn();
+
+        currentBattleSession.lastAction = actionDescription;
+
+        if (currentBattleSession.mode === 'pvp' && typeof emitSocket === 'function') {
+            emitSocket('submit_pvp_action', {
+                activeEnemyIndex: currentBattleSession.activePlayerIndex,
+                enemyTeam: currentBattleSession.playerTeam,
+                playerTeam: currentBattleSession.enemyTeam,
+                turnNumber: currentBattleSession.turnNumber + 1,
+                lastAction: actionDescription
+            });
+        }
+
+        if (currentBattleSession.mode !== 'pvp') {
+            arenaFinishTurn();
+        } else {
+            currentBattleSession.turnBusy = true;
+            if (typeof showCustomPopup === 'function') {
+                showCustomPopup("Aguardando Oponente", "⏳ A tua jogada foi enviada. Aguarde o turno do oponente.", true);
+            }
+        }
     }, 800);
 }
 
@@ -924,7 +987,6 @@ function concludeArenaBattle(isVictory) {
         }
     }
 
-    // 🌐 Sincronização online via WebSocket isolando estritamente o playerState atualizado
     if (gameState.online && typeof emitSocket === 'function') {
         emitSocket('update_game_state', {
             playerState: {
