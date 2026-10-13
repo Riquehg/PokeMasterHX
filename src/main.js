@@ -596,46 +596,5 @@ function setupGlobalInterfaceListeners() {
             }
         };
     }
-
-    const passTurnBtn = document.getElementById('pass-turn-btn');
-    if (passTurnBtn) {
-        passTurnBtn.onclick = () => {
-            const activeIndex = gameState.currentPlayerIndex || 0;
-            const myIdx = gameState.online ? (gameState.myPlayerIndex || 0) : activeIndex;
-            if (gameState.online && activeIndex !== myIdx) {
-                if (typeof showCustomPopup === 'function') {
-                    showCustomPopup("Ação Bloqueada", "Não podes passar o turno de outro jogador.", false);
-                }
-                return;
-            }
-
-            gameState.currentPlayerIndex = ((gameState.currentPlayerIndex || 0) + 1) % (gameState.players?.length || 1);
-            
-            if (typeof movementState !== 'undefined') {
-                movementState.hasRolledThisTurn = false;
-                movementState.isMoving = false;
-            }
-
-            if (gameState.online) {
-                if (typeof window.broadcastOnlineAction === 'function') {
-                    window.broadcastOnlineAction('turn_passed', {
-                        nextPlayerIndex: gameState.currentPlayerIndex
-                    });
-                } else if (typeof emitSocket === 'function') {
-                    emitSocket('update_game_state', {
-                        type: 'turn_passed',
-                        gameState: gameState
-                    });
-                }
-            }
-
-            setDiceButtonState(false);
-            if (typeof showCustomPopup === 'function') {
-                showCustomPopup("🔄 Turno Passado", `Agora é a vez de ${gameState.players[gameState.currentPlayerIndex]?.name || 'outro jogador'}!`, true);
-            }
-            updateTrainerVisualsAndHud();
-            renderTeamCardSlots();
-            renderBoardMap();
-        };
-    }
+    // Nota: O listener do pass-turn-btn está centralizado em setupDiceListeners() no ficheiro dice.js para evitar duplicação e conflitos.
 }
