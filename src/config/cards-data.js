@@ -1,6 +1,6 @@
 // --- src/config/cards-data.js ---
 // Base de Dados Oficial: Pokémon Master Trainer (HEX Edition)
-// Catálogo completo estruturado para o sistema de Tiers do Tabuleiro HEX e Regras Oficiais (Até à 7ª Geração / 806 Pokémon por número de Pokédex).
+// Catálogo completo estruturado para o sistema de Tiers do Tabuleiro HEX e Regras Oficiais (Até à 7ª Geração / 806 Pokémon por número de Pokédex)[cite: 5].
 
 if (typeof SUPABASE_STORAGE_URL === 'undefined') {
     var SUPABASE_STORAGE_URL = "https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/";
@@ -326,11 +326,20 @@ export const MONSTER_CATALOG = [
     { dexNumber: 806, id: 'blacephalon', name: "Blacephalon", type: "Fogo/Fantasma", tier: 5, rarity: "Amarelo", stage: "Lendário", icon: "🎆", image: `${SUPABASE_STORAGE_URL}monsters/806.png`, shinyImage: `${SUPABASE_STORAGE_URL}monsters/shiny/806.png`, hp: 40, str: 10, captureRolls: [6], level: 7, xp: 0, evolvesTo: null, isCapturable: true }
 ];
 
-// Função utilitária para procurar um Pokémon por ID (string) ou por número da Pokédex (number)
+// Função utilitária para procurar um Pokémon por ID (string) ou por número da Pokédex (number) de forma robusta
 export function getMonsterById(idOrDex) {
-    return MONSTER_CATALOG.find(m => m.id === idOrDex || m.dexNumber === Number(idOrDex));
+    if (idOrDex === undefined || idOrDex === null) return null;
+    const query = String(idOrDex).toLowerCase().trim();
+    return MONSTER_CATALOG.find(m => m.id.toLowerCase() === query || m.dexNumber === Number(query)) || null;
+}
+
+// Função utilitária estrita para filtrar Pokémon por tier no mapa (evita vazamento de tiers incorretos)
+export function getMonstersByTier(tierNumber) {
+    const targetTier = Number(tierNumber) || 1;
+    return MONSTER_CATALOG.filter(m => m.tier === targetTier);
 }
 
 // Exposição global para depuração e compatibilidade com scripts legados
 window.MONSTER_CATALOG = MONSTER_CATALOG;
 window.getMonsterById = getMonsterById;
+window.getMonstersByTier = getMonstersByTier;
