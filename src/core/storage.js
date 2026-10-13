@@ -40,13 +40,14 @@ export function saveGameProgress() {
 export function loadGameProgressFromServer() {
     const activeEmail = typeof currentAuthenticatedAccount !== 'undefined' && currentAuthenticatedAccount ? currentAuthenticatedAccount : (gameState.accountEmail || null);
     
-    if (typeof socket !== 'undefined' && socket && typeof socket.emit === 'function') {
+    const activeSocket = socket || window.socket;
+    if (activeSocket && typeof activeSocket.emit === 'function') {
         if (!activeEmail) {
             console.warn("⚠️ Nenhum e-mail autenticado encontrado para carregar o save do servidor.");
             return;
         }
 
-        socket.emit('request_saved_game', { accountEmail: activeEmail });
+        activeSocket.emit('request_saved_game', { accountEmail: activeEmail });
         console.log(`☁️ A solicitar progresso da nuvem para: ${activeEmail}`);
     }
 }
@@ -135,28 +136,34 @@ export function saveMonsterToVault(uniqueId) {
     console.log(`📦 ${targetMonster.name} enviado para o cofre global na nuvem.`);
 }
 
-// Ouvinte para resposta de salvamento/carregamento na nuvem via socket
-if (typeof socket !== 'undefined' && socket) {
-    socket.off('saved_game_response');
-    socket.on('saved_game_response', (response) => {
-        if (response && response.success) {
-            if (response.gameState && Object.keys(response.gameState).length > 0) {
-                Object.assign(gameState, response.gameState);
-            }
-            ensureValidGameState();
-            
-            const cp = getCurrentPlayer();
-            if (cp && typeof updateTrainerVisualsAndHud === 'function') {
-                updateTrainerVisualsAndHud(cp.name, cp.avatarId);
-            }
+// Função para registrar os ouvintes de socket relacionados ao storage de forma segura
+export function setupStorageSocketListeners() {
+    const activeSocket = socket || window.socket;
+    if (activeSocket && typeof activeSocket.off === 'function' && typeof activeSocket.on === 'function') {
+        activeSocket.off('saved_game_response');
+        activeSocket.on('saved_game_response', (response) => {
+            if (response && response.success) {
+                if (response.gameState && Object.keys(response.gameState).length > 0) {
+                    Object.assign(gameState, response.gameState);
+                }
+                ensureValidGameState();
+                
+                const cp = getCurrentPlayer();
+                if (cp && typeof updateTrainerVisualsAndHud === 'function') {
+                    updateTrainerVisualsAndHud(cp.name, cp.avatarId);
+                }
 
-            if (typeof renderBoardMap === 'function') renderBoardMap();
-            if (typeof renderBottomPanel === 'function') renderBottomPanel();
-            if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
-            console.log("☁️ Dados da nuvem aplicados com sucesso à interface!");
-        }
-    });
+                if (typeof renderBoardMap === 'function') renderBoardMap();
+                if (typeof renderBottomPanel === 'function') renderBottomPanel();
+                if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
+                console.log("☁️ Dados da nuvem aplicados com sucesso à interface!");
+            }
+        });
+    }
 }
+
+// Tenta configurar os ouvintes caso o socket já exista
+setupStorageSocketListeners();
 
 // Exposições globais para o navegador
 window.saveGameProgress = saveGameProgress;
@@ -166,3 +173,4 @@ window.deleteGameSave = deleteGameSave;
 window.exportSaveToFile = exportSaveToFile;
 window.importSaveFromFile = importSaveFromFile;
 window.saveMonsterToVault = saveMonsterToVault;
+window.setupStorageSocketListeners = setupStorageSocketListeners;
