@@ -154,7 +154,6 @@ export const BOARD_WAYPOINTS = [
     { id: 124, name: "Arena Final", hexagon: "H", top: 28.8, left: 92.1, type: "city", color: "amarelo", requiredType: "", connections: [114, 122] }
 ];
 
-// Função auxiliar unificada para obter o jogador correto no mapa (prioriza o jogador local se estiver em jogo online)
 function getMapPlayer() {
     if (gameState && gameState.online) {
         if (Array.isArray(gameState.players) && gameState.players[gameState.myPlayerIndex]) {
@@ -232,7 +231,6 @@ export function getValidDestinations(startWaypointId, steps) {
 }
 
 export function rollDiceForMovement() {
-    // 🛡️ TRAVA DE SEGURANÇA ONLINE RIGOROSA: Impede rolar o dado fora do turno do próprio jogador
     const activeIndex = Number(gameState.currentPlayerIndex) || 0;
     const myIdx = gameState.online ? (Number(gameState.myPlayerIndex) || 0) : activeIndex;
 
@@ -283,7 +281,6 @@ export function rollDiceForMovement() {
 }
 
 export function onHexClick(waypointId, hexName) {
-    // 🛡️ TRAVA DE SEGURANÇA ONLINE RIGOROSA: Valida vez antes de clicar no destino do mapa
     const activeIndex = Number(gameState.currentPlayerIndex) || 0;
     const myIdx = gameState.online ? (Number(gameState.myPlayerIndex) || 0) : activeIndex;
 
@@ -377,7 +374,6 @@ export function handleWaypointArrival(waypointId) {
         appendAdventureLog(`${cp?.name || 'Treinador'} chegou a ${waypoint.name} (Zona #${waypoint.id}).`);
     }
 
-    // Sincronização rigorosa via WebSocket informando o servidor do novo estado
     if (gameState.online) {
         emitSocket('update_game_state', {
             type: 'player_move',
@@ -385,12 +381,10 @@ export function handleWaypointArrival(waypointId) {
         });
     }
 
-    // Verificação de colisão na mesma casa para ativar o PVP / interações
     if (typeof checkPlayerCellCollision === 'function') {
         checkPlayerCellCollision(waypointId, gameState.online ? (gameState.myPlayerIndex || 0) : (gameState.currentPlayerIndex || 0));
     }
 
-    // Se for o turno do adversário e estamos online, apenas exibe notificação informativa e não abre janelas de evento/batalha para nós
     const activeIndex = Number(gameState.currentPlayerIndex) || 0;
     const myIdx = gameState.online ? (Number(gameState.myPlayerIndex) || 0) : activeIndex;
     if (gameState.online && activeIndex !== myIdx) {
@@ -566,11 +560,19 @@ export function renderBoardMap(highlightIds = []) {
                 const tierNames = { 1: 'Comum', 2: 'Incomum', 3: 'Raro', 4: 'Épico', 5: 'Lendário' };
                 const tierBadgeText = tierNames[pokeCard.tier || 1] || 'Comum';
 
-                const featuredClass = isFeaturedDaily ? 'border-amber-400 animate-bounce bg-amber-950/90 shiny-card-glow shadow-[0_0_15px_rgba(255,215,0,0.8)]' : 'border-amber-400 bg-red-950/90 animate-pulse';
+                // Aplicação das classes TCG e bordas de raridade refinadas
+                const tCat = Number(pokeCard.tier || 1);
+                let tierCssClass = 'card-tier-comum tier-1';
+                if (tCat === 2) tierCssClass = 'card-tier-incomum tier-2';
+                else if (tCat === 3) tierCssClass = 'card-tier-raro tier-3';
+                else if (tCat === 4) tierCssClass = 'card-tier-epico tier-4';
+                else if (tCat === 5) tierCssClass = 'card-tier-lendario tier-5';
+
+                const featuredClass = isFeaturedDaily ? 'border-amber-400 animate-bounce bg-amber-950/90 shiny-card-glow shadow-[0_0_15px_rgba(255,215,0,0.8)]' : `${tierCssClass} animate-pulse`;
 
                 mapOverlayHtml += `
                     <div onclick="tryInteractWithWeakenedPokemon(${wp.id})" class="absolute -translate-x-1/2 -translate-y-1/2 z-30 cursor-pointer group" style="top: ${wp.top - 3}%; left: ${wp.left}%;" title="${pokeCard.name} (${tierBadgeText})">
-                        <div class="${featuredClass} border-2 rounded-lg p-1.5 shadow-2xl flex items-center gap-1.5 hover:scale-110 transition-transform">
+                        <div class="trainer-card ${featuredClass} border-2 rounded-xl p-1.5 shadow-2xl flex items-center gap-1.5 hover:scale-110 transition-transform">
                             <img src="${pokeImg}" class="w-7 h-7 object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                             <div class="text-left">
                                 <p class="text-[9px] font-black text-white leading-none">${pokeCard.name}</p>
@@ -661,7 +663,6 @@ function setupMapChatListeners() {
     }
 }
 
-// Ouvintes de Sincronização Multiplayer via WebSocket
 if (typeof socket !== 'undefined' && socket) {
     socket.off('sync_game_state');
     socket.on('sync_game_state', (data) => {
@@ -722,9 +723,6 @@ export function moveTokenToWaypoint(waypointId) {
     renderBoardMap();
 }
 
-// ==========================================
-// EXPOSIÇÃO GLOBAL PARA O HTML
-// ==========================================
 window.onHexClick = onHexClick;
 window.tryInteractWithCity = tryInteractWithCity;
 window.tryInteractWithWeakenedPokemon = tryInteractWithWeakenedPokemon;
