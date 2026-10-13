@@ -4,7 +4,7 @@
 import { SUPABASE_STORAGE_URL } from '../config/constants.js';
 import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer, movementState } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
-import { BOARD_WAYPOINTS, getValidDestinations, renderBoardMap, renderBoardMapWithHighlights, moveTokenToWaypoint } from './map.js';
+import { BOARD_WAYPOINTS, getValidDestinations, renderBoardMap, renderBoardMapWithHighlights } from './map.js';
 import { openEncounterModalWithPokemon } from './encounter.js';
 import { resetGymAttemptsForTurn } from './gym.js';
 import { socket, emitSocket } from '../core/socket.js';
