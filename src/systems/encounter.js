@@ -47,29 +47,38 @@ export function calculatePokemonStats(baseMonster, level = 1, isShiny = false) {
     
     const tier = Number(originalCatalogData.tier || 1);
     
-    let tierMultiplier = 1.0;
-    if (tier === 2) tierMultiplier = 1.15;
-    else if (tier === 3) tierMultiplier = 1.3;
-    else if (tier === 4) tierMultiplier = 1.5;
-    else if (tier === 5) tierMultiplier = 1.8;
+    // Multiplicadores de Tier mais marcantes para diferenciar Comum de Lendário
+    let tierBaseStr = 5;
+    let tierBaseHp = 20;
+    let levelScalingStr = 1.2;
+    let levelScalingHp = 3.5;
 
-    const rawBaseStr = Number(originalCatalogData.str || originalCatalogData.attack || 4);
-    const rawBaseHp = Number(originalCatalogData.maxHp || originalCatalogData.hp || 16);
+    if (tier === 2) { // Incomum
+        tierBaseStr = 8; tierBaseHp = 25; levelScalingStr = 1.6; levelScalingHp = 4.5;
+    } else if (tier === 3) { // Raro
+        tierBaseStr = 12; tierBaseHp = 35; levelScalingStr = 2.2; levelScalingHp = 6.0;
+    } else if (tier === 4) { // Épico
+        tierBaseStr = 18; tierBaseHp = 50; levelScalingStr = 3.0; levelScalingHp = 8.5;
+    } else if (tier === 5) { // Lendário
+        tierBaseStr = 28; tierBaseHp = 80; levelScalingStr = 4.5; levelScalingHp = 12.0;
+    }
 
     const lvl = Math.max(1, Number(level) || 1);
-    const scaledStr = Math.floor((rawBaseStr + ((lvl - 1) * 1.5)) * tierMultiplier);
-    const scaledHp = Math.floor((rawBaseHp + ((lvl - 1) * 4)) * tierMultiplier);
+    
+    // O nível agora multiplica de forma real o potencial do Tier
+    const finalStr = Math.floor(tierBaseStr + ((lvl - 1) * levelScalingStr));
+    const finalHp = Math.floor(tierBaseHp + ((lvl - 1) * levelScalingHp));
 
-    const shinyStrBonus = isShiny ? Math.floor(scaledStr * 0.1) : 0;
-    const shinyHpBonus = isShiny ? Math.floor(scaledHp * 0.1) : 0;
+    const shinyStrBonus = isShiny ? Math.floor(finalStr * 0.15) : 0;
+    const shinyHpBonus = isShiny ? Math.floor(finalHp * 0.15) : 0;
 
-    const finalStr = scaledStr + shinyStrBonus;
-    const finalHp = scaledHp + shinyHpBonus;
+    const totalStr = finalStr + shinyStrBonus;
+    const totalHp = finalHp + shinyHpBonus;
 
     return {
-        str: Math.max(3, finalStr),
-        maxHp: Math.max(15, finalHp),
-        currentHp: Math.max(15, finalHp)
+        str: Math.max(3, totalStr),
+        maxHp: Math.max(15, totalHp),
+        currentHp: Math.max(15, totalHp)
     };
 }
 
