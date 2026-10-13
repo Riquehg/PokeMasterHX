@@ -575,6 +575,22 @@ io.on('connection', socket => {
         }
     });
 
+    socket.on('get_daily_pokemon', async () => {
+        try {
+            const { data, error } = await supabase
+                .from('game_config')
+                .select('config_value')
+                .eq('config_key', 'pokemon_do_dia')
+                .maybeSingle();
+
+            if (data && data.config_value) {
+                socket.emit('daily_pokemon_updated', data.config_value);
+            }
+        } catch (err) {
+            console.error('🔥 Erro ao buscar Pokémon do dia:', err);
+        }
+    });
+
     socket.on('admin_action', async payload => {
         try {
             const { action, email, amount, pokemon, itemId, count, newPass } = payload;
