@@ -229,13 +229,13 @@ export function resetTurnDiceState() {
 // ------------------------------------------------------------
 
 export function rollDiceForMovement() {
-    // 🛡️ TRAVA DE SEGURANÇA ONLINE RIGOROSA: Impede jogar fora do turno
+    // 🛡️ TRAVA DE SEGURANÇA ONLINE RIGOROSA ESTILO MARIO PARTY
     const activeIndex = Number(gameState.currentPlayerIndex) || 0;
     const myIdx = gameState.online ? (Number(gameState.myPlayerIndex) || 0) : activeIndex;
     
     if (gameState.online && activeIndex !== myIdx) {
         if (typeof showCustomPopup === 'function') {
-            showCustomPopup("Aguarde o seu Turno!", "⏳ Não é a sua vez de jogar! Aguarde o outro jogador concluir a jogada.", false);
+            showCustomPopup("Aguarde o seu Turno!", `⏳ Não é a sua vez de jogar! O turno atual pertence ao jogador #${activeIndex + 1}. Aguarde a sua vez.`, false);
         }
         return;
     }
