@@ -64,6 +64,20 @@ export function initializeSocketConnection() {
                 }
             });
 
+            // === SISTEMA DE AUTENTICAÇÃO / LOGIN ===
+            socket.off('login_response');
+            socket.on('login_response', (response) => {
+                const popup = document.getElementById('global-custom-popup');
+                if (popup) popup.remove();
+
+                if (response && response.success && (response.accountEmail || response.email)) {
+                    window.currentAuthenticatedAccount = response.accountEmail || response.email;
+                }
+                if (typeof window.handleLoginResponse === 'function') {
+                    window.handleLoginResponse(response);
+                }
+            });
+
             // === SISTEMA DE CONVITES POKÉMON (PvP e Trocas com Confirmação Real) ===
             socket.off('receive_pvp_invite');
             socket.on('receive_pvp_invite', (data) => {
@@ -71,12 +85,10 @@ export function initializeSocketConnection() {
                 const targetIndex = data.targetIndex !== undefined ? Number(data.targetIndex) : -1;
                 const challengerIndex = data.challengerIndex !== undefined ? Number(data.challengerIndex) : -1;
 
-                // Se o destinatário do convite não formos nós, ignoramos para evitar que o remetente receba o próprio convite
                 if (targetIndex !== -1 && targetIndex !== myIndex) {
                     return;
                 }
 
-                // Se o desafiante formos nós próprios, ignoramos
                 if (challengerIndex !== -1 && challengerIndex === myIndex) {
                     return;
                 }
@@ -107,6 +119,15 @@ export function initializeSocketConnection() {
 
                 if (typeof window.showTradeAcceptModal === 'function') {
                     window.showTradeAcceptModal(challengerName, validChallengerIndex);
+                }
+            });
+
+            // Tratamento de ações rejeitadas pelo servidor
+            socket.off('action_rejected');
+            socket.on('action_rejected', (data) => {
+                const msg = data && data.message ? data.message : 'Ação rejeitada pelo servidor.';
+                if (typeof showCustomPopup === 'function') {
+                    showCustomPopup('Aviso de Turno', `⚠ ${msg}`, false);
                 }
             });
 
