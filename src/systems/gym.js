@@ -13,7 +13,8 @@ if (typeof window.gymAttemptedThisTurn === 'undefined') {
 export function resetGymAttemptsForTurn(playerIndex) {
     if (!window.gymAttemptedThisTurn) return;
     Object.keys(window.gymAttemptedThisTurn).forEach(key => {
-        if (key.startsWith(`${playerIndex}_`)) {
+        if (key.startsWith(`${playerIndex}_`) || key.includes(`_${playerIndex}_`)) {
+            delete window.gymAttemptedThisTrade[key]; // se aplicável
             delete window.gymAttemptedThisTurn[key];
         }
     });
