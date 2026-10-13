@@ -52,7 +52,7 @@ export function setupDiceListeners() {
 
             resetTurnDiceState();
             
-            // Reseta e limpa rigorosamente as tentativas de ginásio para o jogador atual ao passar o turno[cite: 7]
+            // Reseta e limpa rigorosamente as tentativas de ginásio para o jogador atual ao passar o turno
             if (typeof resetGymAttemptsForTurn === 'function') {
                 resetGymAttemptsForTurn(activeIndex);
             }
@@ -525,7 +525,7 @@ export function triggerWaypointEvent(waypointId) {
     player.currentZone = Number(waypoint.id);
 
     // Notificação visual informativa para o outro jogador no modo online
-    const activeIndex = Number(gameState.currentPlayerIndex) || 0;
+    const activeIndex =Number(gameState.currentPlayerIndex) || 0;
     const myIdx = gameState.online ? (Number(gameState.myPlayerIndex) || 0) : activeIndex;
     if (gameState.online && activeIndex !== myIdx) {
         if (typeof showCustomPopup === 'function') {
