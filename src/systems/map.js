@@ -10,6 +10,7 @@ import { initiateGymSequence, GYM_LEADERS_CATALOG } from './gym.js';
 import { showOnlineGameLayout, applyOnlineRoomState } from './lobby.js';
 import { emitSocket } from '../core/socket.js';
 import { advanceGlobalWeather, updateBoardWeatherUI } from './weather.js';
+import { handleWaypointClick } from './dice.js';
 
 if (typeof window.boardPokemonCards === 'undefined') {
     window.boardPokemonCards = {};
@@ -377,7 +378,6 @@ export function handleWaypointArrival(waypointId) {
         appendAdventureLog(`${cp?.name || 'Treinador'} chegou a ${waypoint.name} (Zona #${waypoint.id}).`);
     }
 
-    // 🌐 Emissão blindada e unificada de atualização de movimento online via socket
     if (gameState.online && typeof emitSocket === 'function') {
         emitSocket('update_game_state', {
             type: 'player_move',
