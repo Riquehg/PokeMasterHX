@@ -1,5 +1,5 @@
 // --- MÓDULO DE ARENA DE BATALHA TCG (battle-arena.js) ---
-import { getCurrentPlayer, gameState } from '../core/state.js';
+import { getCurrentPlayer, getMyPlayer, gameState } from '../core/state.js';
 import { socket, emitSocket } from '../core/socket.js';
 
 if (typeof SUPABASE_STORAGE_URL === 'undefined') {
@@ -99,7 +99,7 @@ function arenaFinishTurn() {
 }
 
 function arenaUpdateOriginalTeams() {
-    const cp = getCurrentPlayer();
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentPlayer();
     if (cp && Array.isArray(cp.activeTeam)) {
         currentBattleSession.playerTeam.forEach(updatedMonster => {
             const original = cp.activeTeam.find(monster =>
@@ -128,7 +128,7 @@ function arenaUpdateOriginalTeams() {
 
 // Ponto de entrada principal
 function openBattleArena(config = {}) {
-    const cp = getCurrentPlayer();
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentPlayer();
     if (!cp || !Array.isArray(cp.activeTeam)) {
         if (typeof showCustomPopup === 'function') {
             showCustomPopup("Aviso", "🚫 A Equipa Ativa não está disponível.", false);
@@ -225,7 +225,7 @@ function openBattleArena(config = {}) {
 }
 
 function openArenaTeamSelectionModal() {
-    const cp = getCurrentPlayer();
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentPlayer();
     const formatLimit = currentBattleSession.format;
     let selectedIndices = [];
 
@@ -306,7 +306,7 @@ function openArenaTeamSelectionModal() {
 }
 
 function renderPreBattleContent(modalEl) {
-    const cp = getCurrentPlayer();
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentPlayer();
     const activeMon = currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
 
     let inventoryHtml = '';
@@ -366,7 +366,7 @@ function confirmArenaTeamAndStart(indexes) {
     const modal = document.getElementById('arena-team-sel-modal');
     if (modal) modal.remove();
 
-    const cp = getCurrentPlayer();
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentPlayer();
     const selectedIndexes = Array.isArray(indexes) ? indexes.map(Number).filter(Number.isInteger) : [];
 
     const validSelection = selectedIndexes.length === currentBattleSession.format &&
@@ -455,7 +455,7 @@ function launchMainArenaCombatInterface() {
 }
 
 function renderArenaCombatUI(modalEl) {
-    const cp = getCurrentPlayer();
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentPlayer();
     const pMon = currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
     const eMon = currentBattleSession.enemyTeam[currentBattleSession.activeEnemyIndex];
 
@@ -716,7 +716,7 @@ function switchArenaPlayerPokemon(index) {
 }
 
 function useItemInPreBattle(itemId, itemIndex) {
-    const cp = getCurrentPlayer();
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentPlayer();
     let item = cp.inventory.find(i => i.id === itemId);
     let activeMon = currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
 
@@ -760,7 +760,7 @@ function useItemInPreBattle(itemId, itemIndex) {
 
 function useArenaItem(itemId) {
     if (currentBattleSession.battleEnded || currentBattleSession.turnBusy) return;
-    const cp = getCurrentPlayer();
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentPlayer();
     const item = cp && Array.isArray(cp.inventory) ? cp.inventory.find(entry => entry && entry.id === itemId && Number(entry.count) > 0) : null;
     const activeMon = currentBattleSession.playerTeam[currentBattleSession.activePlayerIndex];
 
@@ -881,7 +881,7 @@ function concludeArenaBattle(isVictory) {
     const arenaModal = document.getElementById('main-battle-arena-modal');
     if (arenaModal) arenaModal.remove();
 
-    const cp = getCurrentPlayer();
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentPlayer();
     arenaUpdateOriginalTeams();
 
     if (isVictory) {
@@ -920,11 +920,15 @@ function concludeArenaBattle(isVictory) {
         }
     }
 
-    // Sincronização online via WebSocket após o término da batalha
+    // 🌐 Sincronização online via WebSocket isolando estritamente o playerState atualizado
     if (gameState.online && typeof emitSocket === 'function') {
         emitSocket('update_game_state', {
-            type: 'battle_concluded',
-            gameState: typeof gameState !== 'undefined' ? gameState : null
+            playerState: {
+                activeTeam: cp.activeTeam,
+                gold: cp.gold,
+                badges: cp.badges,
+                inventory: cp.inventory
+            }
         });
     }
 
