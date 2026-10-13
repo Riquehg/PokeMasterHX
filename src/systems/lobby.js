@@ -308,7 +308,8 @@ export function sendLobbyChatMessage() {
     const input = document.getElementById('lobby-chat-input');
     if (!input || !input.value.trim()) return;
 
-    emitSocket('lobby_chat_message', {
+    // CORRIGIDO: Alinhado com o evento 'room_chat_message' esperado no server.js
+    emitSocket('room_chat_message', {
         message: input.value.trim(),
         sender: typeof currentAuthenticatedAccount !== 'undefined' && currentAuthenticatedAccount ? currentAuthenticatedAccount : (getCurrentPlayer()?.name || 'Treinador')
     });
