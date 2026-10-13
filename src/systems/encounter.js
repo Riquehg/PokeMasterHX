@@ -20,14 +20,15 @@ export let currentEncounterState = {
     wildDefeated: false
 };
 
+// Mapeamento otimizado com o novo Sistema de Tiers (1 a 5) em CSS
 function getTierColorClass(tier) {
     switch (Number(tier)) {
-        case 1: return 'from-stone-800 via-stone-900 to-black border-stone-600';
-        case 2: return 'from-emerald-950 via-stone-900 to-black border-emerald-600';
-        case 3: return 'from-blue-950 via-stone-900 to-black border-blue-600';
-        case 4: return 'from-purple-950 via-stone-900 to-black border-purple-600';
-        case 5: return 'from-amber-950 via-yellow-950 to-black border-amber-500';
-        default: return 'from-slate-900 to-black border-slate-700';
+        case 1: return 'card-tier-comum tier-1';
+        case 2: return 'card-tier-incomum tier-2';
+        case 3: return 'card-tier-raro tier-3';
+        case 4: return 'card-tier-epico tier-4';
+        case 5: return 'card-tier-lendario tier-5';
+        default: return 'card-tier-comum tier-1';
     }
 }
 
@@ -164,8 +165,8 @@ export function openEncounterModalWithPokemon(pokemon) {
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 justify-items-center items-center py-2">
-                <div id="player-card-visual" class="w-72 h-[420px] bg-gradient-to-b from-amber-100 via-amber-50 to-amber-200 border-4 border-amber-600 rounded-3xl p-4 flex flex-col justify-between text-black shadow-2xl relative transition-all"></div>
-                <div id="enc-card-visual" class="w-72 h-[420px] bg-gradient-to-b from-red-950 via-stone-900 to-black border-4 border-red-600 rounded-3xl p-4 flex flex-col justify-between text-white shadow-2xl relative transition-all"></div>
+                <div id="player-card-visual" class="w-72 h-[420px] rounded-3xl p-4 flex flex-col justify-between text-black shadow-2xl relative transition-all"></div>
+                <div id="enc-card-visual" class="w-72 h-[420px] rounded-3xl p-4 flex flex-col justify-between text-white shadow-2xl relative transition-all"></div>
             </div>
 
             <div class="border-t border-amber-900/60 pt-3 bg-black/30 p-3 rounded-2xl">
@@ -247,28 +248,29 @@ export function updateEncounterUIInfo() {
     if (playerVisual) {
         const activeMonTypeDisplay = Array.isArray(activeMon.types) ? activeMon.types.join('/') : (activeMon.type || 'Normal');
         const shinyBadgePlayer = activeMon.isShiny ? `<span class="bg-amber-400 text-black text-[9px] px-2 py-0.5 rounded font-black uppercase">✨ SHINY</span>` : '';
-        playerVisual.className = `relative flex flex-col justify-between p-4 rounded-3xl border-4 ${playerCardBg} shadow-2xl w-72 h-[420px] text-white ${activeMon.isShiny ? 'shiny-card-glow' : ''}`;
+        
+        playerVisual.className = `trainer-card relative flex flex-col justify-between p-4 rounded-3xl shadow-2xl w-72 h-[420px] text-white ${playerCardBg} ${activeMon.isShiny ? 'shiny-card-glow' : ''} ${activeMon.auraEffect || activeMon.visualClass || ''}`;
         playerVisual.innerHTML = `
-            <div class="flex justify-between items-center font-black text-xs border-b-2 border-amber-400 pb-2">
+            <div class="flex justify-between items-center font-black text-xs border-b border-white/20 pb-2 z-10">
                 <span class="text-amber-300 font-bold uppercase">NV. ${activeMon.level || 1} (${playerTierLabel})</span>
                 ${shinyBadgePlayer}
                 ${advantageBadgeHtml}
                 <span class="text-amber-900 bg-amber-200 px-2 py-0.5 rounded font-bold uppercase text-[10px] border border-amber-400">${activeMonTypeDisplay}</span>
             </div>
             
-            <div class="flex flex-col items-center justify-center my-auto space-y-3">
+            <div class="flex flex-col items-center justify-center my-auto space-y-3 z-10">
                 <h3 class="text-base font-black text-white text-center truncate w-full">${activeMon.name}</h3>
                 <div class="flex items-center justify-center bg-black/60 w-36 h-36 rounded-2xl border-2 border-amber-400 shadow-inner p-3 relative">
                     <img src="${activeMon.isShiny && activeMon.shinyImage ? activeMon.shinyImage : (activeMon.image || '')}" alt="${activeMon.name}" class="max-h-32 max-w-full object-contain drop-shadow-md" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                 </div>
             </div>
 
-            <div class="w-full bg-black/90 text-amber-300 rounded-2xl p-3 text-center space-y-1.5 shadow-md border border-amber-500/40">
+            <div class="w-full bg-black/85 text-amber-300 rounded-2xl p-3 text-center space-y-1.5 shadow-md border border-amber-500/40 z-10">
                 <p class="text-xs font-bold tracking-wide">HP: ${activeHp} / ${activeMaxHp} &nbsp;|&nbsp; STR: ${activeMon.str || 5}</p>
                 <p class="text-[11px] font-black text-emerald-400 bg-emerald-950/90 rounded-xl px-2.5 py-1 border border-emerald-600">🎲 Soma Base: ~${estimatedPlayerPower} + [Dado]</p>
             </div>
             
-            <button onclick="cyclePlayerEncounterPokemon()" class="absolute -bottom-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black text-[10px] px-3.5 py-1.5 rounded-full shadow-lg border border-white uppercase tracking-wider cursor-pointer flex items-center gap-1 transition-transform hover:scale-105">
+            <button onclick="cyclePlayerEncounterPokemon()" class="absolute -bottom-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black text-[10px] px-3.5 py-1.5 rounded-full shadow-lg border border-white uppercase tracking-wider cursor-pointer flex items-center gap-1 transition-transform hover:scale-105 z-20">
                 <span>🔄</span> Trocar Anima (${currentEncounterState.selectedTeamMemberIndex + 1}/${cp.activeTeam.length})
             </button>
         `;
@@ -277,33 +279,33 @@ export function updateEncounterUIInfo() {
     const encVisual = document.getElementById('enc-card-visual');
     if (encVisual) {
         const wildTypeDisplay = Array.isArray(wild.types) ? wild.types.join('/') : (wild.type || 'Normal');
-        encVisual.className = `relative flex flex-col justify-between p-4 rounded-3xl border-4 ${enemyCardBg} shadow-2xl w-72 h-[420px] text-white ${wild.isShiny ? 'shiny-card-glow' : ''} ${wild.visualClass || wild.aura || ''}`;
         const statusBadge = currentEncounterState.wildDefeated 
             ? `<span class="bg-emerald-600 text-white text-[9px] px-2 py-0.5 rounded-md font-bold shadow animate-bounce">🏆 ENFRAQUECIDO (Bónus +2 Ativo!)</span>`
             : `<span class="bg-blue-600 text-white text-[9px] px-2 py-0.5 rounded-md font-bold shadow">🔴 Pronto para Captura Direta</span>`;
         const shinyWildBadge = wild.isShiny ? `<span class="bg-amber-400 text-black text-[9px] px-2 py-0.5 rounded-md font-black shadow animate-bounce">✨ SHINY</span>` : '';
         
+        encVisual.className = `trainer-card relative flex flex-col justify-between p-4 rounded-3xl shadow-2xl w-72 h-[420px] text-white ${enemyCardBg} ${wild.isShiny ? 'shiny-card-glow' : ''} ${wild.visualClass || wild.aura || ''}`;
         encVisual.innerHTML = `
-            <div class="flex justify-between items-center font-black text-xs border-b-2 border-red-900 pb-2">
+            <div class="flex justify-between items-center font-black text-xs border-b border-white/20 pb-2 z-10">
                 <span class="text-red-400 font-bold uppercase">NV. ${wild.level || 1} (${wildTierLabel})</span>
                 ${shinyWildBadge}
                 <span class="text-red-300 bg-red-950 px-2 py-0.5 rounded font-bold uppercase text-[10px] border border-red-800">${wildTypeDisplay}</span>
             </div>
 
-            <div class="flex flex-col items-center justify-center my-auto space-y-3">
+            <div class="flex flex-col items-center justify-center my-auto space-y-3 z-10">
                 <h3 class="text-base font-black text-white text-center truncate w-full">${wild.name}</h3>
                 <div class="flex items-center justify-center bg-black/60 w-36 h-36 rounded-2xl border-2 ${wild.isShiny ? 'border-amber-400 shiny-card-glow' : 'border-red-800'} shadow-inner p-3 relative">
                     <img src="${wild.isShiny && wild.shinyImage ? wild.shinyImage : (wild.image || '')}" alt="${wild.name}" class="max-h-32 max-w-full object-contain drop-shadow-md" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
                 </div>
             </div>
 
-            <div class="w-full bg-black/90 text-red-300 rounded-2xl p-3 text-center space-y-1.5 shadow-md border border-red-600/40">
+            <div class="w-full bg-black/85 text-red-300 rounded-2xl p-3 text-center space-y-1.5 shadow-md border border-red-600/40 z-10">
                 <p class="text-xs font-bold tracking-wide">HP: ${wildHp} / ${wildMaxHp} &nbsp;|&nbsp; STR: ${wild.str || 3}</p>
                 <p class="text-[11px] font-black text-amber-300 bg-amber-950/90 rounded-xl px-2.5 py-1 border border-emerald-600">🎯 Alvo Cap.: ${displayTarget}+ (Bónus: +${totalCaptureBonusSoFar})</p>
                 ${statusBadge}
             </div>
 
-            <div class="absolute -bottom-3.5 left-1/2 -translate-x-1/2 bg-red-900 text-amber-300 font-black text-[10px] px-3.5 py-1 rounded-full shadow border border-red-500 uppercase tracking-wider pointer-events-none">
+            <div class="absolute -bottom-3.5 left-1/2 -translate-x-1/2 bg-red-900 text-amber-300 font-black text-[10px] px-3.5 py-1 rounded-full shadow border border-red-500 uppercase tracking-wider pointer-events-none z-20">
                 Inimigo Selvagem
             </div>
         `;
@@ -643,7 +645,6 @@ export function resolveCaptureAttempt() {
             if (!Array.isArray(cp.pokedex)) cp.pokedex = [];
             if (!cp.pokedex.includes(wild.id)) cp.pokedex.push(wild.id);
 
-            // 🧹 SÓ REMOVE DO MAPA SE FOR CAPTURADO COM SUCESSO
             if (wild.waypointId && typeof boardPokemonCards !== 'undefined') {
                 delete boardPokemonCards[wild.waypointId];
             }
@@ -667,7 +668,6 @@ export function resolveCaptureAttempt() {
 }
 
 export function fleeEncounter() {
-    // 🧹 AO FUGIR OU FECHAR, O POKÉMON PERMANECE NO MAPA PARA FUTUROS ENCONTROS
     showCustomPopup("Fuga", "🏃‍♂️ Afastaste-te do Pokémon selvagem. Ele continuará no mapa.", true);
     closeEncounterModalUI();
     if (typeof renderBoardMap === 'function') renderBoardMap();
