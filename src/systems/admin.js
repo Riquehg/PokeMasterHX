@@ -83,9 +83,12 @@ export function openAdminPanelModal() {
     const sock = typeof window.socket !== 'undefined' ? window.socket : null;
     if (sock && typeof sock.on === 'function' && !adminUsersListenerRegistered) {
         sock.on('admin_users_list', handleAdminUsersList);
-        sock.on('daily_pokemon_update', (config) => {
+        
+        // CORRIGIDO: Alinhado com o evento emitido pelo server.js ('daily_pokemon_updated')
+        sock.on('daily_pokemon_updated', (config) => {
             applyDailyFeaturedPokemonConfig(config);
         });
+
         sock.on('admin_action_response', (res) => {
             if (res && res.message) {
                 alert(res.message);
