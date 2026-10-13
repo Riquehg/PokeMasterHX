@@ -240,7 +240,7 @@ export function initializeSocketConnection() {
                         if (typeof renderBottomPanel === 'function') renderBottomPanel();
                     }
                     if (typeof showCustomPopup === 'function') {
-                        showCustomPopup('🌐 Sincronização Online', ' Uma troca foi efetuada na sua sala e o estado foi atualizado!', true);
+                        showCustomPopup('🌐 Sincronização Online', 'Uma troca foi efetuada na sua sala e o estado foi atualizado!', true);
                     }
                 }
             });
@@ -264,16 +264,24 @@ export function emitSocket(eventName, payload) {
 }
 
 // Funções globais utilitárias para disparar convites de PvP e Trocas a partir de botões na interface
-window.requestPvpMatch = function(opponentIndex) {
-    if (emitSocket('send_pvp_invite', { opponentIndex })) {
+window.requestPvpMatch = function(opponentIndex, opponentName) {
+    if (emitSocket('send_pvp_invite', { 
+        targetIndex: opponentIndex !== undefined ? opponentIndex : 0, 
+        targetName: opponentName || '',
+        roomId: currentJoinedOnlineRoomId || gameState.onlineRoomId 
+    })) {
         if (typeof showCustomPopup === 'function') {
             showCustomPopup("Convite de Batalha", "⏳ Convite PvP enviado. Aguardando resposta do adversário...", true);
         }
     }
 };
 
-window.requestTradeMatch = function(opponentIndex) {
-    if (emitSocket('send_trade_invite', { opponentIndex })) {
+window.requestTradeMatch = function(opponentIndex, opponentName) {
+    if (emitSocket('send_trade_invite', { 
+        targetIndex: opponentIndex !== undefined ? opponentIndex : 0, 
+        targetName: opponentName || '',
+        roomId: currentJoinedOnlineRoomId || gameState.onlineRoomId 
+    })) {
         if (typeof showCustomPopup === 'function') {
             showCustomPopup("Convite de Troca", "⏳ Convite de troca enviado. Aguardando resposta do adversário...", true);
         }
