@@ -4,12 +4,16 @@
   "description": "Servidor multiplayer PokeMasterHX",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "app": "electron electron-main.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.8",
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "electron": "^44.7.1"
   }
 }
