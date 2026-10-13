@@ -67,38 +67,46 @@ export function initializeSocketConnection() {
             // === SISTEMA DE CONVITES POKÉMON (PvP e Trocas com Confirmação Real) ===
             socket.off('receive_pvp_invite');
             socket.on('receive_pvp_invite', (data) => {
+                const myIndex = gameState.online ? (gameState.myPlayerIndex || 0) : 0;
+                const targetIndex = data.targetIndex !== undefined ? Number(data.targetIndex) : -1;
+                const challengerIndex = data.challengerIndex !== undefined ? Number(data.challengerIndex) : -1;
+
+                // Se o destinatário do convite não formos nós, ignoramos para evitar que o remetente receba o próprio convite
+                if (targetIndex !== -1 && targetIndex !== myIndex) {
+                    return;
+                }
+
+                // Se o desafiante formos nós próprios, ignoramos
+                if (challengerIndex !== -1 && challengerIndex === myIndex) {
+                    return;
+                }
+
                 const challengerName = data.challengerName || data.name || data.targetName || 'Treinador';
-                const challengerIndex = data.challengerIndex !== undefined ? data.challengerIndex : (data.targetIndex !== undefined ? data.targetIndex : 0);
+                const validChallengerIndex = challengerIndex !== -1 ? challengerIndex : 0;
+
                 if (typeof window.showPvPAcceptModal === 'function') {
-                    window.showPvPAcceptModal(challengerName, challengerIndex);
+                    window.showPvPAcceptModal(challengerName, validChallengerIndex);
                 }
             });
 
             socket.off('receive_trade_invite');
             socket.on('receive_trade_invite', (data) => {
+                const myIndex = gameState.online ? (gameState.myPlayerIndex || 0) : 0;
+                const targetIndex = data.targetIndex !== undefined ? Number(data.targetIndex) : -1;
+                const challengerIndex = data.challengerIndex !== undefined ? Number(data.challengerIndex) : -1;
+
+                if (targetIndex !== -1 && targetIndex !== myIndex) {
+                    return;
+                }
+                if (challengerIndex !== -1 && challengerIndex === myIndex) {
+                    return;
+                }
+
                 const challengerName = data.challengerName || data.name || data.targetName || 'Treinador';
-                const challengerIndex = data.challengerIndex !== undefined ? data.challengerIndex : (data.targetIndex !== undefined ? data.targetIndex : 0);
+                const validChallengerIndex = challengerIndex !== -1 ? challengerIndex : 0;
+
                 if (typeof window.showTradeAcceptModal === 'function') {
-                    window.showTradeAcceptModal(challengerName, challengerIndex);
-                }
-            });
-
-            // Tratamento de ações rejeitadas pelo servidor
-            socket.off('action_rejected');
-            socket.on('action_rejected', (data) => {
-                const msg = data && data.message ? data.message : 'Ação rejeitada pelo servidor.';
-                if (typeof showCustomPopup === 'function') {
-                    showCustomPopup('Aviso de Turno', `⚠ ${msg}`, false);
-                }
-            });
-
-            socket.off('login_response');
-            socket.on('login_response', (response) => {
-                if (response && response.success && (response.accountEmail || response.email)) {
-                    window.currentAuthenticatedAccount = response.accountEmail || response.email;
-                }
-                if (typeof window.handleLoginResponse === 'function') {
-                    window.handleLoginResponse(response);
+                    window.showTradeAcceptModal(challengerName, validChallengerIndex);
                 }
             });
 
