@@ -39,7 +39,12 @@ function renderMartContent(modalEl, cityName = '') {
     const cp = getInventoryPlayer();
     
     // Filtra os itens vendíveis no Poké Mart a partir do catálogo oficial
-    const sellableIds = ['poke_ball', 'ball_great', 'ball_ultra', 'item_potion', 'item_revive', 'item_rarecandy', 'evolution_stone', 'item_vitamin'];
+    const sellableIds = [
+        'poke_ball', 'ball_great', 'ball_ultra', 'master_ball', 
+        'ball_mystic', 'ball_flame', 'ball_aqua', 'ball_electric', 
+        'ball_shadow', 'ball_rainbow', 'item_rarecandy', 'evolution_stone', 
+        'item_potion', 'item_revive', 'item_vitamin'
+    ];
     let itemsForSale = ITEM_CATALOG.filter(item => sellableIds.includes(item.id));
 
     let itemsHtml = '';
