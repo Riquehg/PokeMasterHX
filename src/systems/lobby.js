@@ -79,7 +79,6 @@ export function applyOnlineRoomState(data) {
         setupDone: true,
         online: true,
         onlineRoomId: currentJoinedOnlineRoomId,
-        // Garante que o turno começa rigorosamente no índice 0 (Host) se não vier definido
         currentPlayerIndex: Number.isInteger(Number(sharedState.currentPlayerIndex)) ? Number(sharedState.currentPlayerIndex) : 0,
         turn: Math.max(1, Number(sharedState.turn) || 1),
         players: sharedState.players.map(player => ({
@@ -94,26 +93,22 @@ export function applyOnlineRoomState(data) {
 
     // 🛡️ IDENTIFICAÇÃO RIGOROSA E CORRETA DO JOGADOR LOCAL
     const myEmail = typeof currentAuthenticatedAccount !== 'undefined' ? currentAuthenticatedAccount : null;
-    const myPayload = getOnlinePlayerPayload();
-    
     let myIndex = -1;
+
     if (myEmail && Array.isArray(gameState.players)) {
         myIndex = gameState.players.findIndex(p => p && (p.email === myEmail || p.accountEmail === myEmail));
     }
-    if (myIndex === -1 && myPayload && Array.isArray(gameState.players)) {
-        myIndex = gameState.players.findIndex(p => p && p.name === myPayload.name);
+    
+    // Fallback por socketId ou ordem de socket se disponível
+    if (myIndex === -1 && socket && Array.isArray(gameState.players)) {
+        myIndex = gameState.players.findIndex(p => p && p.socketId === socket.id);
     }
 
-    // Fallback absoluto: se houver apenas 2 jogadores e o nome não coincidir exatamente, alinha pela ordem de chegada na lista
     if (myIndex === -1 && gameState.players.length > 0) {
-        myIndex = 0; // O criador/primeiro da lista assume o index 0, os seguintes adaptam-se
+        myIndex = 0;
     }
 
-    if (myIndex !== -1) {
-        gameState.myPlayerIndex = myIndex;
-    } else {
-        gameState.myPlayerIndex = 0;
-    }
+    gameState.myPlayerIndex = Math.max(0, myIndex);
 
     if (sharedBoard && typeof window.boardPokemonCards !== 'undefined') {
         window.boardPokemonCards = sharedBoard;
@@ -157,19 +152,6 @@ export function showOnlineGameLayout() {
     }
 }
 
-// Transmite a ação e o estado atualizado para o servidor gerir a sala online em tempo real
-export function broadcastOnlineAction(actionType, extraData = {}) {
-    if (!gameState.online || !currentJoinedOnlineRoomId) return;
-
-    emitSocket('update_game_state', {
-        roomId: currentJoinedOnlineRoomId,
-        actionType: actionType,
-        gameState: gameState,
-        ...extraData
-    });
-}
-window.broadcastOnlineAction = broadcastOnlineAction;
-
 export function initLobbySocketListeners() {
     if (!socket) return;
 
@@ -191,6 +173,41 @@ export function initLobbySocketListeners() {
     socket.off('room_state');
     socket.on('room_state', () => {
         refreshRoomsList();
+    });
+
+    // 🛡️ OUVINTE OFICIAL PARA O INÍCIO DA PARTIDA DO SERVER
+    socket.off('room_game_started');
+    socket.on('room_game_started', (data) => {
+        onlineRoomStarted = true;
+        if (applyOnlineRoomState(data)) {
+            showOnlineGameLayout();
+        }
+    });
+
+    // 🛡️ OUVINTE OFICIAL PARA A SINCRONIZAÇÃO EM TEMPO REAL DOS TURNOS E JOGADAS
+    socket.off('sync_game_state');
+    socket.on('sync_game_state', (data) => {
+        if (applyOnlineRoomState(data)) {
+            refreshOnlineGameInterface();
+            
+            // Informa visualmente se mudou o turno
+            const activePlayer = gameState.players[gameState.currentPlayerIndex];
+            const isMyTurn = gameState.currentPlayerIndex === gameState.myPlayerIndex;
+            
+            if (activePlayer && typeof showCustomPopup === 'function') {
+                if (isMyTurn) {
+                    showCustomPopup("É a sua vez!", `✨ O turno passou para si, ${activePlayer.name}! Faça o seu movimento.`, true);
+                }
+            }
+        }
+    });
+
+    // 🛡️ REJEIÇÃO DE AÇÕES FORA DE TURNO
+    socket.off('action_rejected');
+    socket.on('action_rejected', (res) => {
+        if (res && res.message && typeof showCustomPopup === 'function') {
+            showCustomPopup("Ação Rejeitada", res.message, false);
+        }
     });
 
     socket.off('chat_broadcast');
@@ -314,7 +331,6 @@ export function sendLobbyChatMessage() {
     const input = document.getElementById('lobby-chat-input');
     if (!input || !input.value.trim()) return;
 
-    // CORRIGIDO: Alinhado com o evento 'room_chat_message' esperado no server.js
     emitSocket('room_chat_message', {
         message: input.value.trim(),
         sender: typeof currentAuthenticatedAccount !== 'undefined' && currentAuthenticatedAccount ? currentAuthenticatedAccount : (getCurrentPlayer()?.name || 'Treinador')
