@@ -97,11 +97,20 @@ export function initializeSocketConnection() {
                 }
             });
 
+            // === NOVO: Sincronização em tempo real dos Logs de Jogo Globais (Eventos, Batalhas, Capturas e Dados) ===
+            socket.off('game_log_broadcast');
+            socket.on('game_log_broadcast', (logData) => {
+                if (logData && logData.message) {
+                    if (typeof appendAdventureLog === 'function') {
+                        appendAdventureLog(`[Global] ${logData.message}`);
+                    }
+                }
+            });
+
             // Sincronização estrita de estado entre os jogadores da sala
             socket.off('sync_game_state');
             socket.on('sync_game_state', (data) => {
                 if (data && data.gameState && typeof gameState !== 'undefined') {
-                    // Atualiza de forma segura preservando a estrutura local do jogador
                     Object.assign(gameState, data.gameState);
                     if (typeof ensureValidGameState === 'function') {
                         ensureValidGameState();
@@ -115,6 +124,7 @@ export function initializeSocketConnection() {
                         if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
                         if (typeof renderBottomPanel === 'function') renderBottomPanel();
                         if (typeof renderBoardMap === 'function') renderBoardMap();
+                        if (typeof updateTurnIndicatorUI === 'function') updateTurnIndicatorUI();
                     }
                 }
             });
