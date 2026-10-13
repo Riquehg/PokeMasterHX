@@ -1,5 +1,5 @@
 // --- src/systems/encounter.js ---
-// Subsistema Unificado de Batalhas TCG Selvagens, Captura, XP, Evolução e Sincronização Cloud
+// Subsistema Unificado de Batalhas TCG Selvagens, Captura, XP, Evolução e Sincronização Cloud (Balanceado)
 
 import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer } from '../core/state.js';
 import { renderTeamCardSlots, renderBottomPanel } from './pcbox.js';
@@ -35,22 +35,36 @@ function getTierColorClass(tier) {
 // Dicionário de Tiers para exibição visual nos cards
 const tierNamesMap = { 1: 'Comum', 2: 'Incomum', 3: 'Raro', 4: 'Épico', 5: 'Lendário' };
 
-// Cálculo dinâmico de atributos por Nível com bónus garantido para Pokémon Shiny
+// Cálculo dinâmico e balanceado de atributos por Nível e Tier
 export function calculatePokemonStats(baseMonster, level, isShiny = false) {
-    const baseStr = baseMonster.str || Math.floor(5 + (level * 1.5));
-    const baseHp = baseMonster.maxHp || baseMonster.hp || Math.floor(20 + (level * 5));
+    const tier = Number(baseMonster.tier || 1);
+    
+    // Multiplicadores base por tier para diferenciar monstros comuns de lendários/épicos
+    let tierMultiplier = 1.0;
+    if (tier === 2) tierMultiplier = 1.25;
+    else if (tier === 3) tierMultiplier = 1.5;
+    else if (tier === 4) tierMultiplier = 1.85;
+    else if (tier === 5) tierMultiplier = 2.3;
 
-    const shinyStrBonus = isShiny ? 3 : 0;
-    const shinyHpBonus = isShiny ? 10 : 0;
-    const shinyMultiplier = isShiny ? 1.25 : 1.0;
+    // Valores base padrão caso o catálogo não traga definidos
+    const rawBaseStr = Number(baseMonster.str || baseMonster.attack || 8);
+    const rawBaseHp = Number(baseMonster.maxHp || baseMonster.hp || 30);
 
-    const finalStr = Math.floor((baseStr + shinyStrBonus) * (isShiny ? 1.15 : 1.0));
-    const finalHp = Math.floor((baseHp + shinyHpBonus) * shinyMultiplier);
+    // Fórmula progressiva balanceada (O nível agora escala fortemente os atributos)
+    const scaledStr = Math.floor((rawBaseStr + (level * 2.2)) * tierMultiplier);
+    const scaledHp = Math.floor((rawBaseHp + (level * 8)) * tierMultiplier);
+
+    const shinyStrBonus = isShiny ? Math.floor(scaledStr * 0.15) : 0;
+    const shinyHpBonus = isShiny ? Math.floor(scaledHp * 0.15) : 0;
+    const shinyMultiplier = isShiny ? 1.2 : 1.0;
+
+    const finalStr = Math.floor((scaledStr + shinyStrBonus));
+    const finalHp = Math.floor((scaledHp + shinyHpBonus) * shinyMultiplier);
 
     return {
-        str: finalStr,
-        maxHp: finalHp,
-        currentHp: finalHp
+        str: Math.max(5, finalStr),
+        maxHp: Math.max(20, finalHp),
+        currentHp: Math.max(20, finalHp)
     };
 }
 
@@ -100,10 +114,10 @@ export function generateWildPokemonForWaypoint(waypointId, waypointColor = 'rosa
     const tier = baseMon.tier || targetTier;
 
     let minLevel = 3, maxLevel = 6;
-    if (tier === 2) { minLevel = 8; maxLevel = 12; }
-    else if (tier === 3) { minLevel = 15; maxLevel = 22; }
-    else if (tier === 4) { minLevel = 25; maxLevel = 35; }
-    else if (tier === 5) { minLevel = 40; maxLevel = 50; }
+    if (tier === 2) { minLevel = 8; maxLevel = 14; }
+    else if (tier === 3) { minLevel = 15; maxLevel = 24; }
+    else if (tier === 4) { minLevel = 25; maxLevel = 36; }
+    else if (tier === 5) { minLevel = 40; maxLevel = 55; }
 
     const level = Math.floor(Math.random() * (maxLevel - minLevel + 1)) + minLevel;
     const isShiny = Math.random() < 0.06;
@@ -202,16 +216,16 @@ export function updateEncounterUIInfo() {
     const activeMon = cp.activeTeam[currentEncounterState.selectedTeamMemberIndex] || cp.activeTeam[0];
     if (!activeMon) return;
 
-    if (activeMon.level && (!activeMon.str || activeMon.str < (4 + activeMon.level))) {
-        const stats = calculatePokemonStats(activeMon, activeMon.level, activeMon.isShiny);
-        activeMon.str = stats.str;
-        activeMon.maxHp = stats.maxHp;
-    }
+    // Recalcula os stats do Pokémon do jogador caso estejam desatualizados
+    const freshPlayerStats = calculatePokemonStats(activeMon, activeMon.level || 1, activeMon.isShiny);
+    activeMon.str = freshPlayerStats.str;
+    activeMon.maxHp = freshPlayerStats.maxHp;
+    if (activeMon.currentHp === undefined) activeMon.currentHp = activeMon.maxHp;
 
-    const activeHp = activeMon.currentHp !== undefined ? activeMon.currentHp : (activeMon.maxHp || 20);
-    const activeMaxHp = activeMon.maxHp || activeMon.hp || 20;
-    const wildHp = wild.currentHp !== undefined ? wild.currentHp : (wild.maxHp || 20);
-    const wildMaxHp = wild.maxHp || wild.hp || 20;
+    const activeHp = activeMon.currentHp;
+    const activeMaxHp = activeMon.maxHp;
+    const wildHp = wild.currentHp !== undefined ? wild.currentHp : wild.maxHp;
+    const wildMaxHp = wild.maxHp;
 
     const pType = activeMon.types || activeMon.type;
     const wType = wild.types || wild.type;
@@ -224,7 +238,7 @@ export function updateEncounterUIInfo() {
         advantageBadgeHtml = `<span class="bg-red-700 text-white text-[9px] px-2 py-0.5 rounded font-black uppercase">⚠️ Desvantagem (${typeMult}x)</span>`;
     }
 
-    const baseStr = (activeMon.str || 5) + currentEncounterState.battlePowerBonus;
+    const baseStr = activeMon.str + currentEncounterState.battlePowerBonus;
     const estimatedPlayerPower = Math.round(baseStr * typeMult); 
     
     const isLegendary = (wild.tier === 5) || (wild.color && wild.color.toLowerCase() === 'amarelo');
@@ -267,7 +281,7 @@ export function updateEncounterUIInfo() {
             </div>
 
             <div class="w-full bg-black/85 text-amber-300 rounded-2xl p-3 text-center space-y-1.5 shadow-md border border-amber-500/40 z-10">
-                <p class="text-xs font-bold tracking-wide">HP: ${activeHp} / ${activeMaxHp} &nbsp;|&nbsp; STR: ${activeMon.str || 5}</p>
+                <p class="text-xs font-bold tracking-wide">HP: ${activeHp} / ${activeMaxHp} &nbsp;|&nbsp; STR: ${activeMon.str}</p>
                 <p class="text-[11px] font-black text-emerald-400 bg-emerald-950/90 rounded-xl px-2.5 py-1 border border-emerald-600">🎲 Soma Base: ~${estimatedPlayerPower} + [Dado]</p>
             </div>
             
@@ -302,7 +316,7 @@ export function updateEncounterUIInfo() {
             </div>
 
             <div class="w-full bg-black/85 text-red-300 rounded-2xl p-3 text-center space-y-1.5 shadow-md border border-red-600/40 z-10">
-                <p class="text-xs font-bold tracking-wide">HP: ${wildHp} / ${wildMaxHp} &nbsp;|&nbsp; STR: ${wild.str || 3}</p>
+                <p class="text-xs font-bold tracking-wide">HP: ${wildHp} / ${wildMaxHp} &nbsp;|&nbsp; STR: ${wild.str}</p>
                 <p class="text-[11px] font-black text-amber-300 bg-amber-950/90 rounded-xl px-2.5 py-1 border border-emerald-600">🎯 Alvo Cap.: ${displayTarget}+ (Bónus: +${totalCaptureBonusSoFar})</p>
                 ${statusBadge}
             </div>
@@ -332,7 +346,7 @@ export function cyclePlayerEncounterPokemon() {
     
     while (nextIndex !== startIndex) {
         let mon = cp.activeTeam[nextIndex];
-        let hp = mon.currentHp !== undefined ? mon.currentHp : (mon.maxHp || 20);
+        let hp = mon.currentHp !== undefined ? mon.currentHp : mon.maxHp;
         if (hp > 0) break;
         nextIndex = (nextIndex + 1) % cp.activeTeam.length;
     }
@@ -453,7 +467,7 @@ function addExperienceAndCheckEvolution(monster, expGain) {
         monster.currentHp = stats.maxHp;
         monster.str = stats.str;
 
-        showCustomPopup("✨ SUBIDA DE NÍVEL!", `O teu ${monster.name} subiu para o Nível ${monster.level}!\nOs seus atributos melhoraram de acordo com o nível e forma!`, true);
+        showCustomPopup("✨ SUBIDA DE NÍVEL!", `O teu ${monster.name} subiu para o Nível ${monster.level}!\nOs seus atributos melhoraram consideravelmente!`, true);
 
         const baseCatalogItem = MONSTER_CATALOG.find(m => m.id === monster.catalogId || m.id === monster.id || m.name.toLowerCase() === monster.name.toLowerCase());
         
@@ -521,21 +535,19 @@ export function resolveBattleAttempt() {
         const wType = wild.types || wild.type;
         const typeMult = calculateTypeAdvantageMultiplier(pType, wType);
 
-        const playerPower = Math.round(((activeMon.str || 5) + currentEncounterState.battlePowerBonus + playerDice) * typeMult);
-        const wildPower = (wild.str || 4) + wildDice;
+        const playerPower = Math.round(((activeMon.str || 8) + currentEncounterState.battlePowerBonus + playerDice) * typeMult);
+        const wildPower = (wild.str || 10) + wildDice;
 
         if (playerPower >= wildPower) {
-            const damageToWild = Math.max(12, playerPower - wildPower + 8);
+            const damageToWild = Math.max(15, playerPower - wildPower + 10);
             wild.currentHp = Math.max(0, (wild.currentHp !== undefined ? wild.currentHp : wild.maxHp) - damageToWild);
 
             if (wild.currentHp <= 0) {
                 currentEncounterState.wildDefeated = true;
-                addExperienceAndCheckEvolution(activeMon, 85);
+                addExperienceAndCheckEvolution(activeMon, 100);
                 
-                // Fecha o modal de combate atual
                 closeEncounterModalUI();
 
-                // Cria o Modal Customizado de Vitória e Escolha de Poké Ball para Captura no centro da tela
                 let victoryModal = document.getElementById('wild-victory-capture-modal');
                 if (!victoryModal) {
                     victoryModal = document.createElement('div');
@@ -608,11 +620,11 @@ export function resolveBattleAttempt() {
             }
             updateEncounterUIInfo();
         } else {
-            const damageToPlayer = 10 + Math.floor(wild.level * 0.4);
-            activeMon.currentHp = Math.max(0, (activeMon.currentHp || activeMon.maxHp) - damageToPlayer);
+            const damageToPlayer = 12 + Math.floor(wild.level * 0.6);
+            activeMon.currentHp = Math.max(0, activeMon.currentHp - damageToPlayer);
             
             if (activeMon.currentHp <= 0) {
-                showCustomPopup("💀 O TEU POKÉMON DESMAIOU", `O ${wild.name} contra-atacou com força (Soma: ${wildPower} vs ${playerPower})!\n\n💔 ${activeMon.name} desmaiou. Troca para outro Pokémon na equipa se tiveres disponíveis.`, false);
+                showCustomPopup("💀 O TEU POKÉMON DESMAIOU", `O ${wild.name} contra-atacou com força (Soma: ${wildPower} vs ${playerPower})!\n\n💔 ${activeMon.name} desmaiou. Troca para outro Pokémon se tiveres disponíveis.`, false);
                 
                 const healthyRemaining = cp.activeTeam.some(m => (m.currentHp !== undefined ? m.currentHp : m.maxHp) > 0);
                 if (!healthyRemaining) {
@@ -635,7 +647,6 @@ window.selectVictoryModalBall = function(ballId) {
     if (itemInfo) {
         currentEncounterState.itemBonus = Number(itemInfo.value) || 0;
     }
-    // Reabre o modal atualizado para destacar a bola escolhida
     if (currentEncounterState.wildPokemon) {
         const modal = document.getElementById('wild-victory-capture-modal');
         if (modal) modal.remove();
@@ -644,7 +655,6 @@ window.selectVictoryModalBall = function(ballId) {
 };
 
 function resolveBattleAttemptTriggerRedraw() {
-    // Helper para redesenhar o modal de vitória com a seleção atualizada
     const cp = getCurrentOrMyPlayer();
     const wild = currentEncounterState.wildPokemon;
     if (!cp || !wild) return;
@@ -784,7 +794,7 @@ export function resolveCaptureAttempt() {
                 ...wild,
                 uniqueId: 'mon_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
                 catalogId: wild.id,
-                currentHp: wild.maxHp || 20,
+                currentHp: wild.maxHp,
                 exp: 0,
                 auraEffect: auraEffect
             };
