@@ -149,14 +149,22 @@ export function setupStorageSocketListeners() {
                 ensureValidGameState();
                 
                 const cp = getMyPlayer();
-                if (cp && typeof updateTrainerVisualsAndHud === 'function') {
-                    updateTrainerVisualsAndHud(cp.name, cp.avatarId);
+                if (cp && typeof window.updateTrainerVisualsAndHud === 'function') {
+                    window.updateTrainerVisualsAndHud(cp.name, cp.avatarId);
                 }
 
                 if (typeof renderBoardMap === 'function') renderBoardMap();
                 if (typeof renderBottomPanel === 'function') renderBottomPanel();
                 if (typeof renderTeamCardSlots === 'function') renderTeamCardSlots();
                 console.log("☁️ Dados da nuvem aplicados com sucesso à interface!");
+            }
+        });
+
+        // Ouvinte para resposta de salvamento individual
+        activeSocket.off('save_response');
+        activeSocket.on('save_response', (res) => {
+            if (res && !res.success && res.message && typeof showCustomPopup === 'function') {
+                showCustomPopup("Erro ao Salvar", res.message, false);
             }
         });
     }
