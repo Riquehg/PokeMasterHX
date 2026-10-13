@@ -151,9 +151,9 @@ export function hideSetupAndShowGame() {
 }
 window.hideSetupAndShowGame = hideSetupAndShowGame;
 
-// === Indicador Visual de Turno na Interface do Dado ===
+// === Indicador Visual de Turno Dinâmico ===
 export function updateTurnIndicatorUI() {
-    let container = document.getElementById('pass-turn-btn-container');
+    let container = document.getElementById('pass-turn-btn-container') || document.querySelector('header') || document.body;
     if (!container) return;
 
     let indicator = document.getElementById('turn-indicator-badge');
