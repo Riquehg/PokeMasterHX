@@ -4,7 +4,7 @@ import { loadGameProgress, saveGameProgress } from './core/storage.js';
 import { renderBoardMap, tryInteractWithCity, onHexClick } from './systems/map.js';
 import { setupDiceListeners, rollDiceForMovement, handleWaypointClick, resetTurnDiceState } from './systems/dice.js';
 import { MONSTER_CATALOG } from './config/cards-data.js';
-import { updateBoardWeatherUI, weatherState } from './systems/weather.js'; // Importação do sistema de clima
+import { updateBoardWeatherUI, weatherState } from './systems/weather.js';
 
 // Importação dos Módulos dos Sistemas
 import './systems/city.js';
@@ -122,7 +122,7 @@ export function setDiceButtonState(hasRolled) {
 }
 window.setDiceButtonState = setDiceButtonState;
 
-// Função de Nova Partida / Reset Inteligente do Tabuleiro
+// Função de Nova Partida / Reset Inteligente do Tabuleiro com Sincronização Cloud
 window.resetGameProgressKeepCollection = function() {
     const cp = getCurrentOrMyPlayer();
     if (!cp) {
@@ -148,13 +148,22 @@ window.resetGameProgressKeepCollection = function() {
     saveGameProgress();
 
     if (gameState.online) {
+        const payload = {
+            type: 'game_reset',
+            playerState: {
+                currentZone: cp.currentZone,
+                badges: cp.badges,
+                activeTeam: cp.activeTeam,
+                pcBox: cp.pcBox,
+                inventory: cp.inventory,
+                gold: cp.gold
+            },
+            gameState: gameState
+        };
         if (typeof window.broadcastOnlineAction === 'function') {
-            window.broadcastOnlineAction('game_reset', { gameState: gameState });
+            window.broadcastOnlineAction('game_reset', payload);
         } else if (typeof emitSocket === 'function') {
-            emitSocket('update_game_state', {
-                type: 'game_reset',
-                gameState: gameState
-            });
+            emitSocket('update_game_state', payload);
         }
     }
 
@@ -233,7 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupGlobalInterfaceListeners();
     setupAuthenticationListeners();
     loadDailyPokemonPreview();
-    updateBoardWeatherUI(); // Ativa o estado inicial do clima no mapa
+    updateBoardWeatherUI();
 
     document.addEventListener('click', (event) => {
         const target = event.target;
@@ -307,6 +316,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             saveGameProgress();
+            
+            // 🌐 Sincronização em tempo real do novo perfil criado no modo online
+            if (gameState.online && typeof emitSocket === 'function') {
+                emitSocket('update_game_state', {
+                    type: 'player_profile_created',
+                    playerState: player,
+                    gameState: gameState
+                });
+            }
+
             hideSetupAndShowGame();
 
             updateTrainerVisualsAndHud(trainerName, avatarId);
@@ -416,8 +435,8 @@ window.openCharacterCreationMode = function () {
     if (avatarGrid && avatarGrid.children.length === 0) {
         let avatarsHtml = '';
         for (let i = 1; i <= 8; i++) {
-            const avatarId = i < 10 ? `0${i}` : `${i}`;
-            const url = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_${avatarId}.png`;
+            const avatarIdStr = i < 10 ? `0${i}` : `${i}`;
+            const url = `https://juowcnkbjhfrbfttnwge.supabase.co/storage/v1/object/public/sprites/player_${avatarIdStr}.png`;
             avatarsHtml += `
                 <div onclick="selectAvatar(${i})" data-avatar="${i}" class="avatar-option w-14 h-16 bg-black/60 border-2 ${i === 1 ? 'border-amber-400' : 'border-blue-900'} rounded-xl p-1 flex items-center justify-center cursor-pointer hover:border-amber-400 transition-all">
                     <img src="${url}" class="w-full h-full object-contain" onerror="this.src='https://api.iconify.design/noto:video-game.svg'">
