@@ -52,9 +52,16 @@ export function setupDiceListeners() {
 
             resetTurnDiceState();
             
-            // Reseta as tentativas de ginásio para o jogador atual ao passar o turno
+            // Reseta e limpa rigorosamente as tentativas de ginásio para o jogador atual ao passar o turno[cite: 7]
             if (typeof resetGymAttemptsForTurn === 'function') {
                 resetGymAttemptsForTurn(activeIndex);
+            }
+            if (typeof window.gymAttemptedThisTurn === 'object' && window.gymAttemptedThisTurn !== null) {
+                Object.keys(window.gymAttemptedThisTurn).forEach(key => {
+                    if (key.startsWith(`${activeIndex}_`)) {
+                        delete window.gymAttemptedThisTurn[key];
+                    }
+                });
             }
             
             // Avança o índice do jogador atual de forma circular e estrita (Estilo Mario Party: 0 -> 1 -> 2 -> 0)
