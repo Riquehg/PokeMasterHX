@@ -32,7 +32,7 @@ window.rollDice = rollDiceForMovement;
 window.handleWaypointClick = handleWaypointClick;
 window.resetTurnDiceState = resetTurnDiceState;
 window.openSpecificTrainerCardModal = openSpecificTrainerCardModal;
-window.openTrainerCardModal = function() { 
+window.openTrainerCardModal = function() {  
     const targetIdx = gameState.online ? (gameState.myPlayerIndex || 0) : (gameState.currentPlayerIndex || 0);
     openSpecificTrainerCardModal(targetIdx); 
 };
@@ -266,7 +266,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initializeSocketConnection();
 
-    // Carregamento inicial centrado no servidor remoto via socket
     loadGameProgress();
     ensureValidGameState();
 
@@ -284,7 +283,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setupAuthenticationListeners();
     loadDailyPokemonPreview();
 
-    // Vinculação robusta para os botões do lobby online
     document.addEventListener('click', (event) => {
         const target = event.target;
         if (target && (target.id === 'create-room-btn' || target.closest('#create-room-btn'))) {
