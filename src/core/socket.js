@@ -163,7 +163,6 @@ export function initializeSocketConnection() {
             socket.on('game_log_broadcast', (logData) => {
                 if (logData && logData.message) {
                     if (typeof window.pushAdventureLog === 'function') {
-                        // Insere diretamente no log local sem disparar loop de broadcast
                         window.pushAdventureLog(logData.message, false);
                     }
                 }
@@ -241,7 +240,7 @@ export function initializeSocketConnection() {
                         if (typeof renderBottomPanel === 'function') renderBottomPanel();
                     }
                     if (typeof showCustomPopup === 'function') {
-                        showCustomPopup('🌐 Sincronização Online', 'Uma troca foi efetuada na sua sala e o estado foi atualizado!', true);
+                        showCustomPopup('🌐 Sincronização Online', ' Uma troca foi efetuada na sua sala e o estado foi atualizado!', true);
                     }
                 }
             });
@@ -263,6 +262,23 @@ export function emitSocket(eventName, payload) {
     activeSocket.emit(eventName, payload);
     return true;
 }
+
+// Funções globais utilitárias para disparar convites de PvP e Trocas a partir de botões na interface
+window.requestPvpMatch = function(opponentIndex) {
+    if (emitSocket('send_pvp_invite', { opponentIndex })) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup("Convite de Batalha", "⏳ Convite PvP enviado. Aguardando resposta do adversário...", true);
+        }
+    }
+};
+
+window.requestTradeMatch = function(opponentIndex) {
+    if (emitSocket('send_trade_invite', { opponentIndex })) {
+        if (typeof showCustomPopup === 'function') {
+            showCustomPopup("Convite de Troca", "⏳ Convite de troca enviado. Aguardando resposta do adversário...", true);
+        }
+    }
+};
 
 window.initializeSocketConnection = initializeSocketConnection;
 window.emitSocket = emitSocket;
