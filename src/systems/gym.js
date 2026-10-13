@@ -12,9 +12,9 @@ if (typeof window.gymAttemptedThisTurn === 'undefined') {
 // Função auxiliar para resetar as tentativas de ginásio ao mudar de turno
 export function resetGymAttemptsForTurn(playerIndex) {
     if (!window.gymAttemptedThisTurn) return;
+    // Limpa todas as tentativas daquele jogador ou reseta o objeto global do turno
     Object.keys(window.gymAttemptedThisTurn).forEach(key => {
-        if (key.startsWith(`${playerIndex}_`) || key.includes(`_${playerIndex}_`)) {
-            delete window.gymAttemptedThisTrade[key]; // se aplicável
+        if (key.startsWith(`${playerIndex}_`) || playerIndex === undefined) {
             delete window.gymAttemptedThisTurn[key];
         }
     });
