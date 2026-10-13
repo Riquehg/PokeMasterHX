@@ -82,13 +82,15 @@ export function openAdminPanelModal() {
 
     const sock = typeof window.socket !== 'undefined' ? window.socket : null;
     if (sock && typeof sock.on === 'function' && !adminUsersListenerRegistered) {
+        sock.off('admin_users_list', handleAdminUsersList);
         sock.on('admin_users_list', handleAdminUsersList);
         
-        // CORRIGIDO: Alinhado com o evento emitido pelo server.js ('daily_pokemon_updated')
+        sock.off('daily_pokemon_updated');
         sock.on('daily_pokemon_updated', (config) => {
             applyDailyFeaturedPokemonConfig(config);
         });
 
+        sock.off('admin_action_response');
         sock.on('admin_action_response', (res) => {
             if (res && res.message) {
                 alert(res.message);
@@ -97,9 +99,12 @@ export function openAdminPanelModal() {
                 }
             }
         });
+
+        sock.off('admin_error');
         sock.on('admin_error', (err) => {
             alert(err?.message || 'Erro no painel administrativo.');
         });
+
         adminUsersListenerRegistered = true;
     }
 
@@ -156,7 +161,7 @@ export function renderAdminDashboard(modalElement, users) {
     modalElement.innerHTML = `
         <div class="trainer-card max-w-5xl w-full p-6 space-y-4 border-4 border-red-600 rounded-3xl bg-gradient-to-b from-[#1c1410] to-[#0a0705] shadow-2xl text-white">
             <div class="flex justify-between items-center border-b border-red-900 pb-2">
-                <span class="text-xs font-black text-red-400 font-cinzel"><i class="fa-solid fa-shield-halved"></i> PAINEL DO ADMINISTRADOR (SUPABASE CLOUD)</span>
+                <span class="text-xs font-black text-red-400 font-cinzel">🛡️ PAINEL DO ADMINISTRADOR (SUPABASE CLOUD)</span>
                 <button type="button" id="close-admin-panel-button" class="text-red-400 hover:text-white font-bold text-sm px-2 py-0.5 bg-black/60 rounded border border-red-800 cursor-pointer">✕ Fechar</button>
             </div>
             
@@ -215,7 +220,6 @@ export function renderAdminDashboard(modalElement, users) {
             goldBonus: Math.max(0, Number(newGold) || 500)
         };
         
-        // Envia a configuração exata para o servidor persistir no Supabase
         emitSocket('admin_set_daily_pokemon', { 
             configKey: 'pokemon_do_dia',
             dailyConfig: updatedConfig 
