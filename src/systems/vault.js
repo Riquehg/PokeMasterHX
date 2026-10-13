@@ -1,12 +1,12 @@
 // --- src/systems/vault.js ---
 // Sistema de Cofre Global de Pokémon (Vault / Herança), Gestão de Equipa e Trocas Online
 
-import { gameState, getCurrentPlayer, ensureValidGameState } from '../core/state.js';
+import { gameState, getCurrentPlayer, getMyPlayer, ensureValidGameState } from '../core/state.js';
 import { saveGameProgress } from '../core/storage.js';
 import { emitSocket } from '../core/socket.js';
 
 export function saveMonsterToVault(uniqueId) {
-    const cp = getCurrentPlayer();
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : getCurrentPlayer();
     if (!cp) return;
     
     let monster = cp.activeTeam ? cp.activeTeam.find(m => m.uniqueId === uniqueId) : null;
@@ -37,10 +37,15 @@ export function saveMonsterToVault(uniqueId) {
     gameState.globalVault.push(vaultMon);
     
     saveGameProgress();
-    if (gameState.online) {
+    
+    // 🌐 Sincronização online via WebSocket isolando o playerState e globalVault
+    if (gameState.online && typeof emitSocket === 'function') {
         emitSocket('update_game_state', {
-            type: 'vault_updated',
-            gameState: gameState
+            playerState: {
+                activeTeam: cp.activeTeam,
+                pcBox: cp.pcBox
+            },
+            globalVault: gameState.globalVault
         });
     }
 
@@ -74,7 +79,7 @@ export function closeVaultModal() {
 }
 
 export function renderVaultModalContent(modalElement) {
-    const cp = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[gameState.myPlayerIndex || 0] || gameState?.players?.[0] || {});
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : (typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[gameState.myPlayerIndex || 0] || gameState?.players?.[0] || {}));
     const activeTeam = Array.isArray(cp.activeTeam) ? cp.activeTeam : [];
     const pcBox = Array.isArray(cp.pcBox) ? cp.pcBox : (Array.isArray(cp.box) ? cp.box : []);
 
@@ -163,7 +168,7 @@ export function renderVaultModalContent(modalElement) {
 }
 
 export function movePokemonToBox(teamIndex) {
-    const cp = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[gameState.myPlayerIndex || 0] || gameState?.players?.[0] || {});
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : (typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[gameState.myPlayerIndex || 0] || gameState?.players?.[0] || {}));
     if (!cp || !cp.activeTeam || !cp.activeTeam[teamIndex]) return;
 
     if (!Array.isArray(cp.pcBox)) cp.pcBox = [];
@@ -172,8 +177,13 @@ export function movePokemonToBox(teamIndex) {
     cp.pcBox.push(removedMon);
 
     saveGameProgress();
-    if (gameState.online) {
-        emitSocket('update_game_state', { type: 'team_updated', gameState: gameState });
+    if (gameState.online && typeof emitSocket === 'function') {
+        emitSocket('update_game_state', {
+            playerState: {
+                activeTeam: cp.activeTeam,
+                pcBox: cp.pcBox
+            }
+        });
     }
 
     const modal = document.getElementById('global-vault-modal');
@@ -184,7 +194,7 @@ export function movePokemonToBox(teamIndex) {
 }
 
 export function movePokemonToTeam(boxIndex) {
-    const cp = typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[gameState.myPlayerIndex || 0] || gameState?.players?.[0] || {});
+    const cp = typeof getMyPlayer === 'function' ? getMyPlayer() : (typeof getCurrentPlayer === 'function' ? getCurrentPlayer() : (gameState?.players?.[gameState.myPlayerIndex || 0] || gameState?.players?.[0] || {}));
     if (!cp || !cp.pcBox || !cp.pcBox[boxIndex]) return;
 
     if (!Array.isArray(cp.activeTeam)) cp.activeTeam = [];
@@ -199,8 +209,13 @@ export function movePokemonToTeam(boxIndex) {
     cp.activeTeam.push(selectedMon);
 
     saveGameProgress();
-    if (gameState.online) {
-        emitSocket('update_game_state', { type: 'team_updated', gameState: gameState });
+    if (gameState.online && typeof emitSocket === 'function') {
+        emitSocket('update_game_state', {
+            playerState: {
+                activeTeam: cp.activeTeam,
+                pcBox: cp.pcBox
+            }
+        });
     }
 
     const modal = document.getElementById('global-vault-modal');
