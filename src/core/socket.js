@@ -102,6 +102,27 @@ export function initializeSocketConnection() {
                 }
             });
 
+            // Sincronização e resposta das ações do Painel Administrativo
+            socket.off('admin_action_response');
+            socket.on('admin_action_response', (response) => {
+                if (response && response.message) {
+                    if (typeof showCustomPopup === 'function') {
+                        showCustomPopup('Painel Admin', response.message, response.success);
+                    }
+                }
+                if (response && response.success && response.updatedGameState) {
+                    if (typeof gameState !== 'undefined') {
+                        Object.assign(gameState, response.updatedGameState);
+                    }
+                }
+                if (typeof renderBottomPanel === 'function') {
+                    renderBottomPanel();
+                }
+                if (typeof renderTeamCardSlots === 'function') {
+                    renderTeamCardSlots();
+                }
+            });
+
             socket.off('rooms_list_update');
             socket.on('rooms_list_update', (rooms) => {
                 if (typeof window.renderRoomsList === 'function') {
