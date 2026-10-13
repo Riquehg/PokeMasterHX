@@ -64,22 +64,19 @@ export function setupDiceListeners() {
                 });
             }
             
-            // Avança o índice do jogador atual de forma circular e estrita (Estilo Mario Party: 0 -> 1 -> 2 -> 0)
-            if (typeof gameState !== 'undefined' && gameState.players && Array.isArray(gameState.players) && gameState.players.length > 0) {
-                gameState.currentPlayerIndex = (activeIndex + 1) % gameState.players.length;
+            // 🌐 No modo online, pedimos explicitamente ao servidor para avançar o turno de forma oficial e segura
+            if (gameState.online) {
+                if (typeof emitSocket === 'function') {
+                    emitSocket('next_turn');
+                }
+                return;
             }
 
-            // Sincroniza a mudança de turno com os outros jogadores na sala online
-            if (gameState.online) {
-                if (typeof window.broadcastOnlineAction === 'function') {
-                    window.broadcastOnlineAction('turn_passed', {
-                        nextPlayerIndex: gameState.currentPlayerIndex
-                    });
-                } else if (typeof emitSocket === 'function') {
-                    emitSocket('update_game_state', {
-                        type: 'turn_passed',
-                        gameState: gameState
-                    });
+            // Modo Solo local
+            if (typeof gameState !== 'undefined' && gameState.players && Array.isArray(gameState.players) && gameState.players.length > 0) {
+                gameState.currentPlayerIndex = (activeIndex + 1) % gameState.players.length;
+                if (gameState.currentPlayerIndex === 0) {
+                    gameState.turn = (gameState.turn || 1) + 1;
                 }
             }
 
@@ -459,19 +456,20 @@ export function finishMovementSession() {
             : `Local: Zona #${finalWaypointId}`
     );
 
-    // Sincronização em tempo real online com os demais jogadores
-    if (gameState.online) {
-        if (typeof window.broadcastOnlineAction === 'function') {
-            window.broadcastOnlineAction('player_moved', {
-                playerIndex: gameState.currentPlayerIndex,
-                newPosition: finalWaypointId
-            });
-        } else {
-            emitSocket('update_game_state', {
-                type: 'player_movement_finished',
-                gameState: typeof gameState !== 'undefined' ? gameState : null
-            });
-        }
+    // 🌐 Sincronização em tempo real online enviando estritamente o estado isolado do jogador ativo
+    if (gameState.online && typeof emitSocket === 'function') {
+        const activeP = getDicePlayer();
+        emitSocket('update_game_state', {
+            playerState: {
+                currentZone: activeP.currentZone,
+                gold: activeP.gold,
+                activeTeam: activeP.activeTeam,
+                inventory: activeP.inventory,
+                pcBox: activeP.pcBox,
+                badges: activeP.badges
+            },
+            boardPokemonCards: typeof boardPokemonCards !== 'undefined' ? boardPokemonCards : {}
+        });
     }
 
     if (typeof triggerWaypointEvent === 'function') {
@@ -525,7 +523,7 @@ export function triggerWaypointEvent(waypointId) {
     player.currentZone = Number(waypoint.id);
 
     // Notificação visual informativa para o outro jogador no modo online
-    const activeIndex =Number(gameState.currentPlayerIndex) || 0;
+    const activeIndex = Number(gameState.currentPlayerIndex) || 0;
     const myIdx = gameState.online ? (Number(gameState.myPlayerIndex) || 0) : activeIndex;
     if (gameState.online && activeIndex !== myIdx) {
         if (typeof showCustomPopup === 'function') {
@@ -661,9 +659,15 @@ export function triggerRandomBoardEvent(waypointName) {
         saveGameProgress();
     }
 
-    // Se estiver online, sincroniza o ganho/evento com a sala
-    if (gameState.online && typeof window.broadcastOnlineAction === 'function') {
-        window.broadcastOnlineAction('board_event', { gameState: gameState });
+    // Se estiver online, sincroniza o estado atualizado do jogador via socket
+    if (gameState.online && typeof emitSocket === 'function') {
+        emitSocket('update_game_state', {
+            playerState: {
+                gold: player.gold,
+                inventory: player.inventory,
+                activeTeam: player.activeTeam
+            }
+        });
     }
 
     if (typeof showCustomPopup === 'function') {
