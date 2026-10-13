@@ -97,12 +97,13 @@ export function handleDrop(e, targetArea, targetIndex) {
 
         saveGameProgress();
         
-        // CORRIGIDO: Envia o myPlayerIndex para que o servidor/outro jogador saiba exatamente de quem é a equipa a atualizar
+        // 🌐 Sincronização isolada do playerState via socket para o novo servidor
         if (gameState.online && typeof emitSocket === 'function') {
             emitSocket('update_game_state', {
-                type: 'team_pc_updated',
-                playerIndex: gameState.myPlayerIndex,
-                gameState: gameState
+                playerState: {
+                    activeTeam: cp.activeTeam,
+                    pcBox: cp.pcBox
+                }
             });
         }
 
