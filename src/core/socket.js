@@ -43,7 +43,7 @@ export function initializeSocketConnection() {
                 }
             });
 
-            // Tratamento de desconexão de jogadores da sala (Remove o peão congelado do tabuleiro)
+            // Tratamento de desconexão de jogadores da sala
             socket.off('player_disconnected');
             socket.on('player_disconnected', (data) => {
                 const disconnectedIndex = data && (data.playerIndex !== undefined ? data.playerIndex : data.index);
@@ -83,7 +83,7 @@ export function initializeSocketConnection() {
                 }
             });
 
-            // Tratamento de ações rejeitadas pelo servidor (ex: jogar fora de turno)
+            // Tratamento de ações rejeitadas pelo servidor
             socket.off('action_rejected');
             socket.on('action_rejected', (data) => {
                 const msg = data && data.message ? data.message : 'Ação rejeitada pelo servidor.';
@@ -137,12 +137,13 @@ export function initializeSocketConnection() {
                 }
             });
 
-            // Sincronização em tempo real dos Logs de Jogo Globais
+            // Sincronização em tempo real dos Logs de Jogo Globais para ambos os jogadores
             socket.off('game_log_broadcast');
             socket.on('game_log_broadcast', (logData) => {
                 if (logData && logData.message) {
                     if (typeof window.pushAdventureLog === 'function') {
-                        window.pushAdventureLog(`[Global] ${logData.message}`);
+                        // Insere diretamente no log local sem disparar loop de broadcast
+                        window.pushAdventureLog(logData.message, false);
                     }
                 }
             });
@@ -187,7 +188,6 @@ export function initializeSocketConnection() {
                         gameState.chatMessages = gameState.chatMessages.slice(-100);
                     }
 
-                    // Renderizar diretamente na UI de chat se estiver ativa
                     const targetChatBox = document.getElementById('chat-messages-container') || document.getElementById('room-chat-box');
                     if (targetChatBox) {
                         const msgEl = document.createElement('div');
@@ -202,7 +202,7 @@ export function initializeSocketConnection() {
                     }
 
                     if (typeof window.pushAdventureLog === 'function') {
-                        window.pushAdventureLog(`💬 [Chat] ${senderName}: ${messageText}`);
+                        window.pushAdventureLog(`💬 [Chat] ${senderName}: ${messageText}`, false);
                     }
                 }
             });
@@ -237,13 +237,6 @@ export function initializeSocketConnection() {
 export function emitSocket(eventName, payload) {
     const activeSocket = socket || window.socket;
     if (!activeSocket || typeof activeSocket.emit !== 'function') {
-        if (typeof showCustomPopup === 'function') {
-            showCustomPopup(
-                'Conexão indisponível',
-                'Não foi possível comunicar com o servidor online. Verifique a sua ligação.',
-                false
-            );
-        }
         return false;
     }
     activeSocket.emit(eventName, payload);
