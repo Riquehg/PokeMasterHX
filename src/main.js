@@ -92,8 +92,9 @@ export function updateTurnIndicatorUI() {
     const activePlayer = players[activeIndex];
     const activeName = activePlayer ? activePlayer.name : `Jogador ${activeIndex + 1}`;
     
-    const myIdx = gameState.online ? (Number(gameState.myPlayerIndex) || 0) : activeIndex;
-    const isMyTurn = activeIndex === myIdx;
+    // Identificar de forma segura se o índice ativo corresponde ao nosso jogador local na sala
+    const myIdx = gameState.online && gameState.myPlayerIndex !== undefined ? Number(gameState.myPlayerIndex) : activeIndex;
+    const isMyTurn = (activeIndex === myIdx);
 
     if (isMyTurn) {
         indicator.className = 'text-[10px] font-black px-2.5 py-1 rounded-xl uppercase tracking-wider shadow border bg-emerald-950/80 text-emerald-300 border-emerald-500/60 animate-pulse';
