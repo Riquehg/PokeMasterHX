@@ -82,6 +82,13 @@ export function getMyPlayer() {
     if (!gameState.online) {
         return getCurrentPlayer();
     }
+
+    // 🛡️ Procura rigorosamente pelo e-mail autenticado ou socketId para nunca misturar os dados com outro jogador
+    if (currentAuthenticatedAccount) {
+        const foundByEmail = gameState.players.find(p => p && (p.email === currentAuthenticatedAccount || p.accountEmail === currentAuthenticatedAccount));
+        if (foundByEmail) return foundByEmail;
+    }
+
     const myIndex = Math.max(0, Math.min(gameState.players.length - 1, Number(gameState.myPlayerIndex) || 0));
     return gameState.players[myIndex] || gameState.players[0] || getCurrentPlayer();
 }
@@ -106,7 +113,7 @@ export function ensureValidGameState() {
             currentZone: 5,
             level: 1,
             activeTeam: [],
-            pcBox: [], // PC Box limpa inicialmente para evitar duplicações
+            pcBox: [],
             inventory: [],
             equipmentSlots: [null, null]
         }];
