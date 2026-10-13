@@ -136,13 +136,13 @@ export function openEncounterModalWithPokemon(pokemon) {
     }
 
     if (!cp || !cp.activeTeam || cp.activeTeam.length === 0) {
-        showCustomPopup("Aviso", "🚫 Precisas de pelo menos um Pokémon na Equipa Ativa!", false);
+        showCustomPopup("Aviso", "🚫 Precisas de pelo menos um Pokémon na Equipa Ativa!", false);[cite: 5]
         return;
     }
 
     let validIndex = cp.activeTeam.findIndex(m => (m.currentHp !== undefined ? m.currentHp : m.maxHp) > 0);
     if (validIndex === -1) {
-        showCustomPopup("Equipa Desmaiada!", "⚠ Todos os Pokémon da tua Equipa Ativa estão desmaiados (HP 0)!", false);
+        showCustomPopup("Equipa Desmaiada!", "⚠ Todos os Pokémon da tua Equipa Ativa estão desmaiados (HP 0)!", false);[cite: 5]
         return;
     }
 
@@ -321,7 +321,7 @@ export function updateEncounterUIInfo() {
 export function cyclePlayerEncounterPokemon() {
     const cp = getCurrentOrMyPlayer();
     if (!cp || !Array.isArray(cp.activeTeam) || cp.activeTeam.length <= 1) {
-        showCustomPopup("Aviso", "Só tens este Pokémon na equipa ativa!", false);
+        showCustomPopup("Aviso", "Só tens este Pokémon na equipa ativa!", false);[cite: 5]
         return;
     }
     
@@ -337,7 +337,7 @@ export function cyclePlayerEncounterPokemon() {
 
     currentEncounterState.selectedTeamMemberIndex = nextIndex;
     const switchedMon = cp.activeTeam[nextIndex];
-    showCustomPopup("Troca de Anima", `🔄 Enviaste para a frente de batalha o ${switchedMon.name}!`, true);
+    showCustomPopup("Troca de Anima", `🔄 Enviaste para a frente de batalha o ${switchedMon.name}!`, true);[cite: 5]
     updateEncounterUIInfo();
 }
 
@@ -368,12 +368,12 @@ export function renderEncounterItemsList() {
 export function selectCaptureBall(item) {
     const count = item.count !== undefined ? item.count : (item.quantity || 0);
     if (count <= 0) {
-        showCustomPopup("Sem Esferas", "Não tens unidades suficientes desta Poké Ball!", false);
+        showCustomPopup("Sem Esferas", "Não tens unidades suficientes desta Poké Ball!", false);[cite: 5]
         return;
     }
     currentEncounterState.itemBonus = Number(item.value) || 0;
     currentEncounterState.selectedCaptureBallId = item.id;
-    showCustomPopup("Esfera Selecionada", `🔴 Selecionaste ${item.name} (+${item.value} Bónus de Captura). Clica agora em 'Tentar Capturar'!`, true);
+    showCustomPopup("Esfera Selecionada", `🔴 Selecionaste ${item.name} (+${item.value} Bónus de Captura). Clica agora em 'Tentar Capturar'!`, true);[cite: 5]
     renderEncounterItemsList();
     updateEncounterUIInfo();
 }
@@ -451,7 +451,7 @@ function addExperienceAndCheckEvolution(monster, expGain) {
         monster.currentHp = stats.maxHp;
         monster.str = stats.str;
 
-        showCustomPopup("✨ SUBIDA DE NÍVEL!", `O teu ${monster.name} subiu para o Nível ${monster.level}!\nOs seus atributos melhoraram de acordo com o nível e forma!`, true);
+        showCustomPopup("✨ SUBIDA DE NÍVEL!", `O teu ${monster.name} subiu para o Nível ${monster.level}!\nOs seus atributos melhoraram de acordo com o nível e forma!`, true);[cite: 5]
 
         const baseCatalogItem = MONSTER_CATALOG.find(m => m.id === monster.catalogId || m.id === monster.id || m.name.toLowerCase() === monster.name.toLowerCase());
         
@@ -464,7 +464,7 @@ function addExperienceAndCheckEvolution(monster, expGain) {
                 monster.catalogId = evolvedData.id;
                 if (evolvedData.image) monster.image = evolvedData.image;
                 if (evolvedData.types) monster.types = evolvedData.types;
-                showCustomPopup("🧬 EVOLUÇÃO POR NÍVEL!", `Incrível! O teu ${oldName} evoluiu para ${monster.name}!`, true);
+                showCustomPopup("🧬 EVOLUÇÃO POR NÍVEL!", `Incrível! O teu ${oldName} evoluiu para ${monster.name}!`, true);[cite: 5]
             }
         }
     }
@@ -475,7 +475,7 @@ export function evolveMonsterWithStone(monster, stoneItemId) {
     if (!monster) return false;
     const baseCatalogItem = MONSTER_CATALOG.find(m => m.id === monster.catalogId || m.id === monster.id);
     if (!baseCatalogItem || !baseCatalogItem.evolvesTo) {
-        showCustomPopup("Evolução Impossível", "Este Pokémon já está na sua forma final ou não possui evolução configurada.", false);
+        showCustomPopup("Evolução Impossível", "Este Pokémon já está na sua forma final ou não possui evolução configurada.", false);[cite: 5]
         return false;
     }
 
@@ -487,7 +487,7 @@ export function evolveMonsterWithStone(monster, stoneItemId) {
         monster.catalogId = evolvedData.id;
         if (evolvedData.image) monster.image = evolvedData.image;
         if (evolvedData.types) monster.types = evolvedData.types;
-        showCustomPopup("🧬 EVOLUÇÃO POR ITEM!", `A pedra reage! O teu ${oldName} evoluiu para ${monster.name}!`, true);
+        showCustomPopup("🧬 EVOLUÇÃO POR ITEM!", `A pedra reage! O teu ${oldName} evoluiu para ${monster.name}!`, true);[cite: 5]
         syncGameStateToCloud();
         return true;
     }
@@ -502,12 +502,12 @@ export function resolveBattleAttempt() {
     if (!activeMon) return;
 
     if (currentEncounterState.wildDefeated) {
-        showCustomPopup("Pokémon Derrotado", "⚠ O Pokémon selvagem já foi derrotado! Usa a opção de Capturar ou foge.", false);
+        showCustomPopup("Pokémon Derrotado", "⚠ O Pokémon selvagem já foi derrotado! Usa a opção de Capturar ou foge.", false);[cite: 5]
         return;
     }
 
     if ((activeMon.currentHp !== undefined ? activeMon.currentHp : activeMon.maxHp) <= 0) {
-        showCustomPopup("Pokémon Desmaiado", "⚠ O teu Anima atual está com 0 de HP e não pode lutar! Troca de Pokémon.", false);
+        showCustomPopup("Pokémon Desmaiado", "⚠ O teu Anima atual está com 0 de HP e não pode lutar! Troca de Pokémon.", false);[cite: 5]
         return;
     }
 
@@ -530,7 +530,6 @@ export function resolveBattleAttempt() {
                 currentEncounterState.wildDefeated = true;
                 addExperienceAndCheckEvolution(activeMon, 85);
                 
-                // Pergunta imediata ao zerar o HP se deseja jogar a Poké Ball
                 if (confirm(`🏆 VITÓRIA NO COMBATE TCG!\nO ${wild.name} foi derrotado e enfraquecido (+2 Bónus de Captura)!\n\nDesejas jogar uma Poké Ball para tentar a captura agora?`)) {
                     if (!currentEncounterState.selectedCaptureBallId && cp.inventory) {
                         const defaultSphere = cp.inventory.find(i => i.type === 'sphere' || i.id.includes('ball'));
@@ -541,16 +540,15 @@ export function resolveBattleAttempt() {
                     }
                     resolveCaptureAttempt();
                 } else {
-                    // Se recusar, o Pokémon derrotado some do mapa
                     if (wild.waypointId && typeof boardPokemonCards !== 'undefined') {
                         delete boardPokemonCards[wild.waypointId];
                     }
                     closeEncounterModalUI();
                     if (typeof renderBoardMap === 'function') renderBoardMap();
-                    showCustomPopup("Fuga", "Deixaste o Pokémon para trás e ele desapareceu do mapa.", true);
+                    showCustomPopup("Fuga", "Deixaste o Pokémon para trás e ele desapareceu do mapa.", true);[cite: 5]
                 }
             } else {
-                showCustomPopup("⚔️ ATAQUE EFICAZ!", `O teu ${activeMon.name} (Dado: ${playerDice}) causou ${damageToWild} de dano!\n\n(Ataque: ${playerPower} vs Defesa: ${wildPower})\nHP do Selvagem: ${wild.currentHp}/${wild.maxHp}`, true);
+                showCustomPopup("⚔️ ATAQUE EFICAZ!", `O teu ${activeMon.name} (Dado: ${playerDice}) causou ${damageToWild} de dano!\n\n(Ataque: ${playerPower} vs Defesa: ${wildPower})\nHP do Selvagem: ${wild.currentHp}/${wild.maxHp}`, true);[cite: 5]
             }
             updateEncounterUIInfo();
         } else {
@@ -558,15 +556,15 @@ export function resolveBattleAttempt() {
             activeMon.currentHp = Math.max(0, (activeMon.currentHp || activeMon.maxHp) - damageToPlayer);
             
             if (activeMon.currentHp <= 0) {
-                showCustomPopup("💀 O TEU POKÉMON DESMAIOU", `O ${wild.name} contra-atacou com força (Soma: ${wildPower} vs ${playerPower})!\n\n💔 ${activeMon.name} desmaiou. Troca para outro Pokémon na equipa se tiveres disponíveis.`, false);
+                showCustomPopup("💀 O TEU POKÉMON DESMAIOU", `O ${wild.name} contra-atacou com força (Soma: ${wildPower} vs ${playerPower})!\n\n💔 ${activeMon.name} desmaiou. Troca para outro Pokémon na equipa se tiveres disponíveis.`, false);[cite: 5]
                 
                 const healthyRemaining = cp.activeTeam.some(m => (m.currentHp !== undefined ? m.currentHp : m.maxHp) > 0);
                 if (!healthyRemaining) {
-                    showCustomPopup("Derrota Total", "⚠ Toda a tua equipa ativa desmaiou!", false);
+                    showCustomPopup("Derrota Total", "⚠ Toda a tua equipa ativa desmaiou!", false);[cite: 5]
                     closeEncounterModalUI();
                 }
             } else {
-                showCustomPopup("💥 CONTRA-ATAQUE SOFRIDO", `O ${wild.name} selvagem defendeu-se!\n\n💔 ${activeMon.name} sofreu ${damageToPlayer} de dano.\nHP Restante: ${activeMon.currentHp}/${activeMon.maxHp}`, false);
+                showCustomPopup("💥 CONTRA-ATAQUE SOFRIDO", `O ${wild.name} selvagem defendeu-se!\n\n💔 ${activeMon.name} sofreu ${damageToPlayer} de dano.\nHP Restante: ${activeMon.currentHp}/${activeMon.maxHp}`, false);[cite: 5]
             }
             renderTeamCardSlots();
             updateEncounterUIInfo();
@@ -581,13 +579,13 @@ export function resolveCaptureAttempt() {
     if (!cp || !wild) return;
 
     if (!currentEncounterState.selectedCaptureBallId) {
-        showCustomPopup("Esfera Necessária", "⚠ Deves selecionar primeiro uma Poké Ball na tua mochila de combate em baixo para tentar capturar!", false);
+        showCustomPopup("Esfera Necessária", "⚠ Deves selecionar primeiro uma Poké Ball na tua mochila de combate em baixo para tentar capturar!", false);[cite: 5]
         return;
     }
 
     const sphereItem = cp.inventory.find(i => i.id === currentEncounterState.selectedCaptureBallId && (Number(i.count) || Number(i.quantity) || 0) > 0);
     if (!sphereItem) {
-        showCustomPopup("Sem Esferas", "Não tens essa Poké Ball disponível na mochila!", false);
+        showCustomPopup("Sem Esferas", "Não tens essa Poké Ball disponível na mochila!", false);[cite: 5]
         return;
     }
 
@@ -635,7 +633,7 @@ export function resolveCaptureAttempt() {
                 "🎉 CAPTURA BEM-SUCEDIDA!",
                 `Capturaste com sucesso o ${wild.name} (Nv.${wild.level || 1})!\n[Dado: ${roll} + Bónus: ${captureBonus + weakenedBonus} = ${totalCaptureValue} / Alvo: ${requiredTarget}+]${dailyBonusMessage}`,
                 true
-            );
+            );[cite: 5]
 
             const itemDetails = getItemDetails(currentEncounterState.selectedCaptureBallId);
             const auraEffect = itemDetails?.visualClass || itemDetails?.aura || wild.visualClass || '';
@@ -656,13 +654,12 @@ export function resolveCaptureAttempt() {
                 cp.activeTeam.push(caughtMonster);
             } else {
                 cp.pcBox.push(caughtMonster);
-                showCustomPopup("PC Box", `📦 Equipa cheia! O ${wild.name} foi enviado para a PC Box.`, true);
+                showCustomPopup("PC Box", `📦 Equipa cheia! O ${wild.name} foi enviado para a PC Box.`, true);[cite: 5]
             }
 
             if (!Array.isArray(cp.pokedex)) cp.pokedex = [];
             if (!cp.pokedex.includes(wild.id)) cp.pokedex.push(wild.id);
 
-            // Remove do mapa se capturado com sucesso
             if (wild.waypointId && typeof boardPokemonCards !== 'undefined') {
                 delete boardPokemonCards[wild.waypointId];
             }
@@ -673,20 +670,19 @@ export function resolveCaptureAttempt() {
             if (typeof renderBottomPanel === 'function') renderBottomPanel();
             syncGameStateToCloud();
         } else {
-            // Se a captura falhar e o Pokémon já estava derrotado, ele some do mapa obrigatoriamente
             if (currentEncounterState.wildDefeated) {
                 if (wild.waypointId && typeof boardPokemonCards !== 'undefined') {
                     delete boardPokemonCards[wild.waypointId];
                 }
                 closeEncounterModalUI();
                 if (typeof renderBoardMap === 'function') renderBoardMap();
-                showCustomPopup("❌ FUGA APÓS FALHA", `O ${wild.name} escapou da esfera e fugiu definitivamente do mapa!`, false);
+                showCustomPopup("❌ FUGA APÓS FALHA", `O ${wild.name} escapou da esfera e fugiu definitivamente do mapa!`, false);[cite: 5]
             } else {
                 showCustomPopup(
                     "❌ FALHA NA CAPTURA",
                     `O ${wild.name} resistiu e escapou da esfera! [Dado: ${roll} + Bónus: ${captureBonus + weakenedBonus} = ${totalCaptureValue} / Alvo: ${requiredTarget}+].\n\nPodes tentar novamente com outra esfera.`,
                     false
-                );
+                );[cite: 5]
                 renderEncounterItemsList();
                 updateEncounterUIInfo();
             }
@@ -696,13 +692,12 @@ export function resolveCaptureAttempt() {
 }
 
 export function fleeEncounter() {
-    // Se o Pokémon já estava derrotado e o jogador decide fugir, ele também desaparece do mapa
     const wild = currentEncounterState.wildPokemon;
     if (currentEncounterState.wildDefeated && wild && wild.waypointId && typeof boardPokemonCards !== 'undefined') {
         delete boardPokemonCards[wild.waypointId];
-        showCustomPopup("Fuga", "O Pokémon derrotado fugiu para longe e desapareceu do mapa.", true);
+        showCustomPopup("Fuga", "O Pokémon derrotado fugiu para longe e desapareceu do mapa.", true);[cite: 5]
     } else {
-        showCustomPopup("Fuga", "🏃‍♂️ Afastaste-te do Pokémon selvagem.", true);
+        showCustomPopup("Fuga", "🏃‍♂️ Afastaste-te do Pokémon selvagem.", true);[cite: 5]
     }
 
     closeEncounterModalUI();
@@ -719,7 +714,7 @@ export function closeEncounterModalUI() {
 
 function showCustomPopup(title, message, isSuccess) {
     if (typeof window.showCustomPopup === 'function') {
-        window.showCustomPopup(title, message, isSuccess);
+        window.showCustomPopup(title, message, isSuccess);[cite: 5]
     } else {
         alert(`${title}: ${message}`);
     }
