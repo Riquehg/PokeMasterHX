@@ -1,5 +1,5 @@
 // --- src/systems/map.js ---
-// Módulo do Tabuleiro, Caminhos e Multiplayer Sincronizado (Versão Otimizada e Corrigida com Clima Dinâmico e Interações de PvP/Trocas)
+// Módulo do Tabuleiro, Caminhos e Multiplayer Sincronizado (Com Logs Dinâmicos de Aventura)
 
 import { SUPABASE_STORAGE_URL, FULL_MAP_IMAGE } from '../config/constants.js';
 import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer, movementState, ensureValidGameState } from '../core/state.js';
@@ -16,6 +16,22 @@ if (typeof window.boardPokemonCards === 'undefined') {
     window.boardPokemonCards = {};
 }
 const boardPokemonCards = window.boardPokemonCards;
+
+// Função auxiliar segura para adicionar mensagens ao Log de Aventura
+function pushAdventureLog(message) {
+    if (typeof appendAdventureLog === 'function') {
+        appendAdventureLog(message);
+    } else {
+        const logBox = document.getElementById('adventure-log-box');
+        if (logBox) {
+            const p = document.createElement('p');
+            p.className = 'text-[9px] text-amber-200/90 leading-tight';
+            p.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logBox.appendChild(p);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+    }
+}
 
 export const BOARD_WAYPOINTS = [
     // --- HEXÁGONO A ---
@@ -255,6 +271,9 @@ export function rollDiceForMovement() {
             if (!cp) return;
             const currentZone = cp.currentZone || 5;
 
+            // Log de Rolagem de Dados
+            pushAdventureLog(`🎲 ${cp.name || 'Treinador'} rolou o dado e tirou [${diceResult}].`);
+
             const validNextSteps = getValidDestinations(currentZone, diceResult);
             
             if (typeof movementState !== 'undefined') {
@@ -324,11 +343,13 @@ export function tryInteractWithCity(waypointId, cityName) {
     if (currentZoneId === waypointId) {
         const hasGym = GYM_LEADERS_CATALOG.some(g => g.city.toLowerCase() === cityName.toLowerCase());
         if (hasGym && typeof initiateGymSequence === 'function') {
+            pushAdventureLog(`🏛️ ${cp?.name || 'Treinador'} desafiou o Ginásio de ${cityName}!`);
             initiateGymSequence(cityName);
             return;
         }
 
         if (typeof openCityModal === 'function') {
+            pushAdventureLog(`🏙️ ${cp?.name || 'Treinador'} visitou a cidade de ${cityName}.`);
             openCityModal(cityName);
         }
         return;
@@ -352,6 +373,7 @@ export function tryInteractWithWeakenedPokemon(waypointId) {
     if (typeof boardPokemonCards !== 'undefined' && boardPokemonCards[waypointId]) {
         const poke = boardPokemonCards[waypointId];
         poke.revealed = true;
+        pushAdventureLog(`⚔️ Batalha iniciada contra ${poke.name} selvagem (Nv.${poke.level})!`);
         if (typeof openEncounterModalWithPokemon === 'function') {
             openEncounterModalWithPokemon(poke);
         } else {
@@ -374,9 +396,7 @@ export function handleWaypointArrival(waypointId) {
         cp.currentZone = waypointId;
     }
 
-    if (typeof appendAdventureLog === 'function') {
-        appendAdventureLog(`${cp?.name || 'Treinador'} chegou a ${waypoint.name} (Zona #${waypoint.id}).`);
-    }
+    pushAdventureLog(`📍 ${cp?.name || 'Treinador'} chegou a ${waypoint.name} (Zona #${waypoint.id}).`);
 
     if (gameState.online && typeof emitSocket === 'function') {
         emitSocket('update_game_state', {
@@ -413,6 +433,7 @@ export function handleWaypointArrival(waypointId) {
     if (waypoint.type === 'city') {
         const hasGym = GYM_LEADERS_CATALOG.some(g => g.city.toLowerCase() === waypoint.name.toLowerCase());
         if (hasGym && typeof initiateGymSequence === 'function') {
+            pushAdventureLog(`🏛️ ${cp?.name || 'Treinador'} entrou no Ginásio de ${waypoint.name}.`);
             initiateGymSequence(waypoint.name);
         } else if (typeof openCityModal === 'function') {
             openCityModal(waypoint.name);
@@ -452,7 +473,10 @@ export function handleWaypointArrival(waypointId) {
         const poke = boardPokemonCards[waypointId];
         if (poke) {
             poke.revealed = true;
+            pushAdventureLog(`✨ Um Pokémon selvagem apareceu em ${waypoint.name}: ${poke.name} (Nv.${poke.level})!`);
+            
             if (typeof dailyFeaturedPokemonConfig !== 'undefined' && poke.id === dailyFeaturedPokemonConfig.pokemonId) {
+                pushAdventureLog(`⭐ O Pokémon do Dia (${dailyFeaturedPokemonConfig.pokemonName}) apareceu nesta rota!`);
                 if (typeof showCustomPopup === 'function') {
                     showCustomPopup("⭐ POKÉMON DO DIA ENCONTRADO!", `Este é o Anima em destaque de hoje (${dailyFeaturedPokemonConfig.pokemonName})! Ao capturá-lo, receberás o item bónus (${dailyFeaturedPokemonConfig.bonusItemName})!`, true);
                 }
@@ -494,6 +518,8 @@ function triggerRandomBoardEvent(eventName) {
     const randomEvt = eventsList[Math.floor(Math.random() * eventsList.length)];
     randomEvt.apply();
     saveGameProgress();
+
+    pushAdventureLog(`📜 Evento em ${eventName}: ${randomEvt.title}`);
 
     if (typeof showCustomPopup === 'function') {
         showCustomPopup(randomEvt.title, randomEvt.text, randomEvt.success);
