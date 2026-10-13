@@ -10,6 +10,11 @@ export { currentAuthenticatedAccount };
 export function initializeSocketConnection() {
     try {
         if (typeof io !== 'undefined') {
+            // Evita múltiplas instâncias de conexão desnecessárias
+            if (socket && socket.connected) {
+                return socket;
+            }
+
             socket = io('https://pokemasterhx.onrender.com', {
                 transports: ['websocket', 'polling']
             });
@@ -39,6 +44,7 @@ export function initializeSocketConnection() {
                 }
             });
 
+            socket.off('login_response');
             socket.on('login_response', (response) => {
                 if (response && response.success && (response.accountEmail || response.email)) {
                     window.currentAuthenticatedAccount = response.accountEmail || response.email;
@@ -48,12 +54,14 @@ export function initializeSocketConnection() {
                 }
             });
 
+            socket.off('rooms_list_update');
             socket.on('rooms_list_update', (rooms) => {
                 if (typeof window.renderRoomsList === 'function') {
                     window.renderRoomsList(rooms);
                 }
             });
 
+            socket.off('rooms_list_response');
             socket.on('rooms_list_response', (rooms) => {
                 if (typeof window.renderRoomsList === 'function') {
                     window.renderRoomsList(rooms);
@@ -61,6 +69,7 @@ export function initializeSocketConnection() {
             });
 
             // Confirmação de entrada na sala
+            socket.off('room_joined');
             socket.on('room_joined', (data) => {
                 if (data && (data.roomId || data.id)) {
                     if (data.gameState && typeof applyOnlineRoomState === 'function') {
@@ -73,6 +82,7 @@ export function initializeSocketConnection() {
             });
 
             // Início do jogo na sala online (Ativa o layout partilhado)
+            socket.off('room_game_started');
             socket.on('room_game_started', (data) => {
                 if (applyOnlineRoomState(data)) {
                     showOnlineGameLayout();
@@ -82,6 +92,7 @@ export function initializeSocketConnection() {
             });
 
             // Sincronização em tempo real do estado de jogo entre os jogadores
+            socket.off('sync_game_state');
             socket.on('sync_game_state', (data) => {
                 if (data && data.gameState && typeof gameState !== 'undefined') {
                     Object.assign(gameState, data.gameState);
@@ -102,6 +113,7 @@ export function initializeSocketConnection() {
             });
 
             // Mensagens de chat em tempo real na sala
+            socket.off('room_chat_broadcast');
             socket.on('room_chat_broadcast', (msgData) => {
                 if (msgData && msgData.text) {
                     if (!Array.isArray(gameState.chatMessages)) {
@@ -120,6 +132,7 @@ export function initializeSocketConnection() {
                 }
             });
 
+            socket.off('trade_synchronized');
             socket.on('trade_synchronized', (data) => {
                 if (data && data.gameState) {
                     if (typeof gameState !== 'undefined') {
@@ -147,7 +160,7 @@ export function initializeSocketConnection() {
 }
 
 export function emitSocket(eventName, payload) {
-    // Garante fallback para window.socket caso a variável local do módulo venha a falhar
+    // Garante fallback dinâmico para window.socket caso a variável local do módulo venha a falhar
     const activeSocket = socket || window.socket;
     if (!activeSocket || typeof activeSocket.emit !== 'function') {
         if (typeof showCustomPopup === 'function') {
