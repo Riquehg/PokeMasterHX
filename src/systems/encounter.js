@@ -266,13 +266,14 @@ export function updateEncounterUIInfo() {
     const typeMult = calculateTypeAdvantageMultiplier(pType, wType);
     let advantageBadgeHtml = '';
     if (typeMult > 1.0) {
-        advantageBadgeHtml = `<span class="bg-emerald-500 text-black text-[9px] px-2 py-0.5 rounded font-black uppercase">⚡ Vantagem (${typeMult}x)</span>`;
+        advantageBadgeHtml = `<span class="bg-emerald-500 text-black text-[9px] px-2 py-0.5 rounded font-black uppercase">⚡ Vantagem (+2)</span>`;
     } else if (typeMult < 1.0) {
-        advantageBadgeHtml = `<span class="bg-red-700 text-white text-[9px] px-2 py-0.5 rounded font-black uppercase">⚠️ Desvantagem (${typeMult}x)</span>`;
+        advantageBadgeHtml = `<span class="bg-red-700 text-white text-[9px] px-2 py-0.5 rounded font-black uppercase">⚠️ Desvantagem</span>`;
     }
 
     const baseStr = activeMon.str + currentEncounterState.battlePowerBonus;
-    const estimatedPlayerPower = Math.round(baseStr * typeMult); 
+    const typeBonus = typeMult > 1.0 ? 2 : 0;
+    const estimatedPlayerPower = Math.round(baseStr + typeBonus); 
     
     const isLegendary = (wild.tier === 5) || (wild.color && wild.color.toLowerCase() === 'amarelo');
     const weakenedBonus = currentEncounterState.wildDefeated ? 2 : 0;
@@ -574,7 +575,9 @@ export function resolveBattleAttempt() {
         const wType = wild.types || wild.type;
         const typeMult = calculateTypeAdvantageMultiplier(pType, wType);
 
-        const playerPower = Math.round(((activeMon.str || 8) + currentEncounterState.battlePowerBonus + playerDice) * typeMult);
+        // Bônus fixo de +2 em caso de vantagem de tipo, substituindo a duplicação por multiplicação
+        const typeBonus = typeMult > 1.0 ? 2 : 0;
+        const playerPower = Math.round((activeMon.str || 8) + currentEncounterState.battlePowerBonus + playerDice + typeBonus);
         const wildPower = (wild.str || 10) + wildDice;
 
         if (playerPower >= wildPower) {
