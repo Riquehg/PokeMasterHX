@@ -431,16 +431,33 @@ export function renderRoomsListUI(rooms) {
         const playerCount = Number(room?.playerCount ?? room?.players?.length ?? 0);
         const maxPlayers = Number(room?.maxPlayers) || 4;
         const hasPin = Boolean(room?.pin);
+        
+        // Renderiza também a lista de membros conectados na sala se disponíveis para permitir ações de PvP/Troca direta
+        let playersHtml = '';
+        if (Array.isArray(room?.players)) {
+            playersHtml = `<div class="mt-2 pt-2 border-t border-amber-900/40 space-y-1">` + room.players.map((p, pIndex) => `
+                <div class="flex justify-between items-center bg-black/40 px-2 py-1 rounded text-[9px]">
+                    <span class="text-slate-200 font-bold">${p.name || 'Treinador'}</span>
+                    <div class="flex gap-1">
+                        <button onclick="window.requestPvpMatch(${pIndex})" class="bg-red-700 hover:bg-red-600 text-white px-2 py-0.5 rounded font-bold cursor-pointer">⚔️ PvP</button>
+                        <button onclick="window.requestTradeMatch(${pIndex})" class="bg-purple-700 hover:bg-purple-600 text-white px-2 py-0.5 rounded font-bold cursor-pointer">🔄 Trocar</button>
+                    </div>
+                </div>
+            `).join('') + `</div>`;
+        }
 
         return `
-            <div class="flex justify-between items-center gap-2 bg-black/60 p-2.5 rounded-xl border border-amber-600/50 text-white text-[10px] my-1">
-                <div class="min-w-0">
-                    <p class="font-bold text-amber-300 truncate">${roomName} ${hasPin ? '🔒' : ''}</p>
-                    <p class="text-slate-400 truncate">Host: ${host} · ${playerCount}/${maxPlayers} Jogadores</p>
+            <div class="bg-black/60 p-2.5 rounded-xl border border-amber-600/50 text-white text-[10px] my-1">
+                <div class="flex justify-between items-center gap-2">
+                    <div class="min-w-0">
+                        <p class="font-bold text-amber-300 truncate">${roomName} ${hasPin ? '🔒' : ''}</p>
+                        <p class="text-slate-400 truncate">Host: ${host} · ${playerCount}/${maxPlayers} Jogadores</p>
+                    </div>
+                    <button type="button" data-room-id="${roomId}" data-has-pin="${hasPin}" class="join-online-room-button bg-amber-600 hover:bg-amber-500 text-black font-bold px-3 py-1 rounded cursor-pointer whitespace-nowrap">
+                        Entrar
+                    </button>
                 </div>
-                <button type="button" data-room-id="${roomId}" data-has-pin="${hasPin}" class="join-online-room-button bg-amber-600 hover:bg-amber-500 text-black font-bold px-3 py-1 rounded cursor-pointer whitespace-nowrap">
-                    Entrar
-                </button>
+                ${playersHtml}
             </div>
         `;
     }).join('');
