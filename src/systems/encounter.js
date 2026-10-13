@@ -3,7 +3,7 @@
 
 import { gameState, getCurrentPlayer, getMyPlayer, getCurrentOrMyPlayer } from '../core/state.js';
 import { renderTeamCardSlots, renderBottomPanel } from './pcbox.js';
-import { SUPABASE_STORAGE_URL, TYPE_ADVANTAGES } from '../config/constants.js';
+import { SUPABASE_STORAGE_URL, TYPE_ADVANTAGES, getTypeMultiplier } from '../config/constants.js';
 import { MONSTER_CATALOG } from '../config/cards-data.js';
 import { getItemDetails } from '../data/items.js';
 import { saveGameProgress } from '../core/storage.js';
@@ -73,6 +73,7 @@ export function calculatePokemonStats(baseMonster, level = 1, isShiny = false) {
     };
 }
 
+// Utiliza diretamente a função centralizada do constants.js com suporte a múltiplos tipos
 export function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
     if (!attackerType || !defenderType) return 1.0;
     
@@ -88,13 +89,11 @@ export function calculateTypeAdvantageMultiplier(attackerType, defenderType) {
 
     for (let a of attackerTypes) {
         for (let d of defenderTypes) {
-            if (TYPE_ADVANTAGES[a] && TYPE_ADVANTAGES[a][d] !== undefined) {
-                const mult = TYPE_ADVANTAGES[a][d];
-                if (mult > bestMultiplier) {
-                    bestMultiplier = mult;
-                } else if (mult < 1.0 && bestMultiplier === 1.0) {
-                    bestMultiplier = mult;
-                }
+            const mult = getTypeMultiplier(a, d);
+            if (mult > bestMultiplier) {
+                bestMultiplier = mult;
+            } else if (mult < 1.0 && bestMultiplier === 1.0) {
+                bestMultiplier = mult;
             }
         }
     }
@@ -337,7 +336,7 @@ export function updateEncounterUIInfo() {
 
             <div class="w-full bg-black/85 text-red-300 rounded-2xl p-3 text-center space-y-1.5 shadow-md border border-red-600/40 z-10">
                 <p class="text-xs font-bold tracking-wide">HP: ${wildHp} / ${wildMaxHp} &nbsp;|&nbsp; STR: ${wild.str}</p>
-                <p class="text-[11px] font-black text-amber-300 bg-amber-950/90 rounded-xl px-2.5 py-1 border border-emerald-600">🎯 Alvo Cap.: ${displayTarget}+ (Bónus: +${totalCaptureBonusSoFar})</p>
+                <p class="text-[11px] font-black text-amber-300 bg-amber-950/90 rounded-xl px-2.5 py-1 border border-emerald-600">🎯 Alvo Cap.: ${displayTarget}+ (Bónus Esfera: +${currentEncounterState.itemBonus})</p>
                 ${statusBadge}
             </div>
 
@@ -861,7 +860,6 @@ export function resolveCaptureAttempt() {
                 delete boardPokemonCards[wild.waypointId];
             }
 
-            // Aguarda o utilizador ler o resultado antes de fechar e atualizar o tabuleiro
             setTimeout(() => {
                 closeEncounterModalUI();
                 if (typeof renderBoardMap === 'function') renderBoardMap();
