@@ -3,8 +3,8 @@
 
 import { gameState, ensureValidGameState, currentAuthenticatedAccount, getCurrentOrMyPlayer } from '../core/state.js';
 import { applyOnlineRoomState, showOnlineGameLayout, currentJoinedOnlineRoomId } from '../systems/lobby.js';
-import { renderTeamCardSlots, renderBottomPanel } from './pcbox.js';
-import { renderBoardMap } from './map.js';
+import { renderTeamCardSlots, renderBottomPanel } from '../systems/pcbox.js';
+import { renderBoardMap } from '../systems/map.js';
 
 export let socket = null;
 export { currentAuthenticatedAccount };
