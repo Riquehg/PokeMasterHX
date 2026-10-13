@@ -96,9 +96,12 @@ export function handleDrop(e, targetArea, targetIndex) {
         else targetList.splice(targetIndex, 0, movedMonster);
 
         saveGameProgress();
+        
+        // CORRIGIDO: Envia o myPlayerIndex para que o servidor/outro jogador saiba exatamente de quem é a equipa a atualizar
         if (gameState.online && typeof emitSocket === 'function') {
             emitSocket('update_game_state', {
                 type: 'team_pc_updated',
+                playerIndex: gameState.myPlayerIndex,
                 gameState: gameState
             });
         }
