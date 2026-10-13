@@ -39,9 +39,9 @@ function updateTrainerCardBadges(cp) {
     });
 }
 
-// --- src/systems/trainer.js ---
-// (Mete isto na secção correspondente do trainer.js)
-
+// ------------------------------------------------------------
+// GATILHOS ROBUSTOS PARA PVP E TROCA ONLINE
+// ------------------------------------------------------------
 window.triggerPvPBattleArena = function(targetTrainerName, targetIndex) {
     if (typeof showCustomPopup === 'function') {
         showCustomPopup("Desafio PvP", `⚔️ A enviar convite de duelo PvP para ${targetTrainerName}...`, true);
@@ -165,10 +165,10 @@ export function openSpecificTrainerCardModal(playerIndex) {
             <div class="bg-purple-950/40 border-2 border-purple-600/60 p-3 rounded-xl flex flex-wrap gap-2 items-center justify-between mt-3">
                 <span class="text-[10px] text-purple-300 font-bold">📍 Estão na mesma casa (#${cp.currentZone})! Ações disponíveis:</span>
                 <div class="flex gap-2 w-full">
-                    <button onclick="document.getElementById('trainer-card-modal-full').remove(); window.triggerPvPBattleArena('${cp.name}');" class="flex-1 bg-red-700 hover:bg-red-600 text-white font-black py-2 rounded-lg text-[10px] uppercase shadow cursor-pointer">
+                    <button onclick="document.getElementById('trainer-card-modal-full').remove(); window.triggerPvPBattleArena('${cp.name}', ${playerIndex});" class="flex-1 bg-red-700 hover:bg-red-600 text-white font-black py-2 rounded-lg text-[10px] uppercase shadow cursor-pointer">
                         ⚔ Desafiar PvP
                     </button>
-                    <button onclick="document.getElementById('trainer-card-modal-full').remove(); window.proposeTradeWithTrainer('${cp.name}');" class="flex-1 bg-blue-700 hover:bg-blue-600 text-white font-black py-2 rounded-lg text-[10px] uppercase shadow cursor-pointer">
+                    <button onclick="document.getElementById('trainer-card-modal-full').remove(); window.proposeTradeWithTrainer('${cp.name}', ${playerIndex});" class="flex-1 bg-blue-700 hover:bg-blue-600 text-white font-black py-2 rounded-lg text-[10px] uppercase shadow cursor-pointer">
                         🔄 Propor Troca
                     </button>
                 </div>
