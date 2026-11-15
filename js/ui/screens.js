@@ -1,4 +1,4 @@
-// Telas fora da partida: login, hub do treinador, lobby online, sala de espera, partida local, cofre, ranking e admin.
+// Telas fora da partida: login, hub do treinador, lobby online, sala de espera, partida local, coleção, ranking e admin.
 import { STARTERS, getSpecies, SPECIES_LIST } from '../../shared/data/pokemon.js';
 import { dailyPokemon } from '../../shared/daily.js';
 import { esc, toast, bindActions, openModal, closeModal, setModalBody } from './dom.js';
@@ -58,45 +58,88 @@ export function loginScreen(root, { onDone, onLocal }) {
 }
 
 // ================================================================ hub
+
+// ================================================================ componentes de modo/coleção
+export const MODE_INFO = {
+  balanced: { icon: '⚖️', name: 'Balanceado', desc: 'Todos começam com 1 inicial Nv.5. Justo para todo mundo.' },
+  collection: { icon: '📦', name: 'Coleção', desc: 'Cada um leva até 6 Pokémon da sua Coleção (times já evoluídos).' },
+  ranked: { icon: '🏆', name: 'Competitivo', desc: 'Balanceado, só humanos, com limite de turnos. Vale rating no ranking.' }
+};
+
+function modeChip(mode, levelCap) {
+  const m = MODE_INFO[mode] || MODE_INFO.balanced;
+  return `<span class="chip ${mode === 'ranked' ? 'red' : mode === 'collection' ? 'gold' : 'green'}">${m.icon} ${m.name}${mode === 'collection' && levelCap ? ` · Nv. máx ${levelCap}` : ''}</span>`;
+}
+
+function sortCollection(vault) {
+  return [...(vault || [])].sort((a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0) || (b.shiny ? 1 : 0) - (a.shiny ? 1 : 0) || b.lvl - a.lvl);
+}
+
+/** Grade de seleção de até 6 Pokémon da Coleção. */
+function teamPicker(vault, selected, levelCap, act = 'pick') {
+  const list = sortCollection(vault);
+  if (!list.length) return '<p class="small muted">Sua Coleção está vazia. Jogue um Treino contra CPUs ou uma partida online — tudo que você capturar vem para cá.</p>';
+  return `<p class="small">Escolhidos: <b>${selected.length}/6</b> ${selected.length ? '' : '<span class="muted">(sem escolher = começa com o inicial)</span>'}</p>
+    <div class="pick-grid" style="max-height:300px;overflow:auto">${list.map(m => {
+      const on = selected.includes(m.uid);
+      const lv = levelCap ? Math.min(levelCap, m.lvl) : m.lvl;
+      return `<div class="pick ${on ? 'on' : ''}" data-act="${act}" data-uid="${esc(m.uid)}" title="${esc(getSpecies(m.sp)?.name)}">
+        <img src="${monSprite(m)}" alt="${esc(getSpecies(m.sp)?.name)}">${esc(getSpecies(m.sp)?.name)}${m.shiny ? ' ✨' : ''}<br>Nv.${lv}${levelCap && m.lvl > levelCap ? ` <span class="muted">(${m.lvl})</span>` : ''}${on ? ` <b>#${selected.indexOf(m.uid) + 1}</b>` : ''}</div>`;
+    }).join('')}</div>`;
+}
+
+function togglePick(selected, uid) {
+  const i = selected.indexOf(uid);
+  if (i >= 0) selected.splice(i, 1);
+  else if (selected.length < 6) selected.push(uid);
+  else toast('Máximo de 6 Pokémon.', 'bad');
+  return selected;
+}
+
+// ================================================================ hub
 export async function hubScreen(root, ctx) {
   let profile = null;
   let profileError = '';
-  try { profile = (await api('profile', { op: 'get' })).profile; } catch (e) { profileError = e.message; toast(e.message, 'bad'); }
+  try { profile = (await api('profile', { op: 'get' })).profile; } catch (e) { profileError = e.message; }
   const daily = ctx.daily || dailyPokemon(null);
   const dsp = getSpecies(daily);
   const localSave = LocalSession.hasSave();
   let mine = [];
-  try { mine = (await api('rooms', null, 'GET')).mine || []; } catch { /* sem salas */ }
+  if (!profileError) { try { mine = (await api('rooms', null, 'GET')).mine || []; } catch { /* sem salas */ } }
 
   const render = () => `<div class="screen"><div class="panel-wide">${LOGO}
     ${profileError ? `<div class="card" style="border-color:var(--red);margin-bottom:12px"><b style="color:#ff9b9e">⚠️ Problema no servidor</b>
-      <p class="small">${esc(profileError)}</p><p class="small muted">Abra <a href="/api/health" target="_blank" style="color:var(--gold)">/api/health</a> para ver o diagnóstico da configuração.</p></div>` : ''}
+      <p class="small">${esc(profileError)}</p><p class="small muted">Abra <a href="/api/health" target="_blank" style="color:var(--gold)">/api/health</a> para ver o diagnóstico. Enquanto isso, o modo offline funciona.</p></div>` : ''}
     <div class="hub-grid">
       <div class="col">
         <div class="trainer">
           <img class="avatar" src="${avatarUrl(profile?.avatar)}" alt="avatar">
           <div class="grow"><h3 style="color:var(--gold)">${esc(profile?.trainer_name || 'Treinador')}</h3>
-            <div class="small">⭐ ${profile?.points || 0} pts · 📖 ${(profile?.pokedex || []).length} · 🏆 ${profile?.stats?.wins || 0} vitórias · ✨ ${profile?.stats?.shinies || 0}</div>
+            <div class="small">⭐ ${profile?.points || 0} pts · 🏆 ${profile?.rating ?? 1000} rating · 📖 ${(profile?.pokedex || []).length} · 📦 ${(profile?.vault || []).length}</div>
             <div class="tiny muted">${esc(net.user?.email || '')}</div></div>
-          <button class="btn sm" data-act="edit">✏️</button>
+          <button class="btn sm" data-act="edit" ${profile ? '' : 'disabled'}>✏️</button>
         </div>
         <div class="daily"><img src="${monSprite(daily)}" alt="${esc(dsp?.name)}"><div><div class="tiny" style="color:var(--gold)">⭐ POKÉMON DO DIA</div><b>${esc(dsp?.name)}</b> ${typeChips(dsp?.types || [])}
           <div class="tiny muted">Aparece mais, dá XP em dobro e tem chance de shiny 1/8.</div></div></div>
         <div class="card col">
           <h3>🌐 Online</h3>
-          <button class="btn blue" data-act="online">Salas online (criar / entrar)</button>
+          <button class="btn blue" data-act="online" ${profile ? '' : 'disabled'}>Salas online (criar / entrar)</button>
+          <div class="tiny muted">${Object.values(MODE_INFO).map(m => `${m.icon} <b>${m.name}</b>: ${m.desc}`).join('<br>')}</div>
           ${mine.length ? `<div class="small muted">Minhas partidas:</div>${mine.map(m => `<button class="btn sm" data-act="resume-online" data-id="${m.id}">▶ ${esc(m.name)} · ${m.status === 'playing' ? 'em jogo' : 'no lobby'} · ${m.players} jog.</button>`).join('')}` : ''}
         </div>
       </div>
       <div class="col">
         <div class="card col">
-          <h3>🏠 Local</h3>
-          ${localSave ? `<button class="btn green" data-act="resume-local">▶ Continuar partida local</button>` : ''}
-          <button class="btn" data-act="new-local">✨ Nova partida local</button>
+          <h3>🤖 Treino contra CPUs</h3>
+          <button class="btn green" data-act="solo" ${profile ? '' : 'disabled'}>✨ Novo treino (salva na sua conta)</button>
+          <div class="tiny muted">Roda no servidor: tudo que você capturar e evoluir vai para a sua Coleção e Pokédex.</div>
+          <div class="divider"></div>
+          ${localSave ? `<button class="btn sm" data-act="resume-local">▶ Continuar partida offline</button>` : ''}
+          <button class="btn sm" data-act="new-local">📱 Modo offline (mesmo aparelho, não salva na conta)</button>
         </div>
         <div class="card col">
-          <h3>📦 Coleção</h3>
-          <div class="grid2"><button class="btn purple" data-act="vault">📦 Cofre (${(profile?.vault || []).length})</button><button class="btn" data-act="dex">📖 Pokédex</button></div>
+          <h3>📦 Minha coleção</h3>
+          <div class="grid2"><button class="btn purple" data-act="vault" ${profile ? '' : 'disabled'}>📦 Coleção (${(profile?.vault || []).length})</button><button class="btn" data-act="dex">📖 Pokédex (${(profile?.pokedex || []).length})</button></div>
           <button class="btn" data-act="ranking">🏆 Ranking</button>
           ${profile?.is_admin ? `<button class="btn red" data-act="admin">🛡️ Painel do admin</button>` : ''}
         </div>
@@ -105,18 +148,243 @@ export async function hubScreen(root, ctx) {
     </div></div></div>`;
 
   root.innerHTML = render();
+  const rerender = p => { if (p) profile = p; root.innerHTML = render(); };
   bindActions(root, {
     online: () => ctx.go('lobby'),
     'resume-online': d => ctx.openOnline(d.id),
     'resume-local': () => ctx.openLocal(LocalSession.load()),
     'new-local': () => ctx.go('local-setup'),
-    vault: () => vaultModal(profile),
+    solo: () => soloModal(profile, ctx),
+    vault: () => collectionModal(profile, rerender),
     dex: () => openDex(null, profile?.pokedex || []),
     ranking: () => rankingModal(),
     admin: () => adminModal(),
     logout: async () => { await signOut(); ctx.go('login'); },
-    edit: () => editProfile(profile, async p => { profile = p; root.innerHTML = render(); })
+    edit: () => editProfile(profile, async p => rerender(p))
   });
+}
+
+function soloModal(profile, ctx) {
+  const st = { bots: 2, turnLimit: 60, useTeam: false, starter: 'charmander', team: [] };
+  const body = () => `
+    <div class="grid2">
+      <div class="field"><label>Adversários (CPU)</label><select class="input" id="s-bots">${[1, 2, 3, 4, 5].map(n => `<option ${n === st.bots ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+      <div class="field"><label>Duração</label><select class="input" id="s-turns"><option value="30" ${st.turnLimit === 30 ? 'selected' : ''}>Rápida (30 turnos)</option><option value="60" ${st.turnLimit === 60 ? 'selected' : ''}>Normal (60 turnos)</option><option value="0" ${st.turnLimit === 0 ? 'selected' : ''}>Completa (até o Campeão)</option></select></div>
+    </div>
+    <div class="tabs" style="margin:10px 0"><button class="btn sm ${!st.useTeam ? 'primary' : ''}" data-act="use-starter">🌱 Começar com inicial</button><button class="btn sm ${st.useTeam ? 'primary' : ''}" data-act="use-team">📦 Levar time da Coleção</button></div>
+    ${st.useTeam ? teamPicker(profile?.vault, st.team, 0) : starterPicker(st.starter)}
+    <button class="btn primary block" data-act="go" style="margin-top:10px">▶ Começar treino</button>`;
+  const ov = openModal('solo', '🤖 Treino contra CPUs', body(), { wide: true });
+  const keep = () => { st.bots = Number(ov.querySelector('#s-bots').value); st.turnLimit = Number(ov.querySelector('#s-turns').value); };
+  const re = () => { keep(); setModalBody('solo', body()); };
+  bindActions(ov, {
+    'use-starter': () => { st.useTeam = false; re(); },
+    'use-team': () => { st.useTeam = true; re(); },
+    starter: d => { st.starter = d.id; re(); },
+    pick: d => { togglePick(st.team, d.uid); re(); },
+    go: async () => {
+      keep();
+      try {
+        const { match } = await api('match', { op: 'solo', bots: st.bots, turnLimit: st.turnLimit, starter: st.starter, teamUids: st.useTeam ? st.team : [] });
+        closeModal('solo');
+        ctx.openOnline(match.id);
+      } catch (e) { toast(e.message, 'bad'); }
+    }
+  });
+}
+
+function collectionModal(profile, onChange) {
+  let filter = 'all';
+  const body = () => {
+    const all = sortCollection(profile?.vault);
+    const list = filter === 'shiny' ? all.filter(m => m.shiny) : filter === 'fav' ? all.filter(m => m.fav) : all;
+    return `<p class="small muted">Tudo que você captura em partidas salvas na conta (Treino contra CPUs e Online) fica aqui, com o nível atualizado. Use no modo <b>📦 Coleção</b> para levar seu time. Limite: 300 (os mais fracos saem primeiro; ⭐ favoritos e shinies nunca saem).</p>
+      <div class="row" style="margin:8px 0"><button class="btn sm ${filter === 'all' ? 'primary' : ''}" data-act="f" data-f="all">Todos (${all.length})</button>
+        <button class="btn sm ${filter === 'shiny' ? 'primary' : ''}" data-act="f" data-f="shiny">✨ Shiny (${all.filter(m => m.shiny).length})</button>
+        <button class="btn sm ${filter === 'fav' ? 'primary' : ''}" data-act="f" data-f="fav">⭐ Favoritos</button></div>
+      <div class="dex">${list.map(m => `<div class="e caught" title="${esc(getSpecies(m.sp)?.name)}"><img src="${monSprite(m)}" alt="${esc(getSpecies(m.sp)?.name)}">
+        <div><b>${esc(getSpecies(m.sp)?.name)}</b>${m.shiny ? ' ✨' : ''}</div><div>Nv. ${m.lvl}</div>
+        <div class="row" style="justify-content:center;gap:3px;margin-top:3px"><button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar">✕</button></div></div>`).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div>`;
+  };
+  const ov = openModal('vault', `📦 Coleção (${(profile?.vault || []).length}/300)`, body(), { wide: true });
+  const op = async (o, uid) => {
+    try { profile = (await api('profile', { op: o, uid })).profile; setModalBody('vault', body()); onChange(profile); }
+    catch (e) { toast(e.message, 'bad'); }
+  };
+  bindActions(ov, {
+    f: d => { filter = d.f; setModalBody('vault', body()); },
+    fav: d => op('favorite', d.uid),
+    rel: d => { if (confirm('Soltar este Pokémon da sua Coleção? Não dá para desfazer.')) op('release', d.uid); }
+  });
+}
+
+async function rankingModal() {
+  openModal('rank', '🏆 Ranking', '<span class="spinner"></span>', { wide: true });
+  let tab = 'competitive', data = null;
+  const body = () => {
+    const comp = tab === 'competitive';
+    const rows = comp ? data.competitive : data.ranking;
+    return `<div class="tabs" style="margin-bottom:8px"><button class="btn sm ${comp ? 'primary' : ''}" data-act="t" data-t="competitive">🏆 Competitivo (rating)</button><button class="btn sm ${!comp ? 'primary' : ''}" data-act="t" data-t="general">⭐ Geral (pontos)</button></div>
+      <table class="score"><tr><th>#</th><th>Treinador</th>${comp ? '<th>Rating</th><th>Partidas</th><th>Vitórias</th>' : '<th>Pontos</th><th>Pokédex</th><th>Vitórias</th><th>Campeão</th><th>✨</th>'}</tr>
+      ${rows.map((r, i) => `<tr><td>${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</td><td>${esc(r.name)}</td>${comp
+        ? `<td><b>${r.rating}</b></td><td>${r.ranked}</td><td>${r.rankedWins}</td>`
+        : `<td><b>${r.points}</b></td><td>${r.pokedex}</td><td>${r.wins}</td><td>${r.champion}</td><td>${r.shinies}</td>`}</tr>`).join('') || `<tr><td colspan="7" class="muted">${comp ? 'Ninguém jogou uma partida competitiva ainda.' : 'Ninguém pontuou ainda.'}</td></tr>`}</table>
+      <p class="tiny muted">${comp ? 'Rating Elo (começa em 1000): sobe ao terminar à frente de quem tem rating igual ou maior. Só partidas 🏆 Competitivas contam.' : 'Pontos: 10 por espécie na Pokédex, 300 por vitória, 500 por título de Campeão, 50 por shiny, 25 por vitória PvP.'}</p>`;
+  };
+  try {
+    data = await api('leaderboard', null, 'GET');
+    setModalBody('rank', body());
+    bindActions(document.getElementById('rank'), { t: d => { tab = d.t; setModalBody('rank', body()); } });
+  } catch (e) { setModalBody('rank', `<p class="muted">${esc(e.message)}</p>`); }
+}
+
+// ================================================================ lobby online
+export async function lobbyScreen(root, ctx) {
+  root.innerHTML = `<div class="screen"><div class="panel-wide">${LOGO}
+    <div class="hub-grid">
+      <div class="card col"><h3>🛠️ Criar sala</h3>
+        <div class="field"><label>Nome</label><input class="input" id="c-name" maxlength="30" placeholder="Sala de Kanto"></div>
+        <div class="field"><label>Modo</label><select class="input" id="c-mode">${Object.entries(MODE_INFO).map(([k, m]) => `<option value="${k}">${m.icon} ${m.name} — ${m.desc}</option>`).join('')}</select></div>
+        <div class="grid2">
+          <div class="field"><label>Jogadores</label><select class="input" id="c-max">${[2, 3, 4, 5, 6].map(n => `<option ${n === 4 ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+          <div class="field"><label>Duração</label><select class="input" id="c-turns"><option value="30">Rápida (30 turnos)</option><option value="40">Competitiva (40 turnos)</option><option value="60" selected>Normal (60 turnos)</option><option value="0">Completa (até o Campeão)</option></select></div>
+        </div>
+        <div class="field hidden" id="c-cap-f"><label>Nível máximo dos Pokémon levados</label><select class="input" id="c-cap"><option value="0">Sem limite</option><option value="15">15</option><option value="25">25</option><option value="35">35</option><option value="45">45</option></select></div>
+        <div class="grid2">
+          <div class="field"><label>PIN (opcional)</label><input class="input" id="c-pin" inputmode="numeric" maxlength="6" placeholder="só números"></div>
+          <div class="field"><label>Visibilidade</label><select class="input" id="c-pub"><option value="1">Pública (aparece na lista)</option><option value="0">Privada (só por código)</option></select></div>
+        </div>
+        <button class="btn primary" data-act="create">Criar sala</button>
+        <div class="divider"></div>
+        <h3>🔑 Entrar por código</h3>
+        <div class="row"><input class="input grow" id="j-code" maxlength="5" placeholder="ABCDE" style="text-transform:uppercase"><input class="input" id="j-pin" maxlength="6" placeholder="PIN" style="width:90px"><button class="btn blue" data-act="join-code">Entrar</button></div>
+      </div>
+      <div class="card col"><div class="spread"><h3>🌐 Salas abertas</h3><button class="btn sm" data-act="refresh">↻</button></div>
+        <div class="list" id="rooms"><span class="spinner"></span></div>
+        <button class="btn ghost" data-act="back">← Voltar</button>
+      </div>
+    </div></div></div>`;
+  const v = id => root.querySelector(id).value;
+  root.querySelector('#c-mode').addEventListener('change', e => {
+    root.querySelector('#c-cap-f').classList.toggle('hidden', e.target.value !== 'collection');
+    if (e.target.value === 'ranked') { root.querySelector('#c-turns').value = '40'; }
+  });
+  const load = async () => {
+    try {
+      const { rooms } = await api('rooms', null, 'GET');
+      root.querySelector('#rooms').innerHTML = rooms.length ? rooms.map(r => `
+        <div class="list-item"><div class="grow"><b>${esc(r.name)}</b> ${r.hasPin ? '🔒' : ''} ${modeChip(r.mode, r.levelCap)}<div class="tiny muted">Anfitrião: ${esc(r.host)} · ${r.players}/${r.maxPlayers} · ${r.turnLimit ? r.turnLimit + ' turnos' : 'completa'} · código ${esc(r.code)}</div></div>
+        <button class="btn sm blue" data-act="join" data-id="${r.id}" data-pin="${r.hasPin ? '1' : ''}" ${r.players >= r.maxPlayers ? 'disabled' : ''}>Entrar</button></div>`).join('')
+        : '<p class="muted small">Nenhuma sala aberta. Crie uma!</p>';
+    } catch (e) { root.querySelector('#rooms').innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
+  };
+  const go = async p => { try { const { match } = await p; ctx.openRoom(match.id); } catch (e) { toast(e.message, 'bad'); } };
+  bindActions(root, {
+    create: () => go(api('match', { op: 'create', name: v('#c-name'), mode: v('#c-mode'), maxPlayers: Number(v('#c-max')), turnLimit: Number(v('#c-turns')), levelCap: Number(v('#c-cap')), pin: v('#c-pin'), isPublic: v('#c-pub') === '1' })),
+    'join-code': () => go(api('match', { op: 'join', code: v('#j-code'), pin: v('#j-pin') })),
+    join: d => go(api('match', { op: 'join', matchId: d.id, pin: d.pin ? prompt('PIN da sala:') || '' : '' })),
+    refresh: load,
+    back: () => ctx.go('hub')
+  });
+  load();
+  const t = setInterval(load, 6000);
+  return () => clearInterval(t);
+}
+
+// ================================================================ sala de espera
+export async function roomScreen(root, ctx, matchId) {
+  let match = null;
+  let profile = null;
+  try { profile = (await api('profile', { op: 'get' })).profile; } catch { /* ok */ }
+  const meId = profile?.id;
+
+  const render = () => {
+    if (!match) return;
+    const isHost = match.hostId === meId;
+    const mine = match.lobby.find(e => e.id === meId);
+    const o = match.options || {};
+    const mode = o.mode || 'balanced';
+    const picks = mine?.teamUids || [];
+    const teamTxt = e => {
+      if (mode === 'collection' && e.teamUids?.length) return `Time da Coleção (${e.teamUids.length})`;
+      return `Inicial: ${esc(getSpecies(e.starter)?.name)}`;
+    };
+    root.innerHTML = `<div class="screen"><div class="panel-wide">${LOGO}
+      <div class="hub-grid">
+        <div class="card col">
+          <div class="spread"><h3>🏟️ ${esc(match.name)}</h3><span class="chip gold" style="font-size:14px">Código: ${esc(match.code)}</span></div>
+          <div class="row">${modeChip(mode, o.levelCap)}<span class="small muted">${o.maxPlayers} jogadores · ${o.turnLimit ? o.turnLimit + ' turnos' : 'até o Campeão'} ${match.hasPin ? '· 🔒 PIN' : ''}</span></div>
+          <div class="tiny muted">${esc(MODE_INFO[mode]?.desc || '')}</div>
+          ${isHost ? `<div class="grid2">
+            <select class="input" id="o-mode">${Object.entries(MODE_INFO).map(([k, m]) => `<option value="${k}" ${k === mode ? 'selected' : ''}>${m.icon} ${m.name}</option>`).join('')}</select>
+            <select class="input" id="o-turns">${[[30, 'Rápida (30)'], [40, 'Competitiva (40)'], [60, 'Normal (60)'], [0, 'Completa']].map(([v, l]) => `<option value="${v}" ${v === (o.turnLimit || 0) ? 'selected' : ''}>${l}</option>`).join('')}</select>
+            ${mode === 'collection' ? `<select class="input" id="o-cap">${[[0, 'Sem limite de nível'], [15, 'Nível máx 15'], [25, 'Nível máx 25'], [35, 'Nível máx 35'], [45, 'Nível máx 45']].map(([v, l]) => `<option value="${v}" ${v === (o.levelCap || 0) ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}
+          </div>` : ''}
+          <div class="list" style="max-height:none">${match.lobby.map(e => `
+            <div class="list-item"><img class="avatar sm" src="${avatarUrl(e.avatar)}" alt="${esc(e.name)}">
+              <div class="grow"><b>${esc(e.name)}</b> ${e.id === match.hostId ? '<span class="chip gold">anfitrião</span>' : ''} ${e.isBot ? '<span class="chip">CPU</span>' : e.ready || e.id === match.hostId ? '<span class="chip green">pronto</span>' : '<span class="chip">aguardando</span>'}
+                <div class="tiny muted">${teamTxt(e)}</div></div>
+              ${isHost && e.id !== meId ? `<button class="btn sm red" data-act="kick" data-id="${esc(e.id)}">✕</button>` : ''}
+            </div>`).join('')}</div>
+          ${isHost ? `<div class="row"><button class="btn sm" data-act="bot" ${match.lobby.length >= o.maxPlayers || mode === 'ranked' ? 'disabled' : ''} title="${mode === 'ranked' ? 'Competitivo é só entre humanos' : ''}">🤖 Adicionar CPU</button>
+              <button class="btn primary grow" data-act="start">▶ Iniciar partida</button></div>`
+            : `<button class="btn ${mine?.ready ? '' : 'green'}" data-act="ready">${mine?.ready ? 'Cancelar pronto' : '✅ Estou pronto'}</button>`}
+          <button class="btn ghost" data-act="leave">← Sair da sala</button>
+        </div>
+        <div class="card col">
+          ${mode === 'collection'
+            ? `<h3>📦 Seu time (até 6 da Coleção)</h3>${teamPicker(profile?.vault, picks, o.levelCap || 0)}${picks.length ? '' : `<h3 style="margin-top:8px">ou um inicial</h3>${starterPicker(mine?.starter)}`}`
+            : `<h3>🌱 Seu inicial</h3>${starterPicker(mine?.starter)}`}
+          <h3 style="margin-top:8px">💬 Chat</h3>
+          <div class="log" id="r-chat" style="height:130px">${(match.chat || []).map(c => `<p class="chat"><b>${esc(c.name)}:</b> ${esc(c.text)}</p>`).join('') || '<p class="muted">Diga olá!</p>'}</div>
+          <form class="row" id="r-form"><input class="input grow" id="r-msg" maxlength="200" placeholder="Mensagem..."><button class="btn sm primary">Enviar</button></form>
+        </div>
+      </div></div></div>`;
+    const chat = root.querySelector('#r-chat');
+    chat.scrollTop = chat.scrollHeight;
+    root.querySelector('#r-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const text = root.querySelector('#r-msg').value.trim();
+      if (text) await op({ op: 'chat', text });
+    });
+    const sendOpts = () => op({ op: 'options', mode: root.querySelector('#o-mode').value, turnLimit: Number(root.querySelector('#o-turns').value), levelCap: Number(root.querySelector('#o-cap')?.value || 0) });
+    root.querySelectorAll('#o-mode, #o-turns, #o-cap').forEach(el => el.addEventListener('change', sendOpts));
+  };
+
+  const op = async body => {
+    try { const r = await api('match', { matchId, ...body }); if (r.match) { match = r.match; check(); } }
+    catch (e) { toast(e.message, 'bad'); }
+  };
+  const check = () => {
+    if (match.status === 'playing' || match.status === 'finished') { cleanup(); ctx.openOnline(match.id); return; }
+    if (match.status === 'abandoned') { cleanup(); toast('A sala foi encerrada.'); ctx.go('lobby'); return; }
+    if (!match.lobby.some(e => e.id === meId)) { cleanup(); toast('Você saiu da sala.'); ctx.go('lobby'); return; }
+    render();
+  };
+  const refresh = async () => {
+    try { const r = await api('match', { op: 'get', matchId }); if (!match || r.match.version !== match.version) { match = r.match; check(); } }
+    catch (e) { if (e.status === 403 || e.status === 404) { cleanup(); ctx.go('lobby'); } }
+  };
+
+  bindActions(root, {
+    starter: d => op({ op: 'update', starter: d.id }),
+    pick: d => {
+      const mine = match.lobby.find(e => e.id === meId);
+      op({ op: 'update', teamUids: togglePick([...(mine?.teamUids || [])], d.uid) });
+    },
+    ready: () => op({ op: 'update', ready: !match.lobby.find(e => e.id === meId)?.ready }),
+    bot: () => op({ op: 'add_bot' }),
+    kick: d => op({ op: 'remove', target: d.id }),
+    start: () => op({ op: 'start' }),
+    leave: async () => { await op({ op: 'leave' }); cleanup(); ctx.go('lobby'); }
+  });
+
+  const unwatch = watchMatch(matchId, refresh);
+  const poll = setInterval(refresh, 5000);
+  let cleaned = false;
+  function cleanup() { if (cleaned) return; cleaned = true; unwatch(); clearInterval(poll); }
+  await refresh();
+  return cleanup;
 }
 
 function editProfile(profile, onSaved) {
@@ -136,21 +404,6 @@ function editProfile(profile, onSaved) {
   });
 }
 
-function vaultModal(profile) {
-  const v = profile?.vault || [];
-  openModal('vault', '📦 Cofre de Pokémon', `<p class="small muted">Ao fim de cada partida online, o seu melhor Pokémon (shinies primeiro) vem para o Cofre. No lobby de uma sala você pode levar 1 deles como segundo Pokémon (entra no nível 10, no máximo).</p>
-    <div class="dex">${v.map(m => `<div class="e caught"><img src="${monSprite(m)}" alt="${esc(getSpecies(m.sp)?.name)}"><div><b>${esc(getSpecies(m.sp)?.name)}</b>${m.shiny ? ' ✨' : ''}</div><div>Nv. ${m.lvl}</div></div>`).join('') || '<p class="muted">Vazio por enquanto — termine uma partida online!</p>'}</div>`, { wide: true });
-}
-
-async function rankingModal() {
-  openModal('rank', '🏆 Ranking', '<span class="spinner"></span>');
-  try {
-    const { ranking } = await api('leaderboard', null, 'GET');
-    setModalBody('rank', `<table class="score"><tr><th>#</th><th>Treinador</th><th>Pontos</th><th>Pokédex</th><th>Vitórias</th><th>Campeão</th><th>✨</th></tr>
-      ${ranking.map((r, i) => `<tr><td>${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</td><td>${esc(r.name)}</td><td><b>${r.points}</b></td><td>${r.pokedex}</td><td>${r.wins}</td><td>${r.champion}</td><td>${r.shinies}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">Ninguém pontuou ainda.</td></tr>'}</table>
-      <p class="tiny muted">Pontos: 10 por espécie na Pokédex, 300 por vitória, 500 por título de Campeão, 50 por shiny, 25 por vitória PvP. Só partidas online contam.</p>`);
-  } catch (e) { setModalBody('rank', `<p class="muted">${esc(e.message)}</p>`); }
-}
 
 async function adminModal() {
   openModal('admin', '🛡️ Admin', '<span class="spinner"></span>', { wide: true });
@@ -188,134 +441,7 @@ async function adminModal() {
 }
 
 // ================================================================ lobby online
-export async function lobbyScreen(root, ctx) {
-  root.innerHTML = `<div class="screen"><div class="panel-wide">${LOGO}
-    <div class="hub-grid">
-      <div class="card col"><h3>🛠️ Criar sala</h3>
-        <div class="field"><label>Nome</label><input class="input" id="c-name" maxlength="30" placeholder="Sala de Kanto"></div>
-        <div class="grid2">
-          <div class="field"><label>Jogadores</label><select class="input" id="c-max">${[2, 3, 4, 5, 6].map(n => `<option ${n === 4 ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
-          <div class="field"><label>Duração</label><select class="input" id="c-turns"><option value="30">Rápida (30 turnos)</option><option value="60" selected>Normal (60 turnos)</option><option value="0">Completa (até o Campeão)</option></select></div>
-        </div>
-        <div class="grid2">
-          <div class="field"><label>PIN (opcional)</label><input class="input" id="c-pin" inputmode="numeric" maxlength="6" placeholder="só números"></div>
-          <div class="field"><label>Visibilidade</label><select class="input" id="c-pub"><option value="1">Pública (aparece na lista)</option><option value="0">Privada (só por código)</option></select></div>
-        </div>
-        <button class="btn primary" data-act="create">Criar sala</button>
-        <div class="divider"></div>
-        <h3>🔑 Entrar por código</h3>
-        <div class="row"><input class="input grow" id="j-code" maxlength="5" placeholder="ABCDE" style="text-transform:uppercase"><input class="input" id="j-pin" maxlength="6" placeholder="PIN" style="width:90px"><button class="btn blue" data-act="join-code">Entrar</button></div>
-      </div>
-      <div class="card col"><div class="spread"><h3>🌐 Salas abertas</h3><button class="btn sm" data-act="refresh">↻</button></div>
-        <div class="list" id="rooms"><span class="spinner"></span></div>
-        <button class="btn ghost" data-act="back">← Voltar</button>
-      </div>
-    </div></div></div>`;
-  const v = id => root.querySelector(id).value;
-  const load = async () => {
-    try {
-      const { rooms } = await api('rooms', null, 'GET');
-      root.querySelector('#rooms').innerHTML = rooms.length ? rooms.map(r => `
-        <div class="list-item"><div class="grow"><b>${esc(r.name)}</b> ${r.hasPin ? '🔒' : ''}<div class="tiny muted">Anfitrião: ${esc(r.host)} · ${r.players}/${r.maxPlayers} · código ${esc(r.code)}</div></div>
-        <button class="btn sm blue" data-act="join" data-id="${r.id}" data-pin="${r.hasPin ? '1' : ''}" ${r.players >= r.maxPlayers ? 'disabled' : ''}>Entrar</button></div>`).join('')
-        : '<p class="muted small">Nenhuma sala aberta. Crie uma!</p>';
-    } catch (e) { root.querySelector('#rooms').innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
-  };
-  const go = async p => { try { const { match } = await p; ctx.openRoom(match.id); } catch (e) { toast(e.message, 'bad'); } };
-  bindActions(root, {
-    create: () => go(api('match', { op: 'create', name: v('#c-name'), maxPlayers: Number(v('#c-max')), turnLimit: Number(v('#c-turns')), pin: v('#c-pin'), isPublic: v('#c-pub') === '1' })),
-    'join-code': () => go(api('match', { op: 'join', code: v('#j-code'), pin: v('#j-pin') })),
-    join: d => go(api('match', { op: 'join', matchId: d.id, pin: d.pin ? prompt('PIN da sala:') || '' : '' })),
-    refresh: load,
-    back: () => ctx.go('hub')
-  });
-  load();
-  const t = setInterval(load, 6000);
-  return () => clearInterval(t);
-}
 
-// ================================================================ sala de espera
-export async function roomScreen(root, ctx, matchId) {
-  let match = null;
-  let profile = null;
-  try { profile = (await api('profile', { op: 'get' })).profile; } catch { /* ok */ }
-  const meId = profile?.id;
-
-  const render = () => {
-    if (!match) return;
-    const isHost = match.hostId === meId;
-    const mine = match.lobby.find(e => e.id === meId);
-    const vault = profile?.vault || [];
-    root.innerHTML = `<div class="screen"><div class="panel-wide">${LOGO}
-      <div class="hub-grid">
-        <div class="card col">
-          <div class="spread"><h3>🏟️ ${esc(match.name)}</h3><span class="chip gold" style="font-size:14px">Código: ${esc(match.code)}</span></div>
-          <div class="small muted">${match.options.maxPlayers} jogadores · ${match.options.turnLimit ? match.options.turnLimit + ' turnos' : 'até o Campeão'} ${match.hasPin ? '· 🔒 PIN' : ''}</div>
-          <div class="list" style="max-height:none">${match.lobby.map(e => `
-            <div class="list-item"><img class="avatar sm" src="${avatarUrl(e.avatar)}" alt="${esc(e.name)}">
-              <div class="grow"><b>${esc(e.name)}</b> ${e.id === match.hostId ? '<span class="chip gold">anfitrião</span>' : ''} ${e.isBot ? '<span class="chip">CPU</span>' : e.ready || e.id === match.hostId ? '<span class="chip green">pronto</span>' : '<span class="chip">aguardando</span>'}
-                <div class="tiny muted">Inicial: ${esc(getSpecies(e.starter)?.name)}${e.vaultUid ? ' + 1 do Cofre' : ''}</div></div>
-              <img src="${monSprite(e.starter)}" alt="${esc(getSpecies(e.starter)?.name)}" style="width:36px;height:36px;object-fit:contain">
-              ${isHost && e.id !== meId ? `<button class="btn sm red" data-act="kick" data-id="${esc(e.id)}">✕</button>` : ''}
-            </div>`).join('')}</div>
-          ${isHost ? `<div class="row"><button class="btn sm" data-act="bot" ${match.lobby.length >= match.options.maxPlayers ? 'disabled' : ''}>🤖 Adicionar CPU</button>
-              <button class="btn primary grow" data-act="start">▶ Iniciar partida</button></div>`
-            : `<button class="btn ${mine?.ready ? '' : 'green'}" data-act="ready">${mine?.ready ? 'Cancelar pronto' : '✅ Estou pronto'}</button>`}
-          <button class="btn ghost" data-act="leave">← Sair da sala</button>
-        </div>
-        <div class="card col">
-          <h3>Seu inicial</h3>${starterPicker(mine?.starter)}
-          ${vault.length ? `<h3 style="margin-top:8px">Levar do Cofre (opcional)</h3>
-            <div class="pick-grid"><div class="pick ${!mine?.vaultUid ? 'on' : ''}" data-act="vault" data-uid="">Nenhum</div>${vault.map(m => `<div class="pick ${mine?.vaultUid === m.uid ? 'on' : ''}" data-act="vault" data-uid="${esc(m.uid)}"><img src="${monSprite(m)}" alt="">${esc(getSpecies(m.sp)?.name)}${m.shiny ? '✨' : ''}<br>Nv.${Math.min(10, m.lvl)}</div>`).join('')}</div>` : ''}
-          <h3 style="margin-top:8px">💬 Chat</h3>
-          <div class="log" id="r-chat" style="height:140px">${(match.chat || []).map(c => `<p class="chat"><b>${esc(c.name)}:</b> ${esc(c.text)}</p>`).join('') || '<p class="muted">Diga olá!</p>'}</div>
-          <form class="row" id="r-form"><input class="input grow" id="r-msg" maxlength="200" placeholder="Mensagem..."><button class="btn sm primary">Enviar</button></form>
-        </div>
-      </div></div></div>`;
-    const chat = root.querySelector('#r-chat');
-    chat.scrollTop = chat.scrollHeight;
-    root.querySelector('#r-form').addEventListener('submit', async e => {
-      e.preventDefault();
-      const text = root.querySelector('#r-msg').value.trim();
-      if (!text) return;
-      await op({ op: 'chat', text });
-    });
-  };
-
-  const op = async body => {
-    try { const r = await api('match', { matchId, ...body }); if (r.match) { match = r.match; check(); } }
-    catch (e) { toast(e.message, 'bad'); }
-  };
-  const check = () => {
-    if (match.status === 'playing' || match.status === 'finished') { cleanup(); ctx.openOnline(match.id); return; }
-    if (match.status === 'abandoned') { cleanup(); toast('A sala foi encerrada.'); ctx.go('lobby'); return; }
-    if (!match.lobby.some(e => e.id === meId)) { cleanup(); toast('Você saiu da sala.'); ctx.go('lobby'); return; }
-    render();
-  };
-  const refresh = async () => {
-    try { const r = await api('match', { op: 'get', matchId }); if (!match || r.match.version !== match.version) { match = r.match; check(); } }
-    catch (e) { if (e.status === 403 || e.status === 404) { cleanup(); ctx.go('lobby'); } }
-  };
-
-  bindActions(root, {
-    starter: d => op({ op: 'update', starter: d.id }),
-    vault: d => op({ op: 'update', vaultUid: d.uid || null }),
-    ready: () => op({ op: 'update', ready: !match.lobby.find(e => e.id === meId)?.ready }),
-    bot: () => op({ op: 'add_bot' }),
-    kick: d => op({ op: 'remove', target: d.id }),
-    start: () => op({ op: 'start' }),
-    leave: async () => { await op({ op: 'leave' }); cleanup(); ctx.go('lobby'); }
-  });
-
-  const unwatch = watchMatch(matchId, refresh);
-  const poll = setInterval(refresh, 5000);
-  let cleaned = false;
-  function cleanup() { if (cleaned) return; cleaned = true; unwatch(); clearInterval(poll); }
-  await refresh();
-  return cleanup;
-}
-
-// ================================================================ partida local
 export function localSetupScreen(root, ctx) {
   const players = [
     { name: 'Jogador 1', avatar: 1, starter: 'charmander', isBot: false },

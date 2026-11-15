@@ -176,7 +176,8 @@ export function mountGame(root, session, { onExit }) {
     const cur = s.players[s.current];
     root.querySelector('#game').dataset.mtab = ui.mtab;
     root.querySelectorAll('[data-act="mtab"]').forEach(b => b.classList.toggle('primary', b.dataset.t === ui.mtab));
-    root.querySelector('#g-mode').textContent = session.kind === 'online' ? `🌐 Sala ${session.match?.code || ''}` : '🏠 Local';
+    const mo = session.match?.options || {};
+    root.querySelector('#g-mode').textContent = session.kind !== 'online' ? '📱 Offline' : mo.solo ? '🤖 Treino (salva na conta)' : `🌐 Sala ${session.match?.code || ''} · ${{ balanced: '⚖️ Balanceado', collection: '📦 Coleção', ranked: '🏆 Competitivo' }[mo.mode] || ''}`;
     root.querySelector('#g-turn').textContent = `Turno ${s.turn}${s.options.turnLimit ? '/' + s.options.turnLimit : ''}`;
     root.querySelector('#g-speed').textContent = SPEEDS.find(x => x[0] === anim.speed)?.[1].split(' ')[0] || '🎬';
     root.querySelector('#g-stats').innerHTML = p ? `
@@ -422,9 +423,9 @@ export function mountGame(root, session, { onExit }) {
     const ov = openModal('over', '🏆 Fim de jogo', `
       <div class="banner-win">${w ? avatarImg(w, 'avatar') : ''}<h2>${esc(w ? w.name : '—')} venceu!</h2>
       <p class="muted">${esc(s.log.filter(l => l.kind === 'win').slice(-1)[0]?.msg || '')}</p></div>
-      <table class="score"><tr><th>Treinador</th><th>Insígnias</th><th>Pokédex</th><th>Shinies</th><th>Pontos</th></tr>
-      ${ranked.map(p => `<tr><td>${esc(p.name)}</td><td>${p.badges.length}</td><td>${p.caught.length}</td><td>${p.stats.shinies}</td><td><b>${score(p)}</b></td></tr>`).join('')}</table>
-      ${session.kind === 'online' ? '<p class="small muted">Sua Pokédex, estatísticas e seu melhor Pokémon foram salvos no perfil (Cofre).</p>' : ''}
+      <table class="score"><tr><th>Treinador</th><th>Insígnias</th><th>Pokédex</th><th>Shinies</th><th>Pontos</th>${s.ratingChanges ? '<th>Rating</th>' : ''}</tr>
+      ${ranked.map(p => { const d = s.ratingChanges?.[p.id]; return `<tr><td>${esc(p.name)}</td><td>${p.badges.length}</td><td>${p.caught.length}</td><td>${p.stats.shinies}</td><td><b>${score(p)}</b></td>${s.ratingChanges ? `<td style="color:${d >= 0 ? '#8ff0bd' : '#ff9b9e'}"><b>${d >= 0 ? '+' : ''}${d ?? 0}</b></td>` : ''}</tr>`; }).join('')}</table>
+      ${session.kind === 'online' ? '<p class="small muted">Seus Pokémon (equipe e PC), Pokédex e estatísticas foram salvos na sua conta — veja em 📦 Coleção.</p>' : '<p class="small muted">Modo offline: o progresso não vai para a conta.</p>'}
       <button class="btn primary block" data-act="exit" style="margin-top:10px">Voltar ao menu</button>`);
     bindActions(ov, { exit: () => { closeModal('over'); onExit(); } });
   }

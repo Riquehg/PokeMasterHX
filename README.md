@@ -32,7 +32,9 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 - **XP e evolução:** quem derruba ganha tudo; quem participou 60%; o resto da equipe 40%; vencer Pokémon muito mais fracos rende pouco. Evolui no nível do catálogo ou com Pedra Evolutiva.
 - **PvP:** caiu na mesma casa de outro treinador → desafie. Quem perde paga 15% do ouro.
 - **CPUs:** completam salas e jogam sozinhas; se alguém sai, uma CPU assume. Se alguém fica 90 s parado, os outros podem deixar a CPU jogar a vez dele.
-- **Cofre e Pokédex:** ao fim de cada partida online o servidor grava sua Pokédex, estatísticas, pontos do ranking e o seu melhor Pokémon no Cofre (dá para levar 1 deles, no nível 10, para a próxima partida).
+- **Coleção da conta:** todo Pokémon da sua equipe e do PC em partidas salvas na conta (🤖 Treino contra CPUs e 🌐 Online) vai para a Coleção, com nível e evolução atualizados **durante a partida** (a cada captura, fim de batalha, uso do PC ou de itens). A Pokédex da conta também. Limite de 300; ⭐ favoritos e shinies nunca são descartados.
+- **Modos de sala online:** ⚖️ **Balanceado** (todos começam com 1 inicial Nv.5), 📦 **Coleção** (cada um leva até 6 Pokémon da Coleção, com nível máximo opcional: 15/25/35/45) e 🏆 **Competitivo** (balanceado, só humanos, sempre com limite de turnos, muda o **rating Elo**; ranking próprio).
+- **🤖 Treino contra CPUs:** partida privada que roda no servidor (salva na conta), começando com inicial ou com time da Coleção. É o jeito de "farmar". O **📱 Modo offline** continua existindo, mas não salva na conta (roda só no navegador).
 - **Cartas de Evento:** 14 cartas com história curta e recompensa/penalidade (Bolsa Perdida, Mochila de Campista, Árvore de Frutinhas, Treinador na Rota, Emboscada Rocket, Aula do Professor, Grama Agitada, Ovo Misterioso, Tempestade, Nuvem de Zubats, Pedágio do Snorlax, Meowth Ladrão, Atalho Secreto, Achado Raro). Texto e efeitos em `shared/data/events.js`.
 - **Animações:** dado 3D (para na face sorteada pelo servidor), peão andando casa a casa, faixa de troca de turno, carta de evento virando, entrada de batalha (Pokémon saindo da grama / tela VS contra treinadores), golpes com investida, dano flutuante, HP descendo, crítico e "super efetivo", desmaio, captura com arremesso da Pokébola e até 3 balançadas. Os turnos das CPUs também são animados. Botão 🎬 alterna normal / rápida / desligada.
 - **Mapa:** proporção real da imagem, zoom (roda do mouse, pinça no celular, botões + − ⤢), arrastar para mover, ◎ centraliza no seu peão; peões e Pokémon têm tamanho fixo na tela em qualquer zoom.
@@ -42,7 +44,7 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 
 ### 3.1 Supabase
 1. Abra o seu projeto em [supabase.com](https://supabase.com) (pode ser o mesmo de hoje — os sprites do Storage continuam iguais).
-2. **SQL Editor → New query**, cole todo o conteúdo de `supabase/schema.sql` e clique **Run**. Ele cria `profiles`, `matches`, `match_players`, `match_secrets`, `game_config`, as políticas de segurança (RLS) e liga o Realtime. Não mexe na tabela antiga `accounts`.
+2. **SQL Editor → New query**, cole todo o conteúdo de `supabase/schema.sql` e clique **Run** (rode de novo a cada atualização — ele só adiciona o que falta). Ele cria `profiles`, `matches`, `match_players`, `match_secrets`, `game_config`, as políticas de segurança (RLS) e liga o Realtime. Não mexe na tabela antiga `accounts`.
 3. **Authentication → Providers → Email**: deixe ativo. Para facilitar no começo, você pode desligar **Confirm email** (senão cada jogador precisa clicar no link do e-mail antes de entrar).
 4. **Authentication → URL Configuration**: em *Site URL* coloque o endereço da Vercel (ex.: `https://pokemasterhx.vercel.app`).
 5. **Project Settings → API**: copie *Project URL*, a chave **anon public** e a chave **service_role**.
@@ -61,6 +63,8 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 4. Pode desligar/apagar o serviço do Render.
 
 ### 3.4 Conferir se está tudo certo
+> **Erro "Servidor sem as chaves do Supabase"**: falta a chave do servidor na Vercel. Em *Settings → Environment Variables* crie `SUPABASE_SERVICE_ROLE_KEY` com a chave **service_role** (Supabase → Project Settings → API Keys → aba *Legacy API keys*, botão *Reveal*) **ou** a **Secret key** `sb_secret_...`. Marque **Production** (e Preview), salve e vá em *Deployments → ⋯ → Redeploy*. O servidor também aceita os nomes `SUPABASE_SECRET_KEY` e `SUPABASE_KEY` (o do servidor antigo).
+
 Abra **`https://SEU-SITE.vercel.app/api/health`**. Ele mostra se as 3 variáveis estão presentes, se a chave do servidor é mesmo a `service_role`/`secret` (e não a pública) e se as tabelas existem. Se aparecer "Erro interno"/"Problema no servidor" no jogo, é aqui que se descobre o motivo. Depois de mudar variáveis na Vercel, faça **Redeploy**.
 
 ### 3.5 Virar administrador

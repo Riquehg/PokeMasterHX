@@ -2,10 +2,20 @@
 import { createClient } from '@supabase/supabase-js';
 
 let client = null;
+
+// Aceita os nomes mais comuns (inclusive SUPABASE_KEY, usado pelo servidor antigo do Render)
+export const SERVICE_KEY_NAMES = ['SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY', 'SUPABASE_SERVICE_KEY', 'SUPABASE_KEY'];
+export function serviceKey() {
+  for (const n of SERVICE_KEY_NAMES) if (process.env[n]) return process.env[n].trim();
+  return null;
+}
+export function supabaseUrl() {
+  return (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim().replace(/\/+$/, '') || null;
+}
 export function admin() {
   if (!client) {
-    const url = process.env.SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const url = supabaseUrl();
+    const key = serviceKey();
     if (!url || !key) throw new Error('Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY nas variáveis de ambiente da Vercel.');
     client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   }
@@ -39,7 +49,7 @@ export const supabaseDb = {
     return res;
   },
   async listProfiles(limit) {
-    return check(await admin().from('profiles').select('id, trainer_name, avatar, points, stats, pokedex, vault, is_admin').order('points', { ascending: false }).limit(limit));
+    return check(await admin().from('profiles').select('id, trainer_name, avatar, points, rating, stats, pokedex, vault, is_admin').order('points', { ascending: false }).limit(limit));
   },
 
   async getMatch(id) {

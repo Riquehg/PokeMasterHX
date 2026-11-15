@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMemoryDb } from '../api/_lib/memory-db.js';
-import { matchOp, actionOp, listRooms, recordResults, adminOp, profileOp } from '../api/_lib/core.js';
+import { matchOp, actionOp, listRooms, recordResults, adminOp, profileOp, leaderboard } from '../api/_lib/core.js';
 import { whoMustAct } from '../shared/engine.js';
 
 async function setup() {
@@ -107,11 +107,11 @@ test('sair do lobby passa o anfitrião; sair em jogo vira CPU', async () => {
   assert.equal(g.isBot, true);
 });
 
-test('fim de partida grava Pokédex, estatísticas, pontos e Cofre no perfil', async () => {
+test('fim de partida: Coleção recebe equipe e PC, Pokédex, estatísticas e pontos', async () => {
   const { db, ash } = await setup();
   await profileOp(db, ash, { op: 'get' });
   const fake = {
-    id: 'm1', winner: ash.id,
+    id: 'm1', winner: ash.id, status: 'finished',
     players: [{ id: ash.id, caught: ['pikachu', 'eevee'], champion: true, badges: [1, 2, 3, 4, 5, 6], eliteStage: 4,
       team: [{ uid: 'u1', sp: 'raichu', lvl: 40, shiny: false }], box: [{ uid: 'u2', sp: 'eevee', lvl: 12, shiny: true }],
       stats: { captures: 2, shinies: 1, pvpWins: 1 } }]
@@ -120,12 +120,78 @@ test('fim de partida grava Pokédex, estatísticas, pontos e Cofre no perfil', a
   const p = await db.getProfile(ash.id);
   assert.deepEqual(p.pokedex.sort(), ['eevee', 'pikachu']);
   assert.equal(p.stats.wins, 1);
-  assert.equal(p.stats.champion, 1);
-  assert.equal(p.vault[0].uid, 'u2', 'shiny tem prioridade no Cofre');
+  assert.deepEqual(p.vault.map(v => v.uid).sort(), ['u1', 'u2']);
   assert.ok(p.points > 0);
 });
 
-test('admin: só is_admin; Pokémon do Dia e presente para o Cofre', async () => {
+test('Coleção sincroniza DURANTE a partida (PC, capturas) e sobe de nível', async () => {
+  const { db, ash } = await setup();
+  await profileOp(db, ash, { op: 'get' });
+  const { match } = await matchOp(db, ash, { op: 'solo', bots: 1, starter: 'charmander' });
+  assert.equal(match.status, 'playing');
+  assert.equal(match.options.solo, true);
+  // força estar numa cidade e usar o PC (ação que sincroniza)
+  const row = await db.getMatch(match.id);
+  const st = row.state;
+  const me = st.players.find(p => p.id === ash.id);
+  me.box.push({ uid: 'boxmon', sp: 'pidgey', lvl: 9, xp: 0, hp: 20, shiny: false });
+  st.current = st.players.indexOf(me); st.phase = 'action'; st.battle = null; st.pending = null;
+  await db.updateMatch(row.id, row.version, { state: st, version: row.version + 1 });
+  const r = await actionOp(db, ash, { matchId: match.id, action: { type: 'pc', op: 'withdraw', box: 0 } });
+  assert.equal(r.error, undefined);
+  const p = await db.getProfile(ash.id);
+  assert.ok(p.vault.some(v => v.uid === 'boxmon' && v.lvl === 9), 'Pokémon do PC aparece na Coleção');
+  assert.ok(p.vault.some(v => v.sp === 'charmander'));
+  assert.equal((await listRooms(db, ash)).rooms.length, 0, 'treino solo não aparece na lista pública');
+});
+
+test('modo Coleção: leva até 6 da conta, com limite de nível', async () => {
+  const { db, ash, gary } = await setup();
+  await profileOp(db, ash, { op: 'get' });
+  await db.upsertProfile(ash.id, { vault: [
+    { uid: 'v1', sp: 'dragonite', lvl: 50, shiny: true }, { uid: 'v2', sp: 'pikachu', lvl: 20, shiny: false }
+  ] });
+  const { match } = await matchOp(db, ash, { op: 'create', name: 'Farm', mode: 'collection', levelCap: 35 });
+  await rejects(matchOp(db, ash, { op: 'update', matchId: match.id, teamUids: ['nao-tenho'] }), /Coleção/);
+  await matchOp(db, ash, { op: 'update', matchId: match.id, teamUids: ['v1', 'v2'] });
+  await matchOp(db, gary, { op: 'join', matchId: match.id });
+  await matchOp(db, gary, { op: 'update', matchId: match.id, ready: true });
+  const s = (await matchOp(db, ash, { op: 'start', matchId: match.id })).match.state;
+  const team = s.players.find(p => p.id === ash.id).team;
+  assert.deepEqual(team.map(m => m.sp), ['dragonite', 'pikachu']);
+  assert.equal(team[0].lvl, 35, 'limite de nível aplicado');
+  assert.equal(team[0].uid, 'v1', 'mantém o uid para sincronizar de volta');
+  assert.equal(s.players.find(p => p.id === gary.id).team[0].lvl, 5, 'quem não escolheu usa o inicial');
+});
+
+test('modo balanceado não aceita time da Coleção', async () => {
+  const { db, ash } = await setup();
+  await profileOp(db, ash, { op: 'get' });
+  const { match } = await matchOp(db, ash, { op: 'create', name: 'Justo', mode: 'balanced' });
+  await rejects(matchOp(db, ash, { op: 'update', matchId: match.id, teamUids: [] }), /balanceada/);
+});
+
+test('competitivo: sem CPUs, sempre com limite de turnos e muda o rating (Elo)', async () => {
+  const { db, ash, gary } = await setup();
+  await profileOp(db, ash, { op: 'get' }); await profileOp(db, gary, { op: 'get' });
+  const { match } = await matchOp(db, ash, { op: 'create', name: 'Ranked', mode: 'ranked', turnLimit: 0 });
+  assert.equal(match.options.turnLimit, 40);
+  await rejects(matchOp(db, ash, { op: 'add_bot', matchId: match.id }), /humanos/);
+  await rejects(matchOp(db, ash, { op: 'start', matchId: match.id }), /2/);
+  await matchOp(db, gary, { op: 'join', matchId: match.id });
+  await matchOp(db, gary, { op: 'update', matchId: match.id, ready: true });
+  const s = (await matchOp(db, ash, { op: 'start', matchId: match.id })).match.state;
+  // termina a partida com Ash vencendo
+  s.status = 'finished'; s.winner = ash.id;
+  await recordResults(db, s, { mode: 'ranked' });
+  const a = await db.getProfile(ash.id), g = await db.getProfile(gary.id);
+  assert.ok(a.rating > 1000 && g.rating < 1000, `${a.rating} / ${g.rating}`);
+  assert.equal(a.stats.ranked, 1);
+  const lb = await leaderboard(db);
+  assert.equal(lb.competitive[0].name, a.trainer_name);
+});
+
+test('admin: só is_admin; Pokémon do Dia e presente para a Coleção', async () => {
   const { db, ash, gary } = await setup();
   await profileOp(db, ash, { op: 'get' }); // primeiro perfil do banco em memória vira admin
   await profileOp(db, gary, { op: 'get' });
@@ -135,18 +201,4 @@ test('admin: só is_admin; Pokémon do Dia e presente para o Cofre', async () =>
   await adminOp(db, ash, { op: 'grant_mon', userId: gary.id, species: 'dratini', level: 9, shiny: true });
   const g = await db.getProfile(gary.id);
   assert.equal(g.vault[0].sp, 'dratini');
-});
-
-test('Cofre: Pokémon herdado entra limitado ao nível 10', async () => {
-  const { db, ash } = await setup();
-  await profileOp(db, ash, { op: 'get' });
-  await db.upsertProfile(ash.id, { vault: [{ uid: 'v1', sp: 'dragonite', lvl: 50, shiny: true }] });
-  const { match } = await matchOp(db, ash, { op: 'create', name: 'Herança' });
-  await matchOp(db, ash, { op: 'update', matchId: match.id, vaultUid: 'v1' });
-  await matchOp(db, ash, { op: 'add_bot', matchId: match.id });
-  const s = (await matchOp(db, ash, { op: 'start', matchId: match.id })).match.state;
-  const team = s.players.find(p => p.id === ash.id).team;
-  assert.equal(team.length, 2);
-  assert.equal(team[1].sp, 'dragonite');
-  assert.ok(team[1].lvl <= 10);
 });

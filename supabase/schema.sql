@@ -17,7 +17,9 @@ create table if not exists public.profiles (
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now()
 );
+alter table public.profiles add column if not exists rating int not null default 1000; -- competitivo (Elo)
 create index if not exists profiles_points_idx on public.profiles (points desc);
+create index if not exists profiles_rating_idx on public.profiles (rating desc);
 
 -- Cria o perfil automaticamente quando alguém se cadastra
 create or replace function public.handle_new_user()

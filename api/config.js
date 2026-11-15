@@ -9,8 +9,8 @@ export default route(async db => {
   try { info = await configInfo(db); } catch (e) { console.error('[config]', e.message); }
   return {
     dev,
-    supabaseUrl: dev ? null : process.env.SUPABASE_URL || null,
-    supabaseAnonKey: dev ? null : process.env.SUPABASE_ANON_KEY || null,
+    supabaseUrl: dev ? null : (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim() || null,
+    supabaseAnonKey: dev ? null : (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim() || null,
     storageUrl: process.env.SPRITES_URL || null,
     ...info
   };

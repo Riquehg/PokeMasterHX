@@ -1,5 +1,5 @@
 // GET /api/health — diagnóstico da configuração (abra no navegador: https://SEU-SITE/api/health).
-// Não revela as chaves: só diz se estão presentes, de que tipo são e se o banco responde.
+// Não revela as chaves: só diz quais variáveis existem, de que tipo são e se o banco responde.
 import { route } from './_lib/http.js';
 
 function keyKind(k) {
@@ -18,28 +18,34 @@ function keyKind(k) {
 
 export default route(async () => {
   if (globalThis.__PMHX_DB__) return { ok: true, mode: 'dev (banco em memória)' };
-  const url = process.env.SUPABASE_URL;
-  const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const anon = process.env.SUPABASE_ANON_KEY;
+  const { serviceKey, supabaseUrl, SERVICE_KEY_NAMES } = await import('./_lib/supabase-db.js');
+  const url = supabaseUrl();
+  const service = serviceKey();
+  const anon = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const out = {
+    ambiente_vercel: process.env.VERCEL_ENV || 'desconhecido',
+    variaveis_encontradas: Object.keys(process.env).filter(k => /SUPABASE/i.test(k)).sort(),
     SUPABASE_URL: url ? 'ok' : 'ausente',
-    SUPABASE_ANON_KEY: anon ? 'presente' : 'ausente',
-    SUPABASE_SERVICE_ROLE_KEY: keyKind(service),
+    chave_publica: anon ? 'presente' : 'ausente',
+    chave_do_servidor: `${keyKind(service)}${service ? ' — lida de ' + SERVICE_KEY_NAMES.find(n => process.env[n]) : ''}`,
     tabelas: {},
     problemas: []
   };
-  if (!url) out.problemas.push('Defina SUPABASE_URL na Vercel (Settings > Environment Variables) e faça Redeploy.');
-  if (!anon) out.problemas.push('Defina SUPABASE_ANON_KEY (chave anon/publishable).');
-  if (!service) out.problemas.push('Defina SUPABASE_SERVICE_ROLE_KEY (chave service_role/secret).');
-  if (/ERRADA/.test(out.SUPABASE_SERVICE_ROLE_KEY)) out.problemas.push('SUPABASE_SERVICE_ROLE_KEY está com a chave pública. Use a "service_role" (ou "Secret key") em Supabase > Project Settings > API Keys.');
+  if (!url) out.problemas.push('Falta SUPABASE_URL.');
+  if (!anon) out.problemas.push('Falta SUPABASE_ANON_KEY (chave anon / Publishable key).');
+  if (!service) out.problemas.push('Falta a chave do servidor: crie SUPABASE_SERVICE_ROLE_KEY com a chave service_role (ou Secret key sb_secret_...). Marque o ambiente "Production" e faça Redeploy.');
+  if (/ERRADA/.test(out.chave_do_servidor)) out.problemas.push('A chave do servidor é a pública. Use a service_role / Secret key (Supabase > Project Settings > API Keys).');
+  if (anon && service && anon.trim() === service.trim()) out.problemas.push('A chave pública e a do servidor são iguais — a do servidor precisa ser a service_role/secret.');
 
-  if (url && service) {
+  if (url && service && !/ERRADA/.test(out.chave_do_servidor)) {
     const { admin } = await import('./_lib/supabase-db.js');
     for (const t of ['profiles', 'matches', 'match_players', 'match_secrets', 'game_config']) {
       const { error } = await admin().from(t).select('*', { count: 'exact', head: true });
       out.tabelas[t] = error ? `ERRO: ${error.message}` : 'ok';
       if (error) out.problemas.push(`Tabela ${t}: ${error.message} — rode o supabase/schema.sql no SQL Editor.`);
     }
+    const { error: colErr } = await admin().from('profiles').select('rating', { head: true });
+    if (colErr) out.problemas.push('Schema desatualizado (falta profiles.rating): rode de novo o supabase/schema.sql.');
   }
   out.ok = out.problemas.length === 0;
   return out;

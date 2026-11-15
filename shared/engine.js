@@ -78,8 +78,17 @@ export function createMatch(config) {
 
 function newPlayer(rng, cfg, index) {
   const starter = SPECIES[cfg.starter] ? cfg.starter : STARTERS[index % STARTERS.length];
-  const starterLevel = Math.max(1, Math.min(10, Number(cfg.starterLevel) || 5));
-  const mon = createMon(rng, starter, starterLevel, { shiny: !!cfg.starterShiny, ot: cfg.id });
+  const starterLevel = Math.max(1, Math.min(cfg.isBot ? 60 : 10, Number(cfg.starterLevel) || 5));
+  // Modo Coleção: o jogador traz até 6 Pokémon da conta (mantendo o uid para sincronizar de volta)
+  const brought = (Array.isArray(cfg.teamMons) ? cfg.teamMons : [])
+    .filter(m => m && SPECIES[m.sp]).slice(0, TEAM_SIZE)
+    .map(m => {
+      const mon = createMon(rng, m.sp, Math.max(1, Math.min(60, Number(m.lvl) || 5)), { shiny: !!m.shiny, ot: cfg.id });
+      if (m.uid) mon.uid = String(m.uid);
+      if (m.aura) mon.aura = m.aura;
+      return mon;
+    });
+  const mon = brought[0] || createMon(rng, starter, starterLevel, { shiny: !!cfg.starterShiny, ot: cfg.id });
   const p = {
     id: String(cfg.id || `p${index + 1}`),
     name: String(cfg.name || `Treinador ${index + 1}`).slice(0, 24),
@@ -91,16 +100,16 @@ function newPlayer(rng, cfg, index) {
     visited: [START_SPACE],
     gold: STARTING_GOLD,
     items: { ...STARTING_ITEMS },
-    team: [mon],
+    team: brought.length ? brought : [mon],
     box: [],
     badges: [],
     eliteStage: 0,
     champion: false,
-    seen: [starter],
-    caught: [starter],
+    seen: brought.length ? [...new Set(brought.map(m => m.sp))] : [starter],
+    caught: brought.length ? [...new Set(brought.map(m => m.sp))] : [starter],
     skip: 0,
     moveBonus: 0,
-    stats: { captures: 0, shinies: mon.shiny ? 1 : 0, wins: 0, losses: 0, pvpWins: 0, ballsThrown: 0 }
+    stats: { captures: 0, shinies: brought.length ? 0 : (mon.shiny ? 1 : 0), wins: 0, losses: 0, pvpWins: 0, ballsThrown: 0 }
   };
   // Pokémon extra (ex.: herdado do Cofre)
   if (cfg.extraMon && SPECIES[cfg.extraMon.sp]) {
