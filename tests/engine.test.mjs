@@ -292,6 +292,7 @@ test('sair da partida: CPU assume o lugar e o jogo continua', () => {
 
 test('estado é serializável em JSON e pequeno o bastante para o Realtime', () => {
   const r = simulate(123, 4, 40);
+  r.state.log = r.state.log.slice(-120); // no jogo real o log é limitado a 120 linhas
   const json = JSON.stringify(r.state);
   assert.deepEqual(JSON.parse(json).players.length, 4);
   assert.ok(json.length < 400_000, `estado com ${json.length} bytes`);

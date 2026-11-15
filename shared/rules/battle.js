@@ -81,6 +81,12 @@ export function startBattle(state, cfg) {
   if (sides[1].kind === 'player') markSeen(getPlayer(state, sides[1].pid), sideActive(state, sides[0]).sp);
 
   const foeSide = sides[1];
+  fx(state, {
+    k: 'battle', kind: cfg.kind, pid: p.id,
+    foe: foeSide.kind === 'player'
+      ? { kind: 'player', pid: foeSide.pid }
+      : { kind: foeSide.kind, name: foeSide.name || null, title: foeSide.title || null, sprite: foeSide.sprite || null, sp: foeMon.sp, lvl: foeMon.lvl, shiny: !!foeMon.shiny, count: foeSide.team.length }
+  });
   if (cfg.kind === 'wild') {
     log(state, `🌿 Um ${speciesName(foeMon.sp)}${foeMon.shiny ? ' ✨SHINY✨' : ''} selvagem (Nv. ${foeMon.lvl}) apareceu!`, foeMon.shiny ? 'shiny' : 'info');
   } else if (foeSide.kind === 'npc') {
@@ -180,6 +186,7 @@ function doSwitch(state, si, index) {
   const side = state.battle.sides[si];
   const team = sideTeam(state, side);
   side.active = index;
+  fx(state, { k: 'switch', side: si, uid: team[index].uid });
   if (!side.seen.includes(team[index].uid)) side.seen.push(team[index].uid);
   log(state, `🔄 ${sideName(state, side)} enviou ${speciesName(team[index].sp)}!`);
   const other = state.battle.sides[1 - si];
@@ -195,6 +202,7 @@ function useBattleItem(state, si, choice) {
   takeItem(player, choice.item);
   if (it.kind === 'heal') {
     const healed = healMon(target, it.healPct);
+    fx(state, { k: 'heal', side: si, uid: target.uid, amount: healed, hpAfter: target.hp, maxHp: maxHpOf(target) });
     log(state, `💊 ${player.name} usou ${it.name}: ${speciesName(target.sp)} recuperou ${healed} HP.`);
   } else if (it.kind === 'revive') {
     target.hp = Math.max(1, Math.ceil(maxHpOf(target) * it.healPct));
@@ -218,7 +226,7 @@ function tryCapture(state, rng, si, ballId) {
   player.stats.ballsThrown += 1;
 
   if (ball.bonus >= 99) {
-    fx(state, { k: 'capture', roll: 6, total: 99, target: 0, ok: true, ball: ballId });
+    fx(state, { k: 'capture', pid: player.id, roll: 6, total: 99, target: 0, ok: true, ball: ballId, sp: wild.sp, shiny: !!wild.shiny, shakes: 3 });
     return 'captured';
   }
 
@@ -237,7 +245,8 @@ function tryCapture(state, rng, si, ballId) {
   if (hpBonus) parts.push(`HP baixo +${hpBonus}`);
   if (lvlBonus) parts.push(`nível +${lvlBonus}`);
   const detail = `${parts.join(' · ')} = ${total} (precisa ${target}+)`;
-  fx(state, { k: 'capture', roll, total, target, ok, ball: ballId });
+  const shakes = ok ? 3 : roll === 1 ? 0 : Math.max(0, Math.min(2, 3 + (total - target)));
+  fx(state, { k: 'capture', pid: player.id, roll, total, target, ok, ball: ballId, sp: wild.sp, shiny: !!wild.shiny, shakes });
 
   if (ok) {
     log(state, `🔴 ${player.name} jogou uma ${ball.name}... ${detail}. Capturou!`, 'good');
@@ -293,7 +302,7 @@ function attackDamage(state, rng, si) {
     else if (roll !== 6) msg += '.';
   }
   log(state, msg, mult >= 2 ? 'good' : mult < 1 ? 'bad' : 'battle');
-  fx(state, { k: 'hit', side: si, roll, dmg, mult, crit: roll === 6, type });
+  fx(state, { k: 'hit', side: si, roll, dmg, mult, crit: roll === 6, weak: roll === 1, type, atkUid: a.uid, defUid: d.uid, hpAfter: d.hp, maxHp: maxHpOf(d) });
   return d.hp <= 0;
 }
 
@@ -303,7 +312,7 @@ function awardKO(state, winnerSi, loserSi) {
   const loseSide = b.sides[loserSi];
   const foe = sideActive(state, loseSide);
   log(state, `💥 ${monLabel(state, loseSide)} desmaiou!`, 'battle');
-  fx(state, { k: 'faint', side: loserSi });
+  fx(state, { k: 'faint', side: loserSi, uid: foe.uid });
   if (winSide.kind !== 'player') return;
 
   const player = getPlayer(state, winSide.pid);

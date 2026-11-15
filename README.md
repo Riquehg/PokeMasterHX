@@ -33,6 +33,9 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 - **PvP:** caiu na mesma casa de outro treinador → desafie. Quem perde paga 15% do ouro.
 - **CPUs:** completam salas e jogam sozinhas; se alguém sai, uma CPU assume. Se alguém fica 90 s parado, os outros podem deixar a CPU jogar a vez dele.
 - **Cofre e Pokédex:** ao fim de cada partida online o servidor grava sua Pokédex, estatísticas, pontos do ranking e o seu melhor Pokémon no Cofre (dá para levar 1 deles, no nível 10, para a próxima partida).
+- **Cartas de Evento:** 14 cartas com história curta e recompensa/penalidade (Bolsa Perdida, Mochila de Campista, Árvore de Frutinhas, Treinador na Rota, Emboscada Rocket, Aula do Professor, Grama Agitada, Ovo Misterioso, Tempestade, Nuvem de Zubats, Pedágio do Snorlax, Meowth Ladrão, Atalho Secreto, Achado Raro). Texto e efeitos em `shared/data/events.js`.
+- **Animações:** dado 3D (para na face sorteada pelo servidor), peão andando casa a casa, faixa de troca de turno, carta de evento virando, entrada de batalha (Pokémon saindo da grama / tela VS contra treinadores), golpes com investida, dano flutuante, HP descendo, crítico e "super efetivo", desmaio, captura com arremesso da Pokébola e até 3 balançadas. Os turnos das CPUs também são animados. Botão 🎬 alterna normal / rápida / desligada.
+- **Mapa:** proporção real da imagem, zoom (roda do mouse, pinça no celular, botões + − ⤢), arrastar para mover, ◎ centraliza no seu peão; peões e Pokémon têm tamanho fixo na tela em qualquer zoom.
 - **Balanceamento:** testado com simulações de partidas só com CPUs (`npm run sim`): todas terminam, ~75% de vitória nos ginásios quando a equipe está no nível, campeão entre os turnos 60 e 100 no modo completo (por isso as salas têm os modos Rápida e Normal).
 
 ## 3. Publicar (passo a passo, só pelo navegador)
@@ -53,11 +56,14 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 2. Em **Environment Variables** adicione (veja `.env.example`):
    - `SUPABASE_URL`
    - `SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY` ← **secreta**, nunca coloque no código
+   - `SUPABASE_SERVICE_ROLE_KEY` ← **secreta**, nunca coloque no código. Em projetos novos do Supabase ela se chama **Secret key** (`sb_secret_...`); a pública é a **Publishable key** (`sb_publishable_...`) e vai em `SUPABASE_ANON_KEY`.
 3. **Deploy**. A cada commit no GitHub, a Vercel publica sozinha.
 4. Pode desligar/apagar o serviço do Render.
 
-### 3.4 Virar administrador
+### 3.4 Conferir se está tudo certo
+Abra **`https://SEU-SITE.vercel.app/api/health`**. Ele mostra se as 3 variáveis estão presentes, se a chave do servidor é mesmo a `service_role`/`secret` (e não a pública) e se as tabelas existem. Se aparecer "Erro interno"/"Problema no servidor" no jogo, é aqui que se descobre o motivo. Depois de mudar variáveis na Vercel, faça **Redeploy**.
+
+### 3.5 Virar administrador
 Cadastre-se no jogo e rode no SQL Editor (trocando o e-mail):
 ```sql
 update public.profiles set is_admin = true
@@ -65,7 +71,7 @@ where id = (select id from auth.users where email = 'seu@email.com');
 ```
 O botão **🛡️ Painel do admin** aparece no hub (Pokémon do Dia, dar Pokémon para o Cofre de alguém, promover admins).
 
-### 3.5 Contas antigas (opcional)
+### 3.6 Contas antigas (opcional)
 As contas da tabela `accounts` não entram automaticamente (as senhas estavam em texto puro). Para migrar e-mail, senha, nome e Pokédex de uma vez, rode no seu computador:
 ```bash
 npm install

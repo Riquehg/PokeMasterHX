@@ -15,7 +15,7 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
   '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.svg': 'image/svg+xml' };
 
 const routes = {};
-for (const name of ['match', 'action', 'rooms', 'profile', 'leaderboard', 'admin', 'config']) {
+for (const name of ['match', 'action', 'rooms', 'profile', 'leaderboard', 'admin', 'config', 'health']) {
   routes['/api/' + name] = (await import(`../api/${name}.js`)).default;
 }
 
@@ -32,6 +32,14 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (routes[url.pathname]) return routes[url.pathname](req, res);
+  // Sprites locais opcionais para testes offline: DEV_SPRITES_DIR=/pasta SPRITES_URL=/dev-sprites/
+  if (url.pathname.startsWith('/dev-sprites/') && process.env.DEV_SPRITES_DIR) {
+    const f = join(process.env.DEV_SPRITES_DIR, normalize(decodeURIComponent(url.pathname.slice(13))).replace(/^([/\\])+/, ''));
+    let data;
+    try { data = await readFile(f); } catch { res.writeHead(404); return res.end(); }
+    res.writeHead(200, { 'Content-Type': MIME[extname(f)] || 'application/octet-stream' });
+    return res.end(data);
+  }
   if (url.pathname.startsWith('/api/')) { res.writeHead(404); return res.end('{}'); }
 
   let path = normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, '');

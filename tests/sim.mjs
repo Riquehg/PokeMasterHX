@@ -12,6 +12,7 @@ export function simulate(seed, nPlayers = 4, maxTurns = 400) {
   let loops = 0;
   while (state.status === 'playing' && state.turn <= maxTurns && loops < 100000) {
     const rng = createRng(state.seed);
+    state.fx = [];
     const before = JSON.stringify([state.turn, state.current, state.phase, state.log.length]);
     runBots(state, rng, 0);
     state.seed = rng.state;

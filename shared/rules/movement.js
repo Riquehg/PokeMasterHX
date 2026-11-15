@@ -49,3 +49,21 @@ export function distancesFrom(player, from) {
   }
   return dist;
 }
+
+/** Um caminho de exatamente `steps` casas até `to` (para animar o peão). */
+export function pathTo(player, to, steps) {
+  const start = player.pos;
+  let found = null;
+  const walk = (id, left, path) => {
+    if (found) return;
+    if (left === 0) { if (id === to) found = [...path]; return; }
+    for (const nb of SPACES[id].links) {
+      if (path.includes(nb) || !canEnter(player, nb)) continue;
+      path.push(nb);
+      walk(nb, left - 1, path);
+      path.pop();
+    }
+  };
+  walk(start, steps, [start]);
+  return found || [start, to];
+}

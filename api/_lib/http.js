@@ -45,7 +45,18 @@ export function route(handler, { auth = true, methods = ['POST'] } = {}) {
     } catch (e) {
       if (e instanceof HttpError) return send(res, e.status, { error: e.message });
       console.error('[api]', e);
-      send(res, 500, { error: 'Erro interno no servidor.' });
+      send(res, 500, { error: explain(e) });
     }
   };
+}
+
+/** Traduz erros de configuração comuns para mensagens que dizem o que fazer. */
+export function explain(e) {
+  const m = String(e && e.message || e).toLowerCase();
+  if (m.includes('configure supabase_url')) return 'Servidor sem as chaves do Supabase. Configure as variáveis na Vercel e faça Redeploy (veja /api/health).';
+  if (m.includes('row-level security') || m.includes('permission denied')) return 'O servidor está usando a chave pública. Coloque a chave service_role/secret em SUPABASE_SERVICE_ROLE_KEY e faça Redeploy (veja /api/health).';
+  if (m.includes('does not exist') || m.includes('could not find the table') || m.includes('schema cache')) return 'Faltam tabelas no banco: rode o arquivo supabase/schema.sql no SQL Editor do Supabase (veja /api/health).';
+  if (m.includes('invalid api key') || m.includes('jwt')) return 'Chave do Supabase inválida na Vercel (veja /api/health).';
+  if (m.includes('fetch failed') || m.includes('enotfound')) return 'O servidor não conseguiu falar com o Supabase. Confira SUPABASE_URL (veja /api/health).';
+  return 'Erro interno no servidor: ' + String(e && e.message || e).slice(0, 160);
 }

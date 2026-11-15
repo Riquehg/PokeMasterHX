@@ -1,12 +1,13 @@
-// Tela de batalha (selvagem, treinador, ginásio, Liga e PvP). Também serve de "modo espectador".
+// Tela de batalha (arena estilo jogos de Pokémon) + animações de golpe, dano, cura, troca e desmaio.
 import { getSpecies } from '../../shared/data/pokemon.js';
 import { ITEMS, ballBonusAgainst } from '../../shared/data/items.js';
 import { monView, maxHpOf } from '../../shared/rules/monsters.js';
-import { bestAttack, effectivenessLabel } from '../../shared/rules/types.js';
+import { bestAttack, effectivenessLabel, TYPE_COLORS } from '../../shared/rules/types.js';
 import { whoMustAct } from '../../shared/engine.js';
-import { esc } from './dom.js';
+import { esc, hpClass } from './dom.js';
 import { monSprite, itemUrl, leaderUrl, typeLabel } from '../config.js';
-import { typeChips, hpBar } from './common.js';
+import { typeChips } from './common.js';
+import { wait } from './fx.js';
 
 const CAPTURE_TARGET = { 1: 3, 2: 4, 3: 5, 4: 6, 5: 7 };
 const KIND_TITLE = {
@@ -18,7 +19,6 @@ function sideTeam(state, side) {
   return side.kind === 'player' ? state.players.find(p => p.id === side.pid).team : side.team;
 }
 
-/** Chance (0..1) de captura com uma bola, pela mesma regra do motor. */
 export function captureChance(state, ballId) {
   const b = state.battle;
   const wild = b.sides[1].team[0];
@@ -35,33 +35,22 @@ export function captureChance(state, ballId) {
   return ok / 6;
 }
 
-function fighter(state, side, mon, isMe, opp) {
+function hpBox(state, side, mon, cls) {
   const v = monView(mon);
   const owner = side.kind === 'player' ? state.players.find(p => p.id === side.pid)?.name : side.kind === 'wild' ? 'Selvagem' : side.name;
-  let hint = '';
-  if (opp) {
-    const m = bestAttack(v.types, getSpecies(opp.sp).types);
-    const lbl = effectivenessLabel(m.mult);
-    hint = `<div class="tiny" style="margin-top:4px">Golpe de ${esc(typeLabel(m.type))} ${m.mult !== 1 ? `<b>x${m.mult}</b>` : ''} ${lbl ? '· ' + esc(lbl) : ''}</div>`;
-  }
   const team = sideTeam(state, side);
-  const balls = team.length > 1 || side.kind !== 'wild'
-    ? `<div class="balls">${team.map(m => `<i class="${m.hp > 0 ? '' : 'off'}"></i>`).join('')}</div>` : '';
-  return `<div class="fighter ${isMe ? 'me' : 'foe'} ${v.shiny ? 'shiny' : ''}" data-side="${isMe ? 'me' : 'foe'}">
-    <div class="tiny muted">${esc(owner || '')}</div>
-    <img class="sprite" src="${monSprite(mon)}" alt="${esc(v.name)}">
-    <div class="name">${esc(v.name)} ${v.shiny ? '✨' : ''} <span class="chip gold">Nv. ${v.lvl}</span></div>
-    <div class="row" style="justify-content:center;margin:4px 0">${typeChips(v.types)}</div>
-    ${hpBar(v.hp, v.maxHp)}
-    <div class="small"><b>${Math.max(0, v.hp)}</b> / ${v.maxHp} HP · ATQ ${v.atk}${side.boost?.[mon.uid] ? ` <span class="chip green">+${side.boost[mon.uid]}</span>` : ''}</div>
-    ${hint}${balls}
+  const r = Math.max(0, v.hp) / v.maxHp;
+  return `<div class="hpbox ${cls}" data-uid="${esc(mon.uid)}">
+    <div class="owner">${esc(owner || '')}</div>
+    <div class="nm"><span>${esc(v.name)}${v.shiny ? ' ✨' : ''}</span><span class="lv">Nv.${v.lvl}</span></div>
+    <div class="types">${typeChips(v.types)}${side.boost?.[mon.uid] ? ` <span class="chip green">ATQ +${side.boost[mon.uid]}</span>` : ''}</div>
+    <div class="hp ${hpClass(r)}"><i style="width:${(r * 100).toFixed(1)}%"></i></div>
+    <div class="hpnum"><b class="cur">${Math.max(0, v.hp)}</b> / ${v.maxHp}</div>
+    ${team.length > 1 ? `<div class="balls">${team.map(m => `<i class="${m.hp > 0 ? '' : 'off'}"></i>`).join('')}</div>` : ''}
   </div>`;
 }
 
-/**
- * HTML do conteúdo da batalha para o espectador/participante `vid`.
- * ui.sub = submenu aberto ('switch' | 'item' | 'ball' | null)
- */
+/** HTML completo. ui.sub = submenu ('switch'|'item'|'ball'). */
 export function battleHtml(state, vid, ui = {}, canAct = true) {
   const b = state.battle;
   if (!b) return '';
@@ -69,85 +58,157 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
   const participant = mySi >= 0;
   if (!participant) mySi = 0;
   const me = b.sides[mySi], foe = b.sides[1 - mySi];
-  const myTeam = sideTeam(state, me), foeTeam = sideTeam(state, foe);
-  const myMon = myTeam[me.active], foeMon = foeTeam[foe.active];
+  const myMon = sideTeam(state, me)[me.active], foeMon = sideTeam(state, foe)[foe.active];
   const must = whoMustAct(state);
-  const myTurn = participant && canAct && must.includes(vid);
+  const myTurn = participant && canAct && must.includes(vid) && !ui.busy;
   const mustSwitch = participant && b.mustSwitch[mySi];
+  const tier = b.kind === 'wild' ? getSpecies(foeMon.sp).tier : 1;
+  const official = ['gym', 'elite', 'champion'].includes(b.kind);
 
-  const foeHeader = foe.kind === 'npc'
-    ? `<div class="foe-trainer">${foe.sprite ? `<img src="${leaderUrl(foe.sprite)}" alt="${esc(foe.name)}">` : ''}<span>${esc(foe.title ? foe.title + ' ' : '')}${esc(foe.name)}</span></div>` : '';
+  const mAtk = bestAttack(getSpecies(myMon.sp).types, getSpecies(foeMon.sp).types);
+  const fAtk = bestAttack(getSpecies(foeMon.sp).types, getSpecies(myMon.sp).types);
+  const matchup = `Seu golpe: <b style="color:${TYPE_COLORS[mAtk.type]}">${esc(typeLabel(mAtk.type))}</b> ${mAtk.mult !== 1 ? `<b>x${mAtk.mult}</b>` : ''} · Golpe do adversário: <b style="color:${TYPE_COLORS[fAtk.type]}">${esc(typeLabel(fAtk.type))}</b> ${fAtk.mult !== 1 ? `<b>x${fAtk.mult}</b>` : ''}`;
+
+  const arena = `<div class="arena t${tier} ${official ? 'official' : ''}" id="arena">
+      ${foe.kind === 'npc' && foe.sprite ? `<img class="foe-trainer" src="${leaderUrl(foe.sprite)}" alt="${esc(foe.name)}">` : ''}
+      <div class="platform foe"></div><div class="platform me"></div>
+      <img class="mon-sprite foe ${foeMon.shiny ? 'shiny' : ''}" data-uid="${esc(foeMon.uid)}" src="${monSprite(foeMon)}" alt="${esc(getSpecies(foeMon.sp).name)}">
+      <img class="mon-sprite me ${myMon.shiny ? 'shiny' : ''}" data-uid="${esc(myMon.uid)}" src="${monSprite(myMon)}" alt="${esc(getSpecies(myMon.sp).name)}">
+      ${hpBox(state, foe, foeMon, 'foe')}
+      ${hpBox(state, me, myMon, 'me')}
+    </div>`;
 
   let controls = '';
-  if (!participant) {
-    controls = `<p class="muted center">Você está assistindo esta batalha.</p>`;
-  } else if (!myTurn) {
-    controls = `<p class="muted center"><span class="spinner"></span> Aguardando ${b.kind === 'pvp' ? 'o adversário escolher' : '...'}</p>`;
-  } else if (mustSwitch) {
-    controls = `<p class="center"><b>Seu Pokémon desmaiou!</b> Escolha quem entra:</p>${switchList(myTeam, me.active, true)}`;
-  } else {
+  if (ui.busy) controls = `<p class="muted center" style="margin-top:10px">⚔️ ...</p>`;
+  else if (!participant) controls = `<p class="muted center" style="margin-top:10px">👀 Você está assistindo esta batalha.</p>`;
+  else if (!myTurn) controls = `<p class="muted center" style="margin-top:10px"><span class="spinner"></span> ${b.kind === 'pvp' ? 'Aguardando o adversário escolher...' : 'Aguarde...'}</p>`;
+  else if (mustSwitch) controls = `<p class="center" style="margin-top:10px"><b>${esc(getSpecies(myMon.sp).name)} desmaiou!</b> Escolha quem entra:</p>${switchList(sideTeam(state, me), me.active)}`;
+  else {
     const p = state.players.find(x => x.id === vid);
-    const ballCount = Object.entries(p.items).filter(([id, n]) => ITEMS[id]?.kind === 'ball' && n > 0).reduce((a, [, n]) => a + n, 0);
-    const battleItems = Object.entries(p.items).filter(([id, n]) => ['heal', 'revive', 'boost'].includes(ITEMS[id]?.kind) && n > 0);
-    const official = ['gym', 'elite', 'champion'].includes(b.kind);
-    controls = `
-      <div class="battle-actions">
+    const myTeam = sideTeam(state, me);
+    const balls = Object.entries(p.items).filter(([id, n]) => ITEMS[id]?.kind === 'ball' && n > 0);
+    const items = Object.entries(p.items).filter(([id, n]) => ['heal', 'revive', 'boost'].includes(ITEMS[id]?.kind) && n > 0);
+    controls = `<div class="battle-actions">
         <button class="btn red" data-act="b-attack">⚔️ Atacar</button>
         <button class="btn blue" data-act="b-sub" data-sub="switch" ${myTeam.filter(m => m.hp > 0).length < 2 ? 'disabled' : ''}>🔄 Trocar</button>
-        <button class="btn purple" data-act="b-sub" data-sub="item" ${battleItems.length ? '' : 'disabled'}>🎒 Itens</button>
-        <button class="btn green" data-act="b-sub" data-sub="ball" ${b.kind === 'wild' && ballCount ? '' : 'disabled'}>🔴 Capturar</button>
+        <button class="btn purple" data-act="b-sub" data-sub="item" ${items.length ? '' : 'disabled'}>🎒 Itens</button>
+        <button class="btn green" data-act="b-sub" data-sub="ball" ${b.kind === 'wild' && balls.length ? '' : 'disabled'}>🔴 Capturar</button>
         <button class="btn" data-act="b-flee" ${official ? 'disabled' : ''}>${b.kind === 'wild' ? '🏃 Fugir' : '🏳️ Desistir'}</button>
       </div>`;
-    if (ui.sub === 'switch') controls += switchList(myTeam, me.active, false);
-    if (ui.sub === 'item') {
-      controls += `<div class="subpick">${battleItems.map(([id, n]) => `
-        <button class="btn sm pickbtn" data-act="b-item" data-item="${id}"><img src="${itemUrl(id)}" alt="${esc(ITEMS[id].name)}">${esc(ITEMS[id].name)} ×${n}</button>`).join('')}</div>
-        <p class="tiny muted">Poções e Revive pedem o alvo: o ativo é usado por padrão; para curar outro, troque antes.</p>`;
-    }
+    if (ui.sub === 'switch') controls += switchList(myTeam, me.active);
+    if (ui.sub === 'item') controls += `<div class="subpick">${items.map(([id, n]) => `<button class="btn sm pickbtn" data-act="b-item" data-item="${id}"><img src="${itemUrl(id)}" alt="${esc(ITEMS[id].name)}">${esc(ITEMS[id].name)} ×${n}</button>`).join('')}</div>`;
     if (ui.sub === 'ball') {
-      const balls = Object.entries(p.items).filter(([id, n]) => ITEMS[id]?.kind === 'ball' && n > 0);
       controls += `<div class="subpick">${balls.map(([id, n]) => {
         const c = Math.round(captureChance(state, id) * 100);
         return `<button class="btn sm pickbtn" data-act="b-ball" data-item="${id}"><img src="${itemUrl(id)}" alt="${esc(ITEMS[id].name)}">${esc(ITEMS[id].name)} ×${n} <span class="chip ${c >= 60 ? 'green' : c >= 34 ? 'gold' : 'red'}">${c}%</span></button>`;
-      }).join('')}</div>
-      <p class="tiny muted">Dica: HP do selvagem abaixo de 50% dá +1 e abaixo de 25% dá +2. Rolar 1 sempre falha. Cada erro pode fazê-lo fugir.</p>`;
+      }).join('')}</div><p class="tiny muted">Dica: HP abaixo de 50% dá +1 e abaixo de 25% dá +2. 🎲1 sempre falha e cada erro pode fazê-lo fugir.</p>`;
     }
   }
 
-  const logLines = b.log.slice(-14).map(l => `<p>${esc(l)}</p>`).join('');
-  return `
-    <div class="spread" style="margin-bottom:8px"><b>${KIND_TITLE[b.kind] || 'Batalha'}</b><span class="chip">Rodada ${b.round + 1}</span></div>
-    ${foeHeader}
-    <div class="arena">
-      ${fighter(state, me, myMon, true, foeMon)}
-      <div class="vs">VS</div>
-      ${fighter(state, foe, foeMon, false, myMon)}
-    </div>
+  return `<div class="battle-head"><b>${KIND_TITLE[b.kind] || 'Batalha'}${foe.kind === 'npc' ? ` · ${esc(foe.title ? foe.title + ' ' : '')}${esc(foe.name)}` : ''}</b><span class="chip">Rodada ${b.round + 1}</span></div>
+    ${arena}
+    <div class="matchup">${matchup}</div>
     ${controls}
-    <div class="battle-log" id="battle-log">${logLines}</div>`;
+    <div class="battle-log" id="battle-log">${b.log.slice(-14).map(l => `<p>${esc(l)}</p>`).join('')}</div>`;
 }
 
-function switchList(team, active, forced) {
+function switchList(team, active) {
   return `<div class="subpick">${team.map((m, i) => {
     const v = monView(m);
-    const dis = m.hp <= 0 || i === active;
-    return `<button class="btn sm pickbtn" data-act="b-switch" data-index="${i}" ${dis ? 'disabled' : ''}>
+    return `<button class="btn sm pickbtn" data-act="b-switch" data-index="${i}" ${m.hp <= 0 || i === active ? 'disabled' : ''}>
       <img src="${monSprite(m)}" alt="${esc(v.name)}">${esc(v.name)} Nv.${v.lvl} <span class="tiny muted">${Math.max(0, m.hp)}/${v.maxHp}</span></button>`;
-  }).join('')}</div>${forced ? '' : ''}`;
+  }).join('')}</div>`;
+}
+
+// ------------------------------------------------ animações dentro da arena
+function float(arena, target, text, cls) {
+  const r = target.getBoundingClientRect(), a = arena.getBoundingClientRect();
+  const d = document.createElement('div');
+  d.className = 'dmg-float ' + cls;
+  d.textContent = text;
+  d.style.left = (r.left - a.left + r.width / 2) + 'px';
+  d.style.top = (r.top - a.top + r.height * 0.25) + 'px';
+  arena.appendChild(d);
+  setTimeout(() => d.remove(), 1100);
+}
+
+function setHp(box, hp, max) {
+  if (!box) return;
+  const r = Math.max(0, hp) / max;
+  const bar = box.querySelector('.hp');
+  bar.className = 'hp ' + hpClass(r);
+  bar.querySelector('i').style.width = (r * 100).toFixed(1) + '%';
+  const cur = box.querySelector('.cur');
+  const from = Number(cur.textContent) || 0;
+  const t0 = performance.now();
+  const step = t => {
+    const k = Math.min(1, (t - t0) / 500);
+    cur.textContent = Math.round(from + (Math.max(0, hp) - from) * k);
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+/** Toca, em ordem, os efeitos de uma rodada na arena aberta (#arena). */
+export async function playBattleFx(fxList) {
+  const arena = document.getElementById('arena');
+  if (!arena) return;
+  for (const f of fxList) {
+    if (!arena.isConnected) return;
+    const sprite = uid => arena.querySelector(`.mon-sprite[data-uid="${uid}"]`);
+    const box = uid => arena.querySelector(`.hpbox[data-uid="${uid}"]`);
+    if (f.k === 'hit') {
+      const atk = sprite(f.atkUid), def = sprite(f.defUid);
+      if (atk) { const c = atk.classList.contains('me') ? 'lunge-me' : 'lunge-foe'; atk.classList.remove(c); void atk.offsetWidth; atk.classList.add(c); }
+      const chip = document.createElement('div');
+      chip.className = 'roll-chip';
+      chip.textContent = `🎲 ${f.roll}`;
+      if (atk) { const r = atk.getBoundingClientRect(), a = arena.getBoundingClientRect(); chip.style.left = (r.left - a.left + r.width * 0.4) + 'px'; chip.style.top = (r.top - a.top) + 'px'; }
+      arena.appendChild(chip); setTimeout(() => chip.remove(), 900);
+      await wait(260);
+      if (def) {
+        if (f.dmg > 0) { def.classList.remove('hurt'); void def.offsetWidth; def.classList.add('hurt'); }
+        const flash = document.createElement('div');
+        flash.className = 'hit-flash';
+        flash.style.background = (TYPE_COLORS[f.type] || '#fff') + '88';
+        arena.appendChild(flash); setTimeout(() => flash.remove(), 260);
+        if (f.crit) { arena.classList.remove('shake'); void arena.offsetWidth; arena.classList.add('shake'); }
+        float(arena, def, f.mult === 0 ? 'Imune!' : `-${f.dmg}${f.crit ? '!' : ''}`, f.crit ? 'crit' : '');
+        setHp(box(f.defUid), f.hpAfter, f.maxHp);
+      }
+      const eff = f.mult === 0 ? 'Não afeta...' : effectivenessLabel(f.mult) || (f.crit ? 'Golpe crítico!' : '');
+      if (eff) {
+        const e = document.createElement('div');
+        e.className = 'eff-banner' + (f.mult < 1 ? ' bad' : '');
+        e.textContent = eff;
+        arena.appendChild(e); setTimeout(() => e.remove(), 950);
+      }
+      await wait(650);
+    } else if (f.k === 'heal') {
+      const s = sprite(f.uid);
+      if (s) float(arena, s, `+${f.amount}`, 'heal');
+      setHp(box(f.uid), f.hpAfter, f.maxHp);
+      await wait(600);
+    } else if (f.k === 'faint') {
+      const s = sprite(f.uid);
+      if (s) s.classList.add('faint');
+      await wait(700);
+    } else if (f.k === 'switch') {
+      await wait(150);
+    }
+  }
 }
 
 export function outcomeText(state, lb, vid) {
   if (!lb) return '';
   const o = lb.outcome || {};
   const mySi = lb.sides.findIndex(s => s.kind === 'player' && s.pid === vid);
-  const r = o.result;
-  if (r === 'captured') return mySi === 0 ? '🎉 Captura realizada!' : 'Captura realizada.';
-  if (r === 'escaped') return '💨 O Pokémon fugiu.';
-  if (r === 'fled') return '🏃 Fugiu da batalha.';
-  if (r === 'draw') return '⌛ Empate.';
-  if (r === 'win') {
-    if (mySi < 0) return 'Batalha encerrada.';
-    return o.winner === mySi ? '🏆 Vitória!' : '💫 Derrota...';
+  switch (o.result) {
+    case 'captured': return mySi === 0 ? '🎉 Captura realizada!' : 'Captura realizada.';
+    case 'escaped': return '💨 O Pokémon fugiu.';
+    case 'fled': return '🏃 Você fugiu da batalha.';
+    case 'draw': return '⌛ Empate.';
+    case 'win': return mySi < 0 ? 'Batalha encerrada.' : o.winner === mySi ? '🏆 Vitória!' : '💫 Derrota...';
+    default: return 'Batalha encerrada.';
   }
-  return 'Batalha encerrada.';
 }

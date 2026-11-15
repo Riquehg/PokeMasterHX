@@ -32,10 +32,11 @@ export const supabaseDb = {
   },
   async upsertProfile(id, patch) {
     const existing = await this.getProfile(id);
-    if (existing) {
-      return check(await admin().from('profiles').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id).select('*').single());
-    }
-    return check(await admin().from('profiles').insert({ id, ...patch }).select('*').single());
+    const res = existing
+      ? check(await admin().from('profiles').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id).select('*').maybeSingle())
+      : check(await admin().from('profiles').insert({ id, ...patch }).select('*').maybeSingle());
+    if (!res) throw new Error('row-level security: o perfil não pôde ser gravado');
+    return res;
   },
   async listProfiles(limit) {
     return check(await admin().from('profiles').select('id, trainer_name, avatar, points, stats, pokedex, vault, is_admin').order('points', { ascending: false }).limit(limit));

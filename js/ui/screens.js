@@ -60,7 +60,8 @@ export function loginScreen(root, { onDone, onLocal }) {
 // ================================================================ hub
 export async function hubScreen(root, ctx) {
   let profile = null;
-  try { profile = (await api('profile', { op: 'get' })).profile; } catch (e) { toast(e.message, 'bad'); }
+  let profileError = '';
+  try { profile = (await api('profile', { op: 'get' })).profile; } catch (e) { profileError = e.message; toast(e.message, 'bad'); }
   const daily = ctx.daily || dailyPokemon(null);
   const dsp = getSpecies(daily);
   const localSave = LocalSession.hasSave();
@@ -68,6 +69,8 @@ export async function hubScreen(root, ctx) {
   try { mine = (await api('rooms', null, 'GET')).mine || []; } catch { /* sem salas */ }
 
   const render = () => `<div class="screen"><div class="panel-wide">${LOGO}
+    ${profileError ? `<div class="card" style="border-color:var(--red);margin-bottom:12px"><b style="color:#ff9b9e">⚠️ Problema no servidor</b>
+      <p class="small">${esc(profileError)}</p><p class="small muted">Abra <a href="/api/health" target="_blank" style="color:var(--gold)">/api/health</a> para ver o diagnóstico da configuração.</p></div>` : ''}
     <div class="hub-grid">
       <div class="col">
         <div class="trainer">

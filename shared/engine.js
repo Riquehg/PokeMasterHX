@@ -15,13 +15,14 @@ import {
   GYMS, gymAt, ELITE_FOUR, CHAMPION, ELITE_SPACE, CHAMPION_SPACE, ROUTE_TRAINERS, ROCKET, BADGES_TO_LEAGUE
 } from './data/trainers.js';
 import { createRng } from './rules/rng.js';
-import { createMon, rollWild, fullHeal, healMon, maxHpOf, levelUp, evolve, TEAM_SIZE, WILD_LEVELS, gainXp } from './rules/monsters.js';
-import { destinations } from './rules/movement.js';
+import { createMon, rollWild, fullHeal, healMon, maxHpOf, levelUp, evolve, TEAM_SIZE, WILD_LEVELS, gainXp, BASE_SHINY_RATE } from './rules/monsters.js';
+import { destinations, pathTo } from './rules/movement.js';
 import { startBattle, submitChoice, setBattleEndHandler, deliverCapture, sideActive, sideIndexOf } from './rules/battle.js';
 import {
   GameError, fail, getPlayer, currentPlayer, log, fx, addItem, takeItem, blackout, speciesName, clone, markCaught
 } from './rules/helpers.js';
 import { speciesByTier } from './data/pokemon.js';
+import { EVENT_CARDS } from './data/events.js';
 import { botAction } from './bots.js';
 
 export const ENGINE_VERSION = 2;
@@ -230,9 +231,11 @@ function roll(state, rng, p) {
 function move(state, rng, p, to) {
   if (state.phase !== 'move' || state.pending?.kind !== 'move') fail('Role o dado antes de se mover.');
   if (!state.pending.options.includes(to)) fail('Destino inválido para esta rolagem.');
+  const path = pathTo(p, to, state.pending.steps);
   state.pending = null;
+  const from = p.pos;
   p.pos = to;
-  fx(state, { k: 'move', pid: p.id, to });
+  fx(state, { k: 'move', pid: p.id, from, to, path });
   const sp = getSpace(to);
   log(state, `🚶 ${p.name} foi para ${sp.name}.`);
   resolveSpace(state, rng, p, sp);
@@ -271,6 +274,7 @@ function advanceTurn(state, now) {
   state.turnStartedAt = now;
   const np = currentPlayer(state);
   log(state, `➡️ Turno ${state.turn}: vez de ${np.name}.`, 'turn');
+  fx(state, { k: 'turn', pid: np.id, turn: state.turn });
   checkTurnLimit(state);
 }
 
@@ -563,69 +567,124 @@ const EVENT_ITEMS = {
   5: [['ultra_ball', 4], ['rare_candy', 3], ['revive', 2], ['rainbow_ball', 1], ['master_ball', 0.6]]
 };
 
+const LUCKY_ITEMS = [['rare_candy', 4], ['evolution_stone', 3], ['rainbow_ball', 2], ['master_ball', 1]];
+
 function boardEvent(state, rng, p, sp) {
   const t = sp.tier;
-  const kind = rng.weighted([
-    ['gold', 16], ['item', 18], ['trainer', 30], ['rocket', t >= 2 ? 7 : 0], ['heal', 9],
-    ['professor', 6], ['rare_wild', 6], ['skip', 4], ['shortcut', 4]
-  ]);
-  fx(state, { k: 'event', kind });
-  switch (kind) {
-    case 'gold': {
+  const cards = EVENT_CARDS.filter(c => t >= c.minTier);
+  const card = rng.weighted(cards.map(c => [c, c.weight]));
+  const lore = rng.pick(card.lore).replace(/\{name\}/g, p.name);
+  const effects = []; // [{ text, tone }]
+  const ev = { k: 'event', pid: p.id, id: card.id, title: card.title, icon: card.icon, tone: card.tone, lore, effects };
+  let then = null; // ação depois de mostrar a carta (batalha)
+
+  switch (card.id) {
+    case 'lost_bag': {
       const g = rng.int(40, 120) * t;
       p.gold += g;
-      log(state, `💰 ${p.name} achou uma bolsa perdida com ${g} de ouro!`, 'good');
-      return;
+      effects.push({ text: `+${g} de ouro`, tone: 'good', icon: '🪙' });
+      break;
     }
-    case 'item': {
+    case 'camper_backpack': {
       const id = rng.weighted(EVENT_ITEMS[t]);
       const q = ITEMS[id].kind === 'ball' && ITEMS[id].bonus < 2 ? rng.int(1, 3) : 1;
       addItem(p, id, q);
-      log(state, `🎁 ${p.name} encontrou ${q}x ${ITEMS[id].name}!`, id === 'master_ball' ? 'shiny' : 'good');
-      return;
+      effects.push({ text: `+${q}x ${ITEMS[id].name}`, tone: id === 'master_ball' ? 'shiny' : 'good', item: id });
+      break;
     }
-    case 'trainer': case 'rocket': {
-      if (!p.team.some(m => m.hp > 0)) {
-        log(state, `😵 Um treinador quis lutar, mas ${p.name} está sem Pokémon de pé.`);
-        return;
-      }
-      const base = kind === 'rocket' ? ROCKET : rng.pick(ROUTE_TRAINERS);
-      const size = kind === 'rocket' ? Math.min(3, 1 + Math.ceil(t / 2)) : rng.int(1, Math.min(3, 1 + Math.floor(t / 2)));
-      const team = routeTeam(rng, t, size, base.favorite);
-      const prize = Math.round(team.reduce((a, m) => a + m.lvl, 0) * (kind === 'rocket' ? 20 : 12));
-      startBattle(state, {
-        kind, pid: p.id,
-        foe: { kind: 'npc', name: base.name, title: kind === 'rocket' ? '' : 'Treinador', sprite: base.sprite, prize, team }
-      });
-      state.phase = 'battle';
-      return;
-    }
-    case 'heal': {
+    case 'berry_tree': {
       p.team.forEach(fullHeal);
-      log(state, `🍓 ${p.name} encontrou frutinhas e a equipe se recuperou totalmente.`, 'good');
-      return;
+      effects.push({ text: 'Equipe totalmente curada', tone: 'good', icon: '💚' });
+      break;
     }
-    case 'professor': {
-      const xp = 12 * t * 3;
-      log(state, `👨‍🔬 O Professor Carvalho apareceu e treinou a equipe de ${p.name} (+${xp} XP para todos)!`, 'good');
+    case 'route_trainer': case 'rocket_ambush': {
+      if (!p.team.some(m => m.hp > 0)) {
+        effects.push({ text: 'Sua equipe está desmaiada — o desafiante foi embora', tone: 'neutral' });
+        break;
+      }
+      const rocket = card.id === 'rocket_ambush';
+      const base = rocket ? ROCKET : rng.pick(ROUTE_TRAINERS);
+      const size = rocket ? Math.min(3, 1 + Math.ceil(t / 2)) : rng.int(1, Math.min(3, 1 + Math.floor(t / 2)));
+      const team = routeTeam(rng, t, size, base.favorite);
+      const prize = Math.round(team.reduce((a, m) => a + m.lvl, 0) * (rocket ? 20 : 12));
+      ev.trainer = { name: base.name, sprite: base.sprite };
+      effects.push({ text: `Batalha contra ${base.name} (${size} Pokémon)`, tone: 'battle', icon: '⚔️' });
+      effects.push({ text: `Prêmio: ${prize} de ouro`, tone: 'good', icon: '🪙' });
+      if (rocket) effects.push({ text: 'Se perder: roubam 25% do seu ouro', tone: 'bad', icon: '💸' });
+      then = () => {
+        startBattle(state, { kind: rocket ? 'rocket' : 'trainer', pid: p.id,
+          foe: { kind: 'npc', name: base.name, title: rocket ? '' : 'Treinador', sprite: base.sprite, prize, team } });
+        state.phase = 'battle';
+      };
+      break;
+    }
+    case 'professor_class': {
+      const xp = 36 * t;
+      effects.push({ text: `+${xp} XP para a equipe`, tone: 'good', icon: '⭐' });
+      fx(state, ev);
+      log(state, `${card.icon} ${p.name} tirou a carta "${card.title}" → ${effects.map(e => e.text).join(' · ')}`, 'event');
       p.team.filter(m => m.hp > 0).forEach(m => gainXp(m, xp).forEach(msg => log(state, msg, 'good')));
       return;
     }
-    case 'rare_wild': {
-      log(state, `🌟 Um brilho estranho no mato... um Pokémon raro apareceu!`, 'shiny');
-      return wildEncounter(state, rng, p, sp, Math.min(5, t + 1));
+    case 'rustling_grass': {
+      effects.push({ text: `Pokémon raro (tier ${Math.min(5, t + 1)}) apareceu!`, tone: 'battle', icon: '🌿' });
+      then = () => wildEncounter(state, rng, p, sp, Math.min(5, t + 1));
+      break;
     }
-    case 'skip': {
-      p.skip += 1;
-      log(state, `🌧️ Uma tempestade pegou ${p.name} desprevenido. Perde a próxima vez.`, 'bad');
+    case 'pokemon_egg': {
+      const pool = speciesByTier(1).filter(s => s.evolvesTo);
+      const mon = createMon(rng, rng.pick(pool).id, rng.int(3, 5), { shiny: rng.chance(BASE_SHINY_RATE * 2) });
+      ev.mon = { sp: mon.sp, shiny: mon.shiny };
+      effects.push({ text: `Nasceu um ${speciesName(mon.sp)}${mon.shiny ? ' ✨SHINY' : ''}!`, tone: mon.shiny ? 'shiny' : 'good', mon: mon.sp });
+      fx(state, ev);
+      log(state, `${card.icon} ${p.name} tirou a carta "${card.title}" → ${effects.map(e => e.text).join(' · ')}`, 'event');
+      deliverCapture(state, p.id, mon, null);
       return;
+    }
+    case 'storm': {
+      p.skip += 1;
+      effects.push({ text: 'Perde a próxima vez', tone: 'bad', icon: '⏸️' });
+      break;
+    }
+    case 'zubat_swarm': {
+      let total = 0;
+      p.team.forEach(m => {
+        if (m.hp <= 1) return;
+        const d = Math.min(m.hp - 1, Math.ceil(maxHpOf(m) * 0.25));
+        m.hp -= d; total += d;
+      });
+      effects.push({ text: `Equipe perdeu ${total} HP (ninguém desmaia)`, tone: 'bad', icon: '💥' });
+      break;
+    }
+    case 'toll': {
+      const g = Math.min(p.gold, Math.max(20, Math.floor(p.gold * 0.1)));
+      p.gold -= g;
+      effects.push({ text: `-${g} de ouro`, tone: 'bad', icon: '🪙' });
+      break;
+    }
+    case 'meowth_thief': {
+      const stealable = Object.keys(p.items).filter(id => p.items[id] > 0 && ITEMS[id] && ITEMS[id].kind !== 'charm');
+      if (!stealable.length) { effects.push({ text: 'Mochila vazia — o Meowth saiu de mãos abanando!', tone: 'good' }); break; }
+      const id = rng.pick(stealable);
+      takeItem(p, id, 1);
+      effects.push({ text: `-1x ${ITEMS[id].name}`, tone: 'bad', item: id });
+      break;
     }
     case 'shortcut': {
-      log(state, `🍃 ${p.name} achou um atalho! Pode rolar o dado de novo.`, 'good');
+      effects.push({ text: 'Role o dado de novo!', tone: 'good', icon: '🎲' });
       state.phase = 'roll';
-      return;
+      break;
+    }
+    case 'lucky_find': {
+      const id = rng.weighted(LUCKY_ITEMS);
+      addItem(p, id, 1);
+      effects.push({ text: `+1x ${ITEMS[id].name}`, tone: 'shiny', item: id });
+      break;
     }
   }
+  fx(state, ev);
+  log(state, `${card.icon} ${p.name} tirou a carta "${card.title}" → ${effects.map(e => e.text).join(' · ')}`, card.tone === 'bad' ? 'bad' : card.tone === 'battle' ? 'battle' : 'event');
+  if (then) then();
 }
 
 function routeTeam(rng, tier, size, favorite) {
@@ -683,6 +742,8 @@ setBattleEndHandler((state, rng, b, outcome) => {
   const p0 = getPlayer(state, b.sides[0].pid);
   const r = outcome.result;
   state.phase = 'action';
+  fx(state, { k: 'battle_end', kind: b.kind, result: r, winner: outcome.winner ?? null,
+    pids: b.sides.filter(s => s.kind === 'player').map(s => s.pid) });
 
   if (b.kind === 'wild') {
     const wild = b.sides[1].team[0];
