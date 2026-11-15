@@ -7,6 +7,9 @@ import { net, api, signIn, signUp, signOut, resetPassword, watchMatch } from '..
 import { LocalSession } from '../session.js';
 import { openDex } from './modals.js';
 import { typeChips } from './common.js';
+import { openShop as openDiamondShop } from './shop.js';
+import { showAnnouncement } from './notify.js';
+import { AURA_PRESETS, FRAME_PRESETS, SHOP_KINDS } from '../../shared/data/cosmetics.js';
 
 const LOGO = `<div class="logo"><h1>Pokémon Master Trainer</h1><p>HEX Edition · v2</p></div>`;
 
@@ -113,11 +116,15 @@ export async function hubScreen(root, ctx) {
     <div class="hub-grid">
       <div class="col">
         <div class="trainer">
-          <img class="avatar" src="${avatarUrl(profile?.avatar)}" alt="avatar">
+          <img class="avatar ${profile?.cosmetic?.frame ? 'frame-' + esc(profile.cosmetic.frame) : ''}" src="${avatarUrl(profile?.avatar)}" alt="avatar">
           <div class="grow"><h3 style="color:var(--gold)">${esc(profile?.trainer_name || 'Treinador')}</h3>
+            ${profile?.cosmetic?.title ? `<div class="player-title">“${esc(profile.cosmetic.title)}”</div>` : ''}
             <div class="small">⭐ ${profile?.points || 0} pts · 🏆 ${profile?.rating ?? 1000} rating · 📖 ${(profile?.pokedex || []).length} · 📦 ${(profile?.vault || []).length}</div>
             <div class="tiny muted">${esc(net.user?.email || '')}</div></div>
-          <button class="btn sm" data-act="edit" ${profile ? '' : 'disabled'}>✏️</button>
+          <div class="col" style="gap:6px;align-items:flex-end">
+            <button class="btn sm" data-act="edit" ${profile ? '' : 'disabled'}>✏️</button>
+            <button class="btn sm blue" data-act="dshop" ${profile ? '' : 'disabled'}><span class="diamonds">💎 ${profile?.diamonds || 0}</span> Loja</button>
+          </div>
         </div>
         <div class="daily"><img src="${monSprite(daily)}" alt="${esc(dsp?.name)}"><div><div class="tiny" style="color:var(--gold)">⭐ POKÉMON DO DIA</div><b>${esc(dsp?.name)}</b> ${typeChips(dsp?.types || [])}
           <div class="tiny muted">Aparece mais, dá XP em dobro e tem chance de shiny 1/8.</div></div></div>
@@ -159,6 +166,7 @@ export async function hubScreen(root, ctx) {
     dex: () => openDex(null, profile?.pokedex || []),
     ranking: () => rankingModal(),
     admin: () => adminModal(),
+    dshop: () => openDiamondShop(profile, null, () => ctx.go('hub')),
     logout: async () => { await signOut(); ctx.go('login'); },
     edit: () => editProfile(profile, async p => rerender(p))
   });
@@ -406,41 +414,107 @@ function editProfile(profile, onSaved) {
 
 
 async function adminModal() {
-  openModal('admin', '🛡️ Admin', '<span class="spinner"></span>', { wide: true });
-  const load = async () => {
-    try {
-      const { users } = await api('admin', { op: 'list_users' });
-      setModalBody('admin', `
-        <div class="card col"><h3>⭐ Pokémon do Dia</h3>
+  let tab = 'avisos', users = [], data = null;
+  openModal('admin', '🛡️ Painel do administrador', '<span class="spinner"></span>', { wide: true });
+  const ov = document.getElementById('admin');
+  const money = v => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const TABS = [['avisos', '📢 Avisos'], ['loja', '💎 Loja'], ['pacotes', '💰 Pacotes Pix'], ['vendas', '🧾 Vendas'], ['jogo', '⭐ Pokémon do Dia'], ['usuarios', '👥 Usuários']];
+
+  const body = () => {
+    const tabs = `<div class="row" style="margin-bottom:10px">${TABS.map(([k, l]) => `<button class="btn sm ${tab === k ? 'primary' : ''}" data-act="tab" data-t="${k}">${l}</button>`).join('')}</div>`;
+    if (tab === 'avisos') {
+      const a = data.announcement || {};
+      return tabs + `<div class="card col">
+        <p class="small muted">O aviso aparece como pop-up para todo mundo (na hora para quem está online e ao abrir o jogo para os outros). Cada jogador vê uma vez.</p>
+        <div class="field"><label>Tipo</label><select class="input" id="an-kind">${[['info', '📢 Aviso'], ['warn', '⚠️ Atenção'], ['event', '🎉 Evento'], ['update', '🆕 Novidade']].map(([v, l]) => `<option value="${v}" ${a.kind === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+        <div class="field"><label>Título</label><input class="input" id="an-title" maxlength="80" value="${esc(a.title || '')}"></div>
+        <div class="field"><label>Mensagem</label><textarea class="input" id="an-text" rows="5" maxlength="600">${esc(a.text || '')}</textarea></div>
+        <div class="row"><button class="btn primary" data-act="an-save" data-on="1">📢 Publicar aviso</button><button class="btn" data-act="an-preview">👀 Pré-visualizar</button><button class="btn red" data-act="an-save" data-on="0">Desativar aviso</button></div>
+        <p class="small">Status: ${a.active ? '<span class="chip green">ativo</span>' : '<span class="chip">desativado</span>'}</p></div>`;
+    }
+    if (tab === 'loja') {
+      return tabs + `<p class="small muted">Itens cosméticos vendidos por diamantes. <b>Valor</b>: para "Estilo de captura" use um destes: ${Object.keys(AURA_PRESETS).join(', ')}. Para "Moldura": ${Object.keys(FRAME_PRESETS).join(', ')}. Para "Título": o texto do título.</p>
+        <div class="col">${data.shop.items.map((it, i) => `<div class="shop-item" style="grid-template-columns:1fr;gap:6px">
+          <div class="grid3"><input class="input" data-f="items.${i}.name" value="${esc(it.name)}" placeholder="Nome">
+            <select class="input" data-f="items.${i}.kind">${Object.entries(SHOP_KINDS).map(([k, l]) => `<option value="${k}" ${it.kind === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+            <input class="input" data-f="items.${i}.value" value="${esc(it.value)}" placeholder="Valor"></div>
+          <div class="grid3"><input class="input" data-f="items.${i}.price" type="number" min="0" value="${it.price}" placeholder="Preço 💎">
+            <input class="input" data-f="items.${i}.desc" value="${esc(it.desc || '')}" placeholder="Descrição">
+            <div class="row"><label class="small"><input type="checkbox" data-f="items.${i}.active" ${it.active ? 'checked' : ''}> à venda</label><button class="btn sm red" data-act="del-item" data-i="${i}">Remover</button></div></div>
+          <div class="tiny muted">ID: ${esc(it.id)}</div></div>`).join('')}</div>
+        <div class="row" style="margin-top:8px"><button class="btn" data-act="add-item">+ Novo item</button><button class="btn primary" data-act="save-shop">💾 Salvar loja</button></div>`;
+    }
+    if (tab === 'pacotes') {
+      return tabs + `<p class="small muted">Pacotes de diamantes vendidos por Pix (Mercado Pago). O preço é cobrado exatamente como está aqui. ${data.pixReady ? '' : '<b style="color:#ff9b9e">Falta configurar MP_ACCESS_TOKEN na Vercel — veja o README.</b>'}</p>
+        <div class="col">${data.shop.packages.map((p, i) => `<div class="shop-item" style="grid-template-columns:repeat(5,1fr) auto;gap:6px">
+          <input class="input" data-f="packages.${i}.name" value="${esc(p.name)}" placeholder="Nome">
+          <input class="input" data-f="packages.${i}.diamonds" type="number" min="1" value="${p.diamonds}" title="Diamantes">
+          <input class="input" data-f="packages.${i}.bonus" type="number" min="0" value="${p.bonus}" title="Bônus">
+          <input class="input" data-f="packages.${i}.price" value="${String(p.price).replace('.', ',')}" title="Preço R$">
+          <label class="small"><input type="checkbox" data-f="packages.${i}.active" ${p.active ? 'checked' : ''}> ativo</label>
+          <button class="btn sm red" data-act="del-pkg" data-i="${i}">✕</button></div>`).join('')}</div>
+        <p class="tiny muted">Colunas: nome · diamantes · bônus · preço (R$) · ativo</p>
+        <div class="row"><button class="btn" data-act="add-pkg">+ Novo pacote</button><button class="btn primary" data-act="save-shop">💾 Salvar pacotes</button></div>`;
+    }
+    if (tab === 'vendas') {
+      const paid = data.payments.filter(p => p.status === 'credited');
+      const total = paid.reduce((a, p) => a + Number(p.amount), 0);
+      return tabs + `<div class="row" style="margin-bottom:8px"><span class="chip gold" style="font-size:14px">Total recebido: ${money(total)}</span><span class="chip">${paid.length} vendas</span></div>
+        <table class="score"><tr><th>Data</th><th>Jogador</th><th>💎</th><th>Valor</th><th>Status</th><th></th></tr>
+        ${data.payments.map(p => `<tr><td>${new Date(p.created_at).toLocaleString('pt-BR')}</td><td>${esc(p.user)}</td><td>${p.diamonds}</td><td>${money(p.amount)}</td><td>${esc(p.status)}</td>
+          <td>${p.status === 'pending' ? `<button class="btn sm" data-act="credit" data-id="${p.id}" title="Use só se o Pix caiu na sua conta e não foi creditado">Creditar manual</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">Nenhuma venda ainda.</td></tr>'}</table>`;
+    }
+    if (tab === 'jogo') {
+      return tabs + `<div class="card col"><h3>⭐ Pokémon do Dia</h3>
           <div class="row"><select class="input grow" id="a-daily"><option value="">(automático pela data)</option>${SPECIES_LIST.map(s => `<option value="${s.id}">${s.dex} · ${esc(s.name)}</option>`).join('')}</select>
           <button class="btn primary" data-act="daily">Definir</button></div>
-          <p class="tiny muted">Vale para as próximas partidas iniciadas.</p></div>
-        <div class="card col" style="margin-top:10px"><h3>🎁 Dar Pokémon (vai para o Cofre)</h3>
-          <div class="row"><select class="input grow" id="a-user">${users.map(u => `<option value="${u.id}">${esc(u.name)}</option>`).join('')}</select>
-          <select class="input grow" id="a-sp">${SPECIES_LIST.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select>
+          <p class="tiny muted">Vale para as próximas partidas iniciadas: aparece mais, XP em dobro e shiny 1/8.</p></div>`;
+    }
+    return tabs + `<div class="card col"><h3>🎁 Dar presente</h3>
+        <div class="row"><select class="input grow" id="a-user">${users.map(u => `<option value="${u.id}">${esc(u.name)} (💎${u.diamonds})</option>`).join('')}</select></div>
+        <div class="row"><input class="input" id="a-dm" type="number" value="100" style="width:110px"><button class="btn blue" data-act="give-dm">💎 Dar diamantes</button><span class="tiny muted">(use número negativo para remover)</span></div>
+        <div class="row"><select class="input grow" id="a-sp">${SPECIES_LIST.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select>
           <input class="input" id="a-lv" type="number" min="1" max="60" value="5" style="width:80px"><label class="small"><input type="checkbox" id="a-shiny"> shiny</label>
-          <button class="btn" data-act="grant">Dar</button></div></div>
-        <div class="card" style="margin-top:10px"><h3>👥 Usuários (${users.length})</h3>
-          <table class="score"><tr><th>Nome</th><th>Pontos</th><th>Pokédex</th><th>Cofre</th><th>Admin</th></tr>
-          ${users.map(u => `<tr><td>${esc(u.name)}</td><td>${u.points}</td><td>${u.pokedex}</td><td>${u.vault}</td><td><button class="btn sm ${u.isAdmin ? 'red' : ''}" data-act="toggle" data-id="${u.id}" data-v="${u.isAdmin ? '0' : '1'}">${u.isAdmin ? 'remover' : 'tornar admin'}</button></td></tr>`).join('')}</table>
-          <p class="tiny muted">Senhas e exclusão de contas ficam no painel do Supabase (Authentication), com segurança.</p></div>`);
-    } catch (e) { setModalBody('admin', `<p class="muted">${esc(e.message)}</p>`); }
+          <button class="btn" data-act="grant">🎁 Dar Pokémon (vai para a Coleção)</button></div></div>
+      <div class="card" style="margin-top:10px"><h3>👥 Usuários (${users.length})</h3>
+        <table class="score"><tr><th>Nome</th><th>Pontos</th><th>Rating</th><th>💎</th><th>Coleção</th><th>Admin</th></tr>
+        ${users.map(u => `<tr><td>${esc(u.name)}</td><td>${u.points}</td><td>${u.rating}</td><td>${u.diamonds}</td><td>${u.vault}</td><td><button class="btn sm ${u.isAdmin ? 'red' : ''}" data-act="toggle" data-id="${u.id}" data-v="${u.isAdmin ? '0' : '1'}">${u.isAdmin ? 'remover' : 'tornar admin'}</button></td></tr>`).join('')}</table>
+        <p class="tiny muted">Senhas e exclusão de contas ficam no Supabase (Authentication → Users).</p></div>`;
   };
-  const ov = document.getElementById('admin');
-  bindActions(ov, {
-    daily: async () => { try { const r = await api('admin', { op: 'set_daily', species: ov.querySelector('#a-daily').value || null }); toast(`Pokémon do Dia: ${getSpecies(r.dailyPokemon).name}`, 'good'); } catch (e) { toast(e.message, 'bad'); } },
-    grant: async () => {
-      try {
-        await api('admin', { op: 'grant_mon', userId: ov.querySelector('#a-user').value, species: ov.querySelector('#a-sp').value, level: ov.querySelector('#a-lv').value, shiny: ov.querySelector('#a-shiny').checked });
-        toast('Enviado para o Cofre!', 'good'); load();
-      } catch (e) { toast(e.message, 'bad'); }
-    },
-    toggle: async d => { try { await api('admin', { op: 'set_admin', userId: d.id, value: d.v === '1' }); load(); } catch (e) { toast(e.message, 'bad'); } }
-  });
-  load();
-}
 
-// ================================================================ lobby online
+  // lê os campos editáveis (data-f="items.0.name") de volta para data.shop
+  const collect = () => {
+    ov.querySelectorAll('[data-f]').forEach(el => {
+      const [list, i, key] = el.dataset.f.split('.');
+      data.shop[list][Number(i)][key] = el.type === 'checkbox' ? el.checked : el.value;
+    });
+  };
+  const render = () => setModalBody('admin', body());
+  const load = async () => {
+    const [u, d] = await Promise.all([api('admin', { op: 'list_users' }), api('admin', { op: 'get_admin_data' })]);
+    users = u.users; data = d;
+    try { data.pixReady = (await api('shop', { op: 'catalog' })).pixEnabled; } catch { data.pixReady = false; }
+    render();
+  };
+  const run = async (fn, ok) => { try { await fn(); if (ok) toast(ok, 'good'); await load(); } catch (e) { toast(e.message, 'bad'); } };
+
+  bindActions(ov, {
+    tab: d => { if (data && (tab === 'loja' || tab === 'pacotes')) collect(); tab = d.t; render(); },
+    'an-preview': () => showAnnouncement({ id: 'preview', active: true, kind: ov.querySelector('#an-kind').value, title: ov.querySelector('#an-title').value, text: ov.querySelector('#an-text').value }, true),
+    'an-save': d => run(() => api('admin', { op: 'set_announcement', announcement: { kind: ov.querySelector('#an-kind').value, title: ov.querySelector('#an-title').value, text: ov.querySelector('#an-text').value, active: d.on === '1' } }), d.on === '1' ? 'Aviso publicado!' : 'Aviso desativado.'),
+    'add-item': () => { collect(); data.shop.items.push({ id: '', kind: 'title', value: '', name: 'Novo item', desc: '', price: 50, active: false }); render(); },
+    'del-item': d => { collect(); data.shop.items.splice(Number(d.i), 1); render(); },
+    'add-pkg': () => { collect(); data.shop.packages.push({ id: '', name: 'Novo pacote', diamonds: 100, bonus: 0, price: 5, active: false }); render(); },
+    'del-pkg': d => { collect(); data.shop.packages.splice(Number(d.i), 1); render(); },
+    'save-shop': () => { collect(); run(() => api('admin', { op: 'save_shop', shop: data.shop }), 'Loja salva!'); },
+    credit: d => { if (confirm('Creditar manualmente? Use só se o Pix foi pago e não caiu sozinho.')) run(() => api('admin', { op: 'credit_payment', paymentId: d.id }), 'Creditado.'); },
+    daily: () => run(async () => { const r = await api('admin', { op: 'set_daily', species: ov.querySelector('#a-daily').value || null }); toast(`Pokémon do Dia: ${getSpecies(r.dailyPokemon).name}`, 'good'); }),
+    'give-dm': () => run(() => api('admin', { op: 'give_diamonds', userId: ov.querySelector('#a-user').value, amount: Number(ov.querySelector('#a-dm').value) }), 'Diamantes enviados!'),
+    grant: () => run(() => api('admin', { op: 'grant_mon', userId: ov.querySelector('#a-user').value, species: ov.querySelector('#a-sp').value, level: ov.querySelector('#a-lv').value, shiny: ov.querySelector('#a-shiny').checked }), 'Enviado para a Coleção!'),
+    toggle: d => run(() => api('admin', { op: 'set_admin', userId: d.id, value: d.v === '1' }))
+  });
+  try { await load(); } catch (e) { setModalBody('admin', `<p class="muted">${esc(e.message)}</p>`); }
+}
 
 export function localSetupScreen(root, ctx) {
   const players = [

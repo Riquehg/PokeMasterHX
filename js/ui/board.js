@@ -236,7 +236,7 @@ export class BoardView {
     const sp = getSpace(pos);
     const off = (k - (n - 1) / 2) * 38; // px na tela (multiplicado por 1/zoom)
     return `<div class="token ${state.current === i ? 'active' : ''}" data-pid="${esc(pl.id)}" style="left:${sp.x}%;top:${sp.y}%;margin-left:calc(${off}px * var(--ms, 1));--pc:${playerColor(state, pl.id)}" title="${esc(pl.name)}">
-      <div class="pin"><img src="${avatarUrl(pl.avatar)}" alt="${esc(pl.name)}" data-color="${playerColor(state, pl.id)}" draggable="false"></div>
+      <div class="pin ${pl.cosmetic?.frame ? 'frame-' + esc(pl.cosmetic.frame) : ''}"><img src="${avatarUrl(pl.avatar)}" alt="${esc(pl.name)}" data-color="${playerColor(state, pl.id)}" draggable="false"></div>
       <span class="name">${pl.id === viewerId ? 'Você' : esc(pl.name.split(' ')[0])}</span></div>`;
   }
 

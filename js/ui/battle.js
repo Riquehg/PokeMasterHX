@@ -72,8 +72,8 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
   const arena = `<div class="arena t${tier} ${official ? 'official' : ''}" id="arena">
       ${foe.kind === 'npc' && foe.sprite ? `<img class="foe-trainer" src="${leaderUrl(foe.sprite)}" alt="${esc(foe.name)}">` : ''}
       <div class="platform foe"></div><div class="platform me"></div>
-      <img class="mon-sprite foe ${foeMon.shiny ? 'shiny' : ''}" data-uid="${esc(foeMon.uid)}" src="${monSprite(foeMon)}" alt="${esc(getSpecies(foeMon.sp).name)}">
-      <img class="mon-sprite me ${myMon.shiny ? 'shiny' : ''}" data-uid="${esc(myMon.uid)}" src="${monSprite(myMon)}" alt="${esc(getSpecies(myMon.sp).name)}">
+      <img class="mon-sprite foe ${foeMon.shiny ? 'shiny' : ''} ${foeMon.aura ? 'aura-' + esc(foeMon.aura) : ''}" data-uid="${esc(foeMon.uid)}" src="${monSprite(foeMon)}" alt="${esc(getSpecies(foeMon.sp).name)}">
+      <img class="mon-sprite me ${myMon.shiny ? 'shiny' : ''} ${myMon.aura ? 'aura-' + esc(myMon.aura) : ''}" data-uid="${esc(myMon.uid)}" src="${monSprite(myMon)}" alt="${esc(getSpecies(myMon.sp).name)}">
       ${hpBox(state, foe, foeMon, 'foe')}
       ${hpBox(state, me, myMon, 'me')}
     </div>`;

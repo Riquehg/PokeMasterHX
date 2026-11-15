@@ -435,6 +435,7 @@ export function deliverCapture(state, pid, mon, ballId) {
   const p = getPlayer(state, pid);
   const ball = getItem(ballId);
   if (ball && ball.aura) mon.aura = ball.aura;
+  if (p.cosmetic?.aura) mon.aura = p.cosmetic.aura; // estilo de captura comprado na loja (só visual)
   mon.ball = ballId;
   const where = giveMon(p, mon);
   log(state, `🎉 ${speciesName(mon.sp)}${mon.shiny ? ' ✨' : ''} entrou ${where === 'team' ? 'na equipe' : 'no PC (equipe cheia)'} de ${p.name}!`, mon.shiny ? 'shiny' : 'good');

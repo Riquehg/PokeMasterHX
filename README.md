@@ -37,6 +37,8 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 - **🤖 Treino contra CPUs:** partida privada que roda no servidor (salva na conta), começando com inicial ou com time da Coleção. É o jeito de "farmar". O **📱 Modo offline** continua existindo, mas não salva na conta (roda só no navegador).
 - **Cartas de Evento:** 14 cartas com história curta e recompensa/penalidade (Bolsa Perdida, Mochila de Campista, Árvore de Frutinhas, Treinador na Rota, Emboscada Rocket, Aula do Professor, Grama Agitada, Ovo Misterioso, Tempestade, Nuvem de Zubats, Pedágio do Snorlax, Meowth Ladrão, Atalho Secreto, Achado Raro). Texto e efeitos em `shared/data/events.js`.
 - **Animações:** dado 3D (para na face sorteada pelo servidor), peão andando casa a casa, faixa de troca de turno, carta de evento virando, entrada de batalha (Pokémon saindo da grama / tela VS contra treinadores), golpes com investida, dano flutuante, HP descendo, crítico e "super efetivo", desmaio, captura com arremesso da Pokébola e até 3 balançadas. Os turnos das CPUs também são animados. Botão 🎬 alterna normal / rápida / desligada.
+- **Avisos globais:** quando alguém captura um **lendário** ou um **shiny** (ou vira Campeão), aparece um banner para todos os jogadores conectados. O admin também pode publicar pop-ups de aviso.
+- **Loja de Diamantes:** só cosméticos (estilo de captura/aura, moldura do treinador, título). Não altera a força de nada. Diamantes por Pix automático (Mercado Pago).
 - **Mapa:** proporção real da imagem, zoom (roda do mouse, pinça no celular, botões + − ⤢), arrastar para mover, ◎ centraliza no seu peão; peões e Pokémon têm tamanho fixo na tela em qualquer zoom.
 - **Balanceamento:** testado com simulações de partidas só com CPUs (`npm run sim`): todas terminam, ~75% de vitória nos ginásios quando a equipe está no nível, campeão entre os turnos 60 e 100 no modo completo (por isso as salas têm os modos Rápida e Normal).
 
@@ -67,15 +69,34 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 
 Abra **`https://SEU-SITE.vercel.app/api/health`**. Ele mostra se as 3 variáveis estão presentes, se a chave do servidor é mesmo a `service_role`/`secret` (e não a pública) e se as tabelas existem. Se aparecer "Erro interno"/"Problema no servidor" no jogo, é aqui que se descobre o motivo. Depois de mudar variáveis na Vercel, faça **Redeploy**.
 
-### 3.5 Virar administrador
-Cadastre-se no jogo e rode no SQL Editor (trocando o e-mail):
+### 3.5 Virar administrador e usar o painel
+1. Entre no jogo com a sua conta pelo menos uma vez (isso cria o seu perfil).
+2. No Supabase, abra **SQL Editor → New query**, cole a linha abaixo trocando o e-mail e clique **Run**:
 ```sql
 update public.profiles set is_admin = true
 where id = (select id from auth.users where email = 'seu@email.com');
 ```
-O botão **🛡️ Painel do admin** aparece no hub (Pokémon do Dia, dar Pokémon para o Cofre de alguém, promover admins).
+3. Recarregue o jogo: aparece o botão vermelho **🛡️ Painel do admin** no menu inicial. Abas:
+   - **📢 Avisos** — escreve um pop-up (Aviso, Atenção, Evento ou Novidade) que aparece para todo mundo; dá para pré-visualizar e desativar.
+   - **💎 Loja** — itens cosméticos: nome, tipo, valor visual, preço em diamantes, descrição e se está à venda.
+   - **💰 Pacotes Pix** — quantos diamantes cada pacote dá, bônus e preço em reais.
+   - **🧾 Vendas** — todas as compras, total recebido e um botão para creditar manualmente se algum Pix não cair sozinho.
+   - **⭐ Pokémon do Dia** e **👥 Usuários** — dar diamantes, dar Pokémon (vai para a Coleção) e promover outros admins.
 
-### 3.6 Contas antigas (opcional)
+### 3.6 Loja de Diamantes com Pix automático (Mercado Pago)
+O jogador escolhe um pacote → aparece o QR Code / Pix Copia e Cola → ao pagar, o Mercado Pago avisa o servidor (webhook) → o servidor **confere o pagamento direto na API do Mercado Pago** (valor e status) e credita os diamantes na hora, uma única vez.
+1. Crie/entre na sua conta em [mercadopago.com.br](https://www.mercadopago.com.br) e **cadastre uma chave Pix** nela.
+2. Acesse [mercadopago.com.br/developers](https://www.mercadopago.com.br/developers) → **Suas integrações → Criar aplicação** (tipo: pagamentos online / Checkout Transparente).
+3. Em **Credenciais de produção**, copie o **Access Token** (`APP_USR-...`) e crie na Vercel a variável `MP_ACCESS_TOKEN` (tipo Secret, Production).
+4. Na aplicação, abra **Webhooks → Configurar notificações**: URL `https://SEU-SITE.vercel.app/api/mp-webhook`, evento **Pagamentos**. Copie a **assinatura secreta** e crie na Vercel `MP_WEBHOOK_SECRET`.
+5. **Redeploy.** Na aba 💰 Pacotes do painel o aviso de "falta configurar" some.
+6. Teste primeiro com as **credenciais de teste** (Access Token `TEST-...`) e um usuário de teste do Mercado Pago; depois troque para as de produção.
+
+Custos: o Mercado Pago informa taxa de 0,99% por Pix recebido online (confira a sua conta). Sem mensalidade.
+
+> ⚠️ **Importante sobre cobrar dinheiro:** "Pokémon", os nomes e os sprites são marcas e obras da Nintendo / The Pokémon Company. Jogos de fã costumam ser tolerados enquanto são gratuitos, mas **monetizar (vender diamantes, cosméticos)** é exatamente o que costuma gerar notificações de remoção e processos. Antes de ligar os pagamentos, considere: (1) manter o jogo grátis e aceitar **doações** (sem vender nada dentro do jogo), ou (2) transformar em um jogo próprio, com criaturas, nome e artes originais — o motor, o tabuleiro e a loja já funcionam para isso. Vale conversar com um advogado. Também é preciso emitir nota fiscal/declarar a renda conforme o seu enquadramento (MEI, por exemplo).
+
+### 3.7 Contas antigas (opcional)
 As contas da tabela `accounts` não entram automaticamente (as senhas estavam em texto puro). Para migrar e-mail, senha, nome e Pokédex de uma vez, rode no seu computador:
 ```bash
 npm install
@@ -83,9 +104,11 @@ SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/migrate-accounts.mjs
 ```
 Depois disso, **apague a coluna `password`** (ou a tabela `accounts`).
 
+> A Vercel no plano grátis aceita até 12 funções `/api`; o projeto usa 11.
+
 ## 4. Rodar e testar no computador (opcional)
 ```bash
-npm test          # 30 testes: regras, tipos, captura, PvP, AFK, salas, permissões, simulações
+npm test          # 47 testes: regras, tipos, captura, PvP, AFK, salas, permissões, simulações
 npm run sim       # 20 partidas só com CPUs, mostra o balanceamento
 npm run dev       # http://localhost:3000 com banco em memória e login livre (abra 2 abas para testar o online)
 ```

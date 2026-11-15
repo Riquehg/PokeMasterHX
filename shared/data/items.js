@@ -9,16 +9,16 @@ export const ITEMS = {
   ultra_ball:   { name: 'Ultra Ball',   kind: 'ball', bonus: 2, price: 600,  minTier: 3, image: 'ultra_ball.png',   desc: '+2 na rolagem de captura.' },
   master_ball:  { name: 'Master Ball',  kind: 'ball', bonus: 99, price: 0,   minTier: 0, image: 'master_ball.png',  desc: 'Captura garantida. Só aparece em eventos raros.' },
   // Bolas temáticas do projeto original — agora com efeito real por tipo, e dão "aura" visual ao Pokémon capturado.
-  flame_ball:   { name: 'Flame Ball',   kind: 'ball', bonus: 1, typeBonus: { types: ['fire', 'grass', 'bug', 'ice'], bonus: 3 },        price: 450, minTier: 3, aura: 'flame',   image: 'ball_flame.png',   desc: '+3 contra Fogo, Grama, Inseto e Gelo. +1 nos demais.' },
-  aqua_ball:    { name: 'Aqua Ball',    kind: 'ball', bonus: 1, typeBonus: { types: ['water', 'ice', 'ground', 'rock'], bonus: 3 },     price: 450, minTier: 3, aura: 'aqua',    image: 'ball_aqua.png',    desc: '+3 contra Água, Gelo, Terra e Pedra. +1 nos demais.' },
-  volt_ball:    { name: 'Volt Ball',    kind: 'ball', bonus: 1, typeBonus: { types: ['electric', 'steel', 'flying'], bonus: 3 },        price: 450, minTier: 3, aura: 'volt',    image: 'ball_electric.png',desc: '+3 contra Elétrico, Aço e Voador. +1 nos demais.' },
-  shadow_ball:  { name: 'Shadow Ball',  kind: 'ball', bonus: 1, typeBonus: { types: ['ghost', 'dark', 'poison'], bonus: 3 },            price: 450, minTier: 3, aura: 'shadow',  image: 'ball_shadow.png',  desc: '+3 contra Fantasma, Sombrio e Veneno. +1 nos demais.' },
-  mystic_ball:  { name: 'Mystic Ball',  kind: 'ball', bonus: 1, typeBonus: { types: ['psychic', 'fairy', 'dragon'], bonus: 3 },         price: 450, minTier: 3, aura: 'mystic',  image: 'ball_mystic.png',  desc: '+3 contra Psíquico, Fada e Dragão. +1 nos demais.' },
-  rainbow_ball: { name: 'Rainbow Ball', kind: 'ball', bonus: 3, price: 1500, minTier: 4, aura: 'rainbow', image: 'ball_rainbow.png', desc: '+3 em qualquer captura e aura prismática.' },
+  flame_ball:   { name: 'Flame Ball',   kind: 'ball', bonus: 1, typeBonus: { types: ['fire', 'grass', 'bug', 'ice'], bonus: 3 },        price: 450, minTier: 3, aura: 'flame',   image: 'flame_ball.png',   desc: '+3 contra Fogo, Grama, Inseto e Gelo. +1 nos demais.' },
+  aqua_ball:    { name: 'Aqua Ball',    kind: 'ball', bonus: 1, typeBonus: { types: ['water', 'ice', 'ground', 'rock'], bonus: 3 },     price: 450, minTier: 3, aura: 'aqua',    image: 'aqua_ball.png',    desc: '+3 contra Água, Gelo, Terra e Pedra. +1 nos demais.' },
+  volt_ball:    { name: 'Volt Ball',    kind: 'ball', bonus: 1, typeBonus: { types: ['electric', 'steel', 'flying'], bonus: 3 },        price: 450, minTier: 3, aura: 'volt',    image: 'electric_ball.png',desc: '+3 contra Elétrico, Aço e Voador. +1 nos demais.' },
+  shadow_ball:  { name: 'Shadow Ball',  kind: 'ball', bonus: 1, typeBonus: { types: ['ghost', 'dark', 'poison'], bonus: 3 },            price: 450, minTier: 3, aura: 'shadow',  image: 'shadow_ball.png',  desc: '+3 contra Fantasma, Sombrio e Veneno. +1 nos demais.' },
+  mystic_ball:  { name: 'Mystic Ball',  kind: 'ball', bonus: 1, typeBonus: { types: ['psychic', 'fairy', 'dragon'], bonus: 3 },         price: 450, minTier: 3, aura: 'mystic',  image: 'mystic_ball.png',  desc: '+3 contra Psíquico, Fada e Dragão. +1 nos demais.' },
+  rainbow_ball: { name: 'Rainbow Ball', kind: 'ball', bonus: 3, price: 1500, minTier: 4, aura: 'rainbow', image: 'rainbow_ball.png', desc: '+3 em qualquer captura e aura prismática.' },
 
   // --- Cura e batalha ---
   potion:       { name: 'Potion',       kind: 'heal', healPct: 0.4, price: 80,   minTier: 1, image: 'potion.png',       desc: 'Recupera 40% do HP de um Pokémon.' },
-  super_potion: { name: 'Super Potion', kind: 'heal', healPct: 0.75, price: 220, minTier: 2, image: 'super_potion.png', desc: 'Recupera 75% do HP de um Pokémon.' },
+  super_potion: { name: 'Super Potion', kind: 'heal', healPct: 0.75, price: 220, minTier: 2, image: 'potion.png', desc: 'Recupera 75% do HP de um Pokémon.' },
   revive:       { name: 'Revive',       kind: 'revive', healPct: 0.5, price: 450, minTier: 2, image: 'revive.png',      desc: 'Revive um Pokémon desmaiado com 50% do HP.' },
   x_attack:     { name: 'X Attack',     kind: 'boost', atk: 3, price: 250,   minTier: 2, image: 'x_attack.png',     desc: '+3 de ataque para o Pokémon ativo até o fim da batalha.' },
 

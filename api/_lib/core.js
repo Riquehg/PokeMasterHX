@@ -4,6 +4,7 @@ import { createMatch, applyAction, score, MAX_PLAYERS } from '../../shared/engin
 import { randomSeed } from '../../shared/rules/rng.js';
 import { SPECIES, STARTERS } from '../../shared/data/pokemon.js';
 import { dailyPokemon } from '../../shared/daily.js';
+import { equippedCosmetic, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment } from './shop.js';
 
 export class HttpError extends Error {
   constructor(status, message) {
@@ -74,7 +75,11 @@ export async function getOrCreateProfile(db, user) {
 
 export async function profileOp(db, user, body) {
   const p = await getOrCreateProfile(db, user);
-  if (body.op === 'get' || !body.op) return { profile: p };
+  if (body.op === 'get' || !body.op) {
+    let cosmetic = null;
+    try { cosmetic = await equippedCosmetic(db, p); } catch { /* ok */ }
+    return { profile: { ...p, cosmetic } };
+  }
   if (body.op === 'update') {
     const patch = {};
     if (body.trainerName !== undefined) patch.trainer_name = cleanName(body.trainerName);
@@ -169,7 +174,9 @@ async function currentDaily(db) {
 }
 
 export async function configInfo(db) {
-  return { dailyPokemon: await currentDaily(db) };
+  let announcement = null;
+  try { announcement = await getAnnouncement(db); } catch { /* sem aviso */ }
+  return { dailyPokemon: await currentDaily(db), announcement };
 }
 
 export async function listRooms(db, user) {
@@ -304,8 +311,9 @@ async function startRoom(db, row, lobby, userId) {
   const players = [];
   for (const e of lobby) {
     const p = { id: e.id, name: e.name, avatar: e.avatar, isBot: e.isBot, starter: e.starter };
+    const prof = e.isBot ? null : await db.getProfile(e.id);
+    if (prof) { try { p.cosmetic = await equippedCosmetic(db, prof); } catch { /* sem cosmético */ } }
     if (mode === 'collection' && !e.isBot && e.teamUids?.length) {
-      const prof = await db.getProfile(e.id);
       const vault = prof?.vault || [];
       p.teamMons = e.teamUids.map(u => vault.find(v => v.uid === u)).filter(Boolean)
         .map(v => ({ ...v, lvl: options.levelCap ? Math.min(options.levelCap, v.lvl) : v.lvl }));
@@ -439,6 +447,7 @@ export async function actionOp(db, user, body) {
     const patch = { state, version: row.version + 1, status: finished ? 'finished' : 'playing' };
     const ok = await db.updateMatch(row.id, row.version, patch);
     if (!ok) continue; // conflito de versão: outra jogada entrou antes — recalcula
+    try { await publishCaptures(db, state, state.fx); } catch (e) { console.error('[feed]', e.message); }
     if (finished) await recordResults(db, state, row.options || {});
     else {
       const ids = playersToSync(body.action, row.state, state);
@@ -470,6 +479,9 @@ export async function recordResults(db, state, options = {}) {
     st.pvpWins = (st.pvpWins || 0) + p.stats.pvpWins;
     st.bestScore = Math.max(st.bestScore || 0, score(p));
     const patch = { stats: st, points: calcPoints(prof.pokedex || [], st) };
+    if (p.champion && db.insertFeed) {
+      try { await db.insertFeed({ kind: 'champion', text: `👑 ${p.name} venceu a Liga e se tornou Campeão!`, data: { name: p.name, avatar: p.avatar } }); } catch { /* ok */ }
+    }
     if (ranked) {
       st.ranked = (st.ranked || 0) + 1;
       st.rankedWins = (st.rankedWins || 0) + (state.winner === p.id ? 1 : 0);
@@ -512,7 +524,7 @@ export async function adminOp(db, user, body) {
     }
     case 'list_users': {
       const rows = await db.listProfiles(200);
-      return { users: rows.map(r => ({ id: r.id, name: r.trainer_name, points: r.points, rating: r.rating ?? START_RATING, isAdmin: r.is_admin, pokedex: (r.pokedex || []).length, vault: (r.vault || []).length })) };
+      return { users: rows.map(r => ({ id: r.id, name: r.trainer_name, points: r.points, rating: r.rating ?? START_RATING, diamonds: r.diamonds || 0, isAdmin: r.is_admin, pokedex: (r.pokedex || []).length, vault: (r.vault || []).length })) };
     }
     case 'grant_mon': {
       if (!SPECIES[body.species]) bad('Espécie inválida.');
@@ -526,6 +538,41 @@ export async function adminOp(db, user, body) {
     case 'set_admin': {
       await db.upsertProfile(body.userId, { is_admin: !!body.value });
       return { ok: true };
+    }
+    case 'set_announcement': {
+      const a = body.announcement || {};
+      const value = {
+        id: 'a' + Date.now().toString(36),
+        title: String(a.title || '').replace(/[<>]/g, '').slice(0, 80),
+        text: String(a.text || '').replace(/[<>]/g, '').slice(0, 600),
+        kind: ['info', 'warn', 'event', 'update'].includes(a.kind) ? a.kind : 'info',
+        active: !!a.active
+      };
+      await db.setConfig('announcement', value);
+      if (value.active && db.insertFeed) await db.insertFeed({ kind: 'announcement', text: value.title, data: value });
+      return { ok: true, announcement: value };
+    }
+    case 'get_admin_data': {
+      const [shop, announcement, payments] = [await getShop(db), await db.getConfig('announcement'), await db.listPayments(100)];
+      const profiles = await db.listProfiles(500);
+      const names = Object.fromEntries(profiles.map(p => [p.id, p.trainer_name]));
+      return { shop, announcement, payments: payments.map(p => ({ ...p, user: names[p.user_id] || p.user_id })) };
+    }
+    case 'save_shop': {
+      const shop = cleanShop(body.shop || {});
+      await db.setConfig('shop', shop);
+      return { ok: true, shop };
+    }
+    case 'give_diamonds': {
+      const n = Math.round(Number(body.amount) || 0);
+      if (!n) bad('Quantidade inválida.');
+      const left = await db.addDiamonds(body.userId, n);
+      if (left === null) bad('O saldo ficaria negativo.');
+      return { ok: true, diamonds: left };
+    }
+    case 'credit_payment': {
+      const ok = await creditPayment(db, body.paymentId);
+      return { ok };
     }
     case 'close_match': {
       const row = await db.getMatch(body.matchId);

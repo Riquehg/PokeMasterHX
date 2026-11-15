@@ -78,6 +78,42 @@ create table if not exists public.game_config (
   updated_at timestamptz not null default now()
 );
 
+-- ---------------------------------------------------------------- loja de diamantes
+alter table public.profiles add column if not exists diamonds int not null default 0;
+alter table public.profiles add column if not exists cosmetics jsonb not null default '{}'::jsonb;
+
+create table if not exists public.payments (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references auth.users(id) on delete cascade,
+  package_id    text not null,
+  diamonds      int not null,
+  amount        numeric(10, 2) not null,
+  status        text not null default 'pending' check (status in ('pending', 'approved', 'credited', 'rejected', 'cancelled', 'expired')),
+  provider      text not null default 'mercadopago',
+  mp_payment_id text unique,
+  created_at    timestamptz not null default now(),
+  credited_at   timestamptz
+);
+create index if not exists payments_user_idx on public.payments (user_id, created_at desc);
+
+-- Soma/subtrai diamantes de forma atômica (nunca deixa ficar negativo)
+create or replace function public.add_diamonds(uid uuid, amount int)
+returns int language sql security definer set search_path = public as $$
+  update public.profiles set diamonds = diamonds + amount, updated_at = now()
+  where id = uid and diamonds + amount >= 0
+  returning diamonds;
+$$;
+revoke execute on function public.add_diamonds(uuid, int) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------- avisos globais (capturas lendárias/shiny, anúncios)
+create table if not exists public.global_feed (
+  id         bigserial primary key,
+  kind       text not null,
+  text       text not null,
+  data       jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
 -- =====================================================================================
 -- Segurança (RLS). O servidor (funções /api da Vercel) usa a service role e ignora RLS.
 -- O navegador usa a anon key e só consegue LER o que as políticas abaixo permitem.
@@ -88,6 +124,14 @@ alter table public.matches       enable row level security;
 alter table public.match_players enable row level security;
 alter table public.match_secrets enable row level security;
 alter table public.game_config   enable row level security;
+alter table public.payments      enable row level security;
+alter table public.global_feed   enable row level security;
+
+drop policy if exists "minhas compras" on public.payments;
+create policy "minhas compras" on public.payments for select to authenticated using (user_id = auth.uid());
+
+drop policy if exists "feed publico" on public.global_feed;
+create policy "feed publico" on public.global_feed for select to anon, authenticated using (true);
 
 drop policy if exists "perfis visiveis" on public.profiles;
 create policy "perfis visiveis" on public.profiles for select to authenticated using (true);
@@ -121,11 +165,18 @@ begin
   ) then
     alter publication supabase_realtime add table public.matches;
   end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'global_feed'
+  ) then
+    alter publication supabase_realtime add table public.global_feed;
+  end if;
 end $$;
 
 -- ---------------------------------------------------------------- limpeza (opcional)
 -- Apaga salas abandonadas/terminadas há mais de 7 dias. Rode manualmente ou agende com pg_cron.
 -- delete from public.matches where status in ('finished','abandoned') and updated_at < now() - interval '7 days';
+-- delete from public.global_feed where created_at < now() - interval '3 days';
 
 -- ---------------------------------------------------------------- admin
 -- Para virar administrador, rode (trocando o e-mail):

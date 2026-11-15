@@ -127,7 +127,7 @@ export function openTrainer(session, pid) {
   const p = s.players.find(x => x.id === pid);
   if (!p) return;
   const html = `<div class="trainer">${avatarImg(p, 'avatar', playerColor(s, p.id))}
-      <div><h3 style="color:${playerColor(s, p.id)}">${esc(p.name)} ${p.isBot ? '<span class="chip">CPU</span>' : ''}</h3>
+      <div><h3 style="color:${playerColor(s, p.id)}">${esc(p.name)} ${p.isBot ? '<span class="chip">CPU</span>' : ''}</h3>${p.cosmetic?.title ? `<div class="player-title">“${esc(p.cosmetic.title)}”</div>` : ''}
       <div class="small">🪙 ${p.gold} · 📖 ${p.caught.length} capturados · ✨ ${p.stats.shinies} shiny · ⭐ ${score(p)} pts</div>
       <div class="small muted">📍 ${esc(getSpace(p.pos).name)} · vitórias ${p.stats.wins} · PvP ${p.stats.pvpWins}</div></div></div>
     <div class="row" style="margin:10px 0">${GYMS.map(g => `<img src="${badgeUrl(g.id)}" alt="${esc(g.badge)}" title="${esc(g.badge)} (${esc(g.leader)})" style="width:34px;height:34px;object-fit:contain;${p.badges.includes(g.id) ? '' : 'filter:grayscale(1) brightness(.4)'}">`).join('')}

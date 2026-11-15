@@ -5,6 +5,7 @@ import { OnlineSession } from './session.js';
 import { mountGame } from './ui/game.js';
 import { loginScreen, hubScreen, lobbyScreen, roomScreen, localSetupScreen } from './ui/screens.js';
 import { toast } from './ui/dom.js';
+import { startNotifications } from './ui/notify.js';
 
 const app = document.getElementById('app');
 let cleanup = null;
@@ -71,5 +72,6 @@ async function go(screen, arg) {
   app.innerHTML = '<div class="screen"><span class="spinner"></span></div>';
   await initNet();
   if (net.config?.dailyPokemon) ctx.daily = net.config.dailyPokemon;
+  startNotifications(net.config);
   go(net.user ? 'hub' : 'login');
 })();

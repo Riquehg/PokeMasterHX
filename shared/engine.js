@@ -23,6 +23,7 @@ import {
 } from './rules/helpers.js';
 import { speciesByTier } from './data/pokemon.js';
 import { EVENT_CARDS } from './data/events.js';
+import { sanitizeCosmetic } from './data/cosmetics.js';
 import { botAction } from './bots.js';
 
 export const ENGINE_VERSION = 2;
@@ -109,7 +110,8 @@ function newPlayer(rng, cfg, index) {
     caught: brought.length ? [...new Set(brought.map(m => m.sp))] : [starter],
     skip: 0,
     moveBonus: 0,
-    stats: { captures: 0, shinies: brought.length ? 0 : (mon.shiny ? 1 : 0), wins: 0, losses: 0, pvpWins: 0, ballsThrown: 0 }
+    stats: { captures: 0, shinies: brought.length ? 0 : (mon.shiny ? 1 : 0), wins: 0, losses: 0, pvpWins: 0, ballsThrown: 0 },
+    cosmetic: sanitizeCosmetic(cfg.cosmetic)
   };
   // Pokémon extra (ex.: herdado do Cofre)
   if (cfg.extraMon && SPECIES[cfg.extraMon.sp]) {

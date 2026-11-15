@@ -49,7 +49,7 @@ export const supabaseDb = {
     return res;
   },
   async listProfiles(limit) {
-    return check(await admin().from('profiles').select('id, trainer_name, avatar, points, rating, stats, pokedex, vault, is_admin').order('points', { ascending: false }).limit(limit));
+    return check(await admin().from('profiles').select('id, trainer_name, avatar, points, rating, diamonds, stats, pokedex, vault, is_admin').order('points', { ascending: false }).limit(limit));
   },
 
   async getMatch(id) {
@@ -95,6 +95,37 @@ export const supabaseDb = {
   },
   async listMembers(matchId) {
     return check(await admin().from('match_players').select('user_id').eq('match_id', matchId)).map(r => r.user_id);
+  },
+
+  // ---- diamantes / pagamentos
+  async addDiamonds(userId, amount) {
+    const { data, error } = await admin().rpc('add_diamonds', { uid: userId, amount });
+    if (error) throw new Error(error.message);
+    return data; // novo saldo, ou null se ficaria negativo
+  },
+  async insertPayment(row) {
+    return check(await admin().from('payments').insert(row).select('*').single());
+  },
+  async getPayment(id) {
+    return check(await admin().from('payments').select('*').eq('id', id).maybeSingle());
+  },
+  /** Atualiza só se o status atual estiver na lista (evita creditar duas vezes). */
+  async updatePaymentIf(id, fromStatuses, patch) {
+    const data = check(await admin().from('payments').update(patch).eq('id', id).in('status', fromStatuses).select('id'));
+    return data.length > 0;
+  },
+  async listPayments(limit = 100, userId = null) {
+    let q = admin().from('payments').select('*').order('created_at', { ascending: false }).limit(limit);
+    if (userId) q = q.eq('user_id', userId);
+    return check(await q);
+  },
+
+  // ---- feed global
+  async insertFeed(row) {
+    check(await admin().from('global_feed').insert(row));
+  },
+  async listFeed(sinceId = 0, limit = 20) {
+    return check(await admin().from('global_feed').select('*').gt('id', sinceId).order('id', { ascending: false }).limit(limit));
   },
 
   async getConfig(key) {

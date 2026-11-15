@@ -38,5 +38,6 @@ export function playerColor(state, pid) {
 }
 
 export function avatarImg(p, cls = 'avatar sm', color) {
+  if (p?.cosmetic?.frame) cls += ' frame-' + p.cosmetic.frame;
   return `<img class="${cls}" src="${avatarUrl(p.avatar)}" alt="${esc(p.name)}" data-color="${color || '#3b2b1d'}" style="${color ? `border-color:${color}` : ''}">`;
 }
