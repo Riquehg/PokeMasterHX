@@ -9,7 +9,9 @@ import { bestAttack } from './rules/types.js';
 import { maxHpOf, WILD_LEVELS, TEAM_SIZE } from './rules/monsters.js';
 import { distancesFrom } from './rules/movement.js';
 import { getPlayer, currentPlayer, canUse } from './rules/helpers.js';
-import { sideTeam, sideActive, sideIndexOf } from './rules/battle.js';
+import { sideTeam, sideActive, sideIndexOf, bestMoveSlot, expectedDamage, CAPTURE_TARGET } from './rules/battle.js';
+import { movesOf } from './data/moves.js';
+import { statsOf } from './rules/monsters.js';
 
 const CITY_SPACES = [5, 20, 39, 60, 70, 91, 95, 107, 114, 122, 124];
 
@@ -46,11 +48,24 @@ function bestBall(p, wild) {
   return best;
 }
 
+/** Força estimada de um Pokémon (nível, tier, status) — usada para montar a equipe. */
+export function monPower(m) {
+  const st = statsOf(m);
+  return st.atk * 2 + st.maxHp * 0.6 + m.lvl;
+}
+
+function moveMatchup(attacker, defender) {
+  return Math.max(...movesOf(attacker.sp).filter(mv => mv.kind === 'dmg' || mv.kind === 'drain').map(mv => {
+    const sp = getSpecies(attacker.sp);
+    return bestAttack([mv.type], getSpecies(defender.sp).types).mult * (sp.types.includes(mv.type) ? 1.2 : 1) * (mv.power || 1);
+  }), 0.1);
+}
+
 function bestSwitch(team, activeIdx, foe, p) {
   let best = -1, bestScore = -Infinity;
   team.forEach((m, i) => {
     if (i === activeIdx || m.hp <= 0 || (p && !canUse(p, m))) return;
-    const score = matchup(m, foe) * 10 - matchup(foe, m) * 4 + m.lvl * 0.6 + hpRatio(m) * 5;
+    const score = moveMatchup(m, foe) * 10 - moveMatchup(foe, m) * 6 + m.lvl * 0.6 + hpRatio(m) * 6;
     if (score > bestScore) { bestScore = score; best = i; }
   });
   return best;
@@ -76,17 +91,34 @@ function battleAction(state, p) {
     return { type: 'battle', move: 'switch', index: bestSwitch(team, side.active, foe, p) };
   }
 
-  // Cura quando o ativo está mal e ainda vale a pena
+  const slot = bestMoveSlot(state, si);
+  const myHit = expectedDamage(state, si, movesOf(me.sp)[slot]);
+  const foeHit = Math.max(...movesOf(foe.sp).map(m => expectedDamage(state, 1 - si, m)));
+  const official = ['gym', 'elite', 'champion', 'ace', 'raid', 'pvp'].includes(b.kind);
+
+  // Se derruba agora, ataca
+  if (myHit >= foe.hp) return { type: 'battle', move: 'attack', slot };
+
+  // Cura quando o próximo golpe do rival derruba e a poção salva
   const heal = healItem(p);
-  if (heal && hpRatio(me) < 0.3 && (b.kind !== 'wild' || getSpecies(foe.sp).tier >= 2)) {
+  if (heal && me.hp <= foeHit * 1.1 && maxHpOf(me) * 0.4 > foeHit * 0.8 && (official || getSpecies(foe.sp).tier >= 2)) {
     return { type: 'battle', move: 'item', item: heal, index: side.active };
   }
 
-  // Troca se estiver em grande desvantagem de tipo
+  // X Attack no começo de lutas importantes
+  if (official && p.items.x_attack > 0 && !side.boost[me.uid] && hpRatio(me) > 0.7 && foe.hp > myHit * 2) {
+    return { type: 'battle', move: 'item', item: 'x_attack', index: side.active };
+  }
+
+  // Troca se estiver em desvantagem clara e houver alguém melhor no banco
   const myMult = matchup(me, foe);
-  if (myMult <= 0.5) {
-    const sw = bestSwitch(team, side.active, foe, p);
-    if (sw >= 0 && matchup(team[sw], foe) >= 2) return { type: 'battle', move: 'switch', index: sw };
+  const sw0 = bestSwitch(team, side.active, foe, p);
+  if (sw0 >= 0 && b.round > 0 || sw0 >= 0) {
+    const cand = team[sw0];
+    const gain = moveMatchup(cand, foe) - moveMatchup(me, foe);
+    const danger = moveMatchup(foe, me) - moveMatchup(foe, cand);
+    if (gain >= 1 && danger >= 0.5 && hpRatio(cand) > 0.5 && me.hp > foeHit * 0.5) return { type: 'battle', move: 'switch', index: sw0 };
+    if (myMult <= 0.5 && moveMatchup(cand, foe) >= 2) return { type: 'battle', move: 'switch', index: sw0 };
   }
 
   if (b.kind === 'wild') {
@@ -95,15 +127,28 @@ function battleAction(state, p) {
     const want = newSpecies || foe.shiny || sp.tier >= 3 || p.team.length < TEAM_SIZE;
     const ball = bestBall(p, foe);
     if (want && ball) {
-      const weak = hpRatio(foe) <= 0.5;
-      if (weak || sp.tier <= 1 || ball === 'master_ball' || me.hp < foe.hp * 0.5) {
+      // chance real: precisa tirar (alvo - bônus) no d6, e 1 sempre falha
+      const max = maxHpOf(foe);
+      const hpB = foe.hp <= max * 0.25 ? 2 : foe.hp <= max * 0.5 ? 1 : 0;
+      const need = CAPTURE_TARGET[sp.tier] + (foe.shiny ? 1 : 0) - ballBonusAgainst(ball, sp.types) - hpB - (me.lvl >= foe.lvl + 5 ? 1 : 0);
+      const odds = ball === 'master_ball' ? 1 : Math.max(0, Math.min(5, 7 - Math.max(2, need))) / 6;
+      const finishing = myHit >= foe.hp; // não derruba o que quer capturar
+      if (odds >= 0.66 || (odds >= 0.34 && (hpB >= 1 || me.hp < foeHit * 1.5)) || (odds > 0 && sp.tier >= 5 && hpB >= 2) || finishing && odds > 0) {
         return { type: 'battle', move: 'ball', item: ball };
       }
+      // enfraquece com o golpe mais fraco para não nocautear
+      if (hpRatio(foe) > 0.25 && odds < 0.66) {
+        const weakSlot = [0, 1].map(i => ({ i, d: expectedDamage(state, si, movesOf(me.sp)[i]) }))
+          .filter(x => x.d > 0 && x.d < foe.hp * 0.85).sort((a, c) => c.d - a.d)[0];
+        if (weakSlot) return { type: 'battle', move: 'attack', slot: weakSlot.i };
+      }
     }
+    if (sp.tier >= 5 && !want) return { type: 'battle', move: 'flee' };
     if (foe.lvl > me.lvl + 8 && !want) return { type: 'battle', move: 'flee' };
     // Batalha indo mal (2+ desmaiados ou equipe abaixo de 40%) e o selvagem ainda inteiro: foge
     const down = team.filter(m => m.hp <= 0).length;
     if ((down >= 2 || teamHealth(p) < 0.4) && hpRatio(foe) > 0.4) return { type: 'battle', move: 'flee' };
+    if (foeHit >= me.hp && myHit * 2 < foe.hp && !team.some((m, i) => i !== side.active && m.hp > 0 && canUse(p, m))) return { type: 'battle', move: 'flee' };
     // Se o golpe não afeta, foge (evita empates infinitos)
     if (myMult === 0) {
       const sw = bestSwitch(team, side.active, foe, p);
@@ -116,7 +161,7 @@ function battleAction(state, p) {
     const sw = bestSwitch(team, side.active, foe, p);
     if (sw >= 0 && matchup(team[sw], foe) > 0) return { type: 'battle', move: 'switch', index: sw };
   }
-  return { type: 'battle', move: 'attack' };
+  return { type: 'battle', move: 'attack', slot };
 }
 
 // ------------------------------------------------------------------ turno
@@ -179,16 +224,15 @@ function cityActions(state, p) {
 
   if ([...p.team].some(m => m.hp < maxHpOf(m))) return { type: 'city', op: 'heal' };
 
-  // PC: completa a equipe e troca o mais fraco pelo melhor do PC
+  // PC: equipe só com quem obedece e é mais forte; quem não obedece vai para o PC
   if (p.box.length) {
-    if (p.team.length < TEAM_SIZE) {
-      const bi = p.box.reduce((bi, m, i, arr) => (m.lvl > arr[bi].lvl ? i : bi), 0);
-      return { type: 'pc', op: 'withdraw', box: bi };
-    }
-    const wi = p.team.reduce((wi, m, i, arr) => (m.lvl < arr[wi].lvl ? i : wi), 0);
-    const bi = p.box.reduce((bi, m, i, arr) => (m.lvl > arr[bi].lvl ? i : bi), 0);
-    if (p.box[bi].lvl > p.team[wi].lvl + 2) return { type: 'pc', op: 'swap', team: wi, box: bi };
+    const val = m => (canUse(p, m) ? monPower(m) : -1);
+    const bi = p.box.reduce((bi, m, i, arr) => (val(m) > val(arr[bi]) ? i : bi), 0);
+    if (p.team.length < TEAM_SIZE && val(p.box[bi]) > 0) return { type: 'pc', op: 'withdraw', box: bi };
+    const wi = p.team.reduce((wi, m, i, arr) => (val(m) < val(arr[wi]) ? i : wi), 0);
+    if (val(p.box[bi]) > 0 && val(p.box[bi]) > Math.max(0, val(p.team[wi])) * 1.08 && p.team.length > 1) return { type: 'pc', op: 'swap', team: wi, box: bi };
   }
+
 
   // Loja
   const shop = shopFor(sp.tier);
@@ -201,6 +245,11 @@ function cityActions(state, p) {
   if (potions < 3) {
     const pot = shop.find(o => o.id === 'super_potion' && o.price * 2 <= p.gold - 200) || shop.find(o => o.id === 'potion' && o.price * 2 <= p.gold - 100);
     if (pot) return { type: 'city', op: 'buy', item: pot.id, qty: 2 };
+  }
+  const nextGym = GYMS.find(g => !p.badges.includes(g.id));
+  if (nextGym && !(p.items.x_attack > 0) && p.gold > 900) {
+    const xa = shop.find(o => o.id === 'x_attack');
+    if (xa) return { type: 'city', op: 'buy', item: 'x_attack', qty: 1 };
   }
   if (!p.items.revive && p.gold > 1500) {
     const rv = shop.find(o => o.id === 'revive');
@@ -244,7 +293,8 @@ export function botAction(state, pid) {
   const p = getPlayer(state, pid);
 
   if (state.pending?.kind === 'pvp_invite' && state.pending.to === pid) {
-    return { type: 'respond', accept: true };
+    const from = getPlayer(state, state.pending.from);
+    return { type: 'respond', accept: strength(p) >= strength(from) * 0.85 };
   }
   if (state.battle && !state.battle.over) return battleAction(state, p);
 
@@ -257,6 +307,11 @@ export function botAction(state, pid) {
   if (city) return city;
   const item = itemActions(state, p);
   if (item) return item;
+
+  // o mais forte (que obedece e está de pé) vai na frente
+  const v = m => (canUse(p, m) && m.hp > 0 ? monPower(m) : -1);
+  const lead = p.team.reduce((bi, m, i, arr) => (v(m) > v(arr[bi]) ? i : bi), 0);
+  if (lead > 0 && v(p.team[lead]) > v(p.team[0]) * 1.05) return { type: 'reorder', index: lead };
 
   if (state.phase === 'roll') return { type: 'roll' };
 

@@ -12,6 +12,9 @@ export function createMemoryDb() {
   const listeners = new Set();
   const payments = new Map();
   const feed = [];
+  const listings = new Map();
+  const offers = new Map();
+  const now = () => new Date().toISOString();
   const notify = id => listeners.forEach(fn => fn(id));
   const copy = v => (v == null ? v : structuredClone(v));
 
@@ -27,10 +30,51 @@ export function createMemoryDb() {
 
     async getProfile(id) { return copy(profiles.get(id) || null); },
     async upsertProfile(id, patch) {
-      const cur = profiles.get(id) || { id, trainer_name: 'Treinador', avatar: 1, is_admin: profiles.size === 0, pokedex: [], vault: [], stats: {}, points: 0, rating: 1000, diamonds: 0, cosmetics: {} };
-      const next = { ...cur, ...copy(patch), id };
+      const cur = profiles.get(id) || { id, trainer_name: 'Treinador', avatar: 1, is_admin: profiles.size === 0, pokedex: [], pokedex_seen: [], vault: [], stats: {}, points: 0, rating: 1000, diamonds: 0, gold: 0, cosmetics: {}, rev: 0 };
+      const next = { ...cur, ...copy(patch), id, rev: (cur.rev || 0) + 1 };
       profiles.set(id, next);
       return copy(next);
+    },
+    async updateProfileIf(id, rev, patch) {
+      const cur = profiles.get(id);
+      if (!cur || (cur.rev || 0) !== (rev || 0)) return null;
+      const next = { ...cur, ...copy(patch), id, rev: (cur.rev || 0) + 1 };
+      profiles.set(id, next);
+      return copy(next);
+    },
+    async walletAdd(id, dD, dG) {
+      const p = profiles.get(id);
+      if (!p) return null;
+      if ((p.diamonds || 0) + dD < 0 || (p.gold || 0) + dG < 0) return null;
+      p.diamonds = (p.diamonds || 0) + dD;
+      p.gold = (p.gold || 0) + dG;
+      return { diamonds: p.diamonds, gold: p.gold };
+    },
+    async insertListing(row) { const r = { id: randomUUID(), status: 'open', created_at: now(), updated_at: now(), ...copy(row) }; listings.set(r.id, r); return copy(r); },
+    async getListing(id) { return copy(listings.get(id) || null); },
+    async updateListingIf(id, from, patch) {
+      const r = listings.get(id);
+      if (!r || !from.includes(r.status)) return null;
+      Object.assign(r, copy(patch), { updated_at: now() });
+      return copy(r);
+    },
+    async listListings({ status, sellerId, buyerId, sp, tier, shiny, limit = 60 } = {}) {
+      const st = status ? [].concat(status) : null;
+      return [...listings.values()].filter(r => (!st || st.includes(r.status)) && (!sellerId || r.seller_id === sellerId) && (!buyerId || r.buyer_id === buyerId)
+        && (!sp || r.sp === sp) && (!tier || r.tier === tier) && (!shiny || r.shiny)).reverse().slice(0, limit).map(copy);
+    },
+    async insertOffer(row) { const r = { id: randomUUID(), status: 'pending', created_at: now(), updated_at: now(), ...copy(row) }; offers.set(r.id, r); return copy(r); },
+    async getOffer(id) { return copy(offers.get(id) || null); },
+    async updateOfferIf(id, from, patch) {
+      const r = offers.get(id);
+      if (!r || !from.includes(r.status)) return null;
+      Object.assign(r, copy(patch), { updated_at: now() });
+      return copy(r);
+    },
+    async listOffers({ listingId, buyerId, sellerId, status, limit = 100 } = {}) {
+      const st = status ? [].concat(status) : null;
+      return [...offers.values()].filter(r => (!listingId || r.listing_id === listingId) && (!buyerId || r.buyer_id === buyerId)
+        && (!sellerId || r.seller_id === sellerId) && (!st || st.includes(r.status))).reverse().slice(0, limit).map(copy);
     },
     async listProfiles(limit) {
       return [...profiles.values()].sort((a, b) => (b.points || 0) - (a.points || 0)).slice(0, limit).map(copy);

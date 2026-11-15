@@ -9,7 +9,8 @@ export const SHINY_STAT_BONUS = 0.1;
 // Faixa de nível dos selvagens por tier de casa
 export const WILD_LEVELS = { 1: [3, 7], 2: [7, 13], 3: [12, 19], 4: [18, 26], 5: [26, 34] };
 
-export const BASE_SHINY_RATE = 1 / 40;
+export const BASE_SHINY_RATE = 1 / 450; // shiny é raríssimo (Amuleto Shiny triplica)
+export const DAILY_SHINY_RATE = 1 / 64;
 
 /** Status derivados da espécie (HP/força do catálogo original) + nível + shiny + natureza. */
 export function computeStats(speciesId, level, shiny = false, nature = null) {
@@ -78,11 +79,11 @@ export function isFainted(mon) {
   return mon.hp <= 0;
 }
 
-export function healMon(mon, pct = 1) {
+export function healMon(mon, pct = 1, flat = 0) {
   const max = maxHpOf(mon);
   if (mon.hp <= 0 && pct < 1) return 0; // poção não revive
   const before = mon.hp;
-  mon.hp = Math.min(max, mon.hp + Math.ceil(max * pct));
+  mon.hp = Math.min(max, mon.hp + Math.ceil(max * pct) + flat);
   return mon.hp - before;
 }
 
@@ -156,7 +157,7 @@ export function rollWild(rng, tier, opts = {}) {
   const [lo, hi] = WILD_LEVELS[tier];
   const level = rng.int(lo, hi);
   let shinyRate = BASE_SHINY_RATE * (opts.shinyCharm ? 3 : 1);
-  if (isDaily) shinyRate = Math.max(shinyRate, 1 / 8);
+  if (isDaily) shinyRate = Math.max(shinyRate, DAILY_SHINY_RATE * (opts.shinyCharm ? 3 : 1));
   if (opts.forceShiny) shinyRate = 1;
   const shiny = rng.chance(shinyRate);
   const mon = createMon(rng, speciesId, level, { shiny });
@@ -170,5 +171,5 @@ export function hatchEgg(rng, tier, opts = {}) {
   const basics = pool.filter(s => !s.evolvesFrom || getSpecies(s.evolvesFrom)?.tier !== tier);
   const sp = rng.pick(basics.length ? basics : pool);
   const lvl = opts.level || { 1: 5, 2: 12, 3: 18, 4: 25, 5: 30 }[tier];
-  return createMon(rng, sp.id, lvl, { shiny: rng.chance(BASE_SHINY_RATE * 2), capTier: tier, ot: opts.ot });
+  return createMon(rng, sp.id, lvl, { shiny: rng.chance(BASE_SHINY_RATE), capTier: tier, ot: opts.ot });
 }

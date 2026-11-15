@@ -62,7 +62,7 @@ export const BADGE_REWARDS = {
   3: { egg: 3, items: { ultra_ball: 3 }, text: 'Ovo de tier 3 + Ultra Balls' },
   4: { egg: 4, items: { rare_candy: 2 }, text: 'Ovo de tier 4 + Rare Candy' },
   5: { items: { ultra_ball: 5, rare_candy: 3, revive: 2 }, text: 'Kit de elite' },
-  6: { egg: 5, items: { master_ball: 1 }, text: 'Ovo Lendário + Master Ball' }
+  6: { egg: 4, items: { ultra_ball: 5, rare_candy: 2 }, text: 'Ovo de tier 4 + Ultra Balls + Rare Candy' }
 };
 
 // Ases da Liga (evento especial das casas Amarelas)

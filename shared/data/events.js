@@ -83,7 +83,7 @@ export const EVENT_CARDS = [
   ] },
   { id: 'star_shower', title: 'Chuva de Estrelas', icon: '🌠', tone: 'battle', weight: 14, tiers: [5], lore: [
     'Estrelas cadentes riscam o céu e uma delas cai bem ao lado de {name}... um Pokémon brilhante surge da luz!',
-    'Na noite mais clara do ano, um Pokémon SHINY aparece atraído pelo brilho das estrelas.'
+    'Na noite mais clara do ano, um Pokémon forte aparece atraído pelo brilho das estrelas... será que ele brilha?'
   ] },
   { id: 'league_treasure', title: 'Tesouro da Liga', icon: '👑', tone: 'good', weight: 16, tiers: [5], lore: [
     'Um baú dourado com o selo da Liga Pokémon está escondido entre as rochas. {name} abre com cuidado...',

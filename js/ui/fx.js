@@ -103,8 +103,21 @@ export async function eventCard(f, { name, mine }) {
 }
 
 // ------------------------------------------------ entrada de batalha
+/** Celebração de shiny: é raríssimo, então a tela inteira comemora. */
+export async function shinyCelebration(sp) {
+  if (!anim.speed) return;
+  const el = layer('dim');
+  el.innerHTML = `<div class="shiny-party"><div class="rays"></div><img src="${monSprite(sp, true)}" alt="">
+    <div class="sp-title">✨ SHINY! ✨</div><div class="sp-sub">Um ${esc(getSpecies(sp).name)} brilhante apareceu! (chance de 1 em 450)</div><div class="sparkles"></div></div>`;
+  sparkle(el.querySelector('.sparkles'), 40);
+  confetti(160);
+  await wait(3000);
+  el.remove();
+}
+
 export async function battleIntro(f, { me, foePlayer }) {
   if (!anim.speed) return;
+  if (f.foe?.shiny && (f.kind === 'wild' || f.kind === 'raid')) await shinyCelebration(f.foe.sp);
   const el = layer('dim');
   if (f.kind === 'raid') {
     el.innerHTML = `<div class="intro raid ${f.foe.shiny ? 'shiny' : ''}"><div class="grass"><img src="${monSprite(f.foe.sp, f.foe.shiny)}" alt=""><div class="sparkles"></div></div>

@@ -3,8 +3,9 @@ import { getSpecies } from '../../shared/data/pokemon.js';
 import { ITEMS, ballBonusAgainst } from '../../shared/data/items.js';
 import { monView, maxHpOf } from '../../shared/rules/monsters.js';
 import { canUse, badgesNeeded } from '../../shared/rules/helpers.js';
+import { movesOf } from '../../shared/data/moves.js';
 import { raidCatchChance } from '../../shared/engine.js';
-import { bestAttack, effectivenessLabel, TYPE_COLORS } from '../../shared/rules/types.js';
+import { bestAttack, against, effectivenessLabel, TYPE_COLORS } from '../../shared/rules/types.js';
 import { whoMustAct } from '../../shared/engine.js';
 import { esc, hpClass } from './dom.js';
 import { monSprite, itemUrl, leaderUrl, typeLabel } from '../config.js';
@@ -68,9 +69,11 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
   const official = ['gym', 'elite', 'champion'].includes(b.kind);
   const vp = state.players.find(x => x.id === vid);
 
-  const mAtk = bestAttack(getSpecies(myMon.sp).types, getSpecies(foeMon.sp).types);
-  const fAtk = bestAttack(getSpecies(foeMon.sp).types, getSpecies(myMon.sp).types);
-  const matchup = `Seu golpe: <b style="color:${TYPE_COLORS[mAtk.type]}">${esc(typeLabel(mAtk.type))}</b> ${mAtk.mult !== 1 ? `<b>x${mAtk.mult}</b>` : ''} · Golpe do adversário: <b style="color:${TYPE_COLORS[fAtk.type]}">${esc(typeLabel(fAtk.type))}</b> ${fAtk.mult !== 1 ? `<b>x${fAtk.mult}</b>` : ''}`;
+  const foeMoves = movesOf(foeMon.sp);
+  const matchup = `Golpes do adversário: ${foeMoves.map(m => {
+    const mult = m.kind === 'dmg' || m.kind === 'drain' ? against(m.type, getSpecies(myMon.sp).types) : 1;
+    return `<b style="color:${TYPE_COLORS[m.type]}">${esc(m.name)}</b>${mult !== 1 ? ` <b>x${mult}</b>` : ''}`;
+  }).join(' · ')}`;
 
   const arena = `<div class="arena t${tier} ${official ? 'official' : ''}" id="arena">
       ${foe.kind === 'npc' && foe.sprite ? `<img class="foe-trainer" src="${leaderUrl(foe.sprite)}" alt="${esc(foe.name)}">` : ''}
@@ -91,8 +94,17 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
     const myTeam = sideTeam(state, me);
     const balls = Object.entries(p.items).filter(([id, n]) => ITEMS[id]?.kind === 'ball' && n > 0);
     const items = Object.entries(p.items).filter(([id, n]) => ['heal', 'revive', 'boost'].includes(ITEMS[id]?.kind) && n > 0);
-    controls = `<div class="battle-actions">
-        <button class="btn red" data-act="b-attack">⚔️ Atacar</button>
+    const moveBtns = movesOf(myMon.sp).map((m, i) => {
+      const dmg = m.kind === 'dmg' || m.kind === 'drain';
+      const mult = dmg ? against(m.type, getSpecies(foeMon.sp).types) : 1;
+      const stab = dmg && getSpecies(myMon.sp).types.includes(m.type);
+      const tag = !dmg ? `<span class="mv-tag sup">${esc(m.desc)}</span>`
+        : mult === 0 ? '<span class="mv-tag bad">Não afeta</span>' : mult >= 2 ? `<span class="mv-tag good">Super efetivo x${mult}</span>` : mult < 1 ? `<span class="mv-tag bad">Pouco efetivo x${mult}</span>` : '<span class="mv-tag">Normal</span>';
+      return `<button class="btn move-btn" style="--tc:${TYPE_COLORS[m.type]}" data-act="b-attack" data-slot="${i}" title="${esc(m.desc)}">
+        <span class="mv-name">${esc(m.name)}</span>
+        <span class="mv-meta">${esc(typeLabel(m.type))}${dmg ? ` · poder ${Math.round((m.power || 1) * (stab ? 1.2 : 1) * 100)}%` : ''}${m.risky ? ' · 🎲1 erra' : ''}</span>${tag}</button>`;
+    }).join('');
+    controls = `<div class="move-grid">${moveBtns}</div><div class="battle-actions">
         <button class="btn blue" data-act="b-sub" data-sub="switch" ${myTeam.filter(m => m.hp > 0 && canUse(p, m)).length < 2 ? 'disabled' : ''}>🔄 Trocar</button>
         <button class="btn purple" data-act="b-sub" data-sub="item" ${items.length ? '' : 'disabled'}>🎒 Itens</button>
         <button class="btn green" data-act="b-sub" data-sub="ball" ${b.kind === 'wild' && balls.length ? '' : 'disabled'} ${b.kind === 'raid' ? 'title="Na Raid, vença primeiro: a captura é automática no fim"' : ''}>🔴 Capturar</button>
@@ -153,6 +165,16 @@ function setHp(box, hp, max) {
   requestAnimationFrame(step);
 }
 
+function moveBanner(arena, sprite, name, type) {
+  const el = document.createElement('div');
+  el.className = 'move-banner';
+  el.style.setProperty('--tc', TYPE_COLORS[type] || '#888');
+  el.textContent = name;
+  if (sprite) el.classList.add(sprite.classList.contains('me') ? 'me' : 'foe');
+  arena.appendChild(el);
+  setTimeout(() => el.remove(), 1100);
+}
+
 /** Toca, em ordem, os efeitos de uma rodada na arena aberta (#arena). */
 export async function playBattleFx(fxList) {
   const arena = document.getElementById('arena');
@@ -164,9 +186,10 @@ export async function playBattleFx(fxList) {
     if (f.k === 'hit') {
       const atk = sprite(f.atkUid), def = sprite(f.defUid);
       if (atk) { const c = atk.classList.contains('me') ? 'lunge-me' : 'lunge-foe'; atk.classList.remove(c); void atk.offsetWidth; atk.classList.add(c); }
+      if (f.move) moveBanner(arena, atk, f.move, f.type);
       const chip = document.createElement('div');
       chip.className = 'roll-chip';
-      chip.textContent = `🎲 ${f.roll}`;
+      chip.textContent = f.miss ? `🎲 ${f.roll} · errou!` : `🎲 ${f.roll}`;
       if (atk) { const r = atk.getBoundingClientRect(), a = arena.getBoundingClientRect(); chip.style.left = (r.left - a.left + r.width * 0.4) + 'px'; chip.style.top = (r.top - a.top) + 'px'; }
       arena.appendChild(chip); setTimeout(() => chip.remove(), 900);
       await wait(260);
@@ -188,8 +211,14 @@ export async function playBattleFx(fxList) {
         arena.appendChild(e); setTimeout(() => e.remove(), 950);
       }
       await wait(650);
+    } else if (f.k === 'buff' || f.k === 'debuff') {
+      const s = sprite(f.uid);
+      if (f.move) moveBanner(arena, f.k === 'buff' ? s : arena.querySelector('.mon-sprite:not([data-uid="' + f.uid + '"])'), f.move, f.k === 'buff' ? 'fighting' : 'dark');
+      if (s) { s.classList.remove('buffed', 'debuffed'); void s.offsetWidth; s.classList.add(f.k === 'buff' ? 'buffed' : 'debuffed'); float(arena, s, f.k === 'buff' ? 'ATQ ▲' : 'ATQ ▼', f.k === 'buff' ? 'heal' : 'crit'); }
+      await wait(800);
     } else if (f.k === 'heal') {
       const s = sprite(f.uid);
+      if (f.move) moveBanner(arena, s, f.move, 'grass');
       if (s) float(arena, s, `+${f.amount}`, 'heal');
       setHp(box(f.uid), f.hpAfter, f.maxHp);
       await wait(600);

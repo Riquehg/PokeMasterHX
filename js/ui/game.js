@@ -10,6 +10,7 @@ import { battleHtml, outcomeText, playBattleFx } from './battle.js';
 import { BoardView } from './board.js';
 import { anim, rollDice, turnBanner, eventCard, battleIntro, captureAnim, confetti } from './fx.js';
 import * as M from './modals.js';
+import { renderTrades } from './trade.js';
 
 const BATTLE_FX = new Set(['hit', 'heal', 'faint', 'switch']);
 const SPEEDS = [[1, '🎬 Animações: normal'], [2, '⚡ Animações: rápidas'], [0, '⏭️ Animações: desligadas']];
@@ -42,6 +43,7 @@ export function mountGame(root, session, { onExit }) {
           </div>
         </section>
         <aside class="right">
+          <div id="g-trades" style="display:none"></div>
           <div class="panel actions dock" id="g-actions"></div>
           <div class="panel" id="g-battle-mini" style="display:none"></div>
           <div class="mtabs">
@@ -75,6 +77,7 @@ export function mountGame(root, session, { onExit }) {
     viewerId: () => vid(),
     on: fn => { ui.listeners.add(fn); return () => ui.listeners.delete(fn); },
     canAct: id => session.canAct(id),
+    act: a => act(a),
     kind: session.kind
   });
 
@@ -159,6 +162,10 @@ export function mountGame(root, session, { onExit }) {
           if (f.pid === v) confetti(90);
           break;
         }
+        case 'trade_done':
+          if (f.ok && (f.from === v || f.to === v)) { toast('🤝 Troca concluída!', 'good'); confetti(60); }
+          else if (!f.ok && f.from === v) toast(`🤝 ${nameOf(f.to)} recusou sua troca.`, 'bad');
+          break;
         case 'placed':
           if (f.pid === v && f.where === 'box') toast(`💻 ${speciesName(f.sp)}${f.shiny ? ' ✨' : ''} foi para o PC — sua equipe já tem 6.`, 'info');
           break;
@@ -198,6 +205,7 @@ export function mountGame(root, session, { onExit }) {
     if (!ui.playing) {
       renderBattle(s);
       renderInvite(s);
+      if (p) renderTrades(root, s, p.id, viewSession());
       renderGameOver(s);
     }
     ui.listeners.forEach(fn => { try { fn(s); } catch (e) { console.error(e); } });
@@ -378,7 +386,7 @@ export function mountGame(root, session, { onExit }) {
   }
 
   const battleHandlers = {
-    'b-attack': () => { ui.battleSub = null; act({ type: 'battle', move: 'attack' }); },
+    'b-attack': d => { ui.battleSub = null; act({ type: 'battle', move: 'attack', slot: Number(d.slot || 0) }); },
     'b-sub': d => { ui.battleSub = ui.battleSub === d.sub ? null : d.sub; renderBattle(S()); },
     'b-switch': d => { ui.battleSub = null; act({ type: 'battle', move: 'switch', index: Number(d.index) }); },
     'b-ball': d => { ui.battleSub = null; act({ type: 'battle', move: 'ball', item: d.item }); },
@@ -454,6 +462,7 @@ export function mountGame(root, session, { onExit }) {
     spectate: () => { ui.spectate = true; render(); },
     'show-over': () => showOver(S()),
     trainer: d => M.openTrainer(viewSession(), d.pid),
+    'trade-cancel': d => act({ type: 'trade_respond', id: d.id, cancel: true }),
     mon: d => M.openMon(viewSession(), act, Number(d.index)),
     tab: d => { ui.tab = d.tab; render(); },
     mtab: d => { ui.mtab = d.t; render(); },

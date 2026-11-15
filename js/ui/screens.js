@@ -6,6 +6,7 @@ import { monSprite, avatarUrl } from '../config.js';
 import { net, api, signIn, signUp, signOut, resetPassword, watchMatch } from '../api.js';
 import { LocalSession } from '../session.js';
 import { openDex } from './modals.js';
+import { openMarket } from './market.js';
 import { typeChips } from './common.js';
 import { openShop as openDiamondShop } from './shop.js';
 import { showAnnouncement } from './notify.js';
@@ -125,10 +126,11 @@ export async function hubScreen(root, ctx) {
           <div class="col" style="gap:6px;align-items:flex-end">
             <button class="btn sm" data-act="edit" ${profile ? '' : 'disabled'}>✏️</button>
             <button class="btn sm blue" data-act="dshop" ${profile ? '' : 'disabled'}><span class="diamonds">💎 ${profile?.diamonds || 0}</span> Loja</button>
+            <span class="chip gold" title="Ouro da conta: ganho no fim de cada partida salva. Use no Mercado.">🪙 ${profile?.gold || 0}</span>
           </div>
         </div>
         <div class="daily"><img src="${monSprite(daily)}" alt="${esc(dsp?.name)}"><div><div class="tiny" style="color:var(--gold)">⭐ POKÉMON DO DIA</div><b>${esc(dsp?.name)}</b> ${typeChips(dsp?.types || [])}
-          <div class="tiny muted">Aparece mais, dá XP em dobro e tem chance de shiny 1/8.</div></div></div>
+          <div class="tiny muted">Aparece mais, dá XP em dobro e tem chance de shiny 1/64.</div></div></div>
         <div class="card col">
           <h3>🌐 Online</h3>
           <button class="btn blue" data-act="online" ${profile ? '' : 'disabled'}>Salas online (criar / entrar)</button>
@@ -148,6 +150,7 @@ export async function hubScreen(root, ctx) {
         <div class="card col">
           <h3>📦 Minha coleção</h3>
           <div class="grid2"><button class="btn purple" data-act="vault" ${profile ? '' : 'disabled'}>📦 Coleção (${(profile?.vault || []).length})</button><button class="btn" data-act="dex">📖 Pokédex (${(profile?.pokedex || []).length})</button></div>
+          <button class="btn gold-btn" data-act="market" ${profile ? '' : 'disabled'}>🏪 Mercado Global (comprar, vender, trocar)</button>
           <button class="btn" data-act="ranking">🏆 Ranking</button>
           ${profile?.is_admin ? `<button class="btn red" data-act="admin">🛡️ Painel do admin</button>` : ''}
         </div>
@@ -164,8 +167,9 @@ export async function hubScreen(root, ctx) {
     'new-local': () => ctx.go('local-setup'),
     solo: () => soloModal(profile, ctx),
     vault: () => collectionModal(profile, rerender),
-    dex: () => openDex(null, profile?.pokedex || []),
+    dex: () => openDex(null, profile?.pokedex || [], profile?.pokedex_seen || []),
     ranking: () => rankingModal(),
+    market: () => openMarket(profile, () => ctx.go('hub')),
     admin: () => adminModal(),
     dshop: () => openDiamondShop(profile, null, () => ctx.go('hub')),
     logout: async () => { await signOut(); ctx.go('login'); },
@@ -469,11 +473,12 @@ async function adminModal() {
       return tabs + `<div class="card col"><h3>⭐ Pokémon do Dia</h3>
           <div class="row"><select class="input grow" id="a-daily"><option value="">(automático pela data)</option>${SPECIES_LIST.map(s => `<option value="${s.id}">${s.dex} · ${esc(s.name)}</option>`).join('')}</select>
           <button class="btn primary" data-act="daily">Definir</button></div>
-          <p class="tiny muted">Vale para as próximas partidas iniciadas: aparece mais, XP em dobro e shiny 1/8.</p></div>`;
+          <p class="tiny muted">Vale para as próximas partidas iniciadas: aparece mais, XP em dobro e shiny 1/64.</p></div>`;
     }
     return tabs + `<div class="card col"><h3>🎁 Dar presente</h3>
         <div class="row"><select class="input grow" id="a-user">${users.map(u => `<option value="${u.id}">${esc(u.name)} (💎${u.diamonds})</option>`).join('')}</select></div>
         <div class="row"><input class="input" id="a-dm" type="number" value="100" style="width:110px"><button class="btn blue" data-act="give-dm">💎 Dar diamantes</button><span class="tiny muted">(use número negativo para remover)</span></div>
+        <div class="row"><input class="input" id="a-gd" type="number" value="500" style="width:110px"><button class="btn" data-act="give-gd">🪙 Dar ouro da conta</button></div>
         <div class="row"><select class="input grow" id="a-sp">${SPECIES_LIST.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select>
           <input class="input" id="a-lv" type="number" min="1" max="60" value="5" style="width:80px"><label class="small"><input type="checkbox" id="a-shiny"> shiny</label>
           <button class="btn" data-act="grant">🎁 Dar Pokémon (vai para a Coleção)</button></div></div>
@@ -510,6 +515,7 @@ async function adminModal() {
     'save-shop': () => { collect(); run(() => api('admin', { op: 'save_shop', shop: data.shop }), 'Loja salva!'); },
     credit: d => { if (confirm('Creditar manualmente? Use só se o Pix foi pago e não caiu sozinho.')) run(() => api('admin', { op: 'credit_payment', paymentId: d.id }), 'Creditado.'); },
     daily: () => run(async () => { const r = await api('admin', { op: 'set_daily', species: ov.querySelector('#a-daily').value || null }); toast(`Pokémon do Dia: ${getSpecies(r.dailyPokemon).name}`, 'good'); }),
+    'give-gd': () => run(() => api('admin', { op: 'give_gold', userId: ov.querySelector('#a-user').value, amount: Number(ov.querySelector('#a-gd').value) }), 'Ouro enviado!'),
     'give-dm': () => run(() => api('admin', { op: 'give_diamonds', userId: ov.querySelector('#a-user').value, amount: Number(ov.querySelector('#a-dm').value) }), 'Diamantes enviados!'),
     grant: () => run(() => api('admin', { op: 'grant_mon', userId: ov.querySelector('#a-user').value, species: ov.querySelector('#a-sp').value, level: ov.querySelector('#a-lv').value, shiny: ov.querySelector('#a-shiny').checked }), 'Enviado para a Coleção!'),
     toggle: d => run(() => api('admin', { op: 'set_admin', userId: d.id, value: d.v === '1' }))

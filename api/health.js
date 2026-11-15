@@ -41,13 +41,15 @@ export default route(async () => {
     const { admin } = await import('./_lib/supabase-db.js');
     // Confere tabela por tabela, com as colunas que o jogo usa
     const expected = {
-      profiles: 'id, trainer_name, avatar, is_admin, pokedex, vault, stats, points, rating, diamonds, cosmetics',
+      profiles: 'id, trainer_name, avatar, is_admin, pokedex, vault, stats, points, rating, diamonds, cosmetics, gold, rev, pokedex_seen',
       matches: 'id, code, name, host_id, status, is_public, has_pin, options, lobby, state, chat, version',
       match_players: 'match_id, user_id',
       match_secrets: 'match_id, pin',
       game_config: 'key, value',
       payments: 'id, user_id, package_id, diamonds, amount, status, mp_payment_id',
-      global_feed: 'id, kind, text, data'
+      global_feed: 'id, kind, text, data',
+      market_listings: 'id, seller_id, mon, sp, tier, price_gold, price_diamonds, accept_offers, status',
+      market_offers: 'id, listing_id, seller_id, buyer_id, gold, diamonds, mons, status'
     };
     for (const [t, cols] of Object.entries(expected)) {
       const { error } = await admin().from(t).select(cols, { head: true }).limit(1);
@@ -57,6 +59,9 @@ export default route(async () => {
     const { error: fnErr } = await admin().rpc('add_diamonds', { uid: '00000000-0000-0000-0000-000000000000', amount: 0 });
     out.funcao_add_diamonds = fnErr ? `ERRO: ${fnErr.message}` : 'ok';
     if (fnErr) out.problemas.push(`Função add_diamonds: ${fnErr.message} — rode o supabase/schema.sql.`);
+    const { error: wErr } = await admin().rpc('wallet_add', { uid: '00000000-0000-0000-0000-000000000000', d_diamonds: 0, d_gold: 0 });
+    out.funcao_wallet_add = wErr ? `ERRO: ${wErr.message}` : 'ok';
+    if (wErr) out.problemas.push(`Função wallet_add: ${wErr.message} — rode o supabase/schema.sql.`);
   }
   out.ok = out.problemas.length === 0;
   return out;

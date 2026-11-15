@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { createMatch, applyAction, _internals } from '../shared/engine.js';
 import { rollWild, createMon, computeStats, hatchEgg } from '../shared/rules/monsters.js';
 import { canUse, badgesNeeded, giveMon } from '../shared/rules/helpers.js';
+import { BADGE_REWARDS } from '../shared/data/trainers.js';
 import { createRng } from '../shared/rules/rng.js';
 import { getSpecies } from '../shared/data/pokemon.js';
 import { SPACE_LIST } from '../shared/data/board.js';
@@ -114,6 +115,12 @@ test('prêmios de insígnia: a 2ª insígnia dá um ovo de tier 2', () => {
   assert.ok(egg, 'chocou um Pokémon de tier 2');
 });
 
+test('a 6ª insígnia não dá mais lendário nem Master Ball', () => {
+  const r6 = BADGE_REWARDS[6];
+  assert.ok(!r6.items?.master_ball);
+  assert.ok((r6.egg || 0) < 5);
+});
+
 test('casas Amarelas só têm eventos especiais; Raid só nas Azuis e Vermelhas', () => {
   const t5 = cardsForTier(5).map(c => c.id);
   assert.deepEqual(t5.sort(), ['ancient_egg', 'league_treasure', 'legend_shrine', 'master_trainer', 'mew_blessing', 'star_shower']);
@@ -143,11 +150,15 @@ test('Raid: chefe lendário com HP extra, sem pokébolas, vitória dá prêmio e
   assert.ok(s.log.some(l => /se acalmou|escapou para o céu/.test(l.msg)));
 });
 
-test('eventos especiais: Chuva de Estrelas sempre traz shiny; Tesouro dá ouro e itens', () => {
-  let s = game(41);
-  s = _internals.boardEvent(s, 'ash', eventSpace(5), 'star_shower');
-  assert.equal(s.battle.kind, 'wild');
-  assert.equal(s.battle.sides[1].team[0].shiny, true);
+test('eventos especiais: Chuva de Estrelas traz Pokémon forte (shiny só às vezes); Tesouro dá ouro e itens', () => {
+  let shinies = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const s = _internals.boardEvent(game(seed), 'ash', eventSpace(5), 'star_shower', seed);
+    assert.equal(s.battle.kind, 'wild');
+    assert.ok(getSpecies(s.battle.sides[1].team[0].sp).tier >= 3);
+    if (s.battle.sides[1].team[0].shiny) shinies++;
+  }
+  assert.ok(shinies > 2 && shinies < 30, `shinies: ${shinies}`);
   let s2 = game(42);
   const g = s2.players[0].gold;
   s2 = _internals.boardEvent(s2, 'ash', eventSpace(5), 'league_treasure');

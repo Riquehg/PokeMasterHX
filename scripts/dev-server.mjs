@@ -15,7 +15,7 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
   '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.svg': 'image/svg+xml' };
 
 const routes = {};
-for (const name of ['match', 'action', 'rooms', 'profile', 'leaderboard', 'admin', 'config', 'health', 'shop', 'mp-webhook', 'feed']) {
+for (const name of ['match', 'action', 'rooms', 'profile', 'leaderboard', 'admin', 'config', 'health', 'shop', 'mp-webhook', 'feed', 'market']) {
   routes['/api/' + name] = (await import(`../api/${name}.js`)).default;
 }
 

@@ -23,6 +23,7 @@ import {
 } from './rules/helpers.js';
 import { speciesByTier } from './data/pokemon.js';
 import { cardsForTier } from './data/events.js';
+import { proposeTrade, respondTrade } from './rules/trade.js';
 import { sanitizeCosmetic } from './data/cosmetics.js';
 import { botAction } from './bots.js';
 
@@ -56,7 +57,8 @@ export function createMatch(config) {
     afkStrikes: {},
     options: {
       dailyPokemon: config.options?.dailyPokemon && SPECIES[config.options.dailyPokemon] ? config.options.dailyPokemon : null,
-      turnLimit: Number(config.options?.turnLimit) || 0
+      turnLimit: Number(config.options?.turnLimit) || 0,
+      trades: config.options?.trades !== false
     },
     players,
     board: {},
@@ -70,7 +72,7 @@ export function createMatch(config) {
     fxSeq: 0
   };
   log(state, `🏁 Partida iniciada com ${players.map(p => p.name).join(', ')}. Boa sorte, treinadores!`);
-  if (state.options.dailyPokemon) log(state, `⭐ Pokémon do Dia: ${speciesName(state.options.dailyPokemon)} (aparece mais, XP em dobro e shiny 1/8).`);
+  if (state.options.dailyPokemon) log(state, `⭐ Pokémon do Dia: ${speciesName(state.options.dailyPokemon)} (aparece mais, XP em dobro e shiny 1/64).`);
   // Se o primeiro jogador for CPU, já joga
   const r = runBots(state, rng, config.now || 0);
   state.seed = rng.state;
@@ -172,6 +174,8 @@ function dispatch(state, rng, actorId, action, now) {
   if (type === 'leave') return leave(state, rng, actor, now);
   if (type === 'skip_afk') return skipAfk(state, rng, actor, now);
   if (type === 'chat') return; // chat não passa pelo motor
+  if (type === 'trade_offer') return proposeTrade(state, rng, actor, action);
+  if (type === 'trade_respond') return respondTrade(state, rng, actor, action);
 
   // Convite de PvP pendente: só o desafiado responde
   if (state.pending?.kind === 'pvp_invite') {
@@ -575,11 +579,11 @@ const EVENT_ITEMS = {
   1: [['poke_ball', 5], ['potion', 4], ['bicycle', 2], ['escape_rope', 1], ['great_ball', 1]],
   2: [['poke_ball', 3], ['great_ball', 4], ['potion', 3], ['super_potion', 2], ['revive', 1], ['x_attack', 1]],
   3: [['great_ball', 3], ['ultra_ball', 3], ['super_potion', 3], ['revive', 2], ['evolution_stone', 1], ['flame_ball', 1], ['aqua_ball', 1]],
-  4: [['ultra_ball', 4], ['super_potion', 3], ['revive', 2], ['rare_candy', 2], ['evolution_stone', 1], ['shadow_ball', 1], ['mystic_ball', 1], ['master_ball', 0.3]],
-  5: [['ultra_ball', 4], ['rare_candy', 3], ['revive', 2], ['rainbow_ball', 1], ['master_ball', 0.6]]
+  4: [['ultra_ball', 4], ['super_potion', 3], ['revive', 2], ['rare_candy', 2], ['evolution_stone', 1], ['shadow_ball', 1], ['mystic_ball', 1], ['master_ball', 0.05]],
+  5: [['ultra_ball', 4], ['rare_candy', 3], ['revive', 2], ['rainbow_ball', 1], ['master_ball', 0.1]]
 };
 
-const LUCKY_ITEMS = [['rare_candy', 4], ['evolution_stone', 3], ['rainbow_ball', 2], ['master_ball', 1]];
+const LUCKY_ITEMS = [['rare_candy', 4], ['evolution_stone', 3], ['rainbow_ball', 2], ['master_ball', 0.15]];
 
 function boardEvent(state, rng, p, sp, forceId = null) {
   const t = sp.tier;
@@ -644,7 +648,7 @@ function boardEvent(state, rng, p, sp, forceId = null) {
       break;
     }
     case 'pokemon_egg': case 'ancient_egg': {
-      const eggTier = card.id === 'ancient_egg' ? (rng.chance(0.25) ? 5 : 4) : Math.max(1, t - 1);
+      const eggTier = card.id === 'ancient_egg' ? 4 : Math.max(1, t - 1);
       const mon = hatchEgg(rng, eggTier, { ot: p.id });
       ev.mon = { sp: mon.sp, shiny: mon.shiny };
       effects.push({ text: `Nasceu um ${speciesName(mon.sp)}${mon.shiny ? ' ✨SHINY' : ''} (tier ${eggTier})!`, tone: mon.shiny ? 'shiny' : 'good', mon: mon.sp });
@@ -687,11 +691,11 @@ function boardEvent(state, rng, p, sp, forceId = null) {
     }
     case 'star_shower': {
       if (!hasUsable(p)) { effects.push({ text: 'Sua equipe está desmaiada — o brilho some no céu', tone: 'neutral' }); break; }
-      const tier = rng.weighted([[3, 5], [4, 4], [5, 1]]);
-      const mon = rollWild(rng, tier, { forceShiny: true });
+      const tier = rng.weighted([[3, 5], [4, 4]]);
+      const mon = rollWild(rng, tier, { forceShiny: rng.chance(0.2) }); // 20% de shiny: ainda é raro
       mon.lvl = Math.max(mon.lvl, WILD_LEVELS[5][0]); fullHeal(mon);
       ev.mon = { sp: mon.sp, shiny: true };
-      effects.push({ text: `${speciesName(mon.sp)} ✨SHINY Nv.${mon.lvl} apareceu!`, tone: 'shiny', icon: '🌠' });
+      effects.push({ text: `${speciesName(mon.sp)}${mon.shiny ? ' ✨SHINY' : ''} Nv.${mon.lvl} apareceu!`, tone: mon.shiny ? 'shiny' : 'battle', icon: '🌠' });
       then = () => {
         if (mon.shiny) fx(state, { k: 'shiny', pid: p.id });
         startBattle(state, { kind: 'wild', pid: p.id, foe: { kind: 'wild', mon } });
@@ -703,7 +707,7 @@ function boardEvent(state, rng, p, sp, forceId = null) {
       const g = rng.int(600, 1000);
       p.gold += g;
       effects.push({ text: `+${g} de ouro`, tone: 'good', icon: '🪙' });
-      const id = rng.weighted([['master_ball', 1], ['rainbow_ball', 3], ['rare_candy', 3], ['evolution_stone', 2]]);
+      const id = rng.weighted([['master_ball', 0.1], ['rainbow_ball', 3], ['rare_candy', 3], ['evolution_stone', 2]]);
       addItem(p, id, 1);
       effects.push({ text: `+1x ${ITEMS[id].name}`, tone: id === 'master_ball' ? 'shiny' : 'good', item: id });
       addItem(p, 'ultra_ball', 3);
@@ -782,7 +786,7 @@ function raidBoss(rng, tier, shrine) {
   const pool = RAID_POOL[tier] || RAID_POOL[4];
   const sp = rng.pick(pool.filter(id => SPECIES[id]));
   const lvl = WILD_LEVELS[tier][1] + (shrine ? 0 : 1);
-  const mon = createMon(rng, sp, lvl, { shiny: rng.chance(BASE_SHINY_RATE * 2), capTier: 5 });
+  const mon = createMon(rng, sp, lvl, { shiny: rng.chance(BASE_SHINY_RATE), capTier: 5 });
   mon.bonusHp = Math.round(maxHpOf(mon) * RAID_HP_BONUS);
   mon.hp = maxHpOf(mon);
   mon.wild = true;
@@ -791,7 +795,7 @@ function raidBoss(rng, tier, shrine) {
 }
 
 export function raidCatchChance(p) {
-  return Math.min(0.6, 0.25 + 0.06 * (p.badges?.length || 0) + (p.items?.shiny_charm ? 0.05 : 0));
+  return Math.min(0.2, 0.08 + 0.02 * (p.badges?.length || 0));
 }
 
 function placeText(p, mon) {

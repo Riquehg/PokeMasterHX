@@ -121,6 +121,60 @@ returns int language sql security definer set search_path = public as $$
 $$;
 revoke execute on function public.add_diamonds(uuid, int) from public, anon, authenticated;
 
+-- ---------------------------------------------------------------- economia: ouro da conta + Mercado Global
+alter table public.profiles add column if not exists gold int not null default 0;          -- ouro da conta (ganho nas partidas)
+alter table public.profiles add column if not exists rev int not null default 0;           -- controle de concorrência da Coleção
+alter table public.profiles add column if not exists pokedex_seen jsonb not null default '[]'::jsonb; -- espécies vistas
+
+-- Soma/subtrai ouro e diamantes juntos, de forma atômica (falha se algum ficaria negativo)
+create or replace function public.wallet_add(uid uuid, d_diamonds int, d_gold int)
+returns table (diamonds int, gold int) language sql security definer set search_path = public as $$
+  update public.profiles p set diamonds = p.diamonds + d_diamonds, gold = p.gold + d_gold, updated_at = now()
+  where p.id = uid and p.diamonds + d_diamonds >= 0 and p.gold + d_gold >= 0
+  returning p.diamonds, p.gold;
+$$;
+revoke execute on function public.wallet_add(uuid, int, int) from public, anon, authenticated;
+
+create table if not exists public.market_listings (
+  id             uuid primary key default gen_random_uuid(),
+  seller_id      uuid not null references auth.users(id) on delete cascade,
+  seller_name    text not null default '',
+  mon            jsonb not null,
+  sp             text not null,
+  tier           int  not null default 1,
+  lvl            int  not null default 1,
+  shiny          boolean not null default false,
+  price_gold     int  not null default 0 check (price_gold >= 0),
+  price_diamonds int  not null default 0 check (price_diamonds >= 0),
+  accept_offers  boolean not null default true,
+  status         text not null default 'open' check (status in ('open', 'locked', 'sold', 'cancelled')),
+  buyer_id       uuid,
+  buyer_name     text,
+  sold_gold      int,
+  sold_diamonds  int,
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
+);
+create index if not exists market_listings_open_idx on public.market_listings (status, created_at desc);
+create index if not exists market_listings_seller_idx on public.market_listings (seller_id, created_at desc);
+
+create table if not exists public.market_offers (
+  id          uuid primary key default gen_random_uuid(),
+  listing_id  uuid not null references public.market_listings(id) on delete cascade,
+  seller_id   uuid not null,
+  buyer_id    uuid not null references auth.users(id) on delete cascade,
+  buyer_name  text not null default '',
+  gold        int  not null default 0 check (gold >= 0),
+  diamonds    int  not null default 0 check (diamonds >= 0),
+  mons        jsonb not null default '[]'::jsonb,
+  status      text not null default 'pending' check (status in ('pending', 'locked', 'accepted', 'declined', 'cancelled')),
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create index if not exists market_offers_listing_idx on public.market_offers (listing_id, status);
+create index if not exists market_offers_buyer_idx on public.market_offers (buyer_id, created_at desc);
+create index if not exists market_offers_seller_idx on public.market_offers (seller_id, status);
+
 -- ---------------------------------------------------------------- avisos globais (capturas lendárias/shiny, anúncios)
 create table if not exists public.global_feed (
   id         bigserial primary key,
@@ -142,6 +196,13 @@ alter table public.match_secrets enable row level security;
 alter table public.game_config   enable row level security;
 alter table public.payments      enable row level security;
 alter table public.global_feed   enable row level security;
+alter table public.market_listings enable row level security;
+alter table public.market_offers   enable row level security;
+
+drop policy if exists "mercado publico" on public.market_listings;
+create policy "mercado publico" on public.market_listings for select to authenticated using (true);
+drop policy if exists "minhas ofertas" on public.market_offers;
+create policy "minhas ofertas" on public.market_offers for select to authenticated using (buyer_id = auth.uid() or seller_id = auth.uid());
 
 drop policy if exists "minhas compras" on public.payments;
 create policy "minhas compras" on public.payments for select to authenticated using (user_id = auth.uid());

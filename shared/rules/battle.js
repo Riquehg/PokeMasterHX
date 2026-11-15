@@ -6,15 +6,17 @@
 
 import { getSpecies } from '../data/pokemon.js';
 import { getItem, ballBonusAgainst } from '../data/items.js';
-import { bestAttack, effectivenessLabel, TYPE_LABELS } from './types.js';
+import { against, bestAttack, effectivenessLabel, TYPE_LABELS } from './types.js';
+import { movesOf, STAB } from '../data/moves.js';
 import { statsOf, maxHpOf, gainXp, xpReward, healMon } from './monsters.js';
 import {
   fail, getPlayer, log, fx, takeItem, giveMon, markSeen, healthyIndex, hasHealthy, speciesName, canUse, usableIndex, badgesNeeded
 } from './helpers.js';
 
 export const MAX_ROUNDS = 30;
-const CAPTURE_TARGET = { 1: 3, 2: 4, 3: 5, 4: 6, 5: 7 };
-const WILD_FLEE_AFTER_FAIL = { 1: 0.1, 2: 0.15, 3: 0.2, 4: 0.3, 5: 0.35 };
+// Lendários (tier 5) são muito difíceis: precisa 10+ e fogem com facilidade depois de escapar da bola.
+export const CAPTURE_TARGET = { 1: 3, 2: 4, 3: 5, 4: 6, 5: 10 };
+export const WILD_FLEE_AFTER_FAIL = { 1: 0.1, 2: 0.15, 3: 0.2, 4: 0.3, 5: 0.6 };
 
 // ---------------------------------------------------------------- lados
 export function sideTeam(state, side) {
@@ -52,17 +54,17 @@ export function startBattle(state, cfg) {
     ? 'Nenhum Pokémon seu de pé te obedece ainda — conquiste mais insígnias ou cure a equipe.'
     : 'Você não tem Pokémon em condições de lutar.');
 
-  const sides = [{ kind: 'player', pid: p.id, active: first, boost: {}, seen: [p.team[first].uid] }];
+  const sides = [{ kind: 'player', pid: p.id, active: first, boost: {}, stage: {}, seen: [p.team[first].uid] }];
   if (cfg.foe.kind === 'wild') {
-    sides.push({ kind: 'wild', team: [cfg.foe.mon], active: 0, boost: {}, seen: [] });
+    sides.push({ kind: 'wild', team: [cfg.foe.mon], active: 0, boost: {}, stage: {}, seen: [] });
   } else if (cfg.foe.kind === 'npc') {
     sides.push({ kind: 'npc', name: cfg.foe.name, title: cfg.foe.title || '', sprite: cfg.foe.sprite || null,
-      team: cfg.foe.team, active: 0, boost: {}, seen: [], prize: cfg.foe.prize || 0 });
+      team: cfg.foe.team, active: 0, boost: {}, stage: {}, seen: [], prize: cfg.foe.prize || 0 });
   } else {
     const q = getPlayer(state, cfg.foe.pid);
     const qi = usableIndex(q);
     if (qi < 0) fail(`${q.name} não tem Pokémon em condições de lutar.`);
-    sides.push({ kind: 'player', pid: q.id, active: qi, boost: {}, seen: [q.team[qi].uid] });
+    sides.push({ kind: 'player', pid: q.id, active: qi, boost: {}, stage: {}, seen: [q.team[qi].uid] });
   }
 
   state.battle = {
@@ -120,8 +122,11 @@ function validateChoice(state, si, choice) {
   if (b.mustSwitch[si] && choice.move !== 'switch') fail('Seu Pokémon desmaiou — escolha outro para entrar.');
 
   switch (choice.move) {
-    case 'attack':
+    case 'attack': {
+      const slot = Number(choice.slot || 0);
+      if (![0, 1].includes(slot)) fail('Golpe inválido.');
       return;
+    }
     case 'switch': {
       const i = Number(choice.index);
       if (!team[i]) fail('Pokémon inválido.');
@@ -175,15 +180,64 @@ export function submitChoice(state, rng, pid, choice) {
   b.choices[si] = { ...choice };
   const humans = humanSides(state);
   if (humans.every(i => b.choices[i])) {
-    const choices = b.sides.map((s, i) => b.choices[i] || aiChoice(state, i));
+    const choices = b.sides.map((s, i) => b.choices[i] || aiChoice(state, i, rng));
     b.choices = [null, null];
     resolveRound(state, rng, choices);
   }
 }
 
-/** IA simples para NPC/selvagem: ataca sempre. */
-function aiChoice() {
-  return { move: 'attack' };
+/** IA para NPC/selvagem: escolhe o melhor golpe (selvagens às vezes erram a escolha). */
+function aiChoice(state, si, rng) {
+  const b = state.battle;
+  const wild = b.sides[si].kind === 'wild';
+  if (wild && rng && rng.chance(0.3)) return { move: 'attack', slot: rng.int(0, 1) };
+  return { move: 'attack', slot: bestMoveSlot(state, si) };
+}
+
+// ---------------------------------------------------------------- golpes
+const stageMult = st => (st >= 0 ? 1 + 0.4 * st : 1 - 0.3 * -st);
+
+function atkOf(state, si) {
+  const side = state.battle.sides[si];
+  const a = sideActive(state, side);
+  const st = (side.stage || {})[a.uid] || 0;
+  return Math.max(1, (statsOf(a).atk + (side.boost[a.uid] || 0)) * stageMult(st));
+}
+
+/** Dano esperado (média do dado) de um golpe do lado si contra o ativo do outro lado. */
+export function expectedDamage(state, si, move) {
+  const b = state.battle;
+  const a = sideActive(state, b.sides[si]);
+  const d = sideActive(state, b.sides[1 - si]);
+  if (!a || !d || move.kind === 'heal' || move.kind === 'buff' || move.kind === 'debuff') return 0;
+  const mult = against(move.type, getSpecies(d.sp).types);
+  const stab = getSpecies(a.sp).types.includes(move.type) ? STAB : 1;
+  const hit = move.risky ? 5 / 6 : 1;
+  return (atkOf(state, si) * 0.7 + 3.5) * (move.power || 1) * mult * stab * hit;
+}
+
+/** Melhor golpe para o lado si (usada pela IA dos NPCs e das CPUs). */
+export function bestMoveSlot(state, si) {
+  const b = state.battle;
+  const side = b.sides[si];
+  const me = sideActive(state, side);
+  const foe = sideActive(state, b.sides[1 - si]);
+  const moves = movesOf(me.sp);
+  const myMax = maxHpOf(me);
+  const foeHit = Math.max(...movesOf(foe.sp).map(m => expectedDamage(state, 1 - si, m)));
+  let best = 0, bestScore = -1;
+  moves.forEach((m, i) => {
+    let score = expectedDamage(state, si, m);
+    if (score >= foe.hp) score += 1000; // derruba agora
+    const stage = (side.stage || {})[me.uid] || 0;
+    const foeStage = (b.sides[1 - si].stage || {})[foe.uid] || 0;
+    if (m.kind === 'heal') score = me.hp < myMax * 0.5 && foeHit < myMax * 0.4 ? Math.min(myMax - me.hp, myMax * 0.4) * 1.3 : 0;
+    if (m.kind === 'buff') score = stage < 2 && me.hp > foeHit * 2.2 ? expectedDamage(state, si, moves[0]) * 1.1 : 0;
+    if (m.kind === 'debuff') score = foeStage > -2 && me.hp > foeHit * 1.8 ? foeHit * 0.9 : 0;
+    if (m.kind === 'drain') score += Math.min(myMax - me.hp, score / 2) * 0.6;
+    if (score > bestScore) { bestScore = score; best = i; }
+  });
+  return best;
 }
 
 // ---------------------------------------------------------------- rodada
@@ -280,24 +334,62 @@ function tryFlee(state, rng, si) {
   return null;
 }
 
-function attackDamage(state, rng, si) {
+function attackDamage(state, rng, si, slot = 0) {
   const b = state.battle;
   const atkSide = b.sides[si];
   const defSide = b.sides[1 - si];
+  atkSide.stage ||= {};
+  defSide.stage ||= {};
   const a = sideActive(state, atkSide);
   const d = sideActive(state, defSide);
   const aSp = getSpecies(a.sp);
   const dSp = getSpecies(d.sp);
-  const atk = statsOf(a).atk + (atkSide.boost[a.uid] || 0);
-  const { mult, type } = bestAttack(aSp.types, dSp.types);
+  const move = movesOf(a.sp)[slot] || movesOf(a.sp)[0];
+  const who = monLabel(state, atkSide);
+
+  // golpes de suporte
+  if (move.kind === 'heal') {
+    const healed = healMon(a, 0.4);
+    fx(state, { k: 'heal', side: si, uid: a.uid, amount: healed, hpAfter: a.hp, maxHp: maxHpOf(a), move: move.name });
+    log(state, `💚 ${who} usou ${move.name} e recuperou ${healed} HP.`, 'good');
+    return false;
+  }
+  if (move.kind === 'buff') {
+    const st = atkSide.stage[a.uid] || 0;
+    if (st >= 2) { log(state, `${who} usou ${move.name}, mas o ataque já está no máximo.`); return false; }
+    atkSide.stage[a.uid] = st + 1;
+    fx(state, { k: 'buff', side: si, uid: a.uid, move: move.name, stage: st + 1 });
+    log(state, `🔺 ${who} usou ${move.name}! Ataque subiu (+${(st + 1) * 40}%).`, 'good');
+    return false;
+  }
+  if (move.kind === 'debuff') {
+    const st = defSide.stage[d.uid] || 0;
+    if (st <= -2) { log(state, `${who} usou ${move.name}, mas ${speciesName(d.sp)} já está acuado ao máximo.`); return false; }
+    defSide.stage[d.uid] = st - 1;
+    fx(state, { k: 'debuff', side: 1 - si, uid: d.uid, move: move.name, stage: st - 1 });
+    log(state, `🔻 ${who} usou ${move.name}! O ataque de ${speciesName(d.sp)} caiu (−${(1 - st) * 30}%).`, 'battle');
+    return false;
+  }
+
+  const atk = atkOf(state, si);
+  const type = move.type;
+  const mult = against(type, dSp.types);
+  const stab = aSp.types.includes(type) ? STAB : 1;
   const roll = rng.d6();
+  if (move.risky && roll === 1) {
+    log(state, `${who} usou ${move.name} (🎲1)... e errou!`, 'bad');
+    fx(state, { k: 'hit', side: si, roll, dmg: 0, mult, miss: true, type, move: move.name, atkUid: a.uid, defUid: d.uid, hpAfter: d.hp, maxHp: maxHpOf(d) });
+    return false;
+  }
   const critMod = roll === 6 ? 1.5 : roll === 1 ? 0.5 : 1;
-  let dmg = mult === 0 ? 0 : Math.max(1, Math.round((atk * 0.7 + roll) * mult * critMod));
+  let dmg = mult === 0 ? 0 : Math.max(1, Math.round((atk * 0.7 + roll) * (move.power || 1) * stab * mult * critMod));
   dmg = Math.min(dmg, d.hp);
   d.hp -= dmg;
+  let drained = 0;
+  if (move.kind === 'drain' && dmg > 0) drained = healMon(a, 0, Math.ceil(dmg / 2));
 
   const eff = effectivenessLabel(mult);
-  let msg = `${monLabel(state, atkSide)} usou um golpe de ${TYPE_LABELS[type]} (🎲${roll})`;
+  let msg = `${who} usou ${move.name} (🎲${roll})`;
   if (mult === 0) msg += ` — não afeta ${speciesName(d.sp)}!`;
   else {
     msg += ` e causou ${dmg} de dano`;
@@ -306,8 +398,10 @@ function attackDamage(state, rng, si) {
     if (eff) msg += (roll === 6 ? ' ' : '. ') + eff;
     else if (roll !== 6) msg += '.';
   }
+  if (drained) msg += ` 💚 +${drained} HP`;
   log(state, msg, mult >= 2 ? 'good' : mult < 1 ? 'bad' : 'battle');
-  fx(state, { k: 'hit', side: si, roll, dmg, mult, crit: roll === 6, weak: roll === 1, type, atkUid: a.uid, defUid: d.uid, hpAfter: d.hp, maxHp: maxHpOf(d) });
+  fx(state, { k: 'hit', side: si, roll, dmg, mult, crit: roll === 6, weak: roll === 1, type, move: move.name, atkUid: a.uid, defUid: d.uid, hpAfter: d.hp, maxHp: maxHpOf(d) });
+  if (drained) fx(state, { k: 'heal', side: si, uid: a.uid, amount: drained, hpAfter: a.hp, maxHp: maxHpOf(a) });
   return d.hp <= 0;
 }
 
@@ -369,7 +463,7 @@ function resolveRound(state, rng, choices) {
   for (const si of attackers) {
     const me = sideActive(state, b.sides[si]);
     if (!me || me.hp <= 0) continue; // desmaiou antes de agir
-    const fainted = attackDamage(state, rng, si);
+    const fainted = attackDamage(state, rng, si, Number(choices[si].slot || 0));
     if (fainted) {
       const loser = 1 - si;
       awardKO(state, si, loser);

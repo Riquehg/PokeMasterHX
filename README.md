@@ -26,9 +26,11 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 
 - **Objetivo:** 6 insígnias → Elite dos Quatro (4 lutas seguidas na Liga Pokémon) → Campeão na Arena Final. Com limite de turnos (Rápida 30 / Normal 60), vence quem tiver mais pontos.
 - **Tabuleiro:** as mesmas 120 casas e coordenadas do seu `map.js`. Casas coloridas = tier **fixo** do Pokémon: Rosa só tier 1, Verde só tier 2, Azul só tier 3, Vermelha só tier 4, Amarela só tier 5 (o Pokémon do Dia também só aparece nas casas do tier dele). O Pokémon revelado **fica na casa** (com o HP que sobrou) até alguém capturar ou derrotar. Casas `?` = eventos (ouro, itens, treinadores, Equipe Rocket, Professor, atalho, tempestade...).
+- **Pokédex completa:** os 806 Pokémon (#001–#806, Gen 1–7) com tipos atuais, evoluções e tier. Os 302 das cartas originais mantêm os valores das cartas; os demais vêm de `scripts/data/species.txt` (gerado com `node scripts/build-pokedex.mjs`). Os sprites continuam em `sprites/monsters/NNN.png` e `sprites/monsters/shiny/NNN.png`.
+- **Golpes (2 por Pokémon):** golpe rápido do 1º tipo (nunca erra) + golpe forte do 2º tipo (140%, erra no 🎲1); +20% quando o golpe é do tipo do Pokémon. Pokémon de suporte (Blissey, Togekiss, Gyarados, Arcanine, Amoonguss...) têm Recover, Swords Dance, Intimidate ou Giga Drain. Tabela em `shared/data/moves.js`.
 - **Batalha:** rodadas; quem tem mais **Velocidade** (nível × natureza) ataca primeiro. Dano = ataque × 0,7 + 🎲, × efetividade de tipo; 🎲6 = crítico, 🎲1 = golpe fraco. Trocar, usar item, jogar Pokébola e fugir gastam a rodada.
 - **Captura:** precisa tirar Rosa 3+, Verde 4+, Azul 5+, Vermelho 6+, Lendário 7+ (shiny +1). Bônus de bola (+1 a +3; bolas temáticas dão +3 contra certos tipos), HP baixo (+1/+2), nível bem maior (+1). 🎲1 sempre falha e o selvagem pode fugir. A tela mostra a **% de chance** de cada bola.
-- **Shiny:** 1/40 (1/8 para o Pokémon do Dia; Amuleto Shiny triplica). +10% de status, mais XP e pontos.
+- **Shiny:** raríssimo — 1/450 (1/64 para o Pokémon do Dia; Amuleto Shiny triplica), com celebração em tela cheia. +10% de status, mais XP e pontos.
 - **XP e evolução:** quem derruba ganha tudo; quem participou 60%; o resto da equipe 40%; vencer Pokémon muito mais fracos rende pouco. Evolui no nível do catálogo ou com Pedra Evolutiva.
 - **Naturezas:** cada Pokémon nasce com uma das 25 naturezas oficiais (Adamant, Modest, Timid...), adaptadas aos 3 atributos do jogo: +10% em Ataque, HP ou Velocidade e −10% em outro (5 neutras). Fica salva na Coleção.
 - **Obediência por insígnias:** Pokémon obtidos de tier 3 só lutam com 2 insígnias, tier 4 com 3 e tier 5 com 4 (a regra vale pelo tier em que ele foi obtido; evoluir um Pokémon de tier baixo não trava). O inicial e os trazidos da Coleção sempre obedecem. Os travados aparecem com 🔒 e não podem entrar na batalha.
@@ -36,6 +38,9 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 - **Equipe cheia:** com 6 na equipe, capturas e ovos vão direto para o PC (aparece um aviso).
 - **Raid lendária:** nas casas de evento Azuis e Vermelhas há chance de Raid contra um lendário com HP de chefe. Pokébolas não funcionam durante a Raid; vencendo, ganha ouro/Rare Candy/Ultra Balls e tem 25%–60% de chance de capturar (sobe com as insígnias).
 - **Eventos especiais (casas Amarelas):** Santuário Lendário (Raid), Ás da Liga (batalha difícil com prêmio grande), Chuva de Estrelas (shiny garantido), Tesouro da Liga, Bênção de Mew e Ovo Ancestral.
+- **Lendários:** todos no tier 5 (casas Amarelas). Captura só com 10+ (🎲 + bônus) e 60% de chance de fugir depois de escapar; Raid dá 8%–20% de captura; a 6ª insígnia não dá mais lendário nem Master Ball.
+- **Trocas na partida:** Pokémon, itens e ouro entre jogadores (CPUs aceitam só trocas vantajosas). Desligado no Competitivo.
+- **Ouro da conta e Mercado Global:** cada partida salva (Treino/Online) rende ouro da conta (ouro final ÷ 10 + 40 por insígnia + bônus de vitória/Campeão, máx. 1200). No 🏪 Mercado Global você anuncia Pokémon da Coleção por ouro e/ou 💎, compra na hora ou faz ofertas (Pokémon + ouro + 💎). Tudo fica em custódia até fechar; taxa de 5% para o vendedor. Vendas de lendários/shinies aparecem no banner global.
 - **PvP:** caiu na mesma casa de outro treinador → desafie. Quem perde paga 15% do ouro.
 - **CPUs:** completam salas e jogam sozinhas; se alguém sai, uma CPU assume. Se alguém fica 90 s parado, os outros podem deixar a CPU jogar a vez dele.
 - **Coleção da conta:** todo Pokémon da sua equipe e do PC em partidas salvas na conta (🤖 Treino contra CPUs e 🌐 Online) vai para a Coleção, com nível e evolução atualizados **durante a partida** (a cada captura, fim de batalha, uso do PC ou de itens). A Pokédex da conta também. Limite de 300; ⭐ favoritos e shinies nunca são descartados.
@@ -44,6 +49,7 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 - **Cartas de Evento:** 14 cartas com história curta e recompensa/penalidade (Bolsa Perdida, Mochila de Campista, Árvore de Frutinhas, Treinador na Rota, Emboscada Rocket, Aula do Professor, Grama Agitada, Ovo Misterioso, Tempestade, Nuvem de Zubats, Pedágio do Snorlax, Meowth Ladrão, Atalho Secreto, Achado Raro). Texto e efeitos em `shared/data/events.js`.
 - **Animações:** dado 3D (para na face sorteada pelo servidor), peão andando casa a casa, faixa de troca de turno, carta de evento virando, entrada de batalha (Pokémon saindo da grama / tela VS contra treinadores), golpes com investida, dano flutuante, HP descendo, crítico e "super efetivo", desmaio, captura com arremesso da Pokébola e até 3 balançadas. Os turnos das CPUs também são animados. Botão 🎬 alterna normal / rápida / desligada.
 - **Avisos globais:** quando alguém captura um **lendário** ou um **shiny** (ou vira Campeão), aparece um banner para todos os jogadores conectados. O admin também pode publicar pop-ups de aviso.
+- **CPUs mais competitivas:** escolhem o melhor golpe, trocam de Pokémon por tipo, usam poções na hora certa, X Attack em lutas importantes, montam a equipe com quem obedece, enfraquecem antes de capturar e recusam PvP desfavorável.
 - **Loja de Diamantes:** só cosméticos (estilo de captura/aura, moldura do treinador, título). Não altera a força de nada. No tabuleiro, quem tem moldura ganha um halo animado e brilho no chão, o estilo de captura solta partículas em volta do peão e o título aparece numa faixa dourada embaixo do nome. Comprar/equipar atualiza na hora as partidas em andamento. Diamantes por Pix automático (Mercado Pago).
 - **Mapa:** proporção real da imagem, zoom (roda do mouse, pinça no celular, botões + − ⤢), arrastar para mover, ◎ centraliza no seu peão; peões e Pokémon têm tamanho fixo na tela em qualquer zoom.
 - **Balanceamento:** testado com simulações de partidas só com CPUs (`npm run sim`): todas terminam, ~75% de vitória nos ginásios quando a equipe está no nível, campeão entre os turnos 60 e 100 no modo completo (por isso as salas têm os modos Rápida e Normal).
@@ -110,7 +116,7 @@ SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/migrate-accounts.mjs
 ```
 Depois disso, **apague a coluna `password`** (ou a tabela `accounts`).
 
-> A Vercel no plano grátis aceita até 12 funções `/api`; o projeto usa 11.
+> A Vercel no plano grátis aceita até 12 funções `/api`; o projeto agora usa **12** (o limite). Uma função nova vai exigir juntar duas.
 
 ## 4. Rodar e testar no computador (opcional)
 ```bash
@@ -130,7 +136,7 @@ shared/engine.js             MOTOR DE REGRAS (puro, roda igual no navegador e no
 shared/rules/*.js            tipos, status/XP, batalha, movimento, RNG determinístico
 shared/data/*.js             302 Pokémon, 120 casas, itens, ginásios/Elite/Campeão
 shared/bots.js               IA das CPUs
-api/*.js                     funções da Vercel: match, action, rooms, profile, leaderboard, admin, config
+api/*.js                     funções da Vercel: match, action, rooms, profile, leaderboard, admin, config, market
 api/_lib/core.js             lógica do backend (salas, jogadas, resultados, admin)
 supabase/schema.sql          tabelas + segurança (RLS) + Realtime
 scripts/dev-server.mjs       servidor local com banco em memória

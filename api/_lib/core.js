@@ -12,9 +12,9 @@ export class HttpError extends Error {
     this.status = status;
   }
 }
-const bad = msg => { throw new HttpError(400, msg); };
+export const bad = msg => { throw new HttpError(400, msg); };
 const forbidden = msg => { throw new HttpError(403, msg || 'Sem permissão.'); };
-const notFound = msg => { throw new HttpError(404, msg || 'Não encontrado.'); };
+export const notFound = msg => { throw new HttpError(404, msg || 'Não encontrado.'); };
 
 export const COLLECTION_MAX = 300;
 export const START_RATING = 1000;
@@ -73,6 +73,29 @@ export async function getOrCreateProfile(db, user) {
   return p;
 }
 
+/**
+ * Lê → altera → grava o perfil só se ninguém mexeu nele no meio (coluna rev). Tenta de novo em caso de conflito.
+ * fn(perfil) devolve o patch (ou null para não gravar); pode lançar erro para abortar.
+ */
+export async function mutateProfile(db, id, fn) {
+  for (let i = 0; i < 15; i++) {
+    if (i) await new Promise(r => setTimeout(r, Math.random() * 15 * i)); // espera um pouco antes de tentar de novo
+    const prof = await db.getProfile(id);
+    if (!prof) return null;
+    const patch = await fn(prof);
+    if (!patch) return prof;
+    const r = await db.updateProfileIf(id, prof.rev || 0, patch);
+    if (r) return r;
+  }
+  throw new Error('Muitas alterações ao mesmo tempo na sua conta. Tente de novo.');
+}
+
+/** Ouro da conta ganho ao fim de uma partida salva no servidor. */
+export function accountGoldReward(state, p) {
+  const base = Math.floor(Math.max(0, p.gold) / 10) + 40 * p.badges.length + (state.winner === p.id ? 150 : 0) + (p.champion ? 250 : 0);
+  return Math.min(1200, base);
+}
+
 export async function profileOp(db, user, body) {
   const p = await getOrCreateProfile(db, user);
   if (body.op === 'get' || !body.op) {
@@ -88,12 +111,10 @@ export async function profileOp(db, user, body) {
   }
   if (body.op === 'release') {
     // Soltar um Pokémon da Coleção (não afeta partidas em andamento)
-    const vault = (p.vault || []).filter(m => m.uid !== body.uid);
-    return { profile: await db.upsertProfile(user.id, { vault }) };
+    return { profile: await mutateProfile(db, user.id, prof => ({ vault: (prof.vault || []).filter(m => m.uid !== body.uid) })) };
   }
   if (body.op === 'favorite') {
-    const vault = (p.vault || []).map(m => (m.uid === body.uid ? { ...m, fav: !m.fav } : m));
-    return { profile: await db.upsertProfile(user.id, { vault }) };
+    return { profile: await mutateProfile(db, user.id, prof => ({ vault: (prof.vault || []).map(m => (m.uid === body.uid ? { ...m, fav: !m.fav } : m)) })) };
   }
   bad('Operação inválida.');
 }
@@ -125,9 +146,14 @@ function collectionEntry(mon, matchId) {
 export async function syncCollection(db, state, pids) {
   for (const p of state.players) {
     if (p.id.startsWith('cpu_') || (pids && !pids.includes(p.id))) continue;
-    const prof = await db.getProfile(p.id);
-    if (!prof) continue;
-    const vault = [...(prof.vault || [])];
+    await mutateProfile(db, p.id, prof => collectionPatch(prof, p, state));
+  }
+}
+
+function collectionPatch(prof, p, state) {
+  {
+    const away = new Set(p.tradedAway || []);
+    const vault = [...(prof.vault || [])].filter(m => !away.has(m.uid)); // trocados na partida saem da Coleção
     const idx = new Map(vault.map((m, i) => [m.uid, i]));
     for (const mon of [...p.team, ...p.box]) {
       const e = collectionEntry(mon, state.id);
@@ -147,7 +173,8 @@ export async function syncCollection(db, state, pids) {
       for (let i = vault.length - 1; i >= 0; i--) if (drop.has(vault[i].uid)) vault.splice(i, 1);
     }
     const pokedex = [...new Set([...(prof.pokedex || []), ...p.caught])];
-    await db.upsertProfile(p.id, { vault, pokedex, points: calcPoints(pokedex, prof.stats || {}) });
+    const seen = [...new Set([...(prof.pokedex_seen || []), ...(p.seen || []), ...p.caught])];
+    return { vault, pokedex, pokedex_seen: seen, points: calcPoints(pokedex, prof.stats || {}) };
   }
 }
 
@@ -160,8 +187,9 @@ function playersToSync(action, prev, next) {
   if (next.status === 'finished') return null; // todos (o fim chama recordResults)
   const ids = new Set();
   for (const f of next.fx || []) {
-    if ((f.k === 'capture' && f.ok) || (f.k === 'event' && f.id === 'pokemon_egg')) ids.add(f.pid);
+    if ((f.k === 'capture' && f.ok) || f.k === 'placed') ids.add(f.pid);
     if (f.k === 'battle_end') (f.pids || []).forEach(id => ids.add(id));
+    if (f.k === 'trade_done' && f.ok) { ids.add(f.from); ids.add(f.to); }
   }
   if (['pc', 'use_item', 'leave', 'reorder'].includes(action?.type)) ids.add('__actor__');
   return ids;
@@ -330,7 +358,7 @@ async function startRoom(db, row, lobby, userId) {
   }
   const state = createMatch({
     id: row.id, mode: 'online', seed: randomSeed(), now: Date.now(), players,
-    options: { dailyPokemon: await currentDaily(db), turnLimit: options.turnLimit || 0 }
+    options: { dailyPokemon: await currentDaily(db), turnLimit: options.turnLimit || 0, trades: mode !== 'ranked' }
   });
   state.roomMode = mode;
   const res = await save(db, row, { status: state.status === 'finished' ? 'finished' : 'playing', state, options }, userId);
@@ -488,6 +516,10 @@ export async function recordResults(db, state, options = {}) {
       patch.rating = Math.max(100, (prof.rating ?? START_RATING) + (deltas[p.id] || 0));
     }
     await db.upsertProfile(p.id, patch);
+    const coins = accountGoldReward(state, p);
+    if (coins > 0 && db.walletAdd) {
+      try { await db.walletAdd(p.id, 0, coins); } catch (e) { console.error('[gold]', e.message); }
+    }
   }
 }
 
@@ -528,11 +560,12 @@ export async function adminOp(db, user, body) {
     }
     case 'grant_mon': {
       if (!SPECIES[body.species]) bad('Espécie inválida.');
-      const prof = await db.getProfile(body.userId);
-      if (!prof) notFound('Usuário não encontrado.');
-      const vault = [...(prof.vault || [])];
-      vault.unshift({ uid: 'adm' + Date.now().toString(36), sp: body.species, lvl: Math.max(1, Math.min(60, Number(body.level) || 5)), shiny: !!body.shiny, aura: null, from: 'admin', at: new Date().toISOString() });
-      await db.upsertProfile(body.userId, { vault: vault.slice(0, COLLECTION_MAX) });
+      const ok = await mutateProfile(db, body.userId, prof => {
+        const vault = [...(prof.vault || [])];
+        vault.unshift({ uid: 'adm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), sp: body.species, lvl: Math.max(1, Math.min(60, Number(body.level) || 5)), shiny: !!body.shiny, aura: null, from: 'admin', at: new Date().toISOString() });
+        return { vault: vault.slice(0, COLLECTION_MAX) };
+      });
+      if (!ok) notFound('Usuário não encontrado.');
       return { ok: true };
     }
     case 'set_admin': {
@@ -562,6 +595,12 @@ export async function adminOp(db, user, body) {
       const shop = cleanShop(body.shop || {});
       await db.setConfig('shop', shop);
       return { ok: true, shop };
+    }
+    case 'give_gold': {
+      const amount = Math.trunc(Number(body.amount) || 0);
+      const r = await db.walletAdd(body.userId, 0, amount);
+      if (!r) bad('Usuário não encontrado ou saldo ficaria negativo.');
+      return { ok: true, gold: r.gold };
     }
     case 'give_diamonds': {
       const n = Math.round(Number(body.amount) || 0);

@@ -43,13 +43,65 @@ export const supabaseDb = {
   async upsertProfile(id, patch) {
     const existing = await this.getProfile(id);
     const res = existing
-      ? check(await admin().from('profiles').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id).select('*').maybeSingle())
+      ? check(await admin().from('profiles').update({ ...patch, rev: (existing.rev || 0) + 1, updated_at: new Date().toISOString() }).eq('id', id).select('*').maybeSingle())
       : check(await admin().from('profiles').insert({ id, ...patch }).select('*').maybeSingle());
     if (!res) throw new Error('row-level security: o perfil não pôde ser gravado');
     return res;
   },
+  /** Grava só se ninguém mexeu no perfil desde a leitura (rev igual). Devolve o perfil novo ou null. */
+  async updateProfileIf(id, rev, patch) {
+    const { data, error } = await admin().from('profiles')
+      .update({ ...patch, rev: (rev || 0) + 1, updated_at: new Date().toISOString() })
+      .eq('id', id).eq('rev', rev || 0).select('*');
+    if (error) throw new Error(error.message);
+    return data?.[0] || null;
+  },
+  /** Soma ouro e diamantes atomicamente (null se ficaria negativo). */
+  async walletAdd(id, dDiamonds, dGold) {
+    const { data, error } = await admin().rpc('wallet_add', { uid: id, d_diamonds: dDiamonds | 0, d_gold: dGold | 0 });
+    if (error) throw new Error(error.message);
+    const row = Array.isArray(data) ? data[0] : data;
+    return row ? { diamonds: row.diamonds, gold: row.gold } : null;
+  },
+
+  // ----- Mercado Global
+  async insertListing(row) { return check(await admin().from('market_listings').insert(row).select('*').single()); },
+  async getListing(id) { return check(await admin().from('market_listings').select('*').eq('id', id).maybeSingle()); },
+  async updateListingIf(id, from, patch) {
+    const { data, error } = await admin().from('market_listings').update({ ...patch, updated_at: new Date().toISOString() })
+      .eq('id', id).in('status', from).select('*');
+    if (error) throw new Error(error.message);
+    return data?.[0] || null;
+  },
+  async listListings({ status, sellerId, buyerId, sp, tier, shiny, limit = 60 } = {}) {
+    let q = admin().from('market_listings').select('*').order('created_at', { ascending: false }).limit(limit);
+    if (status) q = q.in('status', [].concat(status));
+    if (sellerId) q = q.eq('seller_id', sellerId);
+    if (buyerId) q = q.eq('buyer_id', buyerId);
+    if (sp) q = q.eq('sp', sp);
+    if (tier) q = q.eq('tier', tier);
+    if (shiny) q = q.eq('shiny', true);
+    return check(await q);
+  },
+  async insertOffer(row) { return check(await admin().from('market_offers').insert(row).select('*').single()); },
+  async getOffer(id) { return check(await admin().from('market_offers').select('*').eq('id', id).maybeSingle()); },
+  async updateOfferIf(id, from, patch) {
+    const { data, error } = await admin().from('market_offers').update({ ...patch, updated_at: new Date().toISOString() })
+      .eq('id', id).in('status', from).select('*');
+    if (error) throw new Error(error.message);
+    return data?.[0] || null;
+  },
+  async listOffers({ listingId, buyerId, sellerId, status, limit = 100 } = {}) {
+    let q = admin().from('market_offers').select('*').order('created_at', { ascending: false }).limit(limit);
+    if (listingId) q = q.eq('listing_id', listingId);
+    if (buyerId) q = q.eq('buyer_id', buyerId);
+    if (sellerId) q = q.eq('seller_id', sellerId);
+    if (status) q = q.in('status', [].concat(status));
+    return check(await q);
+  },
+
   async listProfiles(limit) {
-    return check(await admin().from('profiles').select('id, trainer_name, avatar, points, rating, diamonds, stats, pokedex, vault, is_admin').order('points', { ascending: false }).limit(limit));
+    return check(await admin().from('profiles').select('id, trainer_name, avatar, points, rating, diamonds, gold, stats, pokedex, vault, is_admin').order('points', { ascending: false }).limit(limit));
   },
 
   async getMatch(id) {
