@@ -7,9 +7,9 @@
 import { getSpecies } from '../data/pokemon.js';
 import { getItem, ballBonusAgainst } from '../data/items.js';
 import { bestAttack, effectivenessLabel, TYPE_LABELS } from './types.js';
-import { computeStats, maxHpOf, gainXp, xpReward, healMon } from './monsters.js';
+import { statsOf, maxHpOf, gainXp, xpReward, healMon } from './monsters.js';
 import {
-  fail, getPlayer, log, fx, takeItem, giveMon, markSeen, healthyIndex, hasHealthy, speciesName
+  fail, getPlayer, log, fx, takeItem, giveMon, markSeen, healthyIndex, hasHealthy, speciesName, canUse, usableIndex, badgesNeeded
 } from './helpers.js';
 
 export const MAX_ROUNDS = 30;
@@ -47,8 +47,10 @@ function monLabel(state, side) {
  */
 export function startBattle(state, cfg) {
   const p = getPlayer(state, cfg.pid);
-  const first = healthyIndex(p.team);
-  if (first < 0) fail('Você não tem Pokémon em condições de lutar.');
+  const first = usableIndex(p);
+  if (first < 0) fail(p.team.some(m => m.hp > 0)
+    ? 'Nenhum Pokémon seu de pé te obedece ainda — conquiste mais insígnias ou cure a equipe.'
+    : 'Você não tem Pokémon em condições de lutar.');
 
   const sides = [{ kind: 'player', pid: p.id, active: first, boost: {}, seen: [p.team[first].uid] }];
   if (cfg.foe.kind === 'wild') {
@@ -58,7 +60,7 @@ export function startBattle(state, cfg) {
       team: cfg.foe.team, active: 0, boost: {}, seen: [], prize: cfg.foe.prize || 0 });
   } else {
     const q = getPlayer(state, cfg.foe.pid);
-    const qi = healthyIndex(q.team);
+    const qi = usableIndex(q);
     if (qi < 0) fail(`${q.name} não tem Pokémon em condições de lutar.`);
     sides.push({ kind: 'player', pid: q.id, active: qi, boost: {}, seen: [q.team[qi].uid] });
   }
@@ -87,7 +89,9 @@ export function startBattle(state, cfg) {
       ? { kind: 'player', pid: foeSide.pid }
       : { kind: foeSide.kind, name: foeSide.name || null, title: foeSide.title || null, sprite: foeSide.sprite || null, sp: foeMon.sp, lvl: foeMon.lvl, shiny: !!foeMon.shiny, count: foeSide.team.length }
   });
-  if (cfg.kind === 'wild') {
+  if (cfg.kind === 'raid') {
+    log(state, `🔥 RAID! ${speciesName(foeMon.sp)}${foeMon.shiny ? ' ✨SHINY✨' : ''} lendário (Nv. ${foeMon.lvl}, ${maxHpOf(foeMon)} HP) desafia ${p.name}!`, 'battle');
+  } else if (cfg.kind === 'wild') {
     log(state, `🌿 Um ${speciesName(foeMon.sp)}${foeMon.shiny ? ' ✨SHINY✨' : ''} selvagem (Nv. ${foeMon.lvl}) apareceu!`, foeMon.shiny ? 'shiny' : 'info');
   } else if (foeSide.kind === 'npc') {
     log(state, `⚔️ ${foeSide.title ? foeSide.title + ' ' : ''}${foeSide.name} desafia ${p.name}! Enviou ${speciesName(foeMon.sp)} (Nv. ${foeMon.lvl}).`, 'battle');
@@ -122,6 +126,7 @@ function validateChoice(state, si, choice) {
       const i = Number(choice.index);
       if (!team[i]) fail('Pokémon inválido.');
       if (team[i].hp <= 0) fail('Esse Pokémon está desmaiado.');
+      if (!canUse(player, team[i])) fail(`${speciesName(team[i].sp)} não te obedece ainda: precisa de ${badgesNeeded(team[i])} insígnias.`);
       if (i === side.active && !b.mustSwitch[si]) fail('Esse Pokémon já está em campo.');
       if (i === side.active && b.mustSwitch[si]) fail('Escolha outro Pokémon.');
       return;
@@ -283,7 +288,7 @@ function attackDamage(state, rng, si) {
   const d = sideActive(state, defSide);
   const aSp = getSpecies(a.sp);
   const dSp = getSpecies(d.sp);
-  const atk = computeStats(a.sp, a.lvl, a.shiny).atk + (atkSide.boost[a.uid] || 0);
+  const atk = statsOf(a).atk + (atkSide.boost[a.uid] || 0);
   const { mult, type } = bestAttack(aSp.types, dSp.types);
   const roll = rng.d6();
   const critMod = roll === 6 ? 1.5 : roll === 1 ? 0.5 : 1;
@@ -359,7 +364,8 @@ function resolveRound(state, rng, choices) {
 
   // 2) ataques, por velocidade (nível; empate: lado 0)
   const attackers = [0, 1].filter(si => choices[si].move === 'attack');
-  attackers.sort((x, y) => sideActive(state, b.sides[y]).lvl - sideActive(state, b.sides[x]).lvl || x - y);
+  // velocidade = nível × natureza (+/-10%); empate: lado 0
+  attackers.sort((x, y) => statsOf(sideActive(state, b.sides[y])).spe - statsOf(sideActive(state, b.sides[x])).spe || x - y);
   for (const si of attackers) {
     const me = sideActive(state, b.sides[si]);
     if (!me || me.hp <= 0) continue; // desmaiou antes de agir
@@ -391,7 +397,8 @@ function handleFaint(state, rng, si) {
   const b = state.battle;
   const side = b.sides[si];
   const team = sideTeam(state, side);
-  if (!hasHealthy(team)) {
+  const alive = side.kind === 'player' ? usableIndex(getPlayer(state, side.pid)) >= 0 : hasHealthy(team);
+  if (!alive) {
     endBattle(state, rng, { result: 'win', winner: 1 - si });
     return true;
   }
@@ -438,5 +445,6 @@ export function deliverCapture(state, pid, mon, ballId) {
   if (p.cosmetic?.aura) mon.aura = p.cosmetic.aura; // estilo de captura comprado na loja (só visual)
   mon.ball = ballId;
   const where = giveMon(p, mon);
+  fx(state, { k: 'placed', pid, sp: mon.sp, shiny: !!mon.shiny, where });
   log(state, `🎉 ${speciesName(mon.sp)}${mon.shiny ? ' ✨' : ''} entrou ${where === 'team' ? 'na equipe' : 'no PC (equipe cheia)'} de ${p.name}!`, mon.shiny ? 'shiny' : 'good');
 }

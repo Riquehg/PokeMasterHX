@@ -104,6 +104,7 @@ export async function hubScreen(root, ctx) {
   let profile = null;
   let profileError = '';
   try { profile = (await api('profile', { op: 'get' })).profile; } catch (e) { profileError = e.message; }
+  ctx.myCosmetic = profile?.cosmetic || null;
   const daily = ctx.daily || dailyPokemon(null);
   const dsp = getSpecies(daily);
   const localSave = LocalSession.hasSave();
@@ -560,7 +561,8 @@ export function localSetupScreen(root, ctx) {
       if (!players.some(p => !p.isBot)) return toast('Precisa de pelo menos 1 humano.', 'bad');
       LocalSession.clear();
       const s = LocalSession.create({
-        players: players.map((p, i) => ({ id: 'p' + (i + 1), name: p.name, avatar: p.avatar, starter: p.starter, isBot: p.isBot })),
+        players: players.map((p, i) => ({ id: 'p' + (i + 1), name: p.name, avatar: p.avatar, starter: p.starter, isBot: p.isBot,
+          cosmetic: !p.isBot && i === players.findIndex(q => !q.isBot) ? ctx.myCosmetic : null })),
         options: { dailyPokemon: ctx.daily, turnLimit }
       });
       ctx.openLocal(s);

@@ -3,6 +3,8 @@ import { SPECIES_LIST, getSpecies } from '../../shared/data/pokemon.js';
 import { getSpace } from '../../shared/data/board.js';
 import { ITEMS, shopFor } from '../../shared/data/items.js';
 import { GYMS } from '../../shared/data/trainers.js';
+import { natureLabel } from '../../shared/data/natures.js';
+import { canUse, badgesNeeded } from '../../shared/rules/helpers.js';
 import { monView, xpToNext } from '../../shared/rules/monsters.js';
 import { against, TYPES } from '../../shared/rules/types.js';
 import { score } from '../../shared/engine.js';
@@ -43,9 +45,9 @@ export function openPC(session, act) {
     const p = me(session);
     return `<p class="small muted">Clique em um Pokémon da equipe e depois em um do PC para trocar. Ou use os botões para guardar/retirar.</p>
       <b>Equipe (${p.team.length}/6)</b>
-      <div class="team" style="grid-template-columns:repeat(6,1fr);margin:6px 0 10px">${p.team.map((m, i) => monCard(m, { index: i, act: 'pick-team', extra: `<button class="btn sm" data-act="deposit" data-index="${i}" ${p.team.length <= 1 ? 'disabled' : ''}>Guardar</button>` })).join('')}</div>
+      <div class="team" style="grid-template-columns:repeat(6,1fr);margin:6px 0 10px">${p.team.map((m, i) => monCard(m, { index: i, act: 'pick-team', owner: p, extra: `<button class="btn sm" data-act="deposit" data-index="${i}" ${p.team.length <= 1 ? 'disabled' : ''}>Guardar</button>` })).join('')}</div>
       <b>PC (${p.box.length})</b>
-      <div class="team" style="grid-template-columns:repeat(auto-fill,minmax(96px,1fr));margin-top:6px">${p.box.map((m, i) => monCard(m, { index: i, act: 'pick-box', extra: `<div class="row" style="justify-content:center;gap:3px"><button class="btn sm" data-act="withdraw" data-index="${i}" ${p.team.length >= 6 ? 'disabled' : ''}>Retirar</button><button class="btn sm red" data-act="release" data-index="${i}" title="Soltar">✕</button></div>` })).join('') || '<p class="muted small">Vazio. Pokémon capturados com a equipe cheia vêm para cá.</p>'}</div>
+      <div class="team" style="grid-template-columns:repeat(auto-fill,minmax(96px,1fr));margin-top:6px">${p.box.map((m, i) => monCard(m, { index: i, act: 'pick-box', owner: p, extra: `<div class="row" style="justify-content:center;gap:3px"><button class="btn sm" data-act="withdraw" data-index="${i}" ${p.team.length >= 6 ? 'disabled' : ''}>Retirar</button><button class="btn sm red" data-act="release" data-index="${i}" title="Soltar">✕</button></div>` })).join('') || '<p class="muted small">Vazio. Pokémon capturados com a equipe cheia vêm para cá.</p>'}</div>
       ${sel ? `<p class="small" style="margin-top:8px">Selecionado: <b>${esc(getSpecies((sel.from === 'team' ? p.team : p.box)[sel.index].sp).name)}</b> — agora clique no outro lado para trocar.</p>` : ''}`;
   };
   const ov = openModal('pc', '💻 PC de Armazenamento', render(), { wide: true });
@@ -132,7 +134,7 @@ export function openTrainer(session, pid) {
       <div class="small muted">📍 ${esc(getSpace(p.pos).name)} · vitórias ${p.stats.wins} · PvP ${p.stats.pvpWins}</div></div></div>
     <div class="row" style="margin:10px 0">${GYMS.map(g => `<img src="${badgeUrl(g.id)}" alt="${esc(g.badge)}" title="${esc(g.badge)} (${esc(g.leader)})" style="width:34px;height:34px;object-fit:contain;${p.badges.includes(g.id) ? '' : 'filter:grayscale(1) brightness(.4)'}">`).join('')}
       ${p.eliteStage ? `<span class="chip gold">👑 Elite ${p.eliteStage}/4</span>` : ''}</div>
-    <b>Equipe</b><div class="team" style="grid-template-columns:repeat(6,1fr);margin-top:6px">${p.team.map((m, i) => monCard(m, { index: i, act: 'noop' })).join('')}</div>
+    <b>Equipe</b><div class="team" style="grid-template-columns:repeat(6,1fr);margin-top:6px">${p.team.map((m, i) => monCard(m, { index: i, act: 'noop', owner: p })).join('')}</div>
     ${p.box.length ? `<p class="small muted">+ ${p.box.length} no PC</p>` : ''}`;
   openModal('trainer', '🪪 Ficha do Treinador', html, { wide: true });
 }
@@ -152,7 +154,9 @@ export function openMon(session, act, index) {
       <div class="col grow">
         <h3 style="font-size:20px">${esc(v.name)} ${v.shiny ? '✨' : ''} <span class="chip gold">Nv. ${v.lvl}</span></h3>
         <div>${typeChips(v.types)} <span class="chip">#${String(sp.dex).padStart(3, '0')}</span> <span class="chip">Tier ${sp.tier}</span>${mon.aura ? ` <span class="chip gold">aura ${esc(mon.aura)}</span>` : ''}</div>
-        ${hpBar(v.hp, v.maxHp)}<div class="small">HP ${Math.max(0, v.hp)}/${v.maxHp} · Ataque ${v.atk} · XP ${mon.xp}/${xpToNext(v.lvl)}</div>
+        ${hpBar(v.hp, v.maxHp)}<div class="small">HP ${Math.max(0, v.hp)}/${v.maxHp} · Ataque ${v.atk} · Velocidade ${v.spe} · XP ${mon.xp}/${xpToNext(v.lvl)}</div>
+        <div class="small">Natureza: <b>${esc(natureLabel(mon.nature))}</b></div>
+        ${badgesNeeded(mon) ? `<div class="small">${canUse(p, mon) ? '✅' : '🔒'} Obedece com ${badgesNeeded(mon)} insígnias (você tem ${p.badges.length})</div>` : ''}
         <div class="small">Evolução: ${esc(evo)}</div>
       </div></div>
     <div class="divider"></div>
@@ -168,8 +172,12 @@ export function openHelp() {
   openModal('help', '❔ Como jogar', `
     <div class="small col">
       <p><b>Objetivo:</b> conquistar as 6 insígnias, vencer a Elite dos Quatro (Liga Pokémon) e derrotar o Campeão na Arena Final. Com limite de turnos, vence quem tiver mais pontos.</p>
-      <p><b>Turno:</b> role o dado e escolha uma das casas piscando. Casas <b>coloridas</b> têm Pokémon do tier da cor (Rosa → Verde → Azul → Vermelha → Amarela). Casas <b>?</b> são eventos (ouro, itens, treinadores, Equipe Rocket, atalhos...). <b>Cidades</b> têm Centro Pokémon (cura grátis), Loja, PC e ginásio.</p>
-      <p><b>Batalha:</b> cada rodada os dois lados agem. Dano = ataque × 0,7 + 🎲, multiplicado pela vantagem de tipo (tabela oficial de 18 tipos; tipo duplo multiplica: x4, x2, x0,5, x0,25 ou x0). 🎲6 = crítico (x1,5); 🎲1 = golpe fraco (x0,5). Quem tem nível maior ataca primeiro.</p>
+      <p><b>Turno:</b> role o dado e escolha uma das casas piscando. Casas <b>coloridas</b> têm Pokémon do tier da cor (Rosa → Verde → Azul → Vermelha → Amarela). Casas <b>?</b> são eventos (ouro, itens, treinadores, Equipe Rocket, atalhos...). Nas casas de evento <b>Azuis e Vermelhas</b> pode surgir uma <b>RAID</b> contra um lendário (sem pokébolas; vença e tenha chance de capturá-lo). As casas de evento <b>Amarelas</b> só têm <b>eventos especiais</b>: Santuário Lendário, Ás da Liga, Chuva de Estrelas (shiny garantido), Tesouro da Liga, Bênção de Mew e Ovo Ancestral. <b>Cidades</b> têm Centro Pokémon (cura grátis), Loja, PC e ginásio.</p>
+      <p><b>Batalha:</b> cada rodada os dois lados agem. Dano = ataque × 0,7 + 🎲, multiplicado pela vantagem de tipo (tabela oficial de 18 tipos; tipo duplo multiplica: x4, x2, x0,5, x0,25 ou x0). 🎲6 = crítico (x1,5); 🎲1 = golpe fraco (x0,5). Quem tem mais <b>Velocidade</b> (nível × natureza) ataca primeiro.</p>
+      <p><b>Natureza:</b> cada Pokémon nasce com uma das 25 naturezas dos jogos: +10% em um atributo (Ataque, HP ou Velocidade) e −10% em outro. 5 são neutras.</p>
+      <p><b>Obediência:</b> Pokémon obtidos de tier 3 só lutam com 2 insígnias, tier 4 com 3 e tier 5 (lendários) com 4. O inicial e os trazidos da Coleção sempre obedecem. Os que não obedecem aparecem com 🔒.</p>
+      <p><b>Prêmios de insígnia:</b> 1ª kit de bolas e poções · 2ª ovo tier 2 · 3ª ovo tier 3 + Ultra Balls · 4ª ovo tier 4 + Rare Candy · 5ª kit de elite · 6ª ovo lendário + Master Ball.</p>
+      <p><b>Equipe cheia:</b> com 6 Pokémon na equipe, novas capturas e ovos vão direto para o PC (abra o PC numa cidade para trocar).</p>
       <p><b>Captura:</b> jogue a Pokébola no selvagem. Precisa tirar no dado: Rosa 3+, Verde 4+, Azul 5+, Vermelho 6+, Lendário 7+ (shiny +1). Bônus: bola (+1 a +3), HP do selvagem abaixo de 50% (+1) ou 25% (+2), seu Pokémon 5+ níveis acima (+1). 🎲1 sempre falha e ele pode fugir. Derrotar (desmaiar) não captura!</p>
       <p><b>Shiny:</b> 1 em 40 (1 em 8 para o Pokémon do Dia; Amuleto Shiny triplica). Shinies têm +10% de status, valem mais XP e pontos.</p>
       <p><b>XP:</b> quem derrota ganha tudo, quem participou 60% e o resto da equipe 40%. Vencer Pokémon muito mais fracos rende pouco. Evolução acontece no nível do catálogo (ou com Pedra Evolutiva).</p>

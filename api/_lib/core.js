@@ -115,7 +115,7 @@ export async function leaderboard(db) {
 
 // ------------------------------------------------------------------ Coleção
 function collectionEntry(mon, matchId) {
-  return { uid: mon.uid, sp: mon.sp, lvl: mon.lvl, shiny: !!mon.shiny, aura: mon.aura || null, from: matchId, at: new Date().toISOString() };
+  return { uid: mon.uid, sp: mon.sp, lvl: mon.lvl, shiny: !!mon.shiny, aura: mon.aura || null, nature: mon.nature || null, capTier: mon.capTier || null, from: matchId, at: new Date().toISOString() };
 }
 
 /**
@@ -133,7 +133,7 @@ export async function syncCollection(db, state, pids) {
       const e = collectionEntry(mon, state.id);
       if (idx.has(mon.uid)) {
         const old = vault[idx.get(mon.uid)];
-        vault[idx.get(mon.uid)] = { ...old, sp: e.sp, lvl: Math.max(old.lvl || 1, e.lvl), shiny: e.shiny, aura: e.aura || old.aura || null };
+        vault[idx.get(mon.uid)] = { ...old, sp: e.sp, lvl: Math.max(old.lvl || 1, e.lvl), shiny: e.shiny, aura: e.aura || old.aura || null, nature: old.nature || e.nature || null, capTier: old.capTier || e.capTier || null };
       } else {
         idx.set(mon.uid, vault.length);
         vault.push(e);

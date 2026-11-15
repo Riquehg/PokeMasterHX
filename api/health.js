@@ -39,13 +39,24 @@ export default route(async () => {
 
   if (url && service && !/ERRADA/.test(out.chave_do_servidor)) {
     const { admin } = await import('./_lib/supabase-db.js');
-    for (const t of ['profiles', 'matches', 'match_players', 'match_secrets', 'game_config']) {
-      const { error } = await admin().from(t).select('*', { count: 'exact', head: true });
+    // Confere tabela por tabela, com as colunas que o jogo usa
+    const expected = {
+      profiles: 'id, trainer_name, avatar, is_admin, pokedex, vault, stats, points, rating, diamonds, cosmetics',
+      matches: 'id, code, name, host_id, status, is_public, has_pin, options, lobby, state, chat, version',
+      match_players: 'match_id, user_id',
+      match_secrets: 'match_id, pin',
+      game_config: 'key, value',
+      payments: 'id, user_id, package_id, diamonds, amount, status, mp_payment_id',
+      global_feed: 'id, kind, text, data'
+    };
+    for (const [t, cols] of Object.entries(expected)) {
+      const { error } = await admin().from(t).select(cols, { head: true }).limit(1);
       out.tabelas[t] = error ? `ERRO: ${error.message}` : 'ok';
-      if (error) out.problemas.push(`Tabela ${t}: ${error.message} — rode o supabase/schema.sql no SQL Editor.`);
+      if (error) out.problemas.push(`${t}: ${error.message} — rode o supabase/schema.sql (versão mais nova) no SQL Editor.`);
     }
-    const { error: colErr } = await admin().from('profiles').select('rating', { head: true });
-    if (colErr) out.problemas.push('Schema desatualizado (falta profiles.rating): rode de novo o supabase/schema.sql.');
+    const { error: fnErr } = await admin().rpc('add_diamonds', { uid: '00000000-0000-0000-0000-000000000000', amount: 0 });
+    out.funcao_add_diamonds = fnErr ? `ERRO: ${fnErr.message}` : 'ok';
+    if (fnErr) out.problemas.push(`Função add_diamonds: ${fnErr.message} — rode o supabase/schema.sql.`);
   }
   out.ok = out.problemas.length === 0;
   return out;

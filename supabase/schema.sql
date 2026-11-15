@@ -72,6 +72,22 @@ create table if not exists public.match_secrets (
 );
 
 -- ---------------------------------------------------------------- configuração
+-- O projeto antigo tinha uma game_config com colunas config_key/config_value.
+-- Se ela existir nesse formato, é renomeada para game_config_legacy e a nova é criada.
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'game_config' and column_name = 'config_key')
+     and not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'game_config' and column_name = 'key') then
+    alter table public.game_config rename to game_config_legacy;
+    if exists (select 1 from pg_constraint where conname = 'game_config_pkey') then
+      alter table public.game_config_legacy rename constraint game_config_pkey to game_config_legacy_pkey;
+    end if;
+    if exists (select 1 from pg_class where relname = 'game_config_pkey') then
+      alter index public.game_config_pkey rename to game_config_legacy_pkey;
+    end if;
+  end if;
+end $$;
+
 create table if not exists public.game_config (
   key        text primary key,
   value      jsonb,

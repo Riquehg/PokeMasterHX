@@ -1,7 +1,7 @@
 // Utilitários de estado compartilhados entre engine.js e battle.js.
 import { getSpecies } from '../data/pokemon.js';
 import { getSpace } from '../data/board.js';
-import { TEAM_SIZE, fullHeal } from './monsters.js';
+import { TEAM_SIZE, fullHeal, capTierOf } from './monsters.js';
 
 export class GameError extends Error {
   constructor(message) {
@@ -98,4 +98,28 @@ export function speciesName(id) {
 
 export function clone(obj) {
   return typeof structuredClone === 'function' ? structuredClone(obj) : JSON.parse(JSON.stringify(obj));
+}
+
+// ------------------------------------------------------------------ obediência por insígnias
+// Pokémon obtidos de tier alto só obedecem com insígnias suficientes (como nos jogos).
+// Iniciais e Pokémon trazidos da Coleção sempre obedecem.
+export const BADGES_TO_USE = { 3: 2, 4: 3, 5: 4 };
+
+export function badgesNeeded(mon) {
+  if (!mon || mon.starter || mon.brought) return 0;
+  return BADGES_TO_USE[capTierOf(mon)] || 0;
+}
+
+export function canUse(player, mon) {
+  if (!player || !player.badges) return true; // NPCs e selvagens
+  return player.badges.length >= badgesNeeded(mon);
+}
+
+/** Índice do primeiro Pokémon que pode lutar (vivo e obediente). */
+export function usableIndex(player, exclude = -1) {
+  return player.team.findIndex((m, i) => i !== exclude && m.hp > 0 && canUse(player, m));
+}
+
+export function hasUsable(player) {
+  return usableIndex(player) >= 0;
 }

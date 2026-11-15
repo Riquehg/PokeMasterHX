@@ -2,6 +2,8 @@
 import { getSpecies } from '../../shared/data/pokemon.js';
 import { monView, xpToNext, MAX_LEVEL } from '../../shared/rules/monsters.js';
 import { esc, hpClass } from './dom.js';
+import { canUse, badgesNeeded } from '../../shared/rules/helpers.js';
+import { natureLabel } from '../../shared/data/natures.js';
 import { monSprite, typeLabel, typeColor, avatarUrl, PLAYER_COLORS } from '../config.js';
 
 export function typeChips(types) {
@@ -13,17 +15,19 @@ export function hpBar(hp, max, cls = '') {
   return `<div class="hp ${hpClass(r)} ${cls}"><i style="width:${(r * 100).toFixed(1)}%"></i></div>`;
 }
 
-export function monCard(mon, { index, lead = false, act = 'mon', extra = '' } = {}) {
+export function monCard(mon, { index, lead = false, act = 'mon', extra = '', owner = null } = {}) {
   const v = monView(mon);
+  const locked = owner && !canUse(owner, mon);
   const xpPct = v.lvl >= MAX_LEVEL ? 100 : Math.min(100, (mon.xp / xpToNext(v.lvl)) * 100);
-  const cls = ['mon', v.hp <= 0 ? 'fainted' : '', v.shiny ? 'shiny' : '', lead ? 'lead' : '', mon.aura ? 'aura-' + mon.aura : ''].join(' ');
-  return `<div class="${cls}" data-act="${act}" data-index="${index ?? ''}" data-uid="${esc(mon.uid)}" title="${esc(v.name)} — ${v.types.map(typeLabel).join('/')}">
+  const cls = ['mon', v.hp <= 0 ? 'fainted' : '', v.shiny ? 'shiny' : '', lead ? 'lead' : '', mon.aura ? 'aura-' + mon.aura : '', locked ? 'locked-mon' : ''].join(' ');
+  return `<div class="${cls}" data-act="${act}" data-index="${index ?? ''}" data-uid="${esc(mon.uid)}" title="${esc(v.name)} — ${v.types.map(typeLabel).join('/')}${mon.nature ? ' · ' + esc(natureLabel(mon.nature)) : ''}${locked ? ` · 🔒 precisa de ${badgesNeeded(mon)} insígnias para lutar` : ''}">
     <span class="lv">Nv.${v.lvl}</span>${v.shiny ? '<span style="position:absolute;top:3px;right:6px">✨</span>' : ''}
     <img src="${monSprite(mon)}" alt="${esc(v.name)}" loading="lazy">
     <div class="nm">${esc(v.name)}</div>
     ${hpBar(v.hp, v.maxHp)}
     <div class="xp"><i style="width:${xpPct}%"></i></div>
     <div class="tiny muted">${Math.max(0, v.hp)}/${v.maxHp} HP</div>
+    ${locked ? `<div class="lock-tag">🔒 ${badgesNeeded(mon)} insígnias</div>` : ''}
     ${extra}
   </div>`;
 }

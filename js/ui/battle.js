@@ -2,6 +2,8 @@
 import { getSpecies } from '../../shared/data/pokemon.js';
 import { ITEMS, ballBonusAgainst } from '../../shared/data/items.js';
 import { monView, maxHpOf } from '../../shared/rules/monsters.js';
+import { canUse, badgesNeeded } from '../../shared/rules/helpers.js';
+import { raidCatchChance } from '../../shared/engine.js';
 import { bestAttack, effectivenessLabel, TYPE_COLORS } from '../../shared/rules/types.js';
 import { whoMustAct } from '../../shared/engine.js';
 import { esc, hpClass } from './dom.js';
@@ -12,7 +14,7 @@ import { wait } from './fx.js';
 const CAPTURE_TARGET = { 1: 3, 2: 4, 3: 5, 4: 6, 5: 7 };
 const KIND_TITLE = {
   wild: '🌿 Pokémon Selvagem', trainer: '⚔️ Treinador', rocket: '🦹 Equipe Rocket', gym: '🏟️ Batalha de Ginásio',
-  elite: '👑 Elite dos Quatro', champion: '🏆 Campeão da Liga', pvp: '🤺 Batalha PvP'
+  elite: '👑 Elite dos Quatro', champion: '🏆 Campeão da Liga', pvp: '🤺 Batalha PvP', raid: '🔥 RAID Lendária', ace: '🎖️ Ás da Liga'
 };
 
 function sideTeam(state, side) {
@@ -42,7 +44,7 @@ function hpBox(state, side, mon, cls) {
   const r = Math.max(0, v.hp) / v.maxHp;
   return `<div class="hpbox ${cls}" data-uid="${esc(mon.uid)}">
     <div class="owner">${esc(owner || '')}</div>
-    <div class="nm"><span>${esc(v.name)}${v.shiny ? ' ✨' : ''}</span><span class="lv">Nv.${v.lvl}</span></div>
+    <div class="nm"><span>${esc(v.name)}${v.shiny ? ' ✨' : ''}${mon.raid ? ' <span class="chip red">CHEFE</span>' : ''}</span><span class="lv">Nv.${v.lvl}</span></div>
     <div class="types">${typeChips(v.types)}${side.boost?.[mon.uid] ? ` <span class="chip green">ATQ +${side.boost[mon.uid]}</span>` : ''}</div>
     <div class="hp ${hpClass(r)}"><i style="width:${(r * 100).toFixed(1)}%"></i></div>
     <div class="hpnum"><b class="cur">${Math.max(0, v.hp)}</b> / ${v.maxHp}</div>
@@ -62,8 +64,9 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
   const must = whoMustAct(state);
   const myTurn = participant && canAct && must.includes(vid) && !ui.busy;
   const mustSwitch = participant && b.mustSwitch[mySi];
-  const tier = b.kind === 'wild' ? getSpecies(foeMon.sp).tier : 1;
+  const tier = b.kind === 'wild' || b.kind === 'raid' ? getSpecies(foeMon.sp).tier : 1;
   const official = ['gym', 'elite', 'champion'].includes(b.kind);
+  const vp = state.players.find(x => x.id === vid);
 
   const mAtk = bestAttack(getSpecies(myMon.sp).types, getSpecies(foeMon.sp).types);
   const fAtk = bestAttack(getSpecies(foeMon.sp).types, getSpecies(myMon.sp).types);
@@ -72,7 +75,7 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
   const arena = `<div class="arena t${tier} ${official ? 'official' : ''}" id="arena">
       ${foe.kind === 'npc' && foe.sprite ? `<img class="foe-trainer" src="${leaderUrl(foe.sprite)}" alt="${esc(foe.name)}">` : ''}
       <div class="platform foe"></div><div class="platform me"></div>
-      <img class="mon-sprite foe ${foeMon.shiny ? 'shiny' : ''} ${foeMon.aura ? 'aura-' + esc(foeMon.aura) : ''}" data-uid="${esc(foeMon.uid)}" src="${monSprite(foeMon)}" alt="${esc(getSpecies(foeMon.sp).name)}">
+      <img class="mon-sprite foe ${foeMon.shiny ? 'shiny' : ''} ${foeMon.raid ? 'raid-boss' : ''} ${foeMon.aura ? 'aura-' + esc(foeMon.aura) : ''}" data-uid="${esc(foeMon.uid)}" src="${monSprite(foeMon)}" alt="${esc(getSpecies(foeMon.sp).name)}">
       <img class="mon-sprite me ${myMon.shiny ? 'shiny' : ''} ${myMon.aura ? 'aura-' + esc(myMon.aura) : ''}" data-uid="${esc(myMon.uid)}" src="${monSprite(myMon)}" alt="${esc(getSpecies(myMon.sp).name)}">
       ${hpBox(state, foe, foeMon, 'foe')}
       ${hpBox(state, me, myMon, 'me')}
@@ -82,7 +85,7 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
   if (ui.busy) controls = `<p class="muted center" style="margin-top:10px">⚔️ ...</p>`;
   else if (!participant) controls = `<p class="muted center" style="margin-top:10px">👀 Você está assistindo esta batalha.</p>`;
   else if (!myTurn) controls = `<p class="muted center" style="margin-top:10px"><span class="spinner"></span> ${b.kind === 'pvp' ? 'Aguardando o adversário escolher...' : 'Aguarde...'}</p>`;
-  else if (mustSwitch) controls = `<p class="center" style="margin-top:10px"><b>${esc(getSpecies(myMon.sp).name)} desmaiou!</b> Escolha quem entra:</p>${switchList(sideTeam(state, me), me.active)}`;
+  else if (mustSwitch) controls = `<p class="center" style="margin-top:10px"><b>${esc(getSpecies(myMon.sp).name)} desmaiou!</b> Escolha quem entra:</p>${switchList(sideTeam(state, me), me.active, vp)}`;
   else {
     const p = state.players.find(x => x.id === vid);
     const myTeam = sideTeam(state, me);
@@ -90,12 +93,12 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
     const items = Object.entries(p.items).filter(([id, n]) => ['heal', 'revive', 'boost'].includes(ITEMS[id]?.kind) && n > 0);
     controls = `<div class="battle-actions">
         <button class="btn red" data-act="b-attack">⚔️ Atacar</button>
-        <button class="btn blue" data-act="b-sub" data-sub="switch" ${myTeam.filter(m => m.hp > 0).length < 2 ? 'disabled' : ''}>🔄 Trocar</button>
+        <button class="btn blue" data-act="b-sub" data-sub="switch" ${myTeam.filter(m => m.hp > 0 && canUse(p, m)).length < 2 ? 'disabled' : ''}>🔄 Trocar</button>
         <button class="btn purple" data-act="b-sub" data-sub="item" ${items.length ? '' : 'disabled'}>🎒 Itens</button>
-        <button class="btn green" data-act="b-sub" data-sub="ball" ${b.kind === 'wild' && balls.length ? '' : 'disabled'}>🔴 Capturar</button>
+        <button class="btn green" data-act="b-sub" data-sub="ball" ${b.kind === 'wild' && balls.length ? '' : 'disabled'} ${b.kind === 'raid' ? 'title="Na Raid, vença primeiro: a captura é automática no fim"' : ''}>🔴 Capturar</button>
         <button class="btn" data-act="b-flee" ${official ? 'disabled' : ''}>${b.kind === 'wild' ? '🏃 Fugir' : '🏳️ Desistir'}</button>
-      </div>`;
-    if (ui.sub === 'switch') controls += switchList(myTeam, me.active);
+      </div>${b.kind === 'raid' ? `<p class="tiny muted center">🔥 Raid: pokébolas bloqueadas. Vença o chefe para ter ${Math.round(raidCatchChance(p) * 100)}% de chance de capturá-lo (sobe com insígnias).</p>` : ''}`;
+    if (ui.sub === 'switch') controls += switchList(myTeam, me.active, p);
     if (ui.sub === 'item') controls += `<div class="subpick">${items.map(([id, n]) => `<button class="btn sm pickbtn" data-act="b-item" data-item="${id}"><img src="${itemUrl(id)}" alt="${esc(ITEMS[id].name)}">${esc(ITEMS[id].name)} ×${n}</button>`).join('')}</div>`;
     if (ui.sub === 'ball') {
       controls += `<div class="subpick">${balls.map(([id, n]) => {
@@ -112,11 +115,12 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
     <div class="battle-log" id="battle-log">${b.log.slice(-14).map(l => `<p>${esc(l)}</p>`).join('')}</div>`;
 }
 
-function switchList(team, active) {
+function switchList(team, active, player) {
   return `<div class="subpick">${team.map((m, i) => {
     const v = monView(m);
-    return `<button class="btn sm pickbtn" data-act="b-switch" data-index="${i}" ${m.hp <= 0 || i === active ? 'disabled' : ''}>
-      <img src="${monSprite(m)}" alt="${esc(v.name)}">${esc(v.name)} Nv.${v.lvl} <span class="tiny muted">${Math.max(0, m.hp)}/${v.maxHp}</span></button>`;
+    const locked = player && !canUse(player, m);
+    return `<button class="btn sm pickbtn ${locked ? 'locked-mon' : ''}" data-act="b-switch" data-index="${i}" ${m.hp <= 0 || i === active || locked ? 'disabled' : ''}>
+      <img src="${monSprite(m)}" alt="${esc(v.name)}">${esc(v.name)} Nv.${v.lvl} <span class="tiny muted">${Math.max(0, m.hp)}/${v.maxHp}</span>${locked ? `<span class="lock-tag">🔒 ${badgesNeeded(m)} insígnias</span>` : ''}</button>`;
   }).join('')}</div>`;
 }
 

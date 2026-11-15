@@ -220,7 +220,7 @@ test('ginásio: só na cidade do ginásio, 1 desafio por turno, vitória dá ins
   s.players[0].pos = 39; // Pewter
   // Equipe forte para garantir a vitória
   const rng = createRng(1);
-  s.players[0].team = [createMon(rng, 'blastoise', 35), createMon(rng, 'venusaur', 35)];
+  s.players[0].team = [createMon(rng, 'blastoise', 35, { starter: true }), createMon(rng, 'venusaur', 35, { starter: true })];
   s = ok(s, 'ash', { type: 'city', op: 'gym' });
   assert.equal(s.battle.kind, 'gym');
   const flee = act(s, 'ash', { type: 'battle', move: 'flee' });

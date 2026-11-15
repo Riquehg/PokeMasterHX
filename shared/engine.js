@@ -12,17 +12,17 @@ import { SPECIES, getSpecies, STARTERS } from './data/pokemon.js';
 import { SPACE_LIST, getSpace, START_SPACE } from './data/board.js';
 import { ITEMS, getItem, shopFor, STARTING_ITEMS, STARTING_GOLD } from './data/items.js';
 import {
-  GYMS, gymAt, ELITE_FOUR, CHAMPION, ELITE_SPACE, CHAMPION_SPACE, ROUTE_TRAINERS, ROCKET, BADGES_TO_LEAGUE
+  GYMS, gymAt, ELITE_FOUR, CHAMPION, ELITE_SPACE, CHAMPION_SPACE, ROUTE_TRAINERS, ROCKET, BADGES_TO_LEAGUE, BADGE_REWARDS, ACE_TRAINERS
 } from './data/trainers.js';
 import { createRng } from './rules/rng.js';
-import { createMon, rollWild, fullHeal, healMon, maxHpOf, levelUp, evolve, TEAM_SIZE, WILD_LEVELS, gainXp, BASE_SHINY_RATE } from './rules/monsters.js';
+import { createMon, rollWild, hatchEgg, fullHeal, healMon, maxHpOf, levelUp, evolve, TEAM_SIZE, WILD_LEVELS, gainXp, BASE_SHINY_RATE } from './rules/monsters.js';
 import { destinations, pathTo } from './rules/movement.js';
 import { startBattle, submitChoice, setBattleEndHandler, deliverCapture, sideActive, sideIndexOf } from './rules/battle.js';
 import {
-  GameError, fail, getPlayer, currentPlayer, log, fx, addItem, takeItem, blackout, speciesName, clone, markCaught
+  GameError, fail, getPlayer, currentPlayer, log, fx, addItem, takeItem, blackout, speciesName, clone, markCaught, hasUsable
 } from './rules/helpers.js';
 import { speciesByTier } from './data/pokemon.js';
-import { EVENT_CARDS } from './data/events.js';
+import { cardsForTier } from './data/events.js';
 import { sanitizeCosmetic } from './data/cosmetics.js';
 import { botAction } from './bots.js';
 
@@ -84,12 +84,13 @@ function newPlayer(rng, cfg, index) {
   const brought = (Array.isArray(cfg.teamMons) ? cfg.teamMons : [])
     .filter(m => m && SPECIES[m.sp]).slice(0, TEAM_SIZE)
     .map(m => {
-      const mon = createMon(rng, m.sp, Math.max(1, Math.min(60, Number(m.lvl) || 5)), { shiny: !!m.shiny, ot: cfg.id });
+      const mon = createMon(rng, m.sp, Math.max(1, Math.min(60, Number(m.lvl) || 5)), { shiny: !!m.shiny, ot: cfg.id, nature: m.nature || undefined, capTier: m.capTier });
+      mon.brought = true; // veio da Coleção: sempre obedece
       if (m.uid) mon.uid = String(m.uid);
       if (m.aura) mon.aura = m.aura;
       return mon;
     });
-  const mon = brought[0] || createMon(rng, starter, starterLevel, { shiny: !!cfg.starterShiny, ot: cfg.id });
+  const mon = brought[0] || createMon(rng, starter, starterLevel, { shiny: !!cfg.starterShiny, ot: cfg.id, starter: true });
   const p = {
     id: String(cfg.id || `p${index + 1}`),
     name: String(cfg.name || `Treinador ${index + 1}`).slice(0, 24),
@@ -115,7 +116,7 @@ function newPlayer(rng, cfg, index) {
   };
   // Pokémon extra (ex.: herdado do Cofre)
   if (cfg.extraMon && SPECIES[cfg.extraMon.sp]) {
-    const extra = createMon(rng, cfg.extraMon.sp, Math.min(10, cfg.extraMon.lvl || 5), { shiny: !!cfg.extraMon.shiny, ot: p.id });
+    const extra = createMon(rng, cfg.extraMon.sp, Math.min(10, cfg.extraMon.lvl || 5), { shiny: !!cfg.extraMon.shiny, ot: p.id, starter: true });
     p.team.push(extra);
     markCaught(p, extra.sp);
   }
@@ -553,12 +554,12 @@ function useItem(state, rng, p, a) {
 }
 
 // ------------------------------------------------------------------ encontros e eventos
-function wildEncounter(state, rng, p, sp, tier) {
-  if (!p.team.some(m => m.hp > 0)) {
-    log(state, `😵 ${p.name} está sem Pokémon de pé e não consegue enfrentar o selvagem.`, 'bad');
+function wildEncounter(state, rng, p, sp, tier, opts = {}) {
+  if (!hasUsable(p)) {
+    log(state, `😵 ${p.name} está sem Pokémon de pé (ou que obedeça) e não consegue enfrentar o selvagem.`, 'bad');
     return;
   }
-  let mon = state.board[sp.id];
+  let mon = opts.fresh ? null : state.board[sp.id];
   if (!mon) {
     mon = rollWild(rng, tier, { dailyPokemon: state.options.dailyPokemon, shinyCharm: !!p.items.shiny_charm });
     state.board[sp.id] = mon;
@@ -580,10 +581,10 @@ const EVENT_ITEMS = {
 
 const LUCKY_ITEMS = [['rare_candy', 4], ['evolution_stone', 3], ['rainbow_ball', 2], ['master_ball', 1]];
 
-function boardEvent(state, rng, p, sp) {
+function boardEvent(state, rng, p, sp, forceId = null) {
   const t = sp.tier;
-  const cards = EVENT_CARDS.filter(c => t >= c.minTier);
-  const card = rng.weighted(cards.map(c => [c, c.weight]));
+  const cards = cardsForTier(t);
+  const card = (forceId && cards.find(c => c.id === forceId)) || rng.weighted(cards.map(c => [c, c.weight]));
   const lore = rng.pick(card.lore).replace(/\{name\}/g, p.name);
   const effects = []; // [{ text, tone }]
   const ev = { k: 'event', pid: p.id, id: card.id, title: card.title, icon: card.icon, tone: card.tone, lore, effects };
@@ -609,7 +610,7 @@ function boardEvent(state, rng, p, sp) {
       break;
     }
     case 'route_trainer': case 'rocket_ambush': {
-      if (!p.team.some(m => m.hp > 0)) {
+      if (!hasUsable(p)) {
         effects.push({ text: 'Sua equipe está desmaiada — o desafiante foi embora', tone: 'neutral' });
         break;
       }
@@ -638,19 +639,90 @@ function boardEvent(state, rng, p, sp) {
       return;
     }
     case 'rustling_grass': {
-      effects.push({ text: `Pokémon raro (tier ${Math.min(5, t + 1)}) apareceu!`, tone: 'battle', icon: '🌿' });
-      then = () => wildEncounter(state, rng, p, sp, Math.min(5, t + 1));
+      effects.push({ text: `Um Pokémon de tier ${t} saltou do mato!`, tone: 'battle', icon: '🌿' });
+      then = () => wildEncounter(state, rng, p, sp, t, { fresh: true });
       break;
     }
-    case 'pokemon_egg': {
-      const pool = speciesByTier(1).filter(s => s.evolvesTo);
-      const mon = createMon(rng, rng.pick(pool).id, rng.int(3, 5), { shiny: rng.chance(BASE_SHINY_RATE * 2) });
+    case 'pokemon_egg': case 'ancient_egg': {
+      const eggTier = card.id === 'ancient_egg' ? (rng.chance(0.25) ? 5 : 4) : Math.max(1, t - 1);
+      const mon = hatchEgg(rng, eggTier, { ot: p.id });
       ev.mon = { sp: mon.sp, shiny: mon.shiny };
-      effects.push({ text: `Nasceu um ${speciesName(mon.sp)}${mon.shiny ? ' ✨SHINY' : ''}!`, tone: mon.shiny ? 'shiny' : 'good', mon: mon.sp });
+      effects.push({ text: `Nasceu um ${speciesName(mon.sp)}${mon.shiny ? ' ✨SHINY' : ''} (tier ${eggTier})!`, tone: mon.shiny ? 'shiny' : 'good', mon: mon.sp });
+      effects.push(placeText(p, mon));
       fx(state, ev);
       log(state, `${card.icon} ${p.name} tirou a carta "${card.title}" → ${effects.map(e => e.text).join(' · ')}`, 'event');
       deliverCapture(state, p.id, mon, null);
       return;
+    }
+    case 'raid': case 'legend_shrine': {
+      if (!hasUsable(p)) {
+        effects.push({ text: 'Sua equipe não tem condições de lutar — o lendário desaparece na névoa', tone: 'neutral' });
+        break;
+      }
+      const boss = raidBoss(rng, t, card.id === 'legend_shrine');
+      ev.mon = { sp: boss.sp, shiny: boss.shiny };
+      effects.push({ text: `${speciesName(boss.sp)}${boss.shiny ? ' ✨SHINY' : ''} Nv.${boss.lvl} — HP de chefe (${maxHpOf(boss)})`, tone: 'battle', icon: '🔥' });
+      effects.push({ text: 'Pokébolas não funcionam durante a Raid', tone: 'neutral', icon: '🚫' });
+      effects.push({ text: `Vença para ganhar prêmios e ${Math.round(raidCatchChance(p) * 100)}% de chance de captura`, tone: 'good', icon: '🎯' });
+      then = () => {
+        startBattle(state, { kind: 'raid', pid: p.id, foe: { kind: 'wild', mon: boss } });
+        state.phase = 'battle';
+      };
+      break;
+    }
+    case 'master_trainer': {
+      if (!hasUsable(p)) { effects.push({ text: 'Sua equipe está desmaiada — o Ás foi embora', tone: 'neutral' }); break; }
+      const base = rng.pick(ACE_TRAINERS);
+      const team = routeTeam(rng, 4, 3, base.favorite).map(m => { m.lvl = Math.min(60, m.lvl + 6); fullHeal(m); return m; });
+      const prize = 1500;
+      ev.trainer = { name: base.name, sprite: base.sprite };
+      effects.push({ text: `Batalha contra ${base.name} (3 Pokémon fortes)`, tone: 'battle', icon: '⚔️' });
+      effects.push({ text: `Prêmio: ${prize} de ouro + Rare Candy`, tone: 'good', icon: '🪙' });
+      then = () => {
+        startBattle(state, { kind: 'ace', pid: p.id,
+          foe: { kind: 'npc', name: base.name, title: 'Ás da Liga', sprite: base.sprite, prize, team } });
+        state.phase = 'battle';
+      };
+      break;
+    }
+    case 'star_shower': {
+      if (!hasUsable(p)) { effects.push({ text: 'Sua equipe está desmaiada — o brilho some no céu', tone: 'neutral' }); break; }
+      const tier = rng.weighted([[3, 5], [4, 4], [5, 1]]);
+      const mon = rollWild(rng, tier, { forceShiny: true });
+      mon.lvl = Math.max(mon.lvl, WILD_LEVELS[5][0]); fullHeal(mon);
+      ev.mon = { sp: mon.sp, shiny: true };
+      effects.push({ text: `${speciesName(mon.sp)} ✨SHINY Nv.${mon.lvl} apareceu!`, tone: 'shiny', icon: '🌠' });
+      then = () => {
+        if (mon.shiny) fx(state, { k: 'shiny', pid: p.id });
+        startBattle(state, { kind: 'wild', pid: p.id, foe: { kind: 'wild', mon } });
+        state.phase = 'battle';
+      };
+      break;
+    }
+    case 'league_treasure': {
+      const g = rng.int(600, 1000);
+      p.gold += g;
+      effects.push({ text: `+${g} de ouro`, tone: 'good', icon: '🪙' });
+      const id = rng.weighted([['master_ball', 1], ['rainbow_ball', 3], ['rare_candy', 3], ['evolution_stone', 2]]);
+      addItem(p, id, 1);
+      effects.push({ text: `+1x ${ITEMS[id].name}`, tone: id === 'master_ball' ? 'shiny' : 'good', item: id });
+      addItem(p, 'ultra_ball', 3);
+      effects.push({ text: '+3x Ultra Ball', tone: 'good', item: 'ultra_ball' });
+      break;
+    }
+    case 'mew_blessing': {
+      p.team.forEach(fullHeal);
+      effects.push({ text: 'Equipe totalmente curada', tone: 'good', icon: '💗' });
+      const best = [...p.team].sort((a, b) => b.lvl - a.lvl)[0];
+      if (best) {
+        const msgs = [...levelUp(best), ...levelUp(best)];
+        effects.push({ text: `${speciesName(best.sp)} subiu 2 níveis!`, tone: 'good', icon: '⬆️' });
+        fx(state, ev);
+        log(state, `${card.icon} ${p.name} tirou a carta "${card.title}" → ${effects.map(e => e.text).join(' · ')}`, 'event');
+        (msgs || []).forEach(m => log(state, m, 'good'));
+        return;
+      }
+      break;
     }
     case 'storm': {
       p.skip += 1;
@@ -698,6 +770,61 @@ function boardEvent(state, rng, p, sp) {
   if (then) then();
 }
 
+// ---------------------------------------------------------------- Raid
+const RAID_POOL = {
+  3: ['raikou', 'entei', 'suicune', 'articuno', 'zapdos', 'moltres'],
+  4: ['articuno', 'zapdos', 'moltres', 'lugia', 'ho_oh', 'mew', 'mewtwo', 'rayquaza', 'dialga', 'palkia', 'giratina'],
+  5: ['mewtwo', 'mew', 'lugia', 'ho_oh', 'rayquaza', 'dialga', 'palkia', 'giratina', 'reshiram', 'zekrom', 'xerneas', 'yveltal', 'zygarde', 'blacephalon']
+};
+export const RAID_HP_BONUS = 0.6; // chefe tem +60% de HP
+
+function raidBoss(rng, tier, shrine) {
+  const pool = RAID_POOL[tier] || RAID_POOL[4];
+  const sp = rng.pick(pool.filter(id => SPECIES[id]));
+  const lvl = WILD_LEVELS[tier][1] + (shrine ? 0 : 1);
+  const mon = createMon(rng, sp, lvl, { shiny: rng.chance(BASE_SHINY_RATE * 2), capTier: 5 });
+  mon.bonusHp = Math.round(maxHpOf(mon) * RAID_HP_BONUS);
+  mon.hp = maxHpOf(mon);
+  mon.wild = true;
+  mon.raid = true;
+  return mon;
+}
+
+export function raidCatchChance(p) {
+  return Math.min(0.6, 0.25 + 0.06 * (p.badges?.length || 0) + (p.items?.shiny_charm ? 0.05 : 0));
+}
+
+function placeText(p, mon) {
+  return p.team.length < TEAM_SIZE
+    ? { text: 'Vai para a equipe', tone: 'neutral', icon: '👥' }
+    : { text: 'Equipe cheia (6) — vai para o PC', tone: 'neutral', icon: '💻' };
+}
+
+/** Prêmio de insígnia (depende de quantas insígnias o jogador tem agora). */
+function grantBadgeReward(state, rng, p) {
+  const n = p.badges.length;
+  const rw = BADGE_REWARDS[n];
+  if (!rw) return;
+  const effects = [];
+  for (const [id, q] of Object.entries(rw.items || {})) {
+    if (!ITEMS[id]) continue;
+    addItem(p, id, q);
+    effects.push({ text: `+${q}x ${ITEMS[id].name}`, tone: id === 'master_ball' ? 'shiny' : 'good', item: id });
+  }
+  let mon = null;
+  if (rw.egg) {
+    mon = hatchEgg(rng, rw.egg, { ot: p.id });
+    effects.push({ text: `Ovo tier ${rw.egg} chocou: ${speciesName(mon.sp)}${mon.shiny ? ' ✨SHINY' : ''}!`, tone: mon.shiny ? 'shiny' : 'good', mon: mon.sp });
+    effects.push(placeText(p, mon));
+  }
+  const unlocked = Object.entries({ 3: 2, 4: 3, 5: 4 }).filter(([, need]) => need === n).map(([t]) => t);
+  if (unlocked.length) effects.push({ text: `Pokémon de tier ${unlocked[0]} agora te obedecem!`, tone: 'good', icon: '🔓' });
+  fx(state, { k: 'event', pid: p.id, id: 'badge_reward', title: `Prêmio da ${n}ª insígnia`, icon: '🎁', tone: 'good',
+    lore: `A Liga Pokémon recompensa ${p.name}: ${rw.text}.`, effects, mon: mon ? { sp: mon.sp, shiny: mon.shiny } : undefined });
+  log(state, `🎁 Prêmio da ${n}ª insígnia para ${p.name}: ${effects.map(e => e.text).join(' · ')}`, 'win');
+  if (mon) deliverCapture(state, p.id, mon, null);
+}
+
 function routeTeam(rng, tier, size, favorite) {
   const [lo, hi] = WILD_LEVELS[tier];
   const pool = speciesByTier(tier);
@@ -717,8 +844,8 @@ function challenge(state, rng, p, targetId, now) {
   const q = getPlayer(state, String(targetId));
   if (!q || q.id === p.id) fail('Adversário inválido.');
   if (q.pos !== p.pos) fail('O adversário precisa estar na mesma casa que você.');
-  if (!p.team.some(m => m.hp > 0)) fail('Sua equipe está desmaiada.');
-  if (!q.team.some(m => m.hp > 0)) fail(`${q.name} está com a equipe desmaiada.`);
+  if (!hasUsable(p)) fail('Você não tem Pokémon de pé que te obedeça.');
+  if (!hasUsable(q)) fail(`${q.name} não tem Pokémon em condições de lutar.`);
   state.turnFlags.pvp = true;
   if (q.isBot) {
     log(state, `🤺 ${p.name} desafiou ${q.name} (CPU), que aceitou na hora!`);
@@ -777,6 +904,35 @@ setBattleEndHandler((state, rng, b, outcome) => {
     return;
   }
 
+  if (b.kind === 'raid') {
+    const boss = b.sides[1].team[0];
+    if (r === 'win' && outcome.winner === 0) {
+      p0.stats.wins += 1;
+      p0.stats.raids = (p0.stats.raids || 0) + 1;
+      const g = 250 * Math.max(3, getSpecies(boss.sp).tier);
+      p0.gold += g;
+      addItem(p0, 'rare_candy', 1);
+      addItem(p0, 'ultra_ball', 2);
+      log(state, `🔥 ${p0.name} venceu a RAID contra ${speciesName(boss.sp)}! +${g} de ouro, Rare Candy e 2 Ultra Balls.`, 'win');
+      const chance = raidCatchChance(p0);
+      const ok = rng.chance(chance);
+      fx(state, { k: 'capture', pid: p0.id, sp: boss.sp, shiny: !!boss.shiny, ball: 'ultra_ball', ok, shakes: ok ? 3 : rng.int(0, 2), raid: true });
+      if (ok) {
+        delete boss.bonusHp; delete boss.raid;
+        fullHeal(boss);
+        log(state, `🎯 ${speciesName(boss.sp)} se acalmou e aceitou ${p0.name}! (chance ${Math.round(chance * 100)}%)`, 'shiny');
+        deliverCapture(state, p0.id, boss, 'ultra_ball');
+      } else {
+        log(state, `💨 ${speciesName(boss.sp)} escapou para o céu… (chance era ${Math.round(chance * 100)}%)`, 'bad');
+      }
+    } else if (r !== 'draw') {
+      p0.stats.losses += 1;
+      log(state, `😓 ${p0.name} não resistiu ao lendário.`, 'bad');
+      if (!outcome.surrender && !hasUsable(p0)) blackout(state, p0, 0);
+    }
+    return;
+  }
+
   if (b.kind === 'pvp') {
     if (r === 'draw') return;
     const w = getPlayer(state, b.sides[outcome.winner].pid);
@@ -788,7 +944,7 @@ setBattleEndHandler((state, rng, b, outcome) => {
     w.stats.wins += 1;
     l.stats.losses += 1;
     log(state, `🏆 ${w.name} venceu o PvP e levou ${pay} de ouro de ${l.name}!`, 'win');
-    if (!l.team.some(m => m.hp > 0)) blackout(state, l, 0);
+    if (!hasUsable(l)) blackout(state, l, 0);
     return;
   }
 
@@ -804,6 +960,7 @@ setBattleEndHandler((state, rng, b, outcome) => {
       p0.badges.push(gym.id);
       log(state, `🎖️ ${p0.name} conquistou a ${gym.badge}! (${p0.badges.length}/${GYMS.length})`, 'win');
       fx(state, { k: 'badge', pid: p0.id, badge: gym.id });
+      grantBadgeReward(state, rng, p0);
     } else if (b.kind === 'elite') {
       p0.eliteStage += 1;
       if (p0.eliteStage < ELITE_FOUR.length) {
@@ -813,6 +970,9 @@ setBattleEndHandler((state, rng, b, outcome) => {
       } else {
         log(state, `👑 ${p0.name} venceu a Elite dos Quatro! Agora só falta o Campeão na Arena Final.`, 'win');
       }
+    } else if (b.kind === 'ace') {
+      addItem(p0, 'rare_candy', 1);
+      log(state, `🍬 ${p0.name} também ganhou um Rare Candy do Ás da Liga.`, 'good');
     } else if (b.kind === 'champion') {
       p0.champion = true;
       finishMatch(state, p0, 'Derrotou o Campeão da Liga!');
@@ -832,7 +992,7 @@ setBattleEndHandler((state, rng, b, outcome) => {
     p0.gold -= stolen;
     log(state, `🦹 A Equipe Rocket roubou ${stolen} de ouro de ${p0.name}!`, 'bad');
   }
-  if (!p0.team.some(m => m.hp > 0)) blackout(state, p0, b.kind === 'rocket' ? 0 : 0.1);
+  if (!hasUsable(p0)) blackout(state, p0, b.kind === 'rocket' || b.kind === 'raid' ? 0 : 0.1);
 });
 
 // ------------------------------------------------------------------ bots
@@ -867,3 +1027,14 @@ export function runBots(state, rng, now) {
 // Reexporta utilidades úteis para o cliente
 export { whoMustAct as mustAct, GameError, sideActive, sideIndexOf };
 export { SPACE_LIST, GYMS, ELITE_FOUR, CHAMPION, ITEMS, shopFor };
+
+// Usado só nos testes automatizados
+export const _internals = {
+  boardEvent(state, pid, spaceId, cardId, seed = 1) {
+    const st = clone(state);
+    const rng = createRng(seed);
+    st.fx = [];
+    boardEvent(st, rng, getPlayer(st, pid), getSpace(spaceId), cardId);
+    return st;
+  }
+};

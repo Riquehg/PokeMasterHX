@@ -9,7 +9,8 @@ const MP_API = 'https://api.mercadopago.com';
 
 // ------------------------------------------------------------------ configuração editável
 export async function getShop(db) {
-  const cfg = await db.getConfig('shop');
+  let cfg = null;
+  try { cfg = await db.getConfig('shop'); } catch (e) { console.error('[shop]', e.message); }
   return {
     items: Array.isArray(cfg?.items) ? cfg.items : DEFAULT_SHOP.items,
     packages: Array.isArray(cfg?.packages) ? cfg.packages : DEFAULT_SHOP.packages
@@ -57,6 +58,24 @@ export async function equippedCosmetic(db, profile) {
   });
 }
 
+/** Atualiza o visual do jogador nas partidas em andamento (aparece na hora para todos). */
+export async function refreshCosmeticInMatches(db, userId, profile) {
+  try {
+    const cosmetic = await equippedCosmetic(db, profile);
+    const list = (await db.myMatches(userId)).filter(m => m.status === 'playing');
+    for (const brief of list) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const row = await db.getMatch(brief.id);
+        if (!row?.state?.players) break;
+        const pl = row.state.players.find(p => p.id === userId);
+        if (!pl || JSON.stringify(pl.cosmetic || null) === JSON.stringify(cosmetic)) break;
+        const state = { ...row.state, fx: [], players: row.state.players.map(p => (p.id === userId ? { ...p, cosmetic } : p)) };
+        if (await db.updateMatch(row.id, row.version, { state, version: row.version + 1 })) break;
+      }
+    }
+  } catch (e) { console.error('[cosmetic-refresh]', e.message); }
+}
+
 // ------------------------------------------------------------------ API da loja
 export async function shopOp(db, user, body, req) {
   const profile = await getOrCreateProfile(db, user);
@@ -82,6 +101,7 @@ export async function shopOp(db, user, body, req) {
       if (left === null) bad('Diamantes insuficientes.');
       const cosmetics = { owned: [...mine.owned, item.id], equipped: { ...mine.equipped, [item.kind]: item.id } };
       const p = await db.upsertProfile(user.id, { cosmetics });
+      await refreshCosmeticInMatches(db, user.id, p);
       return { me: view(p), message: `${item.name} comprado e equipado!` };
     }
 
@@ -90,7 +110,9 @@ export async function shopOp(db, user, body, req) {
       if (!SHOP_KINDS[slot]) bad('Tipo inválido.');
       if (body.itemId && !mine.owned.includes(body.itemId)) bad('Você não tem este item.');
       const cosmetics = { owned: mine.owned, equipped: { ...mine.equipped, [slot]: body.itemId || null } };
-      return { me: view(await db.upsertProfile(user.id, { cosmetics })) };
+      const p = await db.upsertProfile(user.id, { cosmetics });
+      await refreshCosmeticInMatches(db, user.id, p);
+      return { me: view(p) };
     }
 
     case 'pix_create': {

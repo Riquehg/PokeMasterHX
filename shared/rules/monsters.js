@@ -1,5 +1,6 @@
 // Criação de instâncias de Pokémon, status, XP e evolução.
 import { getSpecies, speciesByTier } from '../data/pokemon.js';
+import { NATURE_NAMES, natureMult } from '../data/natures.js';
 
 export const MAX_LEVEL = 60;
 export const TEAM_SIZE = 6;
@@ -10,16 +11,29 @@ export const WILD_LEVELS = { 1: [3, 7], 2: [7, 13], 3: [12, 19], 4: [18, 26], 5:
 
 export const BASE_SHINY_RATE = 1 / 40;
 
-/** Status derivados da espécie (HP/força do catálogo original) + nível + shiny. */
-export function computeStats(speciesId, level, shiny = false) {
+/** Status derivados da espécie (HP/força do catálogo original) + nível + shiny + natureza. */
+export function computeStats(speciesId, level, shiny = false, nature = null) {
   const sp = getSpecies(speciesId);
   if (!sp) throw new Error(`Espécie desconhecida: ${speciesId}`);
   const L = Math.max(1, Math.min(MAX_LEVEL, level | 0));
   const s = shiny ? 1 + SHINY_STAT_BONUS : 1;
   return {
-    maxHp: Math.max(8, Math.round(sp.hp * (1 + 0.07 * (L - 1)) * s)),
-    atk: Math.max(2, Math.round(sp.str * (1 + 0.06 * (L - 1)) * s))
+    maxHp: Math.max(8, Math.round(sp.hp * (1 + 0.07 * (L - 1)) * s * natureMult(nature, 'hp'))),
+    atk: Math.max(2, Math.round(sp.str * (1 + 0.06 * (L - 1)) * s * natureMult(nature, 'atk'))),
+    spe: Math.round(L * 10 * natureMult(nature, 'spe'))
   };
+}
+
+/** Status de uma instância (inclui natureza e HP extra de chefe de Raid). */
+export function statsOf(mon) {
+  const st = computeStats(mon.sp, mon.lvl, mon.shiny, mon.nature);
+  if (mon.bonusHp) st.maxHp += mon.bonusHp;
+  return st;
+}
+
+/** Tier usado para a regra de insígnias: o da espécie quando o Pokémon foi obtido. */
+export function capTierOf(mon) {
+  return mon.capTier || getSpecies(mon.sp)?.tier || 1;
 }
 
 export function xpToNext(level) {
@@ -31,28 +45,33 @@ export function makeUid(rng) {
 }
 
 export function createMon(rng, speciesId, level, opts = {}) {
-  const st = computeStats(speciesId, level, !!opts.shiny);
-  return {
+  const nature = opts.nature !== undefined ? opts.nature : rng.pick(NATURE_NAMES);
+  const st = computeStats(speciesId, level, !!opts.shiny, nature);
+  const mon = {
     uid: makeUid(rng),
     sp: speciesId,
     lvl: level,
     xp: 0,
     hp: st.maxHp,
     shiny: !!opts.shiny,
+    nature,
+    capTier: opts.capTier || getSpecies(speciesId).tier,
     ball: opts.ball || null,
     ot: opts.ot || null // "treinador original" (id do jogador que capturou)
   };
+  if (opts.starter) mon.starter = true;
+  return mon;
 }
 
 /** Visão completa (para UI e cálculos): junta espécie + status. */
 export function monView(mon) {
   const sp = getSpecies(mon.sp);
-  const st = computeStats(mon.sp, mon.lvl, mon.shiny);
-  return { ...mon, name: sp.name, dex: sp.dex, types: sp.types, tier: sp.tier, maxHp: st.maxHp, atk: st.atk };
+  const st = statsOf(mon);
+  return { ...mon, name: sp.name, dex: sp.dex, types: sp.types, tier: sp.tier, maxHp: st.maxHp, atk: st.atk, spe: st.spe };
 }
 
 export function maxHpOf(mon) {
-  return computeStats(mon.sp, mon.lvl, mon.shiny).maxHp;
+  return statsOf(mon).maxHp;
 }
 
 export function isFainted(mon) {
@@ -125,22 +144,31 @@ export function xpReward(foe, isTrainer) {
 
 /** Sorteia um selvagem para uma casa de tier `tier`. */
 export function rollWild(rng, tier, opts = {}) {
-  let t = tier;
-  if (t < 5 && rng.chance(0.06)) t += 1; // aparição rara do tier acima
-  let pool = speciesByTier(t);
+  // Tier estável: a cor da casa define o tier (Rosa 1 · Verde 2 · Azul 3 · Vermelha 4 · Amarela 5)
+  const pool = speciesByTier(tier);
   let speciesId = rng.pick(pool).id;
 
-  // Pokémon do Dia: 25% de chance de substituir o sorteio quando o tier permite
+  // Pokémon do Dia: 25% de chance de aparecer, mas só nas casas do tier dele
   const daily = opts.dailyPokemon && getSpecies(opts.dailyPokemon);
-  const isDaily = !!(daily && daily.tier <= t && rng.chance(0.25));
+  const isDaily = !!(daily && daily.tier === tier && rng.chance(0.25));
   if (isDaily) speciesId = daily.id;
 
   const [lo, hi] = WILD_LEVELS[tier];
   const level = rng.int(lo, hi);
   let shinyRate = BASE_SHINY_RATE * (opts.shinyCharm ? 3 : 1);
   if (isDaily) shinyRate = Math.max(shinyRate, 1 / 8);
+  if (opts.forceShiny) shinyRate = 1;
   const shiny = rng.chance(shinyRate);
   const mon = createMon(rng, speciesId, level, { shiny });
   mon.wild = true;
   return mon;
+}
+
+/** Ovo: choca um Pokémon básico (primeiro estágio) do tier pedido. */
+export function hatchEgg(rng, tier, opts = {}) {
+  const pool = speciesByTier(tier);
+  const basics = pool.filter(s => !s.evolvesFrom || getSpecies(s.evolvesFrom)?.tier !== tier);
+  const sp = rng.pick(basics.length ? basics : pool);
+  const lvl = opts.level || { 1: 5, 2: 12, 3: 18, 4: 25, 5: 30 }[tier];
+  return createMon(rng, sp.id, lvl, { shiny: rng.chance(BASE_SHINY_RATE * 2), capTier: tier, ot: opts.ot });
 }

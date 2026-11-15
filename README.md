@@ -25,11 +25,17 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 ## 2. Como o jogo funciona agora
 
 - **Objetivo:** 6 insígnias → Elite dos Quatro (4 lutas seguidas na Liga Pokémon) → Campeão na Arena Final. Com limite de turnos (Rápida 30 / Normal 60), vence quem tiver mais pontos.
-- **Tabuleiro:** as mesmas 120 casas e coordenadas do seu `map.js`. Casas coloridas = tier do Pokémon (Rosa → Verde → Azul → Vermelha → Amarela/lendários). O Pokémon revelado **fica na casa** (com o HP que sobrou) até alguém capturar ou derrotar. Casas `?` = eventos (ouro, itens, treinadores, Equipe Rocket, Professor, atalho, tempestade...).
-- **Batalha:** rodadas; quem tem nível maior ataca primeiro. Dano = ataque × 0,7 + 🎲, × efetividade de tipo; 🎲6 = crítico, 🎲1 = golpe fraco. Trocar, usar item, jogar Pokébola e fugir gastam a rodada.
+- **Tabuleiro:** as mesmas 120 casas e coordenadas do seu `map.js`. Casas coloridas = tier **fixo** do Pokémon: Rosa só tier 1, Verde só tier 2, Azul só tier 3, Vermelha só tier 4, Amarela só tier 5 (o Pokémon do Dia também só aparece nas casas do tier dele). O Pokémon revelado **fica na casa** (com o HP que sobrou) até alguém capturar ou derrotar. Casas `?` = eventos (ouro, itens, treinadores, Equipe Rocket, Professor, atalho, tempestade...).
+- **Batalha:** rodadas; quem tem mais **Velocidade** (nível × natureza) ataca primeiro. Dano = ataque × 0,7 + 🎲, × efetividade de tipo; 🎲6 = crítico, 🎲1 = golpe fraco. Trocar, usar item, jogar Pokébola e fugir gastam a rodada.
 - **Captura:** precisa tirar Rosa 3+, Verde 4+, Azul 5+, Vermelho 6+, Lendário 7+ (shiny +1). Bônus de bola (+1 a +3; bolas temáticas dão +3 contra certos tipos), HP baixo (+1/+2), nível bem maior (+1). 🎲1 sempre falha e o selvagem pode fugir. A tela mostra a **% de chance** de cada bola.
 - **Shiny:** 1/40 (1/8 para o Pokémon do Dia; Amuleto Shiny triplica). +10% de status, mais XP e pontos.
 - **XP e evolução:** quem derruba ganha tudo; quem participou 60%; o resto da equipe 40%; vencer Pokémon muito mais fracos rende pouco. Evolui no nível do catálogo ou com Pedra Evolutiva.
+- **Naturezas:** cada Pokémon nasce com uma das 25 naturezas oficiais (Adamant, Modest, Timid...), adaptadas aos 3 atributos do jogo: +10% em Ataque, HP ou Velocidade e −10% em outro (5 neutras). Fica salva na Coleção.
+- **Obediência por insígnias:** Pokémon obtidos de tier 3 só lutam com 2 insígnias, tier 4 com 3 e tier 5 com 4 (a regra vale pelo tier em que ele foi obtido; evoluir um Pokémon de tier baixo não trava). O inicial e os trazidos da Coleção sempre obedecem. Os travados aparecem com 🔒 e não podem entrar na batalha.
+- **Prêmios de insígnia:** 1ª kit de bolas/poções · 2ª ovo tier 2 · 3ª ovo tier 3 + Ultra Balls · 4ª ovo tier 4 + Rare Candy · 5ª kit de elite · 6ª ovo lendário + Master Ball (tabela em `shared/data/trainers.js` → `BADGE_REWARDS`).
+- **Equipe cheia:** com 6 na equipe, capturas e ovos vão direto para o PC (aparece um aviso).
+- **Raid lendária:** nas casas de evento Azuis e Vermelhas há chance de Raid contra um lendário com HP de chefe. Pokébolas não funcionam durante a Raid; vencendo, ganha ouro/Rare Candy/Ultra Balls e tem 25%–60% de chance de capturar (sobe com as insígnias).
+- **Eventos especiais (casas Amarelas):** Santuário Lendário (Raid), Ás da Liga (batalha difícil com prêmio grande), Chuva de Estrelas (shiny garantido), Tesouro da Liga, Bênção de Mew e Ovo Ancestral.
 - **PvP:** caiu na mesma casa de outro treinador → desafie. Quem perde paga 15% do ouro.
 - **CPUs:** completam salas e jogam sozinhas; se alguém sai, uma CPU assume. Se alguém fica 90 s parado, os outros podem deixar a CPU jogar a vez dele.
 - **Coleção da conta:** todo Pokémon da sua equipe e do PC em partidas salvas na conta (🤖 Treino contra CPUs e 🌐 Online) vai para a Coleção, com nível e evolução atualizados **durante a partida** (a cada captura, fim de batalha, uso do PC ou de itens). A Pokédex da conta também. Limite de 300; ⭐ favoritos e shinies nunca são descartados.
@@ -38,7 +44,7 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 - **Cartas de Evento:** 14 cartas com história curta e recompensa/penalidade (Bolsa Perdida, Mochila de Campista, Árvore de Frutinhas, Treinador na Rota, Emboscada Rocket, Aula do Professor, Grama Agitada, Ovo Misterioso, Tempestade, Nuvem de Zubats, Pedágio do Snorlax, Meowth Ladrão, Atalho Secreto, Achado Raro). Texto e efeitos em `shared/data/events.js`.
 - **Animações:** dado 3D (para na face sorteada pelo servidor), peão andando casa a casa, faixa de troca de turno, carta de evento virando, entrada de batalha (Pokémon saindo da grama / tela VS contra treinadores), golpes com investida, dano flutuante, HP descendo, crítico e "super efetivo", desmaio, captura com arremesso da Pokébola e até 3 balançadas. Os turnos das CPUs também são animados. Botão 🎬 alterna normal / rápida / desligada.
 - **Avisos globais:** quando alguém captura um **lendário** ou um **shiny** (ou vira Campeão), aparece um banner para todos os jogadores conectados. O admin também pode publicar pop-ups de aviso.
-- **Loja de Diamantes:** só cosméticos (estilo de captura/aura, moldura do treinador, título). Não altera a força de nada. Diamantes por Pix automático (Mercado Pago).
+- **Loja de Diamantes:** só cosméticos (estilo de captura/aura, moldura do treinador, título). Não altera a força de nada. No tabuleiro, quem tem moldura ganha um halo animado e brilho no chão, o estilo de captura solta partículas em volta do peão e o título aparece numa faixa dourada embaixo do nome. Comprar/equipar atualiza na hora as partidas em andamento. Diamantes por Pix automático (Mercado Pago).
 - **Mapa:** proporção real da imagem, zoom (roda do mouse, pinça no celular, botões + − ⤢), arrastar para mover, ◎ centraliza no seu peão; peões e Pokémon têm tamanho fixo na tela em qualquer zoom.
 - **Balanceamento:** testado com simulações de partidas só com CPUs (`npm run sim`): todas terminam, ~75% de vitória nos ginásios quando a equipe está no nível, campeão entre os turnos 60 e 100 no modo completo (por isso as salas têm os modos Rápida e Normal).
 
@@ -136,5 +142,7 @@ tests/                       testes automáticos e simulador
 ## 6. Próximos passos sugeridos
 - Trocas de Pokémon entre jogadores (o motor já tem a base de "pendências" usada pelo convite de PvP).
 - Animação passo a passo dos turnos das CPUs no modo local (hoje elas jogam instantaneamente e o log mostra tudo).
-- Sprites que faltarem no Storage (líderes em `sprites/leaders/`, insígnias em `sprites/badges/`, itens novos) — enquanto não existirem, o jogo mostra um selo com as iniciais.
+- Sprites que faltarem no Storage — enquanto não existirem, o jogo mostra um selo com as iniciais. Os nomes respeitam maiúsculas e espaços:
+  - `sprites/leaders/`: `Brock.png`, `misty.png`, `Lt. Surge.png`, `Erika.png`, `Blaine.png`, `Koga.png` (já existem) + `lorelei.png`, `bruno.png`, `agatha.png`, `lance.png`, `blue.png` (Elite e Campeão).
+  - `sprites/trainers/` (treinadores das casas de evento): `youngster.png`, `bugcatcher.png`, `hiker.png`, `swimmer.png`, `psychic.png`, `blackbelt.png`, `birdkeeper.png`, `scientist.png`, `dragontamer.png`, `channeler.png`, `rocket.png`, `acetrainer_m.png`, `acetrainer_f.png`, `veteran.png`.
 - Agendar limpeza de partidas antigas (comando pronto no fim do `schema.sql`).

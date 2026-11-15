@@ -8,7 +8,7 @@ import { GYMS, gymAt, ELITE_FOUR, ELITE_SPACE, CHAMPION_SPACE, BADGES_TO_LEAGUE,
 import { bestAttack } from './rules/types.js';
 import { maxHpOf, WILD_LEVELS, TEAM_SIZE } from './rules/monsters.js';
 import { distancesFrom } from './rules/movement.js';
-import { getPlayer, currentPlayer } from './rules/helpers.js';
+import { getPlayer, currentPlayer, canUse } from './rules/helpers.js';
 import { sideTeam, sideActive, sideIndexOf } from './rules/battle.js';
 
 const CITY_SPACES = [5, 20, 39, 60, 70, 91, 95, 107, 114, 122, 124];
@@ -46,10 +46,10 @@ function bestBall(p, wild) {
   return best;
 }
 
-function bestSwitch(team, activeIdx, foe) {
+function bestSwitch(team, activeIdx, foe, p) {
   let best = -1, bestScore = -Infinity;
   team.forEach((m, i) => {
-    if (i === activeIdx || m.hp <= 0) return;
+    if (i === activeIdx || m.hp <= 0 || (p && !canUse(p, m))) return;
     const score = matchup(m, foe) * 10 - matchup(foe, m) * 4 + m.lvl * 0.6 + hpRatio(m) * 5;
     if (score > bestScore) { bestScore = score; best = i; }
   });
@@ -73,7 +73,7 @@ function battleAction(state, p) {
   const foe = sideActive(state, foeSide);
 
   if (b.mustSwitch[si]) {
-    return { type: 'battle', move: 'switch', index: bestSwitch(team, side.active, foe) };
+    return { type: 'battle', move: 'switch', index: bestSwitch(team, side.active, foe, p) };
   }
 
   // Cura quando o ativo está mal e ainda vale a pena
@@ -85,7 +85,7 @@ function battleAction(state, p) {
   // Troca se estiver em grande desvantagem de tipo
   const myMult = matchup(me, foe);
   if (myMult <= 0.5) {
-    const sw = bestSwitch(team, side.active, foe);
+    const sw = bestSwitch(team, side.active, foe, p);
     if (sw >= 0 && matchup(team[sw], foe) >= 2) return { type: 'battle', move: 'switch', index: sw };
   }
 
@@ -106,14 +106,14 @@ function battleAction(state, p) {
     if ((down >= 2 || teamHealth(p) < 0.4) && hpRatio(foe) > 0.4) return { type: 'battle', move: 'flee' };
     // Se o golpe não afeta, foge (evita empates infinitos)
     if (myMult === 0) {
-      const sw = bestSwitch(team, side.active, foe);
+      const sw = bestSwitch(team, side.active, foe, p);
       if (sw >= 0 && matchup(team[sw], foe) > 0) return { type: 'battle', move: 'switch', index: sw };
       return { type: 'battle', move: 'flee' };
     }
   }
 
   if (myMult === 0) {
-    const sw = bestSwitch(team, side.active, foe);
+    const sw = bestSwitch(team, side.active, foe, p);
     if (sw >= 0 && matchup(team[sw], foe) > 0) return { type: 'battle', move: 'switch', index: sw };
   }
   return { type: 'battle', move: 'attack' };

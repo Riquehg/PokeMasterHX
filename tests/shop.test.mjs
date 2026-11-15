@@ -91,3 +91,16 @@ test('feed: captura de lendário ou shiny vira aviso global; comum não', async 
   assert.ok(events.some(e => e.kind === 'legendary' && /Mewtwo/.test(e.text)));
   assert.ok(events.some(e => e.kind === 'shiny' && /Pidgey/.test(e.text)));
 });
+
+test('comprar/equipar cosmético atualiza na hora as partidas em andamento', async () => {
+  const { db, ash, admin } = await setup();
+  const { match } = await matchOp(db, ash, { op: 'solo', bots: 1 });
+  assert.equal(match.state.players.find(p => p.id === ash.id).cosmetic, null);
+  await adminOp(db, admin, { op: 'give_diamonds', userId: ash.id, amount: 500 });
+  await shopOp(db, ash, { op: 'buy', itemId: 'frame_rainbow' });
+  const live = await matchOp(db, ash, { op: 'get', matchId: match.id });
+  assert.deepEqual(live.match.state.players.find(p => p.id === ash.id).cosmetic, { frame: 'rainbow' });
+  await shopOp(db, ash, { op: 'equip', slot: 'frame', itemId: null });
+  const after = await matchOp(db, ash, { op: 'get', matchId: match.id });
+  assert.equal(after.match.state.players.find(p => p.id === ash.id).cosmetic, null);
+});

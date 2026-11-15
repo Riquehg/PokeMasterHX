@@ -23,7 +23,12 @@ export function monSprite(spOrMon, shiny) {
 }
 export const avatarUrl = n => `${CFG.sprites}player_${String(Math.max(1, Math.min(8, Number(n) || 1))).padStart(2, '0')}.png`;
 export const itemUrl = id => `${CFG.sprites}items/${ITEMS[id]?.image || id + '.png'}`;
-export const leaderUrl = file => (file ? `${CFG.sprites}leaders/${file}` : '');
+// Sprite de treinador/líder: aceita "pasta/arquivo.png" (ex.: "leaders/Lt. Surge.png") ou só o arquivo (vai para leaders/)
+export const leaderUrl = file => {
+  if (!file) return '';
+  const path = file.includes('/') ? file : `leaders/${file}`;
+  return CFG.sprites + path.split('/').map(encodeURIComponent).join('/');
+};
 export const badgeUrl = id => `${CFG.sprites}badges/${id}.png`;
 export const mapUrl = () => CFG.sprites + CFG.mapImage;
 

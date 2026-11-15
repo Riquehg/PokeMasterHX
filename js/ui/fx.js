@@ -84,9 +84,13 @@ export async function turnBanner({ player, color, mine, turn }) {
 export async function eventCard(f, { name, mine }) {
   if (!anim.speed) return;
   const el = layer('dim');
-  const icon = f.mon ? `<img src="${monSprite(f.mon.sp, f.mon.shiny)}" alt="">` : f.icon;
-  el.innerHTML = `<div class="ev-card" data-tone="${f.tone}"><div class="ev-inner"><div class="ev-face">
-      <div class="ev-kicker">Carta de Evento</div>
+  const icon = f.mon ? `<img src="${monSprite(f.mon.sp, f.mon.shiny)}" alt="">`
+    : f.trainer?.sprite ? `<img class="ev-trainer" src="${leaderUrl(f.trainer.sprite)}" alt="${esc(f.trainer.name)}">` : f.icon;
+  const SPECIAL = ['raid', 'legend_shrine', 'master_trainer', 'star_shower', 'league_treasure', 'mew_blessing', 'ancient_egg'];
+  const special = SPECIAL.includes(f.id);
+  const kicker = f.id === 'raid' ? '🔥 Raid Lendária' : f.id === 'badge_reward' ? '🎁 Recompensa da Liga' : special ? '⭐ Evento Especial' : 'Carta de Evento';
+  el.innerHTML = `<div class="ev-card ${special ? 'special' : ''} ${f.id === 'raid' ? 'raid' : ''}" data-tone="${f.tone}"><div class="ev-inner"><div class="ev-face">
+      <div class="ev-kicker">${kicker}</div>
       <div class="ev-icon">${icon}</div>
       <div class="ev-title">${esc(f.title)}</div>
       <div class="ev-lore">“${esc(f.lore)}”</div>
@@ -102,7 +106,12 @@ export async function eventCard(f, { name, mine }) {
 export async function battleIntro(f, { me, foePlayer }) {
   if (!anim.speed) return;
   const el = layer('dim');
-  if (f.kind === 'wild') {
+  if (f.kind === 'raid') {
+    el.innerHTML = `<div class="intro raid ${f.foe.shiny ? 'shiny' : ''}"><div class="grass"><img src="${monSprite(f.foe.sp, f.foe.shiny)}" alt=""><div class="sparkles"></div></div>
+      <div class="text">🔥 RAID! ${esc(getSpecies(f.foe.sp).name)}${f.foe.shiny ? ' ✨' : ''} Nv.${f.foe.lvl} 🔥</div></div>`;
+    sparkle(el.querySelector('.sparkles'), 22);
+    await wait(2400);
+  } else if (f.kind === 'wild') {
     el.innerHTML = `<div class="intro ${f.foe.shiny ? 'shiny' : ''}"><div class="grass"><img src="${monSprite(f.foe.sp, f.foe.shiny)}" alt=""><div class="sparkles"></div></div>
       <div class="text">${f.foe.shiny ? '✨ Um ' : 'Um '}${esc(getSpecies(f.foe.sp).name)} selvagem apareceu!${f.foe.shiny ? ' ✨' : ''}</div></div>`;
     if (f.foe.shiny) sparkle(el.querySelector('.sparkles'));

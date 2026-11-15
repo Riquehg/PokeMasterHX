@@ -1,6 +1,8 @@
 // Cartas de Evento das casas "?". Cada carta tem um pouco de história (lore) e um efeito.
 // {name} vira o nome do jogador. O efeito é aplicado em shared/engine.js (boardEvent).
 // weight: peso do sorteio; minTier: a partir de que tier de casa a carta aparece.
+// As cartas comuns valem para as casas Rosa→Vermelha (tiers 1–4). As casas Amarelas (tier 5)
+// usam só as cartas ESPECIAIS (tiers: [5]). Raids lendárias aparecem nas casas Azuis e Vermelhas.
 
 export const EVENT_CARDS = [
   { id: 'lost_bag', title: 'Bolsa Perdida', icon: '💰', tone: 'good', weight: 14, minTier: 1, lore: [
@@ -61,5 +63,43 @@ export const EVENT_CARDS = [
   { id: 'lucky_find', title: 'Achado Raro', icon: '💎', tone: 'good', weight: 2, minTier: 3, lore: [
     'Entre os destroços de um laboratório antigo, {name} encontra algo muito valioso.',
     'Um velho colecionador, impressionado com a equipe de {name}, entrega um item raríssimo.'
+  ] },
+
+  // ---------------- RAID (casas Azuis e Vermelhas)
+  { id: 'raid', title: 'RAID LENDÁRIA', icon: '🔥', tone: 'battle', weight: 5, tiers: [3, 4], lore: [
+    'O chão treme e o céu escurece. Um Pokémon lendário enfurecido bloqueia o caminho de {name}!',
+    'Uma energia colossal irrompe de uma cratera. É um lendário — e ele não está para brincadeira!',
+    'Os Pokémon da região fogem em pânico. No centro da clareira, um lendário encara {name}.'
+  ] },
+
+  // ---------------- ESPECIAIS (casas Amarelas)
+  { id: 'legend_shrine', title: 'Santuário Lendário', icon: '⛩️', tone: 'battle', weight: 18, tiers: [5], lore: [
+    '{name} encontra um santuário esquecido. Ao tocar o altar, um lendário desperta para testar seu valor!',
+    'Runas antigas brilham ao redor de {name}. O guardião do santuário surge — vença-o e ele poderá te seguir.'
+  ] },
+  { id: 'master_trainer', title: 'Ás da Liga', icon: '🎖️', tone: 'battle', weight: 18, tiers: [5], lore: [
+    'Um treinador de capa vermelha desafia {name}: "Só os melhores chegam até aqui. Mostre do que é capaz!"',
+    'Um ex-campeão aposentado quer testar a próxima geração. O prêmio é enorme.'
+  ] },
+  { id: 'star_shower', title: 'Chuva de Estrelas', icon: '🌠', tone: 'battle', weight: 14, tiers: [5], lore: [
+    'Estrelas cadentes riscam o céu e uma delas cai bem ao lado de {name}... um Pokémon brilhante surge da luz!',
+    'Na noite mais clara do ano, um Pokémon SHINY aparece atraído pelo brilho das estrelas.'
+  ] },
+  { id: 'league_treasure', title: 'Tesouro da Liga', icon: '👑', tone: 'good', weight: 16, tiers: [5], lore: [
+    'Um baú dourado com o selo da Liga Pokémon está escondido entre as rochas. {name} abre com cuidado...',
+    'O presidente da Liga deixa um presente para os treinadores que chegam tão longe.'
+  ] },
+  { id: 'mew_blessing', title: 'Bênção de Mew', icon: '💗', tone: 'good', weight: 16, tiers: [5], lore: [
+    'Uma bolha rosa flutua até a equipe de {name}. Mew dá uma risadinha e todos se sentem renovados!',
+    'Um brilho rosado envolve os Pokémon de {name}: feridas curadas e uma força nova.'
+  ] },
+  { id: 'ancient_egg', title: 'Ovo Ancestral', icon: '🥚', tone: 'good', weight: 12, tiers: [5], lore: [
+    'Preso no âmbar há milênios, um ovo começa a pulsar nas mãos de {name}...',
+    'Um fóssil se parte e revela um ovo intacto. Ele choca na hora!'
   ] }
 ];
+
+/** Cartas válidas para uma casa de evento do tier informado. */
+export function cardsForTier(tier) {
+  return EVENT_CARDS.filter(c => (c.tiers ? c.tiers.includes(tier) : tier >= c.minTier && tier < 5));
+}

@@ -235,9 +235,16 @@ export class BoardView {
   tokenHtml(state, pl, i, pos, k, n, viewerId) {
     const sp = getSpace(pos);
     const off = (k - (n - 1) / 2) * 38; // px na tela (multiplicado por 1/zoom)
-    return `<div class="token ${state.current === i ? 'active' : ''}" data-pid="${esc(pl.id)}" style="left:${sp.x}%;top:${sp.y}%;margin-left:calc(${off}px * var(--ms, 1));--pc:${playerColor(state, pl.id)}" title="${esc(pl.name)}">
-      <div class="pin ${pl.cosmetic?.frame ? 'frame-' + esc(pl.cosmetic.frame) : ''}"><img src="${avatarUrl(pl.avatar)}" alt="${esc(pl.name)}" data-color="${playerColor(state, pl.id)}" draggable="false"></div>
-      <span class="name">${pl.id === viewerId ? 'Você' : esc(pl.name.split(' ')[0])}</span></div>`;
+    const c = pl.cosmetic || {};
+    const fr = c.frame ? esc(c.frame) : '';
+    const au = c.aura ? esc(c.aura) : '';
+    const cls = ['token', state.current === i ? 'active' : '', fr || au ? 'vip' : '', fr ? 'tf-' + fr : '', au ? 'ta-' + au : ''].join(' ');
+    const sparks = au ? `<div class="sparks">${'<i></i>'.repeat(7)}</div>` : '';
+    return `<div class="${cls}" data-pid="${esc(pl.id)}" style="left:${sp.x}%;top:${sp.y}%;margin-left:calc(${off}px * var(--ms, 1));--pc:${playerColor(state, pl.id)}" title="${esc(pl.name)}${c.title ? ' — ' + esc(c.title) : ''}">
+      ${fr ? '<div class="halo"></div><div class="halo h2"></div>' : ''}${sparks}
+      <div class="pin ${fr ? 'frame-' + fr : ''}"><img src="${avatarUrl(pl.avatar)}" alt="${esc(pl.name)}" data-color="${playerColor(state, pl.id)}" draggable="false"></div>
+      <span class="name">${pl.id === viewerId ? 'Você' : esc(pl.name.split(' ')[0])}</span>
+      ${c.title ? `<span class="ttitle">★ ${esc(c.title)}</span>` : ''}</div>`;
   }
 
   /** Anima o peão casa a casa pelo caminho. */

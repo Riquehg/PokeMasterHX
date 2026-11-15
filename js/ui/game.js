@@ -159,6 +159,9 @@ export function mountGame(root, session, { onExit }) {
           if (f.pid === v) confetti(90);
           break;
         }
+        case 'placed':
+          if (f.pid === v && f.where === 'box') toast(`💻 ${speciesName(f.sp)}${f.shiny ? ' ✨' : ''} foi para o PC — sua equipe já tem 6.`, 'info');
+          break;
         case 'win':
           confetti(140);
           break;
@@ -201,7 +204,7 @@ export function mountGame(root, session, { onExit }) {
   }
 
   function renderTeam(p) {
-    const html = p ? p.team.map((m, i) => monCard(m, { index: i, lead: i === 0 })).join('') + '<div class="mon empty">vaga</div>'.repeat(Math.max(0, 6 - p.team.length)) : '';
+    const html = p ? p.team.map((m, i) => monCard(m, { index: i, lead: i === 0, owner: p })).join('') + '<div class="mon empty">vaga</div>'.repeat(Math.max(0, 6 - p.team.length)) : '';
     root.querySelector('#g-team').innerHTML = html;
     root.querySelector('#g-team-m').innerHTML = html;
   }
