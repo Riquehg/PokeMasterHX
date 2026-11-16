@@ -1,6 +1,7 @@
 // Criação de instâncias de Pokémon, status, XP e evolução.
 import { getSpecies, speciesByTier } from '../data/pokemon.js';
 import { NATURE_NAMES, natureMult } from '../data/natures.js';
+import { MOVES, rollMoveIds } from '../data/moves.js';
 
 export const MAX_LEVEL = 60;
 export const TEAM_SIZE = 6;
@@ -13,21 +14,56 @@ export const BASE_SHINY_RATE = 1 / 450; // shiny é raríssimo (Amuleto Shiny tr
 export const DAILY_SHINY_RATE = 1 / 64;
 
 /** Status derivados da espécie (HP/força do catálogo original) + nível + shiny + natureza. */
-export function computeStats(speciesId, level, shiny = false, nature = null) {
+// Potencial individual (IV): 0 a 31 em HP, Ataque e Velocidade. 0 = −8%, 31 = +8% (como nos jogos, cada um é único).
+export const IV_MAX = 31;
+export const IV_RANGE = 0.08;
+export const ivMult = iv => 1 + ((Math.max(0, Math.min(IV_MAX, iv ?? 15.5)) / IV_MAX) * 2 - 1) * IV_RANGE;
+
+/** Status derivados da espécie + nível + shiny + natureza + potencial (IV). */
+export function computeStats(speciesId, level, shiny = false, nature = null, iv = null) {
   const sp = getSpecies(speciesId);
   if (!sp) throw new Error(`Espécie desconhecida: ${speciesId}`);
   const L = Math.max(1, Math.min(MAX_LEVEL, level | 0));
   const s = shiny ? 1 + SHINY_STAT_BONUS : 1;
+  const v = iv || {};
   return {
-    maxHp: Math.max(8, Math.round(sp.hp * (1 + 0.07 * (L - 1)) * s * natureMult(nature, 'hp'))),
-    atk: Math.max(2, Math.round(sp.str * (1 + 0.06 * (L - 1)) * s * natureMult(nature, 'atk'))),
-    spe: Math.round(L * 10 * natureMult(nature, 'spe'))
+    maxHp: Math.max(8, Math.round(sp.hp * (1 + 0.07 * (L - 1)) * s * natureMult(nature, 'hp') * ivMult(v.hp))),
+    atk: Math.max(2, Math.round(sp.str * (1 + 0.06 * (L - 1)) * s * natureMult(nature, 'atk') * ivMult(v.atk))),
+    spe: Math.round(L * 10 * natureMult(nature, 'spe') * ivMult(v.spe))
   };
+}
+
+/** Maior valor possível de cada status para a espécie/nível (IV 31 + natureza a favor) — base das barrinhas. */
+export function maxStats(speciesId, level) {
+  const best = { hp: IV_MAX, atk: IV_MAX, spe: IV_MAX };
+  const sp = getSpecies(speciesId);
+  const L = Math.max(1, Math.min(MAX_LEVEL, level | 0));
+  return {
+    maxHp: Math.round(sp.hp * (1 + 0.07 * (L - 1)) * 1.1 * ivMult(best.hp)),
+    atk: Math.round(sp.str * (1 + 0.06 * (L - 1)) * 1.1 * ivMult(best.atk)),
+    spe: Math.round(L * 10 * 1.1 * ivMult(best.spe))
+  };
+}
+
+/** Potencial total em % (média dos 3 IVs). */
+export function ivPercent(mon) {
+  const v = mon?.iv;
+  if (!v) return null;
+  return Math.round(((v.hp + v.atk + v.spe) / (3 * IV_MAX)) * 100);
+}
+
+function cleanIv(v) {
+  const c = x => Math.max(0, Math.min(IV_MAX, Math.round(Number(x) || 0)));
+  return { hp: c(v.hp), atk: c(v.atk), spe: c(v.spe) };
+}
+
+export function rollIvs(rng) {
+  return { hp: rng.int(0, IV_MAX), atk: rng.int(0, IV_MAX), spe: rng.int(0, IV_MAX) };
 }
 
 /** Status de uma instância (inclui natureza e HP extra de chefe de Raid). */
 export function statsOf(mon) {
-  const st = computeStats(mon.sp, mon.lvl, mon.shiny, mon.nature);
+  const st = computeStats(mon.sp, mon.lvl, mon.shiny, mon.nature, mon.iv);
   if (mon.bonusHp) st.maxHp += mon.bonusHp;
   return st;
 }
@@ -56,7 +92,9 @@ export function makeUid(rng) {
 
 export function createMon(rng, speciesId, level, opts = {}) {
   const nature = opts.nature !== undefined ? opts.nature : rng.pick(NATURE_NAMES);
-  const st = computeStats(speciesId, level, !!opts.shiny, nature);
+  const iv = opts.iv && typeof opts.iv === 'object' ? cleanIv(opts.iv) : rollIvs(rng);
+  const moves = Array.isArray(opts.moves) && opts.moves.length === 2 && opts.moves.every(id => MOVES[id]) ? [...opts.moves] : rollMoveIds(rng, speciesId);
+  const st = computeStats(speciesId, level, !!opts.shiny, nature, iv);
   const mon = {
     uid: makeUid(rng),
     sp: speciesId,
@@ -65,6 +103,8 @@ export function createMon(rng, speciesId, level, opts = {}) {
     hp: st.maxHp,
     shiny: !!opts.shiny,
     nature,
+    iv,
+    moves,
     capTier: opts.capTier || getSpecies(speciesId).tier,
     ball: opts.ball || null,
     ot: opts.ot || null // "treinador original" (id do jogador que capturou)
@@ -77,7 +117,7 @@ export function createMon(rng, speciesId, level, opts = {}) {
 export function monView(mon) {
   const sp = getSpecies(mon.sp);
   const st = statsOf(mon);
-  return { ...mon, name: sp.name, dex: sp.dex, types: sp.types, tier: sp.tier, maxHp: st.maxHp, atk: st.atk, spe: st.spe };
+  return { ...mon, name: sp.name, dex: sp.dex, types: sp.types, tier: sp.tier, maxHp: st.maxHp, atk: st.atk, spe: st.spe, potential: ivPercent(mon) };
 }
 
 export function maxHpOf(mon) {

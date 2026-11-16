@@ -7,7 +7,7 @@
 import { getSpecies } from '../data/pokemon.js';
 import { getItem, ballBonusAgainst } from '../data/items.js';
 import { against, bestAttack, effectivenessLabel, TYPE_LABELS } from './types.js';
-import { movesOf, STAB } from '../data/moves.js';
+import { monMoves, STAB } from '../data/moves.js';
 import { statsOf, maxHpOf, gainXp, xpReward, healMon } from './monsters.js';
 import {
   fail, getPlayer, log, fx, takeItem, giveMon, markSeen, healthyIndex, hasHealthy, speciesName, canUse, usableIndex, badgesNeeded
@@ -212,7 +212,7 @@ export function expectedDamage(state, si, move) {
   if (!a || !d || move.kind === 'heal' || move.kind === 'buff' || move.kind === 'debuff') return 0;
   const mult = against(move.type, getSpecies(d.sp).types);
   const stab = getSpecies(a.sp).types.includes(move.type) ? STAB : 1;
-  const hit = move.risky ? 5 / 6 : 1;
+  const hit = 1 - (move.miss || 0) / 6;
   return (atkOf(state, si) * 0.7 + 3.5) * (move.power || 1) * mult * stab * hit;
 }
 
@@ -222,9 +222,9 @@ export function bestMoveSlot(state, si) {
   const side = b.sides[si];
   const me = sideActive(state, side);
   const foe = sideActive(state, b.sides[1 - si]);
-  const moves = movesOf(me.sp);
+  const moves = monMoves(me);
   const myMax = maxHpOf(me);
-  const foeHit = Math.max(...movesOf(foe.sp).map(m => expectedDamage(state, 1 - si, m)));
+  const foeHit = Math.max(...monMoves(foe).map(m => expectedDamage(state, 1 - si, m)));
   let best = 0, bestScore = -1;
   moves.forEach((m, i) => {
     let score = expectedDamage(state, si, m);
@@ -344,7 +344,8 @@ function attackDamage(state, rng, si, slot = 0) {
   const d = sideActive(state, defSide);
   const aSp = getSpecies(a.sp);
   const dSp = getSpecies(d.sp);
-  const move = movesOf(a.sp)[slot] || movesOf(a.sp)[0];
+  const mv = monMoves(a);
+  const move = mv[slot] || mv[0];
   const who = monLabel(state, atkSide);
 
   // golpes de suporte
@@ -376,8 +377,8 @@ function attackDamage(state, rng, si, slot = 0) {
   const mult = against(type, dSp.types);
   const stab = aSp.types.includes(type) ? STAB : 1;
   const roll = rng.d6();
-  if (move.risky && roll === 1) {
-    log(state, `${who} usou ${move.name} (🎲1)... e errou!`, 'bad');
+  if (move.miss && roll <= move.miss) {
+    log(state, `${who} usou ${move.name} (🎲${roll})... e errou!`, 'bad');
     fx(state, { k: 'hit', side: si, roll, dmg: 0, mult, miss: true, type, move: move.name, atkUid: a.uid, defUid: d.uid, hpAfter: d.hp, maxHp: maxHpOf(d) });
     return false;
   }

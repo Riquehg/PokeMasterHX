@@ -56,26 +56,26 @@ function battleWith(mine, foe) {
 test('batalha: golpe escolhido define tipo; suporte cura, fortalece e intimida', () => {
   const rng = createRng(5);
   // Charizard: Ember (fogo) contra Venusaur é super efetivo
-  let s = battleWith(createMon(rng, 'charizard', 30, { starter: true, nature: 'Hardy' }), createMon(rng, 'venusaur', 30, { nature: 'Hardy' }));
+  let s = battleWith(createMon(rng, 'charizard', 30, { starter: true, nature: 'Hardy', moves: ['fire_q', 'flying_s'] }), createMon(rng, 'venusaur', 30, { nature: 'Hardy' }));
   submitChoice(s, rng, 'a', { move: 'attack', slot: 0 });
   const hit = s.fx.find(f => f.k === 'hit' && f.side === 0);
   assert.equal(hit.move, 'Ember');
   assert.equal(hit.mult, 2);
 
   // Blissey cura
-  s = battleWith(createMon(rng, 'blissey', 30, { starter: true }), createMon(rng, 'magikarp', 5));
+  s = battleWith(createMon(rng, 'blissey', 30, { starter: true, moves: ['normal_q', 'recover'] }), createMon(rng, 'magikarp', 5));
   const bl = s.players[0].team[0];
   bl.hp = 10;
   submitChoice(s, rng, 'a', { move: 'attack', slot: 1 });
   assert.ok(s.players[0].team[0].hp > 10);
 
   // Gyarados fortalece (estágio +1)
-  s = battleWith(createMon(rng, 'gyarados', 30, { starter: true }), createMon(rng, 'magikarp', 5));
+  s = battleWith(createMon(rng, 'gyarados', 30, { starter: true, moves: ['water_q', 'swords_dance'] }), createMon(rng, 'magikarp', 5));
   submitChoice(s, rng, 'a', { move: 'attack', slot: 1 });
   assert.equal(s.battle.sides[0].stage[s.players[0].team[0].uid], 1);
 
   // Arcanine intimida (estágio −1 no rival)
-  s = battleWith(createMon(rng, 'arcanine', 30, { starter: true }), createMon(rng, 'rattata', 10));
+  s = battleWith(createMon(rng, 'arcanine', 30, { starter: true, moves: ['fire_q', 'intimidate'] }), createMon(rng, 'rattata', 10));
   submitChoice(s, rng, 'a', { move: 'attack', slot: 1 });
   const foe = sideActive(s, s.battle.sides[1]);
   assert.equal(s.battle.sides[1].stage[foe.uid], -1);
@@ -91,4 +91,32 @@ test('raridade: shiny raríssimo e lendário difícil de capturar', () => {
   assert.ok(WILD_FLEE_AFTER_FAIL[5] >= 0.5);
   assert.ok(raidCatchChance({ badges: [1, 2, 3, 4, 5, 6] }) <= 0.2);
   assert.equal(ITEMS.master_ball.price, 0, 'Master Ball não vende em loja');
+});
+
+test('variação individual: IVs e golpes mudam de um Pikachu para outro', async () => {
+  const { rollMoveIds, monMoves, MOVES, possibleSecondMoves } = await import('../shared/data/moves.js');
+  const { ivPercent, computeStats } = await import('../shared/rules/monsters.js');
+  const rng = createRng(11);
+  const seen = new Set(), pots = new Set();
+  for (let i = 0; i < 200; i++) {
+    const m = createMon(rng, 'pikachu', 20);
+    assert.ok(m.iv.hp >= 0 && m.iv.hp <= 31 && m.iv.atk <= 31 && m.iv.spe <= 31);
+    assert.equal(m.moves.length, 2);
+    assert.equal(monMoves(m)[0].name, 'Thunder Shock');
+    seen.add(monMoves(m)[1].name);
+    pots.add(ivPercent(m));
+  }
+  assert.ok(seen.has('Thunderbolt') && seen.has('Thunder'), [...seen].join(','));
+  assert.ok(seen.size >= 3, 'tem golpes de cobertura também');
+  assert.ok(pots.size > 20);
+  // IV perfeito x péssimo muda o ataque
+  const hi = computeStats('pikachu', 30, false, 'Hardy', { hp: 31, atk: 31, spe: 31 });
+  const lo = computeStats('pikachu', 30, false, 'Hardy', { hp: 0, atk: 0, spe: 0 });
+  assert.ok(hi.atk > lo.atk && hi.maxHp > lo.maxHp && hi.spe > lo.spe);
+  // golpe pesado erra no 1–2
+  assert.equal(MOVES.electric_x.miss, 2);
+  assert.ok(possibleSecondMoves('pikachu').some(m => m.name === 'Iron Tail'));
+  // Pokémon antigo (sem variação salva) usa a padrão da espécie
+  assert.deepEqual(monMoves({ sp: 'charizard' }).map(m => m.name), ['Ember', 'Air Slash']);
+  assert.ok(rollMoveIds(rng, 'blissey').length === 2);
 });

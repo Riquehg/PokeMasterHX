@@ -79,6 +79,20 @@ export function createMatch(config) {
   return r;
 }
 
+function hashStr(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+
+/** Natureza/IV/golpes fixos para um Pokémon antigo da Coleção (derivados do uid, sempre iguais). */
+export function fillTraits(entry) {
+  if (!entry || (entry.nature && entry.iv && entry.moves) || !SPECIES[entry.sp]) return entry;
+  const m = createMon(createRng(hashStr(String(entry.uid || entry.sp))), entry.sp, Math.max(1, Number(entry.lvl) || 5),
+    { nature: entry.nature || undefined, iv: entry.iv || undefined, moves: entry.moves || undefined });
+  return { ...entry, nature: m.nature, iv: m.iv, moves: m.moves };
+}
+
 function newPlayer(rng, cfg, index) {
   const starter = SPECIES[cfg.starter] ? cfg.starter : STARTERS[index % STARTERS.length];
   const starterLevel = Math.max(1, Math.min(cfg.isBot ? 60 : 10, Number(cfg.starterLevel) || 5));
@@ -88,7 +102,9 @@ function newPlayer(rng, cfg, index) {
   const brought = (Array.isArray(cfg.teamMons) ? cfg.teamMons : [])
     .filter(m => m && SPECIES[m.sp]).slice(0, TEAM_SIZE)
     .map(m => {
-      const mon = createMon(rng, m.sp, Math.max(1, Math.min(60, Number(m.lvl) || 5)), { shiny: !!m.shiny, ot: cfg.id, nature: m.nature || undefined, capTier: getSpecies(m.sp).tier });
+      // Pokémon antigos da Coleção (sem natureza/IV/golpes salvos) ganham valores fixos derivados do uid — não dá para "re-sortear"
+      const fixed = createRng(hashStr(String(m.uid || m.sp)));
+      const mon = createMon(m.nature && m.iv && m.moves ? rng : fixed, m.sp, Math.max(1, Math.min(60, Number(m.lvl) || 5)), { shiny: !!m.shiny, ot: cfg.id, nature: m.nature || undefined, iv: m.iv || undefined, moves: m.moves || undefined, capTier: getSpecies(m.sp).tier });
       mon.brought = true; // veio da Coleção (segue a regra das insígnias como qualquer outro)
       if (m.uid) mon.uid = String(m.uid);
       if (m.aura) mon.aura = m.aura;

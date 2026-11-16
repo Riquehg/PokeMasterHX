@@ -1,6 +1,6 @@
 // Lógica do backend, independente de infraestrutura.
 // Recebe um "db" (adaptador Supabase em produção, memória no servidor de desenvolvimento/testes).
-import { createMatch, applyAction, score, MAX_PLAYERS } from '../../shared/engine.js';
+import { createMatch, applyAction, score, MAX_PLAYERS, fillTraits } from '../../shared/engine.js';
 import { randomSeed } from '../../shared/rules/rng.js';
 import { ELO_TIERS } from '../../shared/data/elo.js';
 import { SPECIES, STARTERS } from '../../shared/data/pokemon.js';
@@ -102,7 +102,17 @@ export async function profileOp(db, user, body) {
   if (body.op === 'get' || !body.op) {
     let cosmetic = null;
     try { cosmetic = await equippedCosmetic(db, p); } catch { /* ok */ }
-    return { profile: { ...p, cosmetic } };
+    let prof = p;
+    // Pokémon antigos da Coleção ganham (uma vez) natureza, potencial e golpes fixos
+    if ((p.vault || []).some(m => !m.nature || !m.iv || !m.moves)) {
+      try {
+        prof = (await mutateProfile(db, user.id, cur => {
+          const vault = cur.vault || [];
+          return vault.some(m => !m.nature || !m.iv || !m.moves) ? { vault: vault.map(fillTraits) } : null;
+        })) || p;
+      } catch (e) { console.error('[traits]', e.message); prof = { ...p, vault: (p.vault || []).map(fillTraits) }; }
+    }
+    return { profile: { ...prof, cosmetic } };
   }
   if (body.op === 'update') {
     const patch = {};
@@ -144,7 +154,7 @@ export async function leaderboard(db) {
 
 // ------------------------------------------------------------------ Coleção
 function collectionEntry(mon, matchId) {
-  return { uid: mon.uid, sp: mon.sp, lvl: mon.lvl, shiny: !!mon.shiny, aura: mon.aura || null, nature: mon.nature || null, capTier: mon.capTier || null, from: matchId, at: new Date().toISOString() };
+  return { uid: mon.uid, sp: mon.sp, lvl: mon.lvl, shiny: !!mon.shiny, aura: mon.aura || null, nature: mon.nature || null, iv: mon.iv || null, moves: mon.moves || null, capTier: mon.capTier || null, from: matchId, at: new Date().toISOString() };
 }
 
 /**
@@ -167,7 +177,7 @@ function collectionPatch(prof, p, state) {
       const e = collectionEntry(mon, state.id);
       if (idx.has(mon.uid)) {
         const old = vault[idx.get(mon.uid)];
-        vault[idx.get(mon.uid)] = { ...old, sp: e.sp, lvl: Math.max(old.lvl || 1, e.lvl), shiny: e.shiny, aura: e.aura || old.aura || null, nature: old.nature || e.nature || null, capTier: old.capTier || e.capTier || null };
+        vault[idx.get(mon.uid)] = { ...old, sp: e.sp, lvl: Math.max(old.lvl || 1, e.lvl), shiny: e.shiny, aura: e.aura || old.aura || null, nature: old.nature || e.nature || null, iv: old.iv || e.iv || null, moves: old.moves || e.moves || null, capTier: old.capTier || e.capTier || null };
       } else {
         idx.set(mon.uid, vault.length);
         vault.push(e);

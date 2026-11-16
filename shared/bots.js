@@ -10,7 +10,7 @@ import { maxHpOf, WILD_LEVELS, TEAM_SIZE } from './rules/monsters.js';
 import { distancesFrom } from './rules/movement.js';
 import { getPlayer, currentPlayer, canUse } from './rules/helpers.js';
 import { sideTeam, sideActive, sideIndexOf, bestMoveSlot, expectedDamage, CAPTURE_TARGET } from './rules/battle.js';
-import { movesOf } from './data/moves.js';
+import { monMoves } from './data/moves.js';
 import { statsOf } from './rules/monsters.js';
 
 const CITY_SPACES = [5, 20, 39, 60, 70, 91, 95, 107, 114, 122, 124];
@@ -55,7 +55,7 @@ export function monPower(m) {
 }
 
 function moveMatchup(attacker, defender) {
-  return Math.max(...movesOf(attacker.sp).filter(mv => mv.kind === 'dmg' || mv.kind === 'drain').map(mv => {
+  return Math.max(...monMoves(attacker).filter(mv => mv.kind === 'dmg' || mv.kind === 'drain').map(mv => {
     const sp = getSpecies(attacker.sp);
     return bestAttack([mv.type], getSpecies(defender.sp).types).mult * (sp.types.includes(mv.type) ? 1.2 : 1) * (mv.power || 1);
   }), 0.1);
@@ -92,8 +92,8 @@ function battleAction(state, p) {
   }
 
   const slot = bestMoveSlot(state, si);
-  const myHit = expectedDamage(state, si, movesOf(me.sp)[slot]);
-  const foeHit = Math.max(...movesOf(foe.sp).map(m => expectedDamage(state, 1 - si, m)));
+  const myHit = expectedDamage(state, si, monMoves(me)[slot]);
+  const foeHit = Math.max(...monMoves(foe).map(m => expectedDamage(state, 1 - si, m)));
   const official = ['gym', 'elite', 'champion', 'ace', 'raid', 'pvp'].includes(b.kind);
 
   // Se derruba agora, ataca
@@ -138,7 +138,7 @@ function battleAction(state, p) {
       }
       // enfraquece com o golpe mais fraco para não nocautear
       if (hpRatio(foe) > 0.25 && odds < 0.66) {
-        const weakSlot = [0, 1].map(i => ({ i, d: expectedDamage(state, si, movesOf(me.sp)[i]) }))
+        const weakSlot = [0, 1].map(i => ({ i, d: expectedDamage(state, si, monMoves(me)[i]) }))
           .filter(x => x.d > 0 && x.d < foe.hp * 0.85).sort((a, c) => c.d - a.d)[0];
         if (weakSlot) return { type: 'battle', move: 'attack', slot: weakSlot.i };
       }

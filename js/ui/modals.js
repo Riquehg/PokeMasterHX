@@ -4,7 +4,7 @@ import { getSpace } from '../../shared/data/board.js';
 import { ITEMS, shopFor } from '../../shared/data/items.js';
 import { GYMS } from '../../shared/data/trainers.js';
 import { natureLabel } from '../../shared/data/natures.js';
-import { movesOf, ROLE_LABELS } from '../../shared/data/moves.js';
+import { movesOf, ROLE_LABELS, possibleSecondMoves } from '../../shared/data/moves.js';
 import { TYPE_COLORS } from '../../shared/rules/types.js';
 import { canUse, badgesNeeded } from '../../shared/rules/helpers.js';
 import { monView, xpToNext } from '../../shared/rules/monsters.js';
@@ -12,7 +12,7 @@ import { against, TYPES } from '../../shared/rules/types.js';
 import { score } from '../../shared/engine.js';
 import { esc, openModal, closeModal, setModalBody, bindActions } from './dom.js';
 import { monSprite, itemUrl, badgeUrl, typeLabel } from '../config.js';
-import { monCard, typeChips, avatarImg, playerColor, hpBar } from './common.js';
+import { monCard, statCard, typeChips, avatarImg, playerColor, hpBar } from './common.js';
 import { openTradeBuilder } from './trade.js';
 
 const me = session => session.state.players.find(p => p.id === session.viewerId());
@@ -48,9 +48,9 @@ export function openPC(session, act) {
     const p = me(session);
     return `<p class="small muted">Clique em um Pokémon da equipe e depois em um do PC para trocar. Ou use os botões para guardar/retirar.</p>
       <b>Equipe (${p.team.length}/6)</b>
-      <div class="team" style="grid-template-columns:repeat(6,1fr);margin:6px 0 10px">${p.team.map((m, i) => monCard(m, { index: i, act: 'pick-team', owner: p, extra: `<button class="btn sm" data-act="deposit" data-index="${i}" ${p.team.length <= 1 ? 'disabled' : ''}>Guardar</button>` })).join('')}</div>
+      <div class="pk-grid" style="margin:6px 0 10px">${p.team.map((m, i) => statCard(m, { index: i, act: 'pick-team', owner: p, lead: i === 0, extra: `<button class="btn sm" data-act="deposit" data-index="${i}" ${p.team.length <= 1 ? 'disabled' : ''}>Guardar</button>` })).join('')}</div>
       <b>PC (${p.box.length})</b>
-      <div class="team" style="grid-template-columns:repeat(auto-fill,minmax(96px,1fr));margin-top:6px">${p.box.map((m, i) => monCard(m, { index: i, act: 'pick-box', owner: p, extra: `<div class="row" style="justify-content:center;gap:3px"><button class="btn sm" data-act="withdraw" data-index="${i}" ${p.team.length >= 6 ? 'disabled' : ''}>Retirar</button><button class="btn sm red" data-act="release" data-index="${i}" title="Soltar">✕</button></div>` })).join('') || '<p class="muted small">Vazio. Pokémon capturados com a equipe cheia vêm para cá.</p>'}</div>
+      <div class="pk-grid" style="margin-top:6px">${p.box.map((m, i) => statCard(m, { index: i, act: 'pick-box', owner: p, extra: `<div class="row" style="justify-content:center;gap:3px"><button class="btn sm" data-act="withdraw" data-index="${i}" ${p.team.length >= 6 ? 'disabled' : ''}>Retirar</button><button class="btn sm red" data-act="release" data-index="${i}" title="Soltar">✕</button></div>` })).join('') || '<p class="muted small">Vazio. Pokémon capturados com a equipe cheia vêm para cá.</p>'}</div>
       ${sel ? `<p class="small" style="margin-top:8px">Selecionado: <b>${esc(getSpecies((sel.from === 'team' ? p.team : p.box)[sel.index].sp).name)}</b> — agora clique no outro lado para trocar.</p>` : ''}`;
   };
   const ov = openModal('pc', '💻 PC de Armazenamento', render(), { wide: true });
@@ -171,7 +171,7 @@ export function openDex(session, extraCaught = [], extraSeen = []) {
           <div class="grow"><div>${typeChips(sp.types)} <span class="chip">Tier ${sp.tier} · ${TIER_NAMES[sp.tier]}</span> ${sp.legendary ? '<span class="chip gold">Lendário</span>' : ''}</div>
           <div class="small" style="margin-top:6px">${caught.has(sp.id) ? '🔴 Capturado' : '👁️ Só visto'} · HP base ${sp.hp} · Força ${sp.str}</div>
           <div class="small">Evolução: ${from ? esc(from) + ' → ' : ''}<b>${esc(sp.name)}</b> → ${esc(evo)}</div>
-          ${movesHtml(sp.id)}</div></div>`);
+          ${movesHtml(sp.id)}<div class="tiny muted">Variações do 2º golpe: ${possibleSecondMoves(sp.id).map(m => esc(m.name)).join(', ')}</div></div></div>`);
     }
   });
 }
@@ -195,7 +195,7 @@ export function openTrainer(session, pid) {
       <div class="small muted">📍 ${esc(getSpace(p.pos).name)} · vitórias ${p.stats.wins} · PvP ${p.stats.pvpWins}</div></div></div>
     <div class="row" style="margin:10px 0">${GYMS.map(g => `<img src="${badgeUrl(g.id)}" alt="${esc(g.badge)}" title="${esc(g.badge)} (${esc(g.leader)})" style="width:34px;height:34px;object-fit:contain;${p.badges.includes(g.id) ? '' : 'filter:grayscale(1) brightness(.4)'}">`).join('')}
       ${p.eliteStage ? `<span class="chip gold">👑 Elite ${p.eliteStage}/4</span>` : ''}</div>
-    <b>Equipe</b><div class="team" style="grid-template-columns:repeat(6,1fr);margin-top:6px">${p.team.map((m, i) => monCard(m, { index: i, act: 'noop', owner: p })).join('')}</div>
+    <b>Equipe</b><div class="pk-grid" style="margin-top:6px">${p.team.map((m, i) => statCard(m, { owner: p, lead: i === 0 })).join('')}</div>
     ${p.box.length ? `<p class="small muted">+ ${p.box.length} no PC</p>` : ''}
     ${canTrade ? `<button class="btn primary block" data-act="trade-with" style="margin-top:10px">🤝 Propor troca (Pokémon, itens, ouro)</button>` : ''}`;
   const ov = openModal('trainer', '🪪 Ficha do Treinador', html, { wide: true });
@@ -212,16 +212,15 @@ export function openMon(session, act, index) {
   const weak = TYPES.map(t => [t, against(t, sp.types)]).filter(([, m]) => m !== 1).sort((a, b) => b[1] - a[1]);
   const evo = sp.evolvesTo ? `${getSpecies(sp.evolvesTo).name}${sp.evolutionLevel ? ` no Nv. ${sp.evolutionLevel}` : ' (Pedra Evolutiva)'}` : 'não evolui';
   const myTurn = session.state.players[session.state.current].id === p.id && !session.state.battle;
-  const html = `<div class="row" style="align-items:flex-start">
-      <img src="${monSprite(mon)}" alt="${esc(v.name)}" style="width:140px;height:140px;object-fit:contain">
-      <div class="col grow">
-        <h3 style="font-size:20px">${esc(v.name)} ${v.shiny ? '✨' : ''} <span class="chip gold">Nv. ${v.lvl}</span></h3>
-        <div>${typeChips(v.types)} <span class="chip">#${String(sp.dex).padStart(3, '0')}</span> <span class="chip">Tier ${sp.tier}</span>${mon.aura ? ` <span class="chip gold">aura ${esc(mon.aura)}</span>` : ''}</div>
-        ${hpBar(v.hp, v.maxHp)}<div class="small">HP ${Math.max(0, v.hp)}/${v.maxHp} · Ataque ${v.atk} · Velocidade ${v.spe} · XP ${mon.xp}/${xpToNext(v.lvl)}</div>
-        <div class="small">Natureza: <b>${esc(natureLabel(mon.nature))}</b></div>
-        ${movesHtml(mon.sp)}
-        ${badgesNeeded(mon) ? `<div class="small">${canUse(p, mon) ? '✅' : '🔒'} Obedece com ${badgesNeeded(mon)} insígnias (você tem ${p.badges.length})</div>` : ''}
-        <div class="small">Evolução: ${esc(evo)}</div>
+  const html = `<div class="mon-detail">
+      ${statCard(mon, { owner: p, lead: index === 0 })}
+      <div class="col grow small">
+        <div>${typeChips(v.types)} <span class="chip">#${String(sp.dex).padStart(3, '0')}</span>${mon.aura ? ` <span class="chip gold">aura ${esc(mon.aura)}</span>` : ''}</div>
+        <div>Natureza: <b>${esc(natureLabel(mon.nature))}</b></div>
+        <div>Potencial (IV): HP <b>${mon.iv?.hp ?? '?'}</b> · ATQ <b>${mon.iv?.atk ?? '?'}</b> · VEL <b>${mon.iv?.spe ?? '?'}</b> <span class="muted">(0 a 31 — cada Pokémon nasce com os seus)</span></div>
+        <div>Golpes: o 1º é sempre o rápido do tipo; o 2º é a variação deste indivíduo. Outros ${esc(v.name)} podem vir com: ${possibleSecondMoves(mon.sp).map(m => esc(m.name)).join(', ')}.</div>
+        ${badgesNeeded(mon) ? `<div>${canUse(p, mon) ? '✅' : '🔒'} Obedece com ${badgesNeeded(mon)} insígnias (você tem ${p.badges.length})</div>` : ''}
+        <div>Evolução: ${esc(evo)}</div>
       </div></div>
     <div class="divider"></div>
     <b class="small">Efetividade contra ${esc(v.name)}</b>
@@ -241,6 +240,7 @@ export function openHelp() {
       <p><b>Golpes:</b> cada Pokémon tem 2 golpes. O 1º é um golpe rápido do 1º tipo (nunca erra). O 2º é um golpe forte do 2º tipo (ou do mesmo tipo) com 140% de poder, mas erra no 🎲1. Golpe do mesmo tipo do Pokémon ganha +20%. Pokémon de suporte trocam o golpe forte por <b>Recover</b> (cura 40%), <b>Swords Dance</b> (+40% de ataque), <b>Intimidate</b> (−30% no ataque do rival) ou <b>Giga Drain</b> (dano que cura). Escolher o golpe certo para o tipo do rival faz toda a diferença.</p>
       <p><b>Trocas:</b> toque no peão ou no nome de outro treinador → 🤝 Propor troca. Dá para trocar Pokémon, itens e ouro (não vale no modo Competitivo). Pokémon recebido em troca precisa das insígnias para lutar.</p>
       <p><b>Raridade:</b> shiny é raríssimo (1 em 450) e lendários só são capturados com 10+ na rolagem (e costumam fugir depois de escapar da bola).</p>
+      <p><b>Cada Pokémon é único:</b> além da natureza, nasce com <b>potencial (IV)</b> de 0 a 31 em HP, Ataque e Velocidade (até ±8%) — veja as estrelas ★ no card — e com uma <b>variação de golpes</b>: o 2º golpe pode ser forte (140%, erra no 🎲1), pesado (170%, erra no 🎲1–2), de outro tipo (cobertura, ex.: Pikachu com Iron Tail) ou de suporte. Vale a pena capturar de novo atrás de um melhor!</p>
       <p><b>Natureza:</b> cada Pokémon nasce com uma das 25 naturezas dos jogos: +10% em um atributo (Ataque, HP ou Velocidade) e −10% em outro. 5 são neutras.</p>
       <p><b>Obediência:</b> Pokémon obtidos de tier 3 só lutam com 2 insígnias, tier 4 com 3 e tier 5 (lendários) com 4. O inicial e os trazidos da Coleção sempre obedecem. Os que não obedecem aparecem com 🔒.</p>
       <p><b>Prêmios de insígnia:</b> 1ª kit de bolas e poções · 2ª ovo tier 2 · 3ª ovo tier 3 + Ultra Balls · 4ª ovo tier 4 + Rare Candy · 5ª kit de elite · 6ª ovo lendário + Master Ball.</p>

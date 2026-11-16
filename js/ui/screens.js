@@ -9,6 +9,8 @@ import { openDex } from './modals.js';
 import { openMarket } from './market.js';
 import { BADGES_TO_USE } from '../../shared/rules/helpers.js';
 import { eloOf } from '../../shared/data/elo.js';
+import { statCard } from './common.js';
+import { ivPercent } from '../../shared/rules/monsters.js';
 import { typeChips } from './common.js';
 import { openShop as openDiamondShop } from './shop.js';
 import { showAnnouncement } from './notify.js';
@@ -212,14 +214,13 @@ function collectionModal(profile, onChange) {
   let filter = 'all';
   const body = () => {
     const all = sortCollection(profile?.vault);
-    const list = filter === 'shiny' ? all.filter(m => m.shiny) : filter === 'fav' ? all.filter(m => m.fav) : all;
+    const list = filter === 'shiny' ? all.filter(m => m.shiny) : filter === 'fav' ? all.filter(m => m.fav) : filter === 'pot' ? [...all].sort((a, b) => (ivPercent(b) ?? 0) - (ivPercent(a) ?? 0)) : all;
     return `<p class="small muted">Tudo que você captura em partidas salvas na conta (Treino contra CPUs e Online) fica aqui, com o nível atualizado. Use no modo <b>📦 Coleção</b> para levar seu time. Limite: 300 (os mais fracos saem primeiro; ⭐ favoritos e shinies nunca saem).</p>
       <div class="row" style="margin:8px 0"><button class="btn sm ${filter === 'all' ? 'primary' : ''}" data-act="f" data-f="all">Todos (${all.length})</button>
         <button class="btn sm ${filter === 'shiny' ? 'primary' : ''}" data-act="f" data-f="shiny">✨ Shiny (${all.filter(m => m.shiny).length})</button>
-        <button class="btn sm ${filter === 'fav' ? 'primary' : ''}" data-act="f" data-f="fav">⭐ Favoritos</button></div>
-      <div class="dex">${list.map(m => `<div class="e caught" title="${esc(getSpecies(m.sp)?.name)}"><img src="${monSprite(m)}" alt="${esc(getSpecies(m.sp)?.name)}">
-        <div><b>${esc(getSpecies(m.sp)?.name)}</b>${m.shiny ? ' ✨' : ''}</div><div>Nv. ${m.lvl}</div>
-        <div class="row" style="justify-content:center;gap:3px;margin-top:3px"><button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar">✕</button></div></div>`).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div>`;
+        <button class="btn sm ${filter === 'fav' ? 'primary' : ''}" data-act="f" data-f="fav">⭐ Favoritos</button>
+        <button class="btn sm ${filter === 'pot' ? 'primary' : ''}" data-act="f" data-f="pot">📈 Maior potencial</button></div>
+      <div class="pk-grid">${list.map(m => statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px"><button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar">✕</button></div>` })).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div>`;
   };
   const ov = openModal('vault', `📦 Coleção (${(profile?.vault || []).length}/300)`, body(), { wide: true });
   const op = async (o, uid) => {

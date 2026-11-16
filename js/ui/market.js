@@ -4,7 +4,9 @@ import { natureLabel } from '../../shared/data/natures.js';
 import { api } from '../api.js';
 import { esc, toast, openModal, closeModal, setModalBody, bindActions } from './dom.js';
 import { monSprite } from '../config.js';
-import { typeChips } from './common.js';
+import { typeChips, statCard, potentialStars } from './common.js';
+import { fillTraits } from '../../shared/engine.js';
+import { ivPercent } from '../../shared/rules/monsters.js';
 
 const TIER = { 1: 'Rosa', 2: 'Verde', 3: 'Azul', 4: 'Vermelho', 5: 'Lendário' };
 const price = (g, d) => [d ? `<b class="diamonds">💎 ${d}</b>` : '', g ? `<b style="color:var(--gold)">🪙 ${g}</b>` : ''].filter(Boolean).join(' + ') || '<span class="muted">só ofertas</span>';
@@ -14,7 +16,7 @@ function monBlock(m, extra = '') {
   return `<div class="mk-mon"><img src="${monSprite(m)}" alt="${esc(sp?.name)}" loading="lazy">
     <div class="grow"><b>${esc(sp?.name || m.sp)}</b>${m.shiny ? ' ✨' : ''} <span class="tiny muted">Nv.${m.lvl}</span>
       <div>${typeChips(sp?.types || [])} <span class="chip">T${sp?.tier} · ${TIER[sp?.tier] || ''}</span></div>
-      ${m.nature ? `<div class="tiny muted">${esc(natureLabel(m.nature))}</div>` : ''}${extra}</div></div>`;
+      ${m.nature ? `<div class="tiny muted">${esc(natureLabel(m.nature))}${ivPercent(m) !== null ? ` · <span class="pk-stars-mini">${potentialStars(ivPercent(m))}</span> ${ivPercent(m)}%` : ''}</div>` : ''}${extra}</div></div>`;
 }
 
 /**
@@ -41,12 +43,11 @@ export async function openMarket(profile, onChange) {
         <select class="input" id="mk-sort"><option value="new">Mais recentes</option><option value="price" ${st.sort === 'price' ? 'selected' : ''}>Menor preço</option><option value="level" ${st.sort === 'level' ? 'selected' : ''}>Maior nível</option></select>
         <label class="small"><input type="checkbox" id="mk-shiny" ${st.shiny ? 'checked' : ''}> só ✨</label>
         <button class="btn sm" data-act="search">🔎</button></div>
-      <div class="mk-grid">${d.listings.map(l => `<div class="mk-card ${l.shiny ? 'shiny' : ''} ${l.tier >= 5 ? 'legend' : ''}">
-          ${monBlock({ ...l.mon, sp: l.sp, lvl: l.lvl, shiny: l.shiny })}
-          <div class="small">Vendedor: <b>${esc(l.sellerName)}</b></div>
+      <div class="pk-grid">${d.listings.map(l => statCard({ ...fillTraits(l.mon), sp: l.sp, lvl: l.lvl, shiny: l.shiny }, { showHp: false, extra: `<div class="mk-sale">
+          <div class="tiny">Vendedor: <b>${esc(l.sellerName)}</b></div>
           <div class="mk-price">${price(l.priceGold, l.priceDiamonds)}</div>
           <div class="row">${l.priceGold || l.priceDiamonds ? `<button class="btn sm green grow" data-act="buy" data-id="${l.id}">Comprar</button>` : ''}
-            ${l.acceptOffers ? `<button class="btn sm blue grow" data-act="offer" data-id="${l.id}">Fazer oferta</button>` : ''}</div></div>`).join('') || '<p class="muted">Nenhum anúncio com esses filtros. Que tal anunciar o primeiro?</p>'}</div>
+            ${l.acceptOffers ? `<button class="btn sm blue grow" data-act="offer" data-id="${l.id}">Oferta</button>` : ''}</div></div>` })).join('') || '<p class="muted">Nenhum anúncio com esses filtros. Que tal anunciar o primeiro?</p>'}</div>
       ${d.recent?.length ? `<h3 style="margin-top:14px">💰 Vendas recentes</h3><div class="mk-recent">${d.recent.map(l => `<span class="chip">${esc(getSpecies(l.sp)?.name)}${l.shiny ? ' ✨' : ''} → ${esc(l.buyerName || '?')} · ${price(l.soldGold, l.soldDiamonds)}</span>`).join('')}</div>` : ''}`;
   };
 

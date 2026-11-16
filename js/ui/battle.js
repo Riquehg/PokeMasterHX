@@ -3,7 +3,7 @@ import { getSpecies } from '../../shared/data/pokemon.js';
 import { ITEMS, ballBonusAgainst } from '../../shared/data/items.js';
 import { monView, maxHpOf } from '../../shared/rules/monsters.js';
 import { canUse, badgesNeeded } from '../../shared/rules/helpers.js';
-import { movesOf } from '../../shared/data/moves.js';
+import { monMoves } from '../../shared/data/moves.js';
 import { raidCatchChance } from '../../shared/engine.js';
 import { bestAttack, against, effectivenessLabel, TYPE_COLORS } from '../../shared/rules/types.js';
 import { whoMustAct } from '../../shared/engine.js';
@@ -69,7 +69,7 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
   const official = ['gym', 'elite', 'champion'].includes(b.kind);
   const vp = state.players.find(x => x.id === vid);
 
-  const foeMoves = movesOf(foeMon.sp);
+  const foeMoves = monMoves(foeMon);
   const matchup = `Golpes do adversário: ${foeMoves.map(m => {
     const mult = m.kind === 'dmg' || m.kind === 'drain' ? against(m.type, getSpecies(myMon.sp).types) : 1;
     return `<b style="color:${TYPE_COLORS[m.type]}">${esc(m.name)}</b>${mult !== 1 ? ` <b>x${mult}</b>` : ''}`;
@@ -94,7 +94,7 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
     const myTeam = sideTeam(state, me);
     const balls = Object.entries(p.items).filter(([id, n]) => ITEMS[id]?.kind === 'ball' && n > 0);
     const items = Object.entries(p.items).filter(([id, n]) => ['heal', 'revive', 'boost'].includes(ITEMS[id]?.kind) && n > 0);
-    const moveBtns = movesOf(myMon.sp).map((m, i) => {
+    const moveBtns = monMoves(myMon).map((m, i) => {
       const dmg = m.kind === 'dmg' || m.kind === 'drain';
       const mult = dmg ? against(m.type, getSpecies(foeMon.sp).types) : 1;
       const stab = dmg && getSpecies(myMon.sp).types.includes(m.type);
@@ -102,7 +102,7 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
         : mult === 0 ? '<span class="mv-tag bad">Não afeta</span>' : mult >= 2 ? `<span class="mv-tag good">Super efetivo x${mult}</span>` : mult < 1 ? `<span class="mv-tag bad">Pouco efetivo x${mult}</span>` : '<span class="mv-tag">Normal</span>';
       return `<button class="btn move-btn" style="--tc:${TYPE_COLORS[m.type]}" data-act="b-attack" data-slot="${i}" title="${esc(m.desc)}">
         <span class="mv-name">${esc(m.name)}</span>
-        <span class="mv-meta">${esc(typeLabel(m.type))}${dmg ? ` · poder ${Math.round((m.power || 1) * (stab ? 1.2 : 1) * 100)}%` : ''}${m.risky ? ' · 🎲1 erra' : ''}</span>${tag}</button>`;
+        <span class="mv-meta">${esc(typeLabel(m.type))}${dmg ? ` · poder ${Math.round((m.power || 1) * (stab ? 1.2 : 1) * 100)}%` : ''}${m.miss ? ` · erra no 🎲${m.miss === 1 ? '1' : '1–2'}` : ''}</span>${tag}</button>`;
     }).join('');
     controls = `<div class="move-grid">${moveBtns}</div><div class="battle-actions">
         <button class="btn blue" data-act="b-sub" data-sub="switch" ${myTeam.filter(m => m.hp > 0 && canUse(p, m)).length < 2 ? 'disabled' : ''}>🔄 Trocar</button>
