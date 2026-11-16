@@ -6,6 +6,7 @@ import { mountGame } from './ui/game.js';
 import { loginScreen, hubScreen, lobbyScreen, roomScreen, localSetupScreen } from './ui/screens.js';
 import { toast } from './ui/dom.js';
 import { startNotifications } from './ui/notify.js';
+import { startSocial } from './ui/social.js';
 
 const app = document.getElementById('app');
 let cleanup = null;
@@ -31,6 +32,8 @@ function fresh() {
 }
 
 async function go(screen, arg) {
+  if (net.user) startSocial(ctx);
+  document.body.classList.toggle('in-game', screen === 'online' || screen === 'local');
   const el = fresh();
   try {
     switch (screen) {

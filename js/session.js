@@ -142,6 +142,12 @@ export class OnlineSession extends Emitter {
     }
   }
 
+  /** Abandona de vez (uma CPU assume) e sai da lista de partidas. */
+  async leave() {
+    try { await api('match', { op: 'leave', matchId: this.match.id }); } catch (e) { return { error: e.message }; }
+    return { ok: true };
+  }
+
   close() {
     this.unwatch();
     clearInterval(this.poll);

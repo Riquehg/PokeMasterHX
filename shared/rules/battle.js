@@ -539,6 +539,6 @@ export function deliverCapture(state, pid, mon, ballId) {
   if (p.cosmetic?.aura) mon.aura = p.cosmetic.aura; // estilo de captura comprado na loja (só visual)
   mon.ball = ballId;
   const where = giveMon(p, mon);
-  fx(state, { k: 'placed', pid, sp: mon.sp, shiny: !!mon.shiny, where });
+  fx(state, { k: 'placed', pid, sp: mon.sp, shiny: !!mon.shiny, where, via: ballId ? 'capture' : 'egg' });
   log(state, `🎉 ${speciesName(mon.sp)}${mon.shiny ? ' ✨' : ''} entrou ${where === 'team' ? 'na equipe' : 'no PC (equipe cheia)'} de ${p.name}!`, mon.shiny ? 'shiny' : 'good');
 }

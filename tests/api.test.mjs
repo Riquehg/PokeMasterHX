@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { createMemoryDb } from '../api/_lib/memory-db.js';
 import { matchOp, actionOp, listRooms, recordResults, adminOp, profileOp, leaderboard } from '../api/_lib/core.js';
 import { whoMustAct } from '../shared/engine.js';
+import { badgesNeeded } from '../shared/rules/helpers.js';
 
 async function setup() {
   const db = createMemoryDb();
@@ -158,9 +159,13 @@ test('modo Coleção: leva até 6 da conta, com limite de nível', async () => {
   await matchOp(db, gary, { op: 'update', matchId: match.id, ready: true });
   const s = (await matchOp(db, ash, { op: 'start', matchId: match.id })).match.state;
   const team = s.players.find(p => p.id === ash.id).team;
-  assert.deepEqual(team.map(m => m.sp), ['dragonite', 'pikachu']);
-  assert.equal(team[0].lvl, 35, 'limite de nível aplicado');
-  assert.equal(team[0].uid, 'v1', 'mantém o uid para sincronizar de volta');
+  // Dragonite (T4) e Pikachu (T3) precisam de insígnias: o inicial entra na frente para dar para lutar
+  assert.deepEqual(team.map(m => m.sp), ['bulbasaur', 'dragonite', 'pikachu']);
+  assert.equal(team[0].starter, true);
+  assert.equal(team[1].lvl, 35, 'limite de nível aplicado');
+  assert.equal(team[1].uid, 'v1', 'mantém o uid para sincronizar de volta');
+  assert.equal(badgesNeeded(team[1]), 3);
+  assert.equal(badgesNeeded(team[2]), 2);
   assert.equal(s.players.find(p => p.id === gary.id).team[0].lvl, 5, 'quem não escolheu usa o inicial');
 });
 
@@ -201,4 +206,20 @@ test('admin: só is_admin; Pokémon do Dia e presente para a Coleção', async (
   await adminOp(db, ash, { op: 'grant_mon', userId: gary.id, species: 'dratini', level: 9, shiny: true });
   const g = await db.getProfile(gary.id);
   assert.equal(g.vault[0].sp, 'dratini');
+});
+
+test('abandonar partida em andamento: CPU assume, some de "Minhas partidas" e a Coleção para de sincronizar', async () => {
+  const { db, ash, gary } = await setup();
+  await profileOp(db, ash, { op: 'get' }); await profileOp(db, gary, { op: 'get' });
+  const { match } = await matchOp(db, ash, { op: 'create', name: 'Sai', mode: 'balanced' });
+  await matchOp(db, gary, { op: 'join', matchId: match.id });
+  await matchOp(db, gary, { op: 'update', matchId: match.id, ready: true });
+  await matchOp(db, ash, { op: 'start', matchId: match.id });
+  await matchOp(db, gary, { op: 'leave', matchId: match.id });
+  const rooms = await listRooms(db, gary);
+  assert.ok(!rooms.mine.some(r => r.id === match.id));
+  const row = await db.getMatch(match.id);
+  const g = row.state.players.find(p => p.id === gary.id);
+  assert.equal(g.left, true);
+  assert.equal(g.isBot, true);
 });

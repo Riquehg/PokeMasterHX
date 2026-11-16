@@ -164,3 +164,16 @@ test('eventos especiais: Chuva de Estrelas traz Pokémon forte (shiny só às ve
   s2 = _internals.boardEvent(s2, 'ash', eventSpace(5), 'league_treasure');
   assert.ok(s2.players[0].gold >= g + 600);
 });
+
+test('evolução gera o efeito de animação (evolve)', () => {
+  let s = game(77);
+  const p = s.players[s.current];
+  p.team[0] = createMon(createRng(3), 'charmander', 15, { starter: true });
+  p.items.rare_candy = 1;
+  const r = applyAction(s, p.id, { type: 'use_item', item: 'rare_candy', index: 0 }, { now: T0 });
+  assert.equal(r.error, undefined, r.error);
+  const ev = r.state.fx.find(f => f.k === 'evolve');
+  assert.ok(ev, 'tem efeito evolve');
+  assert.equal(ev.from, 'charmander');
+  assert.equal(ev.to, 'charmeleon');
+});

@@ -43,16 +43,18 @@ export const supabaseDb = {
   async upsertProfile(id, patch) {
     const existing = await this.getProfile(id);
     const res = existing
-      ? check(await admin().from('profiles').update({ ...patch, rev: (existing.rev || 0) + 1, updated_at: new Date().toISOString() }).eq('id', id).select('*').maybeSingle())
+      ? await updateWithRevFallback(id, { ...patch, updated_at: new Date().toISOString() }, (existing.rev || 0) + 1)
       : check(await admin().from('profiles').insert({ id, ...patch }).select('*').maybeSingle());
     if (!res) throw new Error('row-level security: o perfil não pôde ser gravado');
     return res;
   },
   /** Grava só se ninguém mexeu no perfil desde a leitura (rev igual). Devolve o perfil novo ou null. */
   async updateProfileIf(id, rev, patch) {
+    if (noRevColumn) return updateWithRevFallback(id, { ...patch, updated_at: new Date().toISOString() }, 0);
     const { data, error } = await admin().from('profiles')
       .update({ ...patch, rev: (rev || 0) + 1, updated_at: new Date().toISOString() })
       .eq('id', id).eq('rev', rev || 0).select('*');
+    if (error && isMissingRev(error)) { noRevColumn = true; return updateWithRevFallback(id, { ...patch, updated_at: new Date().toISOString() }, 0); }
     if (error) throw new Error(error.message);
     return data?.[0] || null;
   },
@@ -101,7 +103,7 @@ export const supabaseDb = {
   },
 
   async listProfiles(limit) {
-    return check(await admin().from('profiles').select('id, trainer_name, avatar, points, rating, diamonds, gold, stats, pokedex, vault, is_admin').order('points', { ascending: false }).limit(limit));
+    return check(await admin().from('profiles').select('id, trainer_name, avatar, points, rating, diamonds, gold, stats, pokedex, vault, is_admin, last_seen').order('points', { ascending: false }).limit(limit));
   },
 
   async getMatch(id) {
@@ -173,6 +175,46 @@ export const supabaseDb = {
   },
 
   // ---- feed global
+  // ----- social
+  async touchSeen(id) {
+    const { error } = await admin().from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', id);
+    if (error) throw new Error(error.message);
+  },
+  async listOnline(sinceIso, limit = 60) {
+    return check(await admin().from('profiles').select('id, trainer_name, avatar, rating, points, cosmetics, last_seen')
+      .gte('last_seen', sinceIso).order('last_seen', { ascending: false }).limit(limit));
+  },
+  async countOnline(sinceIso) {
+    const { count, error } = await admin().from('profiles').select('id', { count: 'exact', head: true }).gte('last_seen', sinceIso);
+    if (error) throw new Error(error.message);
+    return count || 0;
+  },
+  async insertChat(row) { return check(await admin().from('global_chat').insert(row).select('*').single()); },
+  async listChat(sinceId = 0, limit = 50) {
+    return check(await admin().from('global_chat').select('*').gt('id', sinceId).order('id', { ascending: false }).limit(limit));
+  },
+  async lastChatOf(userId) {
+    return check(await admin().from('global_chat').select('*').eq('user_id', userId).order('id', { ascending: false }).limit(1).maybeSingle());
+  },
+  async deleteChat(id) { check(await admin().from('global_chat').delete().eq('id', id)); },
+  async searchProfiles(q, limit = 10) {
+    const safe = String(q).replace(/[%_,()]/g, '');
+    return check(await admin().from('profiles').select('id, trainer_name, avatar, rating, points, last_seen').ilike('trainer_name', `%${safe}%`).limit(limit));
+  },
+  async getProfilesByIds(ids) {
+    if (!ids.length) return [];
+    return check(await admin().from('profiles').select('id, trainer_name, avatar, rating, points, stats, last_seen').in('id', ids));
+  },
+  async listFriendships(userId) {
+    return check(await admin().from('friendships').select('*').or(`user_id.eq.${userId},friend_id.eq.${userId}`));
+  },
+  async insertFriendship(row) { check(await admin().from('friendships').upsert(row)); },
+  async updateFriendship(userId, friendId, patch) { check(await admin().from('friendships').update(patch).eq('user_id', userId).eq('friend_id', friendId)); },
+  async deleteFriendship(a, b) {
+    check(await admin().from('friendships').delete().eq('user_id', a).eq('friend_id', b));
+    check(await admin().from('friendships').delete().eq('user_id', b).eq('friend_id', a));
+  },
+
   async insertFeed(row) {
     check(await admin().from('global_feed').insert(row));
   },
@@ -188,3 +230,18 @@ export const supabaseDb = {
     check(await admin().from('game_config').upsert({ key, value, updated_at: new Date().toISOString() }));
   }
 };
+
+// Se o banco ainda não tem a coluna "rev" (schema.sql antigo), grava sem ela em vez de quebrar.
+let noRevColumn = false;
+const isMissingRev = e => /'rev' column|column .*rev.* does not exist|profiles\.rev/i.test(e?.message || '');
+async function updateWithRevFallback(id, patch, nextRev) {
+  if (!noRevColumn) {
+    const r = await admin().from('profiles').update({ ...patch, rev: nextRev }).eq('id', id).select('*').maybeSingle();
+    if (!r.error) return r.data;
+    if (!isMissingRev(r.error)) throw new Error(r.error.message);
+    noRevColumn = true;
+    console.warn('[db] coluna profiles.rev não existe — rode o supabase/schema.sql mais novo.');
+  }
+  return check(await admin().from('profiles').update(patch).eq('id', id).select('*').maybeSingle());
+}
+

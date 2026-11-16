@@ -2,6 +2,7 @@
 // Recebe um "db" (adaptador Supabase em produção, memória no servidor de desenvolvimento/testes).
 import { createMatch, applyAction, score, MAX_PLAYERS } from '../../shared/engine.js';
 import { randomSeed } from '../../shared/rules/rng.js';
+import { ELO_TIERS } from '../../shared/data/elo.js';
 import { SPECIES, STARTERS } from '../../shared/data/pokemon.js';
 import { dailyPokemon } from '../../shared/daily.js';
 import { equippedCosmetic, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment } from './shop.js';
@@ -29,7 +30,7 @@ const BOT_NAMES = ['Brendan', 'May', 'Dawn', 'Lucas', 'Hilda', 'Nate', 'Serena',
  */
 export const MODES = ['balanced', 'collection', 'ranked', 'solo'];
 
-function cleanName(s, fallback = 'Treinador') {
+export function cleanName(s, fallback = 'Treinador') {
   const v = String(s || '').replace(/[<>"'`]/g, '').trim().slice(0, 20);
   return v || fallback;
 }
@@ -120,7 +121,7 @@ export async function profileOp(db, user, body) {
 }
 
 export async function leaderboard(db) {
-  const rows = await db.listProfiles(100);
+  const rows = await db.listProfiles(500);
   const map = r => ({
     name: r.trainer_name, avatar: r.avatar, points: r.points || 0, rating: r.rating ?? START_RATING,
     ranked: r.stats?.ranked || 0, rankedWins: r.stats?.rankedWins || 0,
@@ -128,9 +129,16 @@ export async function leaderboard(db) {
     shinies: r.stats?.shinies || 0
   });
   const all = rows.map(map);
+  const ranked = all.filter(r => r.ranked > 0).sort((a, b) => b.rating - a.rating);
+  const elos = ELO_TIERS.map((t, i) => {
+    const max = ELO_TIERS[i + 1]?.min ?? null;
+    const people = ranked.filter(r => r.rating >= t.min && (max === null || r.rating < max));
+    return { ...t, max, count: people.length, top: people.slice(0, 5).map(r => ({ name: r.name, avatar: r.avatar, rating: r.rating })) };
+  });
   return {
     ranking: [...all].sort((a, b) => b.points - a.points).slice(0, 50),
-    competitive: all.filter(r => r.ranked > 0).sort((a, b) => b.rating - a.rating).slice(0, 50)
+    competitive: ranked.slice(0, 50),
+    elos, rankedPlayers: ranked.length
   };
 }
 
@@ -145,7 +153,7 @@ function collectionEntry(mon, matchId) {
  */
 export async function syncCollection(db, state, pids) {
   for (const p of state.players) {
-    if (p.id.startsWith('cpu_') || (pids && !pids.includes(p.id))) continue;
+    if (p.id.startsWith('cpu_') || p.left || (pids && !pids.includes(p.id))) continue; // quem saiu não recebe o que a CPU fizer
     await mutateProfile(db, p.id, prof => collectionPatch(prof, p, state));
   }
 }
@@ -432,7 +440,9 @@ async function joinRoom(db, user, body) {
 
 async function leaveRoom(db, user, row) {
   if (row.status === 'playing') {
-    return actionOp(db, user, { matchId: row.id, action: { type: 'leave' } });
+    const r = await actionOp(db, user, { matchId: row.id, action: { type: 'leave' } });
+    await db.removeMember(row.id, user.id); // some da lista "Minhas partidas" e para de receber as jogadas
+    return r;
   }
   await db.removeMember(row.id, user.id);
   if (row.status !== 'lobby') return { left: true };

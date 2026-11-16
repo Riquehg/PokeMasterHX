@@ -8,7 +8,7 @@ import { monSprite } from '../config.js';
 import { monCard, playerColor, avatarImg, speciesName } from './common.js';
 import { battleHtml, outcomeText, playBattleFx } from './battle.js';
 import { BoardView } from './board.js';
-import { anim, rollDice, turnBanner, eventCard, battleIntro, captureAnim, confetti } from './fx.js';
+import { anim, rollDice, turnBanner, eventCard, battleIntro, captureAnim, confetti, evolutionAnim } from './fx.js';
 import * as M from './modals.js';
 import { renderTrades } from './trade.js';
 
@@ -97,7 +97,7 @@ export function mountGame(root, session, { onExit }) {
   async function drain() {
     ui.playing = true;
     document.body.classList.add('anim-busy');
-    while (ui.queue.length) {
+    while (ui.queue.length && !ui.dead) {
       const next = ui.queue.shift();
       const prev = ui.shown;
       try { await playFx(prev, next); } catch (e) { console.error('animação', e); }
@@ -106,7 +106,7 @@ export function mountGame(root, session, { onExit }) {
     }
     ui.playing = false;
     document.body.classList.remove('anim-busy');
-    render();
+    if (!ui.dead) render();
   }
 
   async function playFx(prev, next) {
@@ -118,6 +118,7 @@ export function mountGame(root, session, { onExit }) {
     const flushRound = async () => { if (round.length && battleOpen) await playBattleFx(round); round = []; };
 
     for (let i = 0; i < fxs.length; i++) {
+      if (ui.dead) return; // saiu da partida: para as animações na hora
       const f = fxs[i];
       if (BATTLE_FX.has(f.k)) { round.push(f); continue; }
       await flushRound();
@@ -156,6 +157,10 @@ export function mountGame(root, session, { onExit }) {
         case 'turn':
           await turnBanner({ player: next.players.find(x => x.id === f.pid), color: playerColor(next, f.pid), mine: f.pid === v && session.canAct(f.pid), turn: f.turn });
           break;
+        case 'evolve':
+          if (f.pid === v) await evolutionAnim(f, {});
+          else toast(`✨ O ${speciesName(f.from)} de ${nameOf(f.pid)} evoluiu para ${speciesName(f.to)}!`, 'info');
+          break;
         case 'badge': {
           const g = GYMS.find(x => x.id === f.badge);
           toast(`🎖️ ${nameOf(f.pid)} conquistou a ${g?.badge}!`, 'good');
@@ -179,6 +184,7 @@ export function mountGame(root, session, { onExit }) {
 
   // ================================================================ render
   function render() {
+    if (ui.dead) return;
     const s = S();
     if (!s) return;
     const p = me();
@@ -482,7 +488,7 @@ export function mountGame(root, session, { onExit }) {
         <button class="btn" data-close="exit">Continuar jogando</button></div>`);
       bindActions(ov, {
         menu: () => { closeModal('exit'); onExit(); },
-        abandon: async () => { closeModal('exit'); await act({ type: 'leave' }); onExit(); }
+        abandon: async () => { closeModal('exit'); ui.dead = true; ui.queue.length = 0; await (session.leave ? session.leave() : session.act({ type: 'leave' })); onExit(); }
       });
     }
   });
@@ -498,7 +504,7 @@ export function mountGame(root, session, { onExit }) {
   });
 
   const off = session.on(state => {
-    if (!state) return;
+    if (!state || ui.dead) return;
     if (state === ui.shown) { render(); return; }
     // estado novo: anima a diferença; mudanças sem efeitos (ex.: chat) só re-renderizam
     if (state.fxSeq === ui.shown?.fxSeq && !ui.playing) { ui.shown = state; render(); return; }
@@ -506,7 +512,11 @@ export function mountGame(root, session, { onExit }) {
   });
   render();
   if (S().players.find(p => p.id === vid())) setTimeout(() => board.centerOn && board.ensureVisible(me()?.pos), 300);
-  return () => { off(); board.destroy(); clearTimeout(ui.afkTimer); document.body.classList.remove('anim-busy'); ['battle', 'battle-end', 'invite', 'over'].forEach(closeModal); };
+  return () => {
+    ui.dead = true; ui.queue.length = 0;
+    document.querySelectorAll('.fx-layer, .toast-fx').forEach(el => el.remove());
+    off(); board.destroy(); clearTimeout(ui.afkTimer); document.body.classList.remove('anim-busy'); ['battle', 'battle-end', 'invite', 'over', 'trade-in', 'trade-build'].forEach(closeModal);
+  };
 }
 
 function tierName(t) {

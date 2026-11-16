@@ -244,10 +244,9 @@ export async function feedOp(db, body) {
 /** Publica no feed as capturas que merecem anúncio para todos (lendários e shinies). */
 export async function publishCaptures(db, state, fxList) {
   for (const f of fxList || []) {
-    let sp = null, shiny = false;
-    if (f.k === 'capture' && f.ok) { sp = f.sp; shiny = f.shiny; }
-    else if (f.k === 'event' && f.id === 'pokemon_egg' && f.mon?.shiny) { sp = f.mon.sp; shiny = true; }
-    if (!sp) continue;
+    // 'placed' = qualquer Pokémon novo (captura, Raid, ovo, prêmio de insígnia)
+    if (f.k !== 'placed') continue;
+    const sp = f.sp, shiny = !!f.shiny;
     const species = getSpecies(sp);
     if (!shiny && species.tier < 5) continue;
     const p = state.players.find(x => x.id === f.pid);
@@ -255,7 +254,7 @@ export async function publishCaptures(db, state, fxList) {
     const what = `${species.name}${shiny ? ' ✨SHINY✨' : ''}`;
     await db.insertFeed({
       kind: shiny ? 'shiny' : 'legendary',
-      text: `${p.name} capturou ${species.tier >= 5 ? 'o lendário ' : ''}${what}!`,
+      text: `${p.name} ${f.via === 'egg' ? 'chocou' : 'capturou'} ${species.tier >= 5 ? 'o lendário ' : ''}${what}!`,
       data: { sp, shiny, name: p.name, avatar: p.avatar }
     });
   }

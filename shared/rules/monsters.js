@@ -34,7 +34,16 @@ export function statsOf(mon) {
 
 /** Tier usado para a regra de insígnias: o da espécie quando o Pokémon foi obtido. */
 export function capTierOf(mon) {
-  return mon.capTier || getSpecies(mon.sp)?.tier || 1;
+  return mon.capTier || baseTierOf(mon.sp);
+}
+
+/** Tier da forma básica da linha evolutiva (para Pokémon antigos da Coleção sem capTier). */
+export function baseTierOf(spId) {
+  let sp = getSpecies(spId);
+  if (!sp) return 1;
+  if (sp.legendary) return 5;
+  for (let i = 0; i < 4 && sp.evolvesFrom; i++) sp = getSpecies(sp.evolvesFrom);
+  return sp.tier;
 }
 
 export function xpToNext(level) {

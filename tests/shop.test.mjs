@@ -81,13 +81,15 @@ test('feed: captura de lendário ou shiny vira aviso global; comum não', async 
   const { db } = await setup();
   const state = { players: [{ id: 'u1', name: 'Ash', avatar: 1 }] };
   await publishCaptures(db, state, [
-    { k: 'capture', ok: true, pid: 'u1', sp: 'mewtwo', shiny: false },
-    { k: 'capture', ok: true, pid: 'u1', sp: 'pidgey', shiny: true },
-    { k: 'capture', ok: true, pid: 'u1', sp: 'rattata', shiny: false },
-    { k: 'capture', ok: false, pid: 'u1', sp: 'zapdos', shiny: false }
+    { k: 'placed', pid: 'u1', sp: 'mewtwo', shiny: false, via: 'capture' },
+    { k: 'placed', pid: 'u1', sp: 'pidgey', shiny: true, via: 'capture' },
+    { k: 'placed', pid: 'u1', sp: 'rattata', shiny: false, via: 'capture' },
+    { k: 'capture', ok: false, pid: 'u1', sp: 'zapdos', shiny: false },
+    { k: 'placed', pid: 'u1', sp: 'eevee', shiny: true, via: 'egg' }
   ]);
   const { events } = await feedOp(db, { since: 0 });
-  assert.equal(events.length, 2);
+  assert.equal(events.length, 3);
+  assert.ok(events.some(e => /chocou/.test(e.text)));
   assert.ok(events.some(e => e.kind === 'legendary' && /Mewtwo/.test(e.text)));
   assert.ok(events.some(e => e.kind === 'shiny' && /Pidgey/.test(e.text)));
 });

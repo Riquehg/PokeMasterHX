@@ -41,7 +41,7 @@ export default route(async () => {
     const { admin } = await import('./_lib/supabase-db.js');
     // Confere tabela por tabela, com as colunas que o jogo usa
     const expected = {
-      profiles: 'id, trainer_name, avatar, is_admin, pokedex, vault, stats, points, rating, diamonds, cosmetics, gold, rev, pokedex_seen',
+      profiles: 'id, trainer_name, avatar, is_admin, pokedex, vault, stats, points, rating, diamonds, cosmetics, gold, rev, pokedex_seen, last_seen',
       matches: 'id, code, name, host_id, status, is_public, has_pin, options, lobby, state, chat, version',
       match_players: 'match_id, user_id',
       match_secrets: 'match_id, pin',
@@ -49,7 +49,9 @@ export default route(async () => {
       payments: 'id, user_id, package_id, diamonds, amount, status, mp_payment_id',
       global_feed: 'id, kind, text, data',
       market_listings: 'id, seller_id, mon, sp, tier, price_gold, price_diamonds, accept_offers, status',
-      market_offers: 'id, listing_id, seller_id, buyer_id, gold, diamonds, mons, status'
+      market_offers: 'id, listing_id, seller_id, buyer_id, gold, diamonds, mons, status',
+      global_chat: 'id, user_id, name, avatar, text',
+      friendships: 'user_id, friend_id, status'
     };
     for (const [t, cols] of Object.entries(expected)) {
       const { error } = await admin().from(t).select(cols, { head: true }).limit(1);

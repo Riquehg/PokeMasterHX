@@ -13,6 +13,9 @@ export function createMemoryDb() {
   const payments = new Map();
   const feed = [];
   const listings = new Map();
+  const chat = [];
+  let chatId = 0;
+  const friends = [];
   const offers = new Map();
   const now = () => new Date().toISOString();
   const notify = id => listeners.forEach(fn => fn(id));
@@ -75,6 +78,33 @@ export function createMemoryDb() {
       const st = status ? [].concat(status) : null;
       return [...offers.values()].filter(r => (!listingId || r.listing_id === listingId) && (!buyerId || r.buyer_id === buyerId)
         && (!sellerId || r.seller_id === sellerId) && (!st || st.includes(r.status))).reverse().slice(0, limit).map(copy);
+    },
+    async touchSeen(id) { const p = profiles.get(id); if (p) p.last_seen = now(); },
+    async listOnline(sinceIso, limit = 60) {
+      return [...profiles.values()].filter(p => p.last_seen && p.last_seen >= sinceIso).sort((a, b) => (b.last_seen > a.last_seen ? 1 : -1)).slice(0, limit).map(copy);
+    },
+    async countOnline(sinceIso) { return [...profiles.values()].filter(p => p.last_seen && p.last_seen >= sinceIso).length; },
+    async insertChat(row) { const r = { id: ++chatId, created_at: now(), ...copy(row) }; chat.push(r); if (chat.length > 300) chat.shift(); return copy(r); },
+    async listChat(sinceId = 0, limit = 50) { return chat.filter(c => c.id > sinceId).slice(-limit).reverse().map(copy); },
+    async lastChatOf(userId) { return copy([...chat].reverse().find(c => c.user_id === userId) || null); },
+    async deleteChat(id) { const i = chat.findIndex(c => c.id === id); if (i >= 0) chat.splice(i, 1); },
+    async searchProfiles(q, limit = 10) {
+      const t = String(q).toLowerCase();
+      return [...profiles.values()].filter(p => (p.trainer_name || '').toLowerCase().includes(t)).slice(0, limit).map(copy);
+    },
+    async getProfilesByIds(ids) { return ids.map(id => profiles.get(id)).filter(Boolean).map(copy); },
+    async listFriendships(userId) { return friends.filter(f => f.user_id === userId || f.friend_id === userId).map(copy); },
+    async insertFriendship(row) {
+      const i = friends.findIndex(f => f.user_id === row.user_id && f.friend_id === row.friend_id);
+      const r = { status: 'pending', created_at: now(), ...copy(row) };
+      if (i >= 0) friends[i] = r; else friends.push(r);
+    },
+    async updateFriendship(a, b, patch) { const f = friends.find(x => x.user_id === a && x.friend_id === b); if (f) Object.assign(f, patch); },
+    async deleteFriendship(a, b) {
+      for (let i = friends.length - 1; i >= 0; i--) {
+        const f = friends[i];
+        if ((f.user_id === a && f.friend_id === b) || (f.user_id === b && f.friend_id === a)) friends.splice(i, 1);
+      }
     },
     async listProfiles(limit) {
       return [...profiles.values()].sort((a, b) => (b.points || 0) - (a.points || 0)).slice(0, limit).map(copy);

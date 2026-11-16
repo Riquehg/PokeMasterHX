@@ -19,7 +19,7 @@ import { createMon, rollWild, hatchEgg, fullHeal, healMon, maxHpOf, levelUp, evo
 import { destinations, pathTo } from './rules/movement.js';
 import { startBattle, submitChoice, setBattleEndHandler, deliverCapture, sideActive, sideIndexOf } from './rules/battle.js';
 import {
-  GameError, fail, getPlayer, currentPlayer, log, fx, addItem, takeItem, blackout, speciesName, clone, markCaught, hasUsable
+  GameError, fail, getPlayer, currentPlayer, log, fx, addItem, takeItem, blackout, speciesName, clone, markCaught, hasUsable, badgesNeeded
 } from './rules/helpers.js';
 import { speciesByTier } from './data/pokemon.js';
 import { cardsForTier } from './data/events.js';
@@ -82,17 +82,25 @@ export function createMatch(config) {
 function newPlayer(rng, cfg, index) {
   const starter = SPECIES[cfg.starter] ? cfg.starter : STARTERS[index % STARTERS.length];
   const starterLevel = Math.max(1, Math.min(cfg.isBot ? 60 : 10, Number(cfg.starterLevel) || 5));
-  // Modo Coleção: o jogador traz até 6 Pokémon da conta (mantendo o uid para sincronizar de volta)
+  // Modo Coleção: o jogador traz até 6 Pokémon da conta (mantendo o uid para sincronizar de volta).
+  // Para ser justo, vale o tier ATUAL da espécie: Dragonite (T4) precisa de 3 insígnias mesmo se veio de um Dratini.
+  const cfgBox = [];
   const brought = (Array.isArray(cfg.teamMons) ? cfg.teamMons : [])
     .filter(m => m && SPECIES[m.sp]).slice(0, TEAM_SIZE)
     .map(m => {
-      const mon = createMon(rng, m.sp, Math.max(1, Math.min(60, Number(m.lvl) || 5)), { shiny: !!m.shiny, ot: cfg.id, nature: m.nature || undefined, capTier: m.capTier });
-      mon.brought = true; // veio da Coleção: sempre obedece
+      const mon = createMon(rng, m.sp, Math.max(1, Math.min(60, Number(m.lvl) || 5)), { shiny: !!m.shiny, ot: cfg.id, nature: m.nature || undefined, capTier: getSpecies(m.sp).tier });
+      mon.brought = true; // veio da Coleção (segue a regra das insígnias como qualquer outro)
       if (m.uid) mon.uid = String(m.uid);
       if (m.aura) mon.aura = m.aura;
       return mon;
     });
-  const mon = brought[0] || createMon(rng, starter, starterLevel, { shiny: !!cfg.starterShiny, ot: cfg.id, starter: true });
+  // Se nenhum Pokémon trazido obedece sem insígnias, o inicial entra junto (senão o jogador não conseguiria lutar)
+  const needStarter = brought.length && !brought.some(m => badgesNeeded(m) === 0);
+  const mon = (!needStarter && brought[0]) || createMon(rng, starter, starterLevel, { shiny: !!cfg.starterShiny, ot: cfg.id, starter: true });
+  if (needStarter) {
+    brought.unshift(mon);
+    if (brought.length > TEAM_SIZE) cfgBox.push(brought.pop());
+  }
   const p = {
     id: String(cfg.id || `p${index + 1}`),
     name: String(cfg.name || `Treinador ${index + 1}`).slice(0, 24),
@@ -105,12 +113,12 @@ function newPlayer(rng, cfg, index) {
     gold: STARTING_GOLD,
     items: { ...STARTING_ITEMS },
     team: brought.length ? brought : [mon],
-    box: [],
+    box: cfgBox,
     badges: [],
     eliteStage: 0,
     champion: false,
-    seen: brought.length ? [...new Set(brought.map(m => m.sp))] : [starter],
-    caught: brought.length ? [...new Set(brought.map(m => m.sp))] : [starter],
+    seen: brought.length ? [...new Set([...brought, ...cfgBox].map(m => m.sp))] : [starter],
+    caught: brought.length ? [...new Set([...brought, ...cfgBox].map(m => m.sp))] : [starter],
     skip: 0,
     moveBonus: 0,
     stats: { captures: 0, shinies: brought.length ? 0 : (mon.shiny ? 1 : 0), wins: 0, losses: 0, pvpWins: 0, ballsThrown: 0 },
@@ -126,6 +134,18 @@ function newPlayer(rng, cfg, index) {
 }
 
 // ------------------------------------------------------------------ API principal
+/** Compara antes/depois e gera um efeito 'evolve' para cada Pokémon que mudou de espécie (para a animação). */
+function detectEvolutions(prev, next) {
+  const before = new Map();
+  for (const p of prev.players) for (const m of [...p.team, ...p.box]) before.set(m.uid, m.sp);
+  for (const p of next.players) {
+    for (const m of [...p.team, ...p.box]) {
+      const old = before.get(m.uid);
+      if (old && old !== m.sp) next.fx.push({ k: 'evolve', pid: p.id, uid: m.uid, from: old, to: m.sp, shiny: !!m.shiny });
+    }
+  }
+}
+
 export function applyAction(prevState, actorId, action, ctx = {}) {
   const state = clone(prevState);
   const rng = createRng(state.seed);
@@ -141,6 +161,7 @@ export function applyAction(prevState, actorId, action, ctx = {}) {
     if (e && e.isGameError) return { state: prevState, error: e.message };
     throw e;
   }
+  detectEvolutions(prevState, state);
   state.seed = rng.state;
   state.fxSeq = (prevState.fxSeq || 0) + 1;
   return { state };

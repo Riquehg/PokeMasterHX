@@ -175,6 +175,30 @@ create index if not exists market_offers_listing_idx on public.market_offers (li
 create index if not exists market_offers_buyer_idx on public.market_offers (buyer_id, created_at desc);
 create index if not exists market_offers_seller_idx on public.market_offers (seller_id, status);
 
+-- ---------------------------------------------------------------- social: online, chat global e amigos
+alter table public.profiles add column if not exists last_seen timestamptz;
+create index if not exists profiles_last_seen_idx on public.profiles (last_seen desc);
+
+create table if not exists public.global_chat (
+  id         bigserial primary key,
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  name       text not null default '',
+  avatar     int  not null default 1,
+  text       text not null check (char_length(text) between 1 and 240),
+  created_at timestamptz not null default now()
+);
+create index if not exists global_chat_user_idx on public.global_chat (user_id, id desc);
+
+create table if not exists public.friendships (
+  user_id    uuid not null references auth.users(id) on delete cascade, -- quem pediu
+  friend_id  uuid not null references auth.users(id) on delete cascade, -- quem recebeu
+  status     text not null default 'pending' check (status in ('pending', 'accepted')),
+  created_at timestamptz not null default now(),
+  primary key (user_id, friend_id),
+  check (user_id <> friend_id)
+);
+create index if not exists friendships_friend_idx on public.friendships (friend_id);
+
 -- ---------------------------------------------------------------- avisos globais (capturas lendárias/shiny, anúncios)
 create table if not exists public.global_feed (
   id         bigserial primary key,
@@ -206,6 +230,13 @@ create policy "minhas ofertas" on public.market_offers for select to authenticat
 
 drop policy if exists "minhas compras" on public.payments;
 create policy "minhas compras" on public.payments for select to authenticated using (user_id = auth.uid());
+
+alter table public.global_chat enable row level security;
+alter table public.friendships enable row level security;
+drop policy if exists "chat global" on public.global_chat;
+create policy "chat global" on public.global_chat for select to authenticated using (true);
+drop policy if exists "minhas amizades" on public.friendships;
+create policy "minhas amizades" on public.friendships for select to authenticated using (user_id = auth.uid() or friend_id = auth.uid());
 
 drop policy if exists "feed publico" on public.global_feed;
 create policy "feed publico" on public.global_feed for select to anon, authenticated using (true);
@@ -248,6 +279,12 @@ begin
   ) then
     alter publication supabase_realtime add table public.global_feed;
   end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'global_chat'
+  ) then
+    alter publication supabase_realtime add table public.global_chat;
+  end if;
 end $$;
 
 -- ---------------------------------------------------------------- limpeza (opcional)
@@ -258,3 +295,6 @@ end $$;
 -- ---------------------------------------------------------------- admin
 -- Para virar administrador, rode (trocando o e-mail):
 -- update public.profiles set is_admin = true where id = (select id from auth.users where email = 'seu@email.com');
+
+-- Faz a API do Supabase enxergar as colunas/tabelas novas na hora (evita "could not find ... in the schema cache")
+notify pgrst, 'reload schema';

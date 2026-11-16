@@ -103,6 +103,27 @@ export async function eventCard(f, { name, mine }) {
 }
 
 // ------------------------------------------------ entrada de batalha
+/** Evolução (como nos jogos): silhuetas brancas alternando cada vez mais rápido, flash e a nova forma. */
+export async function evolutionAnim(f, { owner }) {
+  if (!anim.speed) return;
+  const el = layer('dim');
+  const a = getSpecies(f.from)?.name || f.from, b = getSpecies(f.to)?.name || f.to;
+  el.innerHTML = `<div class="evo-scene"><div class="evo-glow"></div>
+      <div class="evo-stage"><img class="evo-old" src="${monSprite(f.from, f.shiny)}" alt=""><img class="evo-new" src="${monSprite(f.to, f.shiny)}" alt=""></div>
+      <div class="evo-text">${owner ? esc(owner) + ': ' : ''}O quê? ${esc(a)} está evoluindo!</div><div class="sparkles"></div></div>`;
+  const scene = el.querySelector('.evo-scene');
+  await wait(900 / anim.speed);
+  scene.classList.add('morph');
+  await wait(3200 / anim.speed);
+  scene.classList.remove('morph');
+  scene.classList.add('done');
+  el.querySelector('.evo-text').innerHTML = `🎉 Parabéns! ${esc(a)} evoluiu para <b>${esc(b)}</b>!`;
+  sparkle(el.querySelector('.sparkles'), 30);
+  confetti(90);
+  await wait(2200 / anim.speed);
+  await removeLayer(el);
+}
+
 /** Celebração de shiny: é raríssimo, então a tela inteira comemora. */
 export async function shinyCelebration(sp) {
   if (!anim.speed) return;

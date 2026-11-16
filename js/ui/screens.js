@@ -7,6 +7,8 @@ import { net, api, signIn, signUp, signOut, resetPassword, watchMatch } from '..
 import { LocalSession } from '../session.js';
 import { openDex } from './modals.js';
 import { openMarket } from './market.js';
+import { BADGES_TO_USE } from '../../shared/rules/helpers.js';
+import { eloOf } from '../../shared/data/elo.js';
 import { typeChips } from './common.js';
 import { openShop as openDiamondShop } from './shop.js';
 import { showAnnouncement } from './notify.js';
@@ -88,7 +90,7 @@ function teamPicker(vault, selected, levelCap, act = 'pick') {
       const on = selected.includes(m.uid);
       const lv = levelCap ? Math.min(levelCap, m.lvl) : m.lvl;
       return `<div class="pick ${on ? 'on' : ''}" data-act="${act}" data-uid="${esc(m.uid)}" title="${esc(getSpecies(m.sp)?.name)}">
-        <img src="${monSprite(m)}" alt="${esc(getSpecies(m.sp)?.name)}">${esc(getSpecies(m.sp)?.name)}${m.shiny ? ' ✨' : ''}<br>Nv.${lv}${levelCap && m.lvl > levelCap ? ` <span class="muted">(${m.lvl})</span>` : ''}${on ? ` <b>#${selected.indexOf(m.uid) + 1}</b>` : ''}</div>`;
+        <img src="${monSprite(m)}" alt="${esc(getSpecies(m.sp)?.name)}">${esc(getSpecies(m.sp)?.name)}${m.shiny ? ' ✨' : ''}<br>Nv.${lv}${levelCap && m.lvl > levelCap ? ` <span class="muted">(${m.lvl})</span>` : ''}${on ? ` <b>#${selected.indexOf(m.uid) + 1}</b>` : ''}${BADGES_TO_USE[getSpecies(m.sp)?.tier] ? `<br><span class="lock-tag">🔒 ${BADGES_TO_USE[getSpecies(m.sp).tier]} insígnias</span>` : ''}</div>`;
     }).join('')}</div>`;
 }
 
@@ -121,7 +123,7 @@ export async function hubScreen(root, ctx) {
           <img class="avatar ${profile?.cosmetic?.frame ? 'frame-' + esc(profile.cosmetic.frame) : ''}" src="${avatarUrl(profile?.avatar)}" alt="avatar">
           <div class="grow"><h3 style="color:var(--gold)">${esc(profile?.trainer_name || 'Treinador')}</h3>
             ${profile?.cosmetic?.title ? `<div class="player-title">“${esc(profile.cosmetic.title)}”</div>` : ''}
-            <div class="small">⭐ ${profile?.points || 0} pts · 🏆 ${profile?.rating ?? 1000} rating · 📖 ${(profile?.pokedex || []).length} · 📦 ${(profile?.vault || []).length}</div>
+            <div class="small">⭐ ${profile?.points || 0} pts · ${eloOf(profile?.rating ?? 1000).icon} ${eloOf(profile?.rating ?? 1000).name} (${profile?.rating ?? 1000}) · 📖 ${(profile?.pokedex || []).length} · 📦 ${(profile?.vault || []).length}</div>
             <div class="tiny muted">${esc(net.user?.email || '')}</div></div>
           <div class="col" style="gap:6px;align-items:flex-end">
             <button class="btn sm" data-act="edit" ${profile ? '' : 'disabled'}>✏️</button>
@@ -168,7 +170,7 @@ export async function hubScreen(root, ctx) {
     solo: () => soloModal(profile, ctx),
     vault: () => collectionModal(profile, rerender),
     dex: () => openDex(null, profile?.pokedex || [], profile?.pokedex_seen || []),
-    ranking: () => rankingModal(),
+    ranking: () => rankingModal(profile ? (profile.rating ?? 1000) : null),
     market: () => openMarket(profile, () => ctx.go('hub')),
     admin: () => adminModal(),
     dshop: () => openDiamondShop(profile, null, () => ctx.go('hub')),
@@ -231,16 +233,30 @@ function collectionModal(profile, onChange) {
   });
 }
 
-async function rankingModal() {
+async function rankingModal(myRating = null) {
   openModal('rank', '🏆 Ranking', '<span class="spinner"></span>', { wide: true });
-  let tab = 'competitive', data = null;
+  let tab = 'elos', data = null;
+  const eloTag = r => { const e = eloOf(r); return `<span class="elo-chip" style="--ec:${e.color}">${e.icon}</span> <span class="tiny" style="color:${e.color}">${e.name}</span>`; };
+  const elosView = () => {
+    const mine = myRating !== null ? eloOf(myRating) : null;
+    return `${mine ? `<div class="elo-me" style="--ec:${mine.color}"><span class="elo-big">${mine.icon}</span><div><div class="small muted">Seu elo</div><b style="color:${mine.color};font-size:20px">${mine.name}</b> · rating <b>${myRating}</b>
+        <div class="tiny muted">${mine.next ? `Faltam ${mine.toNext} pontos para ${mine.next.icon} ${mine.next.name}` : 'Você está no topo! 👑'}</div></div></div>` : ''}
+      <div class="elo-grid">${[...data.elos].reverse().map(t => `<div class="elo-card ${mine?.id === t.id ? 'mine' : ''}" style="--ec:${t.color}">
+          <div class="elo-big">${t.icon}</div><b style="color:${t.color}">${t.name}</b>
+          <div class="tiny muted">${t.max ? `${t.min} – ${t.max - 1}` : `${t.min}+`} de rating</div>
+          <div class="small"><b>${t.count}</b> treinador(es)</div>
+          <div class="elo-top">${t.top.map(p => `<span title="${esc(p.name)} · ${p.rating}"><img src="${avatarUrl(p.avatar)}" alt="">${esc(p.name)}</span>`).join('') || '<span class="tiny muted">ninguém ainda</span>'}</div></div>`).join('')}</div>
+      <p class="tiny muted">Todo mundo começa em 1000 (Prata). Partidas 🏆 Competitivas mudam o rating: terminar à frente de quem tem rating igual ou maior dá mais pontos. ${data.rankedPlayers} treinador(es) já jogaram o Competitivo.</p>`;
+  };
   const body = () => {
+    const tabs = `<div class="tabs" style="margin-bottom:8px">${[['elos', '🎖️ Elos'], ['competitive', '🏆 Competitivo (rating)'], ['general', '⭐ Geral (pontos)']].map(([k, l]) => `<button class="btn sm ${tab === k ? 'primary' : ''}" data-act="t" data-t="${k}">${l}</button>`).join('')}</div>`;
+    if (tab === 'elos') return tabs + elosView();
     const comp = tab === 'competitive';
     const rows = comp ? data.competitive : data.ranking;
-    return `<div class="tabs" style="margin-bottom:8px"><button class="btn sm ${comp ? 'primary' : ''}" data-act="t" data-t="competitive">🏆 Competitivo (rating)</button><button class="btn sm ${!comp ? 'primary' : ''}" data-act="t" data-t="general">⭐ Geral (pontos)</button></div>
-      <table class="score"><tr><th>#</th><th>Treinador</th>${comp ? '<th>Rating</th><th>Partidas</th><th>Vitórias</th>' : '<th>Pontos</th><th>Pokédex</th><th>Vitórias</th><th>Campeão</th><th>✨</th>'}</tr>
+    return `${tabs}
+      <table class="score"><tr><th>#</th><th>Treinador</th>${comp ? '<th>Elo</th><th>Rating</th><th>Partidas</th><th>Vitórias</th>' : '<th>Pontos</th><th>Pokédex</th><th>Vitórias</th><th>Campeão</th><th>✨</th>'}</tr>
       ${rows.map((r, i) => `<tr><td>${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</td><td>${esc(r.name)}</td>${comp
-        ? `<td><b>${r.rating}</b></td><td>${r.ranked}</td><td>${r.rankedWins}</td>`
+        ? `<td>${eloTag(r.rating)}</td><td><b>${r.rating}</b></td><td>${r.ranked}</td><td>${r.rankedWins}</td>`
         : `<td><b>${r.points}</b></td><td>${r.pokedex}</td><td>${r.wins}</td><td>${r.champion}</td><td>${r.shinies}</td>`}</tr>`).join('') || `<tr><td colspan="7" class="muted">${comp ? 'Ninguém jogou uma partida competitiva ainda.' : 'Ninguém pontuou ainda.'}</td></tr>`}</table>
       <p class="tiny muted">${comp ? 'Rating Elo (começa em 1000): sobe ao terminar à frente de quem tem rating igual ou maior. Só partidas 🏆 Competitivas contam.' : 'Pontos: 10 por espécie na Pokédex, 300 por vitória, 500 por título de Campeão, 50 por shiny, 25 por vitória PvP.'}</p>`;
   };
@@ -346,7 +362,9 @@ export async function roomScreen(root, ctx, matchId) {
         </div>
         <div class="card col">
           ${mode === 'collection'
-            ? `<h3>📦 Seu time (até 6 da Coleção)</h3>${teamPicker(profile?.vault, picks, o.levelCap || 0)}${picks.length ? '' : `<h3 style="margin-top:8px">ou um inicial</h3>${starterPicker(mine?.starter)}`}`
+            ? `<h3>📦 Seu time (até 6 da Coleção)</h3>
+              <p class="tiny muted">Regra das insígnias vale para todos: tier 3 precisa de 2, tier 4 de 3 e tier 5 (lendários) de 4 para lutar. Se nenhum do seu time obedecer sem insígnias, o inicial escolhido abaixo entra junto.</p>
+              ${teamPicker(profile?.vault, picks, o.levelCap || 0)}<h3 style="margin-top:8px">${picks.length ? 'Inicial (entra se precisar)' : 'ou um inicial'}</h3>${starterPicker(mine?.starter)}`
             : `<h3>🌱 Seu inicial</h3>${starterPicker(mine?.starter)}`}
           <h3 style="margin-top:8px">💬 Chat</h3>
           <div class="log" id="r-chat" style="height:130px">${(match.chat || []).map(c => `<p class="chat"><b>${esc(c.name)}:</b> ${esc(c.text)}</p>`).join('') || '<p class="muted">Diga olá!</p>'}</div>

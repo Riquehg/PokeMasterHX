@@ -106,7 +106,7 @@ export function clone(obj) {
 export const BADGES_TO_USE = { 3: 2, 4: 3, 5: 4 };
 
 export function badgesNeeded(mon) {
-  if (!mon || mon.starter || mon.brought) return 0;
+  if (!mon || mon.starter) return 0; // só o inicial é sempre obediente (Coleção também segue a regra das insígnias)
   return BADGES_TO_USE[capTierOf(mon)] || 0;
 }
 
