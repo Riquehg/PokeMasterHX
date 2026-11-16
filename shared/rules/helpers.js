@@ -111,7 +111,7 @@ export function badgesNeeded(mon) {
 }
 
 export function canUse(player, mon) {
-  if (!player || !player.badges) return true; // NPCs e selvagens
+  if (!player || !player.badges || player.noRules) return true; // NPCs, selvagens e duelos
   return player.badges.length >= badgesNeeded(mon);
 }
 

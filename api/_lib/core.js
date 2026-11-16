@@ -3,6 +3,8 @@
 import { createMatch, applyAction, score, MAX_PLAYERS, fillTraits } from '../../shared/engine.js';
 import { randomSeed } from '../../shared/rules/rng.js';
 import { ELO_TIERS } from '../../shared/data/elo.js';
+import { CUP_MAX_PLAYERS, DUEL_LEVEL_CAP } from '../../shared/data/cup.js';
+import { duelQueue, duelQueueStatus, duelQueueCancel, duelTeam, startCup, duelFinished } from './tournament.js';
 import { SPECIES, STARTERS } from '../../shared/data/pokemon.js';
 import { dailyPokemon } from '../../shared/daily.js';
 import { equippedCosmetic, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment } from './shop.js';
@@ -28,7 +30,8 @@ const BOT_NAMES = ['Brendan', 'May', 'Dawn', 'Lucas', 'Hilda', 'Nate', 'Serena',
  *  ranked     — competitivo: balanceado, só humanos, limite de turnos obrigatório, vale rating (Elo).
  *  solo       — partida privada contra CPUs (salva na conta).
  */
-export const MODES = ['balanced', 'collection', 'ranked', 'solo'];
+export const MODES = ['balanced', 'collection', 'ranked', 'solo', 'duel', 'cup'];
+export const TEAM_MODES = ['collection', 'duel', 'cup']; // modos em que se leva o time da Coleção
 
 export function cleanName(s, fallback = 'Treinador') {
   const v = String(s || '').replace(/[<>"'`]/g, '').trim().slice(0, 20);
@@ -234,7 +237,7 @@ export async function listRooms(db, user) {
     players: (r.lobby || []).length, maxPlayers: r.options?.maxPlayers || 4,
     host: (r.lobby || []).find(e => e.id === r.host_id)?.name || '?', updatedAt: r.updated_at
   });
-  return { rooms: rows.filter(r => r.options?.mode !== 'solo').map(brief), mine: mine.map(brief) };
+  return { rooms: rows.filter(r => !['solo', 'duel_queue'].includes(r.options?.mode)).map(brief), mine: mine.filter(r => r.options?.mode !== 'duel_queue').map(brief) };
 }
 
 function lobbyEntry(profile, body) {
@@ -253,13 +256,16 @@ function normalizeOptions(body, prev = {}) {
   const o = { ...prev };
   if (body.mode !== undefined) o.mode = MODES.includes(body.mode) ? body.mode : 'balanced';
   o.mode = o.mode || 'balanced';
-  if (body.maxPlayers !== undefined) o.maxPlayers = Math.max(2, Math.min(MAX_PLAYERS, Number(body.maxPlayers) || 4));
-  o.maxPlayers = o.maxPlayers || 4;
+  const cap = o.mode === 'cup' ? CUP_MAX_PLAYERS : o.mode === 'duel' ? 2 : MAX_PLAYERS;
+  if (body.maxPlayers !== undefined) o.maxPlayers = Math.max(2, Math.min(cap, Number(body.maxPlayers) || 4));
+  o.maxPlayers = Math.min(cap, o.maxPlayers || (o.mode === 'cup' ? 8 : 4));
+  if (o.mode === 'duel') o.maxPlayers = 2;
   if (body.turnLimit !== undefined) o.turnLimit = Math.max(0, Math.min(200, Number(body.turnLimit) || 0));
   o.turnLimit = o.turnLimit ?? 60;
   if (body.levelCap !== undefined) o.levelCap = Math.max(0, Math.min(60, Number(body.levelCap) || 0));
   o.levelCap = o.levelCap || 0;
   if (o.mode === 'ranked' && !o.turnLimit) o.turnLimit = 40; // competitivo sempre termina
+  if ((o.mode === 'duel' || o.mode === 'cup') && !o.levelCap) o.levelCap = DUEL_LEVEL_CAP;
   if (o.mode === 'solo') o.maxPlayers = Math.max(2, o.maxPlayers);
   return o;
 }
@@ -269,6 +275,9 @@ export async function matchOp(db, user, body) {
   if (op === 'create') return createRoom(db, user, body);
   if (op === 'solo') return createSolo(db, user, body);
   if (op === 'join') return joinRoom(db, user, body);
+  if (op === 'duel_queue') return duelQueue(db, user, body, await getOrCreateProfile(db, user));
+  if (op === 'duel_status') return duelQueueStatus(db, user);
+  if (op === 'duel_cancel') return duelQueueCancel(db, user);
   if (op === 'get') {
     const row = await db.getMatch(body.matchId);
     if (!row) notFound('Sala não encontrada.');
@@ -305,7 +314,7 @@ export async function matchOp(db, user, body) {
         me.starter = body.starter;
       }
       if (body.teamUids !== undefined) {
-        if (mode !== 'collection') bad('Esta sala é balanceada: todos começam com um inicial.');
+        if (!TEAM_MODES.includes(mode)) bad('Esta sala é balanceada: todos começam com um inicial.');
         const prof = await getOrCreateProfile(db, user);
         const owned = new Set((prof.vault || []).map(v => v.uid));
         const uids = [...new Set((Array.isArray(body.teamUids) ? body.teamUids : []).map(String))].slice(0, 6);
@@ -317,7 +326,7 @@ export async function matchOp(db, user, body) {
     }
     case 'add_bot': {
       if (!isHost) forbidden('Só o anfitrião adiciona CPUs.');
-      if (mode === 'ranked') bad('Partidas competitivas são só entre humanos.');
+      if (mode === 'ranked' || mode === 'duel') bad('Partidas competitivas são só entre humanos.');
       if (lobby.length >= (row.options?.maxPlayers || 4)) bad('Sala cheia.');
       lobby.push(botEntry(lobby.filter(e => e.isBot).length));
       return save(db, row, { lobby }, user.id);
@@ -334,8 +343,8 @@ export async function matchOp(db, user, body) {
       if (!isHost) forbidden();
       const options = normalizeOptions(body, row.options || {});
       let nextLobby = lobby;
-      if (options.mode === 'ranked') nextLobby = lobby.filter(e => !e.isBot);
-      if (options.mode !== 'collection') nextLobby = nextLobby.map(e => ({ ...e, teamUids: [] }));
+      if (options.mode === 'ranked' || options.mode === 'duel') nextLobby = lobby.filter(e => !e.isBot);
+      if (!TEAM_MODES.includes(options.mode)) nextLobby = nextLobby.map(e => ({ ...e, teamUids: [] }));
       nextLobby = nextLobby.map(e => (e.isBot ? e : { ...e, ready: false }));
       return save(db, row, { options, lobby: nextLobby }, user.id);
     }
@@ -351,6 +360,19 @@ async function startRoom(db, row, lobby, userId) {
   const options = normalizeOptions({}, row.options || {});
   const mode = options.mode;
   if (lobby.length < 2) bad('Precisa de pelo menos 2 participantes (adicione uma CPU se quiser).');
+  if (mode === 'cup' || mode === 'duel') {
+    const notReady = lobby.filter(e => !e.isBot && e.id !== row.host_id && !e.ready);
+    if (notReady.length) bad(`Aguardando: ${notReady.map(e => e.name).join(', ')} marcar "Pronto".`);
+  }
+  if (mode === 'cup') return startCup(db, row, lobby, userId);
+  if (mode === 'duel') {
+    if (lobby.length !== 2 || lobby.some(e => e.isBot)) bad('O duelo é entre 2 treinadores humanos.');
+    const [a, b] = await Promise.all(lobby.map(async e => ({ ...e, teamMons: await duelTeam(db, e, options.levelCap) })));
+    if (!a.teamMons || !b.teamMons) bad('Os dois precisam ter Pokémon na Coleção.');
+    const state = createMatch({ kind: 'duel', id: row.id, mode: 'online', seed: randomSeed(), now: Date.now(),
+      players: [a, b].map(e => ({ id: e.id, name: e.name, avatar: e.avatar, teamMons: e.teamMons })) });
+    return save(db, row, { status: 'playing', state, options: { ...options, ranked: true } }, userId);
+  }
   if (mode === 'ranked' && lobby.filter(e => !e.isBot).length < 2) bad('O competitivo precisa de pelo menos 2 treinadores humanos.');
   const notReady = lobby.filter(e => !e.isBot && e.id !== row.host_id && !e.ready);
   if (notReady.length) bad(`Aguardando: ${notReady.map(e => e.name).join(', ')} marcar "Pronto".`);
@@ -362,6 +384,12 @@ async function startRoom(db, row, lobby, userId) {
     if (mode === 'collection' && !e.isBot && e.teamUids?.length) {
       const vault = prof?.vault || [];
       p.teamMons = e.teamUids.map(u => vault.find(v => v.uid === u)).filter(Boolean)
+        .map(v => ({ ...v, lvl: options.levelCap ? Math.min(options.levelCap, v.lvl) : v.lvl }));
+    }
+    if (mode === 'collection' && !e.isBot) {
+      // PC da partida = Coleção inteira (o que não está no time), com o mesmo limite de nível
+      const team = new Set(e.teamUids || []);
+      p.boxMons = (prof?.vault || []).filter(v => !team.has(v.uid))
         .map(v => ({ ...v, lvl: options.levelCap ? Math.min(options.levelCap, v.lvl) : v.lvl }));
     }
     players.push(p);
@@ -488,6 +516,10 @@ export async function actionOp(db, user, body) {
     if (error) return { error, match: publicMatch(row, user.id) };
 
     const finished = state.status === 'finished';
+    if (finished && row.options?.mode === 'duel' && row.options?.ranked) {
+      const humans = state.players.filter(p => !p.id.startsWith('cpu_'));
+      if (humans.length === 2) state.ratingChanges = await eloDeltas(db, state, humans);
+    }
     if (finished && row.options?.mode === 'ranked') {
       const humans = state.players.filter(p => !p.id.startsWith('cpu_'));
       if (humans.length >= 2) state.ratingChanges = await eloDeltas(db, state, humans);
@@ -496,7 +528,8 @@ export async function actionOp(db, user, body) {
     const ok = await db.updateMatch(row.id, row.version, patch);
     if (!ok) continue; // conflito de versão: outra jogada entrou antes — recalcula
     try { await publishCaptures(db, state, state.fx); } catch (e) { console.error('[feed]', e.message); }
-    if (finished) await recordResults(db, state, row.options || {});
+    if (finished && row.options?.mode === 'duel') await duelFinished(db, { ...row, ...patch });
+    else if (finished) await recordResults(db, state, row.options || {});
     else {
       const ids = playersToSync(body.action, row.state, state);
       if (ids && ids.size) {

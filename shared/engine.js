@@ -41,7 +41,7 @@ export const MAX_PLAYERS = 6;
  */
 export function createMatch(config) {
   const rng = createRng(config.seed);
-  const players = (config.players || []).map((p, i) => newPlayer(rng, p, i));
+  const players = (config.players || []).map((p, i) => newPlayer(rng, { ...p, duel: config.kind === 'duel' }, i));
   if (players.length < 1) fail('A partida precisa de pelo menos 1 jogador.');
   if (players.length > MAX_PLAYERS) fail(`Máximo de ${MAX_PLAYERS} jogadores.`);
   const state = {
@@ -71,6 +71,7 @@ export function createMatch(config) {
     fx: [],
     fxSeq: 0
   };
+  if (config.kind === 'duel') return startDuel(state, rng, config);
   log(state, `🏁 Partida iniciada com ${players.map(p => p.name).join(', ')}. Boa sorte, treinadores!`);
   if (state.options.dailyPokemon) log(state, `⭐ Pokémon do Dia: ${speciesName(state.options.dailyPokemon)} (aparece mais, XP em dobro e shiny 1/64).`);
   // Se o primeiro jogador for CPU, já joga
@@ -78,6 +79,8 @@ export function createMatch(config) {
   state.seed = rng.state;
   return r;
 }
+
+export const MAX_BOX = 300;
 
 function hashStr(str) {
   let h = 2166136261;
@@ -99,9 +102,7 @@ function newPlayer(rng, cfg, index) {
   // Modo Coleção: o jogador traz até 6 Pokémon da conta (mantendo o uid para sincronizar de volta).
   // Para ser justo, vale o tier ATUAL da espécie: Dragonite (T4) precisa de 3 insígnias mesmo se veio de um Dratini.
   const cfgBox = [];
-  const brought = (Array.isArray(cfg.teamMons) ? cfg.teamMons : [])
-    .filter(m => m && SPECIES[m.sp]).slice(0, TEAM_SIZE)
-    .map(m => {
+  const fromVault = m => {
       // Pokémon antigos da Coleção (sem natureza/IV/golpes salvos) ganham valores fixos derivados do uid — não dá para "re-sortear"
       const fixed = createRng(hashStr(String(m.uid || m.sp)));
       const mon = createMon(m.nature && m.iv && m.moves ? rng : fixed, m.sp, Math.max(1, Math.min(60, Number(m.lvl) || 5)), { shiny: !!m.shiny, ot: cfg.id, nature: m.nature || undefined, iv: m.iv || undefined, moves: m.moves || undefined, capTier: getSpecies(m.sp).tier });
@@ -109,9 +110,15 @@ function newPlayer(rng, cfg, index) {
       if (m.uid) mon.uid = String(m.uid);
       if (m.aura) mon.aura = m.aura;
       return mon;
-    });
+  };
+  const brought = (Array.isArray(cfg.teamMons) ? cfg.teamMons : []).filter(m => m && SPECIES[m.sp]).slice(0, TEAM_SIZE).map(fromVault);
+  // PC com a Coleção inteira (modos em que se leva o time): o resto da Coleção vai para o PC da partida
+  const teamUids = new Set(brought.map(m => m.uid));
+  for (const m of (Array.isArray(cfg.boxMons) ? cfg.boxMons : []).filter(m => m && SPECIES[m.sp] && !teamUids.has(String(m.uid))).slice(0, MAX_BOX)) {
+    cfgBox.push(fromVault(m));
+  }
   // Se nenhum Pokémon trazido obedece sem insígnias, o inicial entra junto (senão o jogador não conseguiria lutar)
-  const needStarter = brought.length && !brought.some(m => badgesNeeded(m) === 0);
+  const needStarter = !cfg.duel && brought.length && !brought.some(m => badgesNeeded(m) === 0);
   const mon = (!needStarter && brought[0]) || createMon(rng, starter, starterLevel, { shiny: !!cfg.starterShiny, ot: cfg.id, starter: true });
   if (needStarter) {
     brought.unshift(mon);
@@ -133,8 +140,8 @@ function newPlayer(rng, cfg, index) {
     badges: [],
     eliteStage: 0,
     champion: false,
-    seen: brought.length ? [...new Set([...brought, ...cfgBox].map(m => m.sp))] : [starter],
-    caught: brought.length ? [...new Set([...brought, ...cfgBox].map(m => m.sp))] : [starter],
+    seen: [...new Set([...(brought.length ? brought : [mon]), ...cfgBox].map(m => m.sp))],
+    caught: [...new Set([...(brought.length ? brought : [mon]), ...cfgBox].map(m => m.sp))],
     skip: 0,
     moveBonus: 0,
     stats: { captures: 0, shinies: brought.length ? 0 : (mon.shiny ? 1 : 0), wins: 0, losses: 0, pvpWins: 0, ballsThrown: 0 },
@@ -354,11 +361,55 @@ function finishMatch(state, winner, reason) {
   fx(state, { k: 'win', pid: state.winner });
 }
 
+// ------------------------------------------------------------------ Duelo (Torneio e Copa): só a batalha, sem tabuleiro
+export const DUEL_ITEMS = { potion: 2, super_potion: 1, revive: 1 };
+
+function startDuel(state, rng, config) {
+  if (state.players.length !== 2) fail('O duelo é sempre 1 contra 1.');
+  state.kind = 'duel';
+  state.options.trades = false;
+  state.options.duel = true;
+  state.options.dailyPokemon = null;
+  state.phase = 'battle';
+  for (const p of state.players) {
+    p.noRules = true;            // no duelo todos os Pokémon obedecem (não há insígnias)
+    p.items = { ...DUEL_ITEMS }; // kit igual para os dois
+    p.box = [];                  // duelo usa só o time
+    p.team.forEach(fullHeal);
+  }
+  const [a, b] = state.players;
+  log(state, `⚔️ Duelo: ${a.name} x ${b.name}! Vence quem derrubar todo o time do adversário.`);
+  startBattle(state, { kind: 'pvp', pid: a.id, foe: { kind: 'player', pid: b.id } });
+  const r = runBots(state, rng, config.now || 0);
+  state.seed = rng.state;
+  return r;
+}
+
+/** Fim de um duelo: vencedor é quem ainda tem Pokémon de pé (empate: quem tem mais HP sobrando). */
+function finishDuel(state, outcome) {
+  const b = state.battle;
+  let wi = outcome.winner;
+  if (wi === null || wi === undefined) {
+    const hpLeft = si => b.sides[si] && getPlayer(state, b.sides[si].pid).team.reduce((t, m) => t + Math.max(0, m.hp), 0);
+    wi = hpLeft(0) >= hpLeft(1) ? 0 : 1;
+  }
+  const w = getPlayer(state, b.sides[wi].pid);
+  const l = getPlayer(state, b.sides[1 - wi].pid);
+  w.stats.wins += 1; w.stats.pvpWins += 1; l.stats.losses += 1;
+  finishMatch(state, w, outcome.surrender ? `${l.name} desistiu.` : `Derrotou todo o time de ${l.name}.`);
+}
+
 // ------------------------------------------------------------------ AFK / saída
 function leave(state, rng, p, now) {
   if (p.left) return;
   p.left = true;
   p.isBot = true;
+  if (state.options.duel && state.status === 'playing') { // sair do duelo = desistir
+    log(state, `🚪 ${p.name} saiu do duelo.`, 'bad');
+    finishMatch(state, state.players.find(x => x.id !== p.id), `${p.name} abandonou.`);
+    state.battle = null;
+    return;
+  }
   log(state, `🚪 ${p.name} saiu da partida. Uma CPU assumiu o lugar.`, 'bad');
   if (state.players.every(x => x.left || x.isBot) && state.mode === 'online') {
     finishMatch(state, [...state.players].sort((a, b) => score(b) - score(a))[0], 'Todos os humanos saíram.');
@@ -370,6 +421,13 @@ function skipAfk(state, rng, actor, now) {
   if (!waiting.length) fail('Ninguém está travando a partida.');
   if (waiting.some(w => w.id === actor.id)) fail('Você é quem precisa jogar agora.');
   if (!now || now - (state.turnStartedAt || 0) < AFK_SECONDS * 1000) fail(`Aguarde ${AFK_SECONDS}s de inatividade para pular a vez.`);
+  if (state.options.duel) { // no duelo, quem trava perde por W.O.
+    const loser = waiting[0];
+    log(state, `⏰ ${loser.name} ficou parado e perdeu por W.O.`, 'bad');
+    finishMatch(state, state.players.find(x => x.id !== loser.id), `${loser.name} ficou inativo.`);
+    state.battle = null;
+    return;
+  }
   for (const w of waiting) {
     state.afkStrikes[w.id] = (state.afkStrikes[w.id] || 0) + 1;
     log(state, `⏰ ${w.name} ficou inativo e uma CPU jogou por ele${state.afkStrikes[w.id] >= 3 ? ' (de vez, após 3 ausências)' : ''}.`, 'bad');
@@ -974,6 +1032,7 @@ setBattleEndHandler((state, rng, b, outcome) => {
     return;
   }
 
+  if (b.kind === 'pvp' && state.options.duel) return finishDuel(state, outcome);
   if (b.kind === 'pvp') {
     if (r === 'draw') return;
     const w = getPlayer(state, b.sides[outcome.winner].pid);

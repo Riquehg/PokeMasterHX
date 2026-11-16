@@ -12,7 +12,7 @@ const db = createMemoryDb();
 globalThis.__PMHX_DB__ = db;
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.svg': 'image/svg+xml' };
+  '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
 
 const routes = {};
 for (const name of ['match', 'action', 'rooms', 'profile', 'leaderboard', 'admin', 'config', 'health', 'shop', 'mp-webhook', 'feed', 'market']) {

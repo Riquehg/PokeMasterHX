@@ -7,6 +7,8 @@ import { net, api, signIn, signUp, signOut, resetPassword, watchMatch } from '..
 import { LocalSession } from '../session.js';
 import { openDex } from './modals.js';
 import { openMarket } from './market.js';
+import { openDuelQueue } from './tournament.js';
+import { promptInstall, isStandalone } from './install.js';
 import { BADGES_TO_USE } from '../../shared/rules/helpers.js';
 import { eloOf } from '../../shared/data/elo.js';
 import { statCard } from './common.js';
@@ -71,12 +73,15 @@ export function loginScreen(root, { onDone, onLocal }) {
 export const MODE_INFO = {
   balanced: { icon: '⚖️', name: 'Balanceado', desc: 'Todos começam com 1 inicial Nv.5. Justo para todo mundo.' },
   collection: { icon: '📦', name: 'Coleção', desc: 'Cada um leva até 6 Pokémon da sua Coleção (times já evoluídos).' },
-  ranked: { icon: '🏆', name: 'Competitivo', desc: 'Balanceado, só humanos, com limite de turnos. Vale rating no ranking.' }
+  ranked: { icon: '🏆', name: 'Competitivo', desc: 'Balanceado, só humanos, com limite de turnos. Vale rating no ranking.' },
+  duel: { icon: '⚔️', name: 'Duelo (Torneio)', desc: '1 contra 1, só batalha, com o time da Coleção (Nv. máx 50). Vale Elo.' },
+  cup: { icon: '🏟️', name: 'Copa', desc: 'Até 8 treinadores em chaveamento eliminatório até sobrar o campeão. Vale Elo e 💎.' }
 };
+const TEAM_MODES = ['collection', 'duel', 'cup'];
 
 function modeChip(mode, levelCap) {
   const m = MODE_INFO[mode] || MODE_INFO.balanced;
-  return `<span class="chip ${mode === 'ranked' ? 'red' : mode === 'collection' ? 'gold' : 'green'}">${m.icon} ${m.name}${mode === 'collection' && levelCap ? ` · Nv. máx ${levelCap}` : ''}</span>`;
+  return `<span class="chip ${mode === 'ranked' || mode === 'duel' ? 'red' : mode === 'collection' || mode === 'cup' ? 'gold' : 'green'}">${m.icon} ${m.name}${TEAM_MODES.includes(mode) && levelCap ? ` · Nv. máx ${levelCap}` : ''}</span>`;
 }
 
 function sortCollection(vault) {
@@ -141,6 +146,12 @@ export async function hubScreen(root, ctx) {
           <div class="tiny muted">${Object.values(MODE_INFO).map(m => `${m.icon} <b>${m.name}</b>: ${m.desc}`).join('<br>')}</div>
           ${mine.length ? `<div class="small muted">Minhas partidas:</div>${mine.map(m => `<button class="btn sm" data-act="resume-online" data-id="${m.id}">▶ ${esc(m.name)} · ${m.status === 'playing' ? 'em jogo' : 'no lobby'} · ${m.players} jog.</button>`).join('')}` : ''}
         </div>
+        <div class="card col tourney-card">
+          <h3>⚔️ Torneio & 🏟️ Copa</h3>
+          <button class="btn red" data-act="duel" ${profile ? '' : 'disabled'}>⚔️ Torneio — duelo ranqueado (fila)</button>
+          <button class="btn gold-btn" data-act="cup" ${profile ? '' : 'disabled'}>🏟️ Criar uma Copa (até 8, chaveamento)</button>
+          <div class="tiny muted">Só batalhas, com o seu time da Coleção (Nv. máx 50, todos obedecem). Valem <b>Elo</b>. Na Copa, o campeão ganha 💎 (com 4+ treinadores humanos). Copas abertas aparecem em "Salas online".</div>
+        </div>
       </div>
       <div class="col">
         <div class="card col">
@@ -156,6 +167,7 @@ export async function hubScreen(root, ctx) {
           <div class="grid2"><button class="btn purple" data-act="vault" ${profile ? '' : 'disabled'}>📦 Coleção (${(profile?.vault || []).length})</button><button class="btn" data-act="dex">📖 Pokédex (${(profile?.pokedex || []).length})</button></div>
           <button class="btn gold-btn" data-act="market" ${profile ? '' : 'disabled'}>🏪 Mercado Global (comprar, vender, trocar)</button>
           <button class="btn" data-act="ranking">🏆 Ranking</button>
+          ${isStandalone() ? '' : '<button class="btn install-btn" data-act="install">📲 Instalar o app no celular / PC</button>'}
           ${profile?.is_admin ? `<button class="btn red" data-act="admin">🛡️ Painel do admin</button>` : ''}
         </div>
         <button class="btn ghost" data-act="logout">Sair da conta</button>
@@ -172,6 +184,14 @@ export async function hubScreen(root, ctx) {
     solo: () => soloModal(profile, ctx),
     vault: () => collectionModal(profile, rerender),
     dex: () => openDex(null, profile?.pokedex || [], profile?.pokedex_seen || []),
+    duel: () => openDuelQueue(ctx, profile),
+    install: () => promptInstall(),
+    cup: async () => {
+      try {
+        const r = await api('match', { op: 'create', name: `Copa de ${profile?.trainer_name || 'Treinador'}`, mode: 'cup', maxPlayers: 8, isPublic: true });
+        ctx.go('room', r.match.id);
+      } catch (e) { toast(e.message, 'bad'); }
+    },
     ranking: () => rankingModal(profile ? (profile.rating ?? 1000) : null),
     market: () => openMarket(profile, () => ctx.go('hub')),
     admin: () => adminModal(),
@@ -276,7 +296,7 @@ export async function lobbyScreen(root, ctx) {
         <div class="field"><label>Nome</label><input class="input" id="c-name" maxlength="30" placeholder="Sala de Kanto"></div>
         <div class="field"><label>Modo</label><select class="input" id="c-mode">${Object.entries(MODE_INFO).map(([k, m]) => `<option value="${k}">${m.icon} ${m.name} — ${m.desc}</option>`).join('')}</select></div>
         <div class="grid2">
-          <div class="field"><label>Jogadores</label><select class="input" id="c-max">${[2, 3, 4, 5, 6].map(n => `<option ${n === 4 ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+          <div class="field"><label>Jogadores</label><select class="input" id="c-max">${[2, 3, 4, 5, 6, 8].map(n => `<option ${n === 4 ? 'selected' : ''}>${n}</option>`).join('')}</select><div class="tiny muted">8 só na Copa · Duelo é sempre 2</div></div>
           <div class="field"><label>Duração</label><select class="input" id="c-turns"><option value="30">Rápida (30 turnos)</option><option value="40">Competitiva (40 turnos)</option><option value="60" selected>Normal (60 turnos)</option><option value="0">Completa (até o Campeão)</option></select></div>
         </div>
         <div class="field hidden" id="c-cap-f"><label>Nível máximo dos Pokémon levados</label><select class="input" id="c-cap"><option value="0">Sem limite</option><option value="15">15</option><option value="25">25</option><option value="35">35</option><option value="45">45</option></select></div>
@@ -296,7 +316,7 @@ export async function lobbyScreen(root, ctx) {
     </div></div></div>`;
   const v = id => root.querySelector(id).value;
   root.querySelector('#c-mode').addEventListener('change', e => {
-    root.querySelector('#c-cap-f').classList.toggle('hidden', e.target.value !== 'collection');
+    root.querySelector('#c-cap-f').classList.toggle('hidden', !TEAM_MODES.includes(e.target.value));
     if (e.target.value === 'ranked') { root.querySelector('#c-turns').value = '40'; }
   });
   const load = async () => {
@@ -336,7 +356,7 @@ export async function roomScreen(root, ctx, matchId) {
     const mode = o.mode || 'balanced';
     const picks = mine?.teamUids || [];
     const teamTxt = e => {
-      if (mode === 'collection' && e.teamUids?.length) return `Time da Coleção (${e.teamUids.length})`;
+      if (TEAM_MODES.includes(mode) && e.teamUids?.length) return `Time da Coleção (${e.teamUids.length})`;
       return `Inicial: ${esc(getSpecies(e.starter)?.name)}`;
     };
     root.innerHTML = `<div class="screen"><div class="panel-wide">${LOGO}
@@ -348,7 +368,7 @@ export async function roomScreen(root, ctx, matchId) {
           ${isHost ? `<div class="grid2">
             <select class="input" id="o-mode">${Object.entries(MODE_INFO).map(([k, m]) => `<option value="${k}" ${k === mode ? 'selected' : ''}>${m.icon} ${m.name}</option>`).join('')}</select>
             <select class="input" id="o-turns">${[[30, 'Rápida (30)'], [40, 'Competitiva (40)'], [60, 'Normal (60)'], [0, 'Completa']].map(([v, l]) => `<option value="${v}" ${v === (o.turnLimit || 0) ? 'selected' : ''}>${l}</option>`).join('')}</select>
-            ${mode === 'collection' ? `<select class="input" id="o-cap">${[[0, 'Sem limite de nível'], [15, 'Nível máx 15'], [25, 'Nível máx 25'], [35, 'Nível máx 35'], [45, 'Nível máx 45']].map(([v, l]) => `<option value="${v}" ${v === (o.levelCap || 0) ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}
+            ${TEAM_MODES.includes(mode) ? `<select class="input" id="o-cap">${[[0, 'Sem limite de nível'], [15, 'Nível máx 15'], [25, 'Nível máx 25'], [35, 'Nível máx 35'], [45, 'Nível máx 45'], [50, 'Nível máx 50']].map(([v, l]) => `<option value="${v}" ${v === (o.levelCap || 0) ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}
           </div>` : ''}
           <div class="list" style="max-height:none">${match.lobby.map(e => `
             <div class="list-item"><img class="avatar sm" src="${avatarUrl(e.avatar)}" alt="${esc(e.name)}">
@@ -356,16 +376,19 @@ export async function roomScreen(root, ctx, matchId) {
                 <div class="tiny muted">${teamTxt(e)}</div></div>
               ${isHost && e.id !== meId ? `<button class="btn sm red" data-act="kick" data-id="${esc(e.id)}">✕</button>` : ''}
             </div>`).join('')}</div>
-          ${isHost ? `<div class="row"><button class="btn sm" data-act="bot" ${match.lobby.length >= o.maxPlayers || mode === 'ranked' ? 'disabled' : ''} title="${mode === 'ranked' ? 'Competitivo é só entre humanos' : ''}">🤖 Adicionar CPU</button>
+          ${isHost ? `<div class="row"><button class="btn sm" data-act="bot" ${match.lobby.length >= o.maxPlayers || mode === 'ranked' || mode === 'duel' ? 'disabled' : ''} title="${mode === 'ranked' || mode === 'duel' ? 'Só entre humanos' : ''}">🤖 Adicionar CPU</button>
               <button class="btn primary grow" data-act="start">▶ Iniciar partida</button></div>`
             : `<button class="btn ${mine?.ready ? '' : 'green'}" data-act="ready">${mine?.ready ? 'Cancelar pronto' : '✅ Estou pronto'}</button>`}
           <button class="btn ghost" data-act="leave">← Sair da sala</button>
         </div>
         <div class="card col">
-          ${mode === 'collection'
-            ? `<h3>📦 Seu time (até 6 da Coleção)</h3>
-              <p class="tiny muted">Regra das insígnias vale para todos: tier 3 precisa de 2, tier 4 de 3 e tier 5 (lendários) de 4 para lutar. Se nenhum do seu time obedecer sem insígnias, o inicial escolhido abaixo entra junto.</p>
+          ${TEAM_MODES.includes(mode)
+            ? mode === 'collection' ? `<h3>📦 Seu time (até 6 da Coleção)</h3>
+              <p class="tiny muted">O resto da sua Coleção vai para o PC da partida (troque numa cidade). Regra das insígnias vale para todos: tier 3 precisa de 2, tier 4 de 3 e tier 5 (lendários) de 4 para lutar. Se nenhum do seu time obedecer sem insígnias, o inicial escolhido abaixo entra junto.</p>
               ${teamPicker(profile?.vault, picks, o.levelCap || 0)}<h3 style="margin-top:8px">${picks.length ? 'Inicial (entra se precisar)' : 'ou um inicial'}</h3>${starterPicker(mine?.starter)}`
+              : `<h3>⚔️ Seu time de batalha (até 6)</h3>
+              <p class="tiny muted">Duelos não têm tabuleiro nem insígnias: todos obedecem. Nível limitado a ${o.levelCap || 50}. Se não escolher, vão os 6 mais fortes da Coleção. Kit igual para todos: 2 Poções, 1 Super Poção e 1 Revive.</p>
+              ${teamPicker(profile?.vault, picks, o.levelCap || 0)}`
             : `<h3>🌱 Seu inicial</h3>${starterPicker(mine?.starter)}`}
           <h3 style="margin-top:8px">💬 Chat</h3>
           <div class="log" id="r-chat" style="height:130px">${(match.chat || []).map(c => `<p class="chat"><b>${esc(c.name)}:</b> ${esc(c.text)}</p>`).join('') || '<p class="muted">Diga olá!</p>'}</div>

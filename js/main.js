@@ -7,6 +7,8 @@ import { loginScreen, hubScreen, lobbyScreen, roomScreen, localSetupScreen } fro
 import { toast } from './ui/dom.js';
 import { startNotifications } from './ui/notify.js';
 import { startSocial } from './ui/social.js';
+import { cupScreen } from './ui/tournament.js';
+import { initInstall } from './ui/install.js';
 
 const app = document.getElementById('app');
 let cleanup = null;
@@ -57,10 +59,12 @@ async function go(screen, arg) {
       case 'online': {
         const { match } = await api('match', { op: 'get', matchId: arg });
         if (match.status === 'lobby') return go('room', arg);
+        if (match.state?.kind === 'cup') { cleanup = cupScreen(el, ctx, match); return; }
         const me = match.me;
         session = new OnlineSession(match, me);
         session.on((state, m, err) => { if (err) { toast('Você não faz mais parte desta partida.', 'bad'); go('hub'); } });
-        cleanup = mountGame(el, session, { onExit: () => go('hub') });
+        const cupId = match.options?.cupId;
+        cleanup = mountGame(el, session, { onExit: () => (cupId ? go('online', cupId) : go('hub')), backLabel: cupId ? 'Voltar para a Copa' : null });
         return;
       }
     }
@@ -72,6 +76,7 @@ async function go(screen, arg) {
 }
 
 (async function boot() {
+  initInstall();
   app.innerHTML = '<div class="screen"><span class="spinner"></span></div>';
   await initNet();
   if (net.config?.dailyPokemon) ctx.daily = net.config.dailyPokemon;

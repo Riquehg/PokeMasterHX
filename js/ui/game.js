@@ -15,7 +15,8 @@ import { renderTrades } from './trade.js';
 const BATTLE_FX = new Set(['hit', 'heal', 'faint', 'switch']);
 const SPEEDS = [[1, '🎬 Animações: normal'], [2, '⚡ Animações: rápidas'], [0, '⏭️ Animações: desligadas']];
 
-export function mountGame(root, session, { onExit }) {
+export function mountGame(root, session, opts = {}) {
+  const { onExit } = opts;
   const ui = {
     tab: 'log', mtab: 'team', battleSub: null, spectate: false, afkTimer: null, overShown: false,
     shown: session.state, queue: [], playing: false, listeners: new Set(), lastBattleSeen: session.state?.lastBattle?.fxSeq ?? 0
@@ -185,6 +186,7 @@ export function mountGame(root, session, { onExit }) {
   // ================================================================ render
   function render() {
     if (ui.dead) return;
+    root.querySelector('#game')?.classList.toggle('duel', session.state?.kind === 'duel');
     const s = S();
     if (!s) return;
     const p = me();
@@ -435,6 +437,18 @@ export function mountGame(root, session, { onExit }) {
 
   function showOver(s) {
     const w = s.players.find(p => p.id === s.winner);
+    if (s.kind === 'duel') { // duelo: resultado simples (vitória/derrota e Elo)
+      const vid = session.viewerId();
+      const d = s.ratingChanges?.[vid];
+      confetti(w?.id === vid ? 150 : 40);
+      const ov = openModal('over', w?.id === vid ? '🏆 Vitória!' : '⚔️ Fim do duelo', `
+        <div class="banner-win">${w ? avatarImg(w, 'avatar') : ''}<h2>${esc(w ? w.name : '—')} venceu o duelo!</h2>
+        <p class="muted">${esc(s.log.filter(l => l.kind === 'win').slice(-1)[0]?.msg || '')}</p></div>
+        ${d !== undefined ? `<p class="center" style="font-size:18px">Seu Elo: <b style="color:${d >= 0 ? '#8ff0bd' : '#ff9b9e'}">${d >= 0 ? '+' : ''}${d}</b></p>` : ''}
+        <button class="btn primary block" data-act="exit" style="margin-top:10px">${esc(opts.backLabel || 'Voltar ao menu')}</button>`);
+      bindActions(ov, { exit: () => { closeModal('over'); onExit(); } });
+      return;
+    }
     const ranked = [...s.players].sort((a, b) => score(b) - score(a));
     confetti(150);
     const ov = openModal('over', '🏆 Fim de jogo', `

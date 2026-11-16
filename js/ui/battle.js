@@ -120,7 +120,7 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
     }
   }
 
-  return `<div class="battle-head"><b>${KIND_TITLE[b.kind] || 'Batalha'}${foe.kind === 'npc' ? ` · ${esc(foe.title ? foe.title + ' ' : '')}${esc(foe.name)}` : ''}</b><span class="chip">Rodada ${b.round + 1}</span></div>
+  return `<div class="battle-head"><b>${state.kind === 'duel' ? '⚔️ Duelo' : KIND_TITLE[b.kind] || 'Batalha'}${foe.kind === 'npc' ? ` · ${esc(foe.title ? foe.title + ' ' : '')}${esc(foe.name)}` : ''}</b><span class="chip">Rodada ${b.round + 1}</span></div>
     ${arena}
     <div class="matchup">${matchup}</div>
     ${controls}

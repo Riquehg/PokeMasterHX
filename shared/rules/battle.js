@@ -413,6 +413,7 @@ function awardKO(state, winnerSi, loserSi) {
   const foe = sideActive(state, loseSide);
   log(state, `💥 ${monLabel(state, loseSide)} desmaiou!`, 'battle');
   fx(state, { k: 'faint', side: loserSi, uid: foe.uid });
+  if (state.options.duel) return; // duelo não dá XP (não muda a Coleção)
   if (winSide.kind !== 'player') return;
 
   const player = getPlayer(state, winSide.pid);

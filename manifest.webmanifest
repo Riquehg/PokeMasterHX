@@ -1,0 +1,21 @@
+{
+  "name": "Pokémon Master Trainer: HEX Edition",
+  "short_name": "PokeMaster HX",
+  "description": "Jogo de tabuleiro Pokémon online: capture, batalhe, troque e dispute Torneios e Copas.",
+  "id": "/",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "fullscreen"],
+  "orientation": "any",
+  "background_color": "#0b0806",
+  "theme_color": "#0b0806",
+  "lang": "pt-BR",
+  "categories": ["games"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

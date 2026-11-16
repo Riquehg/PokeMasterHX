@@ -887,3 +887,31 @@ body.in-game #social { bottom: 70px; }
 @media (max-width: 560px) { .mon-detail { grid-template-columns: 1fr; } .mon-detail .pk-card { max-width: 260px; margin: 0 auto; } }
 
 .mk-sale { width: 100%; display: flex; flex-direction: column; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 2px dashed #3d3326; font-family: 'Inter', sans-serif; }
+
+/* ===== Duelo (Torneio/Copa): só batalha ===== */
+#game.duel .board-viewport { background: radial-gradient(ellipse at 50% 70%, #3a2a12, #0d0905 70%); display: flex; align-items: center; justify-content: center; }
+#game.duel .board-viewport > * { display: none !important; }
+#game.duel .board-viewport::after { content: "⚔️ ARENA DE DUELO"; font-family: 'Cinzel', serif; font-size: clamp(22px, 4vw, 40px); color: #f2b33d; text-shadow: 0 0 20px rgba(242, 179, 61, .6); }
+#game.duel [data-act="open-dex"], #game.duel #g-actions .city-only { display: none; }
+
+/* ===== Torneio / Copa ===== */
+.queue-pulse { font-size: 56px; animation: raidPulse 1s ease-in-out infinite; }
+.cup-screen .card { max-width: 1200px; margin: 0 auto; }
+.cup-bracket { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(190px, 1fr); gap: 14px; overflow-x: auto; padding: 8px 0 12px; }
+.cup-round { display: flex; flex-direction: column; justify-content: space-around; gap: 10px; }
+.cup-round h4 { text-align: center; margin: 0 0 4px; color: var(--gold, #f2b33d); }
+.cup-match { background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .12); border-radius: 12px; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+.cup-match.mine { border-color: #3fd46b; box-shadow: 0 0 12px rgba(63, 212, 107, .4); }
+.cup-slot { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 8px; background: rgba(0, 0, 0, .25); font-size: 13px; }
+.cup-slot img { width: 26px; height: 26px; object-fit: contain; }
+.cup-slot.win { background: rgba(63, 212, 107, .18); font-weight: 800; }
+.cup-slot.lose { opacity: .45; text-decoration: line-through; }
+.cup-slot.me span { color: #ffd77a; }
+.cup-slot.bye, .cup-slot.tbd { color: #8d8270; font-style: italic; justify-content: center; }
+.cup-slot b { margin-left: auto; color: #3fd46b; }
+.cup-log { border-top: 1px solid rgba(255, 255, 255, .08); padding-top: 8px; }
+
+/* ===== App instalado ===== */
+.install-btn { border-color: #3fd46b; color: #b8f5c9; }
+.install-steps { line-height: 1.8; padding-left: 20px; }
+@media (display-mode: standalone) { body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); } }
