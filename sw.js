@@ -2,7 +2,8 @@
 // - Arquivos do jogo (HTML/JS/CSS/ícones): rede primeiro, cache como reserva (sempre pega a versão nova quando online).
 // - Sprites do Supabase Storage: cache primeiro (economiza dados no celular).
 // - /api: nunca passa pelo cache (sempre ao vivo).
-const VERSION = 'pmhx-v4';
+const VERSION = 'pmhx-v7';
+const SPRITES = 'pmhx-sprites-2'; // nome novo = apaga o cache antigo (que podia guardar "não encontrado")
 const SHELL = ['/', '/index.html', '/css/app.css', '/js/main.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/favicon.ico'];
 
 self.addEventListener('install', e => {
@@ -11,7 +12,7 @@ self.addEventListener('install', e => {
 });
 
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== 'pmhx-sprites').map(k => caches.delete(k)))));
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== SPRITES).map(k => caches.delete(k)))));
   self.clients.claim();
 });
 
@@ -22,11 +23,13 @@ self.addEventListener('fetch', e => {
   if (url.pathname.startsWith('/api/')) return; // sempre ao vivo
   // sprites e fontes: cache primeiro
   if (url.pathname.includes('/storage/v1/object/public/') || url.hostname.endsWith('fonts.gstatic.com') || url.hostname.endsWith('fonts.googleapis.com')) {
-    e.respondWith(caches.open('pmhx-sprites').then(async c => {
-      const hit = await c.match(req);
+    e.respondWith(caches.open(SPRITES).then(async c => {
+      const hit = await c.match(req.url);
       if (hit) return hit;
-      const res = await fetch(req);
-      if (res.ok || res.type === 'opaque') c.put(req, res.clone());
+      // pede com CORS para saber se o arquivo existe; só guarda o que deu certo (nunca um 404)
+      let res;
+      try { res = await fetch(req.url, { mode: 'cors', credentials: 'omit' }); } catch { return fetch(req); }
+      if (res.ok) c.put(req.url, res.clone());
       return res;
     }));
     return;

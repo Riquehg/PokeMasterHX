@@ -9,6 +9,7 @@ import { startNotifications } from './ui/notify.js';
 import { startSocial } from './ui/social.js';
 import { cupScreen } from './ui/tournament.js';
 import { initInstall } from './ui/install.js';
+import { installSpriteFallback } from './config.js';
 
 const app = document.getElementById('app');
 let cleanup = null;
@@ -77,6 +78,7 @@ async function go(screen, arg) {
 
 (async function boot() {
   initInstall();
+  installSpriteFallback();
   app.innerHTML = '<div class="screen"><span class="spinner"></span></div>';
   await initNet();
   if (net.config?.dailyPokemon) ctx.daily = net.config.dailyPokemon;

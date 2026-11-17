@@ -218,6 +218,8 @@ function chooseDestination(state, p) {
       if (goal === 'train' && sp.type === 'city' && teamHealth(p) < 0.8) s += 6;
     }
     if (state.board[id]?.shiny) s += 20;
+    const hs = (state.hotspots || []).find(h => h.space === id);
+    if (hs) s += hs.kind === 'chest' ? 25 : hs.kind === 'mystery' ? 22 : hasUsableBot(p) ? 18 : -5; // evento relâmpago
     s += (state.seed % 7 === id % 7) ? 0.5 : 0; // desempate leve
     if (s > bestScore) { bestScore = s; best = id; }
   }
@@ -355,3 +357,5 @@ export function botAction(state, pid) {
   }
   return { type: 'end_turn' };
 }
+
+const hasUsableBot = p => p.team.some(m => m.hp > 0);

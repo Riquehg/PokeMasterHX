@@ -187,6 +187,14 @@ export function mountGame(root, session, opts = {}) {
               effects: f.rewards.map(t => ({ text: t, tone: 'good', icon: '🎁' })), trainer: f.companion ? { name: '', sprite: COMPANIONS[f.companion]?.sprite } : undefined }, { name: nameOf(f.pid), mine: true });
           } else toast(`🎯 ${nameOf(f.pid)} completou uma missão!`, 'info');
           break;
+        case 'hotspot': {
+          const nm = { chest: '🎁 Baú do Tesouro', raid: '🔥 Raid Relâmpago', mystery: '❔ Pokémon Misterioso' }[f.kind];
+          toast(`${nm} apareceu em ${getSpace(f.space).name}! Pare lá em até ${f.rounds} rodadas.`, 'good');
+          break;
+        }
+        case 'hotspot_gone':
+          toast(`⌛ O evento em ${getSpace(f.space).name} sumiu.`, 'info');
+          break;
         case 'raid_start':
           toast('🔥 RAID EM GRUPO! Escolha um Pokémon para lutar juntos.', 'good');
           break;

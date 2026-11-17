@@ -24,7 +24,7 @@ export class BoardView {
       <div class="board-stage stage-noimg" id="stage">
         <div class="board-fallback"></div>
         <img class="board-img" alt="" draggable="false">
-        <div class="layer-spaces"></div><div class="layer-badges"></div><div class="layer-wild"></div><div class="layer-tokens"></div>
+        <div class="layer-spaces"></div><div class="layer-badges"></div><div class="layer-hotspots"></div><div class="layer-wild"></div><div class="layer-tokens"></div>
       </div>
       <div class="zoom-ctrl">
         <button data-z="in" title="Aproximar">+</button><button data-z="out" title="Afastar">−</button>
@@ -206,6 +206,7 @@ export class BoardView {
     }
     this.stage.querySelector('.layer-spaces').innerHTML = spaces;
     this.stage.querySelector('.layer-badges').innerHTML = state.kind === 'duel' ? '' : badgeMarkers(state, me);
+    this.stage.querySelector('.layer-hotspots').innerHTML = hotspotMarkers(state);
 
     let wild = '';
     for (const [id, mon] of Object.entries(state.board || {})) {
@@ -246,7 +247,7 @@ export class BoardView {
     const sparks = au ? `<div class="sparks">${'<i></i>'.repeat(7)}</div>` : '';
     return `<div class="${cls}" data-pid="${esc(pl.id)}" style="left:${sp.x}%;top:${sp.y}%;margin-left:calc(${off}px * var(--ms, 1));--pc:${playerColor(state, pl.id)}" title="${esc(pl.name)}${c.title ? ' — ' + esc(c.title) : ''}">
       ${fr ? '<div class="halo"></div><div class="halo h2"></div>' : ''}${sparks}
-      <div class="pin ${fr ? 'frame-' + fr : ''}"><img src="${avatarUrl(pl.avatar)}" alt="${esc(pl.name)}" data-color="${playerColor(state, pl.id)}" draggable="false"></div>
+      <div class="pin ${fr ? 'frame-' + fr : ''} ${c.card ? 'tcard-' + esc(c.card) : ''}"><img src="${avatarUrl(pl.avatar)}" alt="${esc(pl.name)}" data-color="${playerColor(state, pl.id)}" draggable="false"></div>
       ${pl.companion && COMPANIONS[pl.companion] ? `<img class="tk-comp" src="${leaderUrl(COMPANIONS[pl.companion].sprite)}" alt="" title="${esc(COMPANIONS[pl.companion].name)}" draggable="false">` : ''}
       <span class="name">${pl.id === viewerId ? 'Você' : esc(pl.name.split(' ')[0])}</span>
       ${c.title ? `<span class="ttitle">★ ${esc(c.title)}</span>` : ''}</div>`;
@@ -281,6 +282,20 @@ export function badgeStatus(state, me) {
   const missing = list.filter(g => !g.owned && g.dist !== null).sort((a, b) => a.dist - b.dist);
   if (missing[0]) missing[0].next = true;
   return list;
+}
+
+const HS_NAME = { chest: 'Baú do Tesouro', raid: 'Raid Relâmpago', mystery: 'Pokémon Misterioso' };
+/** Eventos relâmpago: ícone na casa com as rodadas que faltam. Quem parar ali ativa. */
+function hotspotMarkers(state) {
+  return (state.hotspots || []).map(h => {
+    const sp = SPACE_LIST.find(x => x.id === h.space);
+    if (!sp) return '';
+    const left = Math.max(1, h.until - state.turn);
+    const art = h.kind === 'chest' ? '<span class="hs-emoji">🎁</span>' : h.kind === 'raid' ? '<span class="hs-emoji">🔥</span>'
+      : `<img class="hs-sil" src="${monSprite(h.mon.sp)}" alt="" draggable="false"><span class="hs-q">?</span>`;
+    return `<div class="hotspot hs-${h.kind}" style="left:${sp.x}%;top:${sp.y}%" title="${HS_NAME[h.kind]} — pare nesta casa para ativar · some em ${left} rodada(s)">
+      ${art}<span class="hs-timer">⏳${left}</span></div>`;
+  }).join('');
 }
 
 function badgeMarkers(state, me) {

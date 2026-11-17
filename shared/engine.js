@@ -330,6 +330,8 @@ function move(state, rng, p, to) {
 
 function resolveSpace(state, rng, p, sp) {
   state.phase = 'action';
+  const hs = (state.hotspots || []).find(h => h.space === sp.id);
+  if (hs) return triggerHotspot(state, rng, p, sp, hs);
   if (sp.type === 'city') return visitCity(state, p, sp);
   if (sp.type === 'pokemon') return wildEncounter(state, rng, p, sp, sp.tier);
   if (sp.type === 'event') return boardEvent(state, rng, p, sp);
@@ -348,6 +350,7 @@ function advanceTurn(state, now) {
     if (state.current >= state.players.length) {
       state.current = 0;
       state.turn += 1;
+      tickHotspots(state);
     }
     const np = currentPlayer(state);
     if (np.skip > 0) {
@@ -685,7 +688,8 @@ function wildEncounter(state, rng, p, sp, tier, opts = {}) {
     log(state, `😵 ${p.name} está sem Pokémon de pé (ou que obedeça) e não consegue enfrentar o selvagem.`, 'bad');
     return;
   }
-  let mon = opts.fresh ? null : state.board[sp.id];
+  let mon = opts.mon || (opts.fresh ? null : state.board[sp.id]);
+  if (opts.mon) state.board[sp.id] = mon;
   if (!mon) {
     mon = rollWild(rng, tier, { dailyPokemon: state.options.dailyPokemon, shinyCharm: !!p.items.shiny_charm });
     state.board[sp.id] = mon;
@@ -1159,8 +1163,88 @@ export function runBots(state, rng, now) {
 export { whoMustAct as mustAct, GameError, sideActive, sideIndexOf };
 export { SPACE_LIST, GYMS, ELITE_FOUR, CHAMPION, ITEMS, shopFor };
 
+// ---------------------------------------------------------------- eventos relâmpago (ícone numa casa de evento, com tempo)
+export const HOTSPOT_MAX = 2;      // no máximo 2 ao mesmo tempo
+export const HOTSPOT_ROUNDS = 4;   // somem depois de 4 rodadas
+export const HOTSPOT_CHANCE = 0.4; // chance de surgir um novo a cada rodada
+export const HOTSPOT_INFO = {
+  chest:   { icon: '🎁', name: 'Baú do Tesouro' },
+  raid:    { icon: '🔥', name: 'Raid Relâmpago' },
+  mystery: { icon: '❔', name: 'Pokémon Misterioso' }
+};
+
+/** Começo de cada rodada: vence os antigos e às vezes cria um novo. */
+function tickHotspots(state) {
+  if (state.kind === 'duel' || state.status !== 'playing') return;
+  const rng = createRng((state.seed ^ (state.turn * 2654435761)) >>> 0);
+  const list = (state.hotspots ||= []);
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (state.turn >= list[i].until) {
+      const h = list.splice(i, 1)[0];
+      fx(state, { k: 'hotspot_gone', space: h.space, kind: h.kind });
+      log(state, `⌛ O ${HOTSPOT_INFO[h.kind].name} em ${getSpace(h.space).name} sumiu.`);
+    }
+  }
+  if (list.length >= HOTSPOT_MAX || rng.next() > HOTSPOT_CHANCE) return;
+  const taken = new Set([...list.map(h => h.space), ...state.players.map(p => p.pos)]);
+  const spots = SPACE_LIST.filter(x => x.type === 'event' && !taken.has(x.id));
+  if (!spots.length) return;
+  const sp = rng.pick(spots);
+  const kinds = [['chest', 45], ['mystery', 35]];
+  if (sp.tier >= 3) kinds.push(['raid', 20]);
+  const kind = rng.weighted(kinds);
+  const h = { space: sp.id, kind, until: state.turn + HOTSPOT_ROUNDS, tier: sp.tier };
+  if (kind === 'mystery') {
+    const mt = Math.min(4, sp.tier + 1); // um tier acima do normal da casa
+    const mon = rollWild(rng, mt, { dailyPokemon: state.options.dailyPokemon });
+    if (!mon.shiny && rng.next() < 0.08) mon.shiny = true; // chance de shiny bem maior
+    h.mon = mon;
+  }
+  list.push(h);
+  fx(state, { k: 'hotspot', space: sp.id, kind, rounds: HOTSPOT_ROUNDS });
+  log(state, `${HOTSPOT_INFO[kind].icon} ${HOTSPOT_INFO[kind].name} apareceu em ${sp.name}! Some em ${HOTSPOT_ROUNDS} rodadas.`, 'event');
+}
+
+function triggerHotspot(state, rng, p, sp, h) {
+  state.hotspots = state.hotspots.filter(x => x !== h);
+  const t = sp.tier;
+  if (h.kind === 'raid') return boardEvent(state, rng, p, sp, t >= 5 ? 'legend_shrine' : 'raid');
+  const ev = { k: 'event', pid: p.id, id: 'hotspot_' + h.kind, title: HOTSPOT_INFO[h.kind].name, icon: HOTSPOT_INFO[h.kind].icon, tone: 'good', effects: [] };
+  if (h.kind === 'chest') {
+    ev.lore = `${p.name} chegou primeiro e abriu o baú!`;
+    const g = 120 * t + rng.int(0, 60) * t;
+    p.gold += g;
+    ev.effects.push({ text: `+${g} de ouro`, tone: 'good', icon: '🪙' });
+    for (let i = 0; i < 2; i++) {
+      const id = rng.weighted(i === 0 ? EVENT_ITEMS[t] : LUCKY_ITEMS);
+      addItem(p, id, 1);
+      ev.effects.push({ text: `+1x ${ITEMS[id].name}`, tone: id === 'master_ball' ? 'shiny' : 'good', item: id });
+    }
+    fx(state, ev);
+    log(state, `🎁 ${p.name} abriu o Baú do Tesouro → ${ev.effects.map(e => e.text).join(' · ')}`, 'event');
+    return;
+  }
+  // Pokémon Misterioso: a silhueta vira um selvagem mais forte (e com mais chance de shiny)
+  const mon = h.mon;
+  ev.lore = `A silhueta saltou da sombra... é um ${speciesName(mon.sp)}${mon.shiny ? ' ✨SHINY✨' : ''}!`;
+  ev.mon = { sp: mon.sp, shiny: !!mon.shiny };
+  ev.tone = mon.shiny ? 'shiny' : 'battle';
+  ev.effects.push({ text: `${speciesName(mon.sp)} Nv. ${mon.lvl} quer batalhar!`, tone: 'battle', icon: '⚔️' });
+  fx(state, ev);
+  log(state, `❔ ${p.name} encontrou o Pokémon Misterioso: ${speciesName(mon.sp)}${mon.shiny ? ' ✨' : ''}!`, 'event');
+  if (!hasUsable(p)) { log(state, `😵 ${p.name} não tem Pokémon de pé — o misterioso fugiu.`, 'bad'); return; }
+  wildEncounter(state, rng, p, sp, getSpecies(mon.sp).tier, { mon });
+}
+
 // Usado só nos testes automatizados
 export const _internals = {
+  tickHotspots,
+  land(state, pid, spaceId, seed = 1) {
+    const st = clone(state);
+    st.fx = [];
+    resolveSpace(st, createRng(seed), getPlayer(st, pid), getSpace(spaceId));
+    return st;
+  },
   boardEvent(state, pid, spaceId, cardId, seed = 1) {
     const st = clone(state);
     const rng = createRng(seed);

@@ -280,3 +280,33 @@ test('Pokédex shiny: ver e capturar shiny registra nas listas do jogador', asyn
   gm(p, mon);
   assert.ok(p.shinyCaught.includes('magikarp') && p.shinySeen.includes('magikarp') && p.caught.includes('magikarp'));
 });
+
+test('evento relâmpago: aparece em casa de evento, some com o tempo e ativa ao parar nela', async () => {
+  const { HOTSPOT_ROUNDS } = await import('../shared/engine.js');
+  let s = game(12);
+  // força o surgimento: várias rodadas até aparecer algum
+  for (let t = 2; t < 40 && !(s.hotspots || []).length; t++) { s.turn = t; s.fx = []; _internals.tickHotspots(s); }
+  assert.ok(s.hotspots.length >= 1, 'apareceu um evento');
+  const h = s.hotspots[0];
+  assert.equal(SPACE_LIST.find(x => x.id === h.space).type, 'event');
+  assert.equal(h.until, s.turn + HOTSPOT_ROUNDS);
+  // baú: ouro + itens e some do mapa
+  const chest = { space: eventSpace(2), kind: 'chest', until: s.turn + 4, tier: 2 };
+  s.hotspots = [chest];
+  const g0 = s.players[0].gold;
+  const a = _internals.land(s, 'ash', chest.space);
+  assert.ok(a.players[0].gold > g0 && a.hotspots.length === 0);
+  assert.ok(a.fx.some(f => f.k === 'event' && f.id === 'hotspot_chest'));
+  // Pokémon misterioso: vira batalha contra a silhueta
+  const mon = createMon(createRng(4), 'dragonite', 30, {});
+  s.hotspots = [{ space: eventSpace(3), kind: 'mystery', until: s.turn + 4, tier: 3, mon }];
+  const b = _internals.land(s, 'ash', eventSpace(3));
+  assert.equal(b.battle?.kind, 'wild');
+  assert.equal(b.battle.sides[1].team[0].sp, 'dragonite');
+  // vence o prazo
+  s.hotspots = [{ ...chest, until: s.turn + 1 }];
+  s.turn += 1; s.fx = [];
+  _internals.tickHotspots(s);
+  assert.ok(!s.hotspots.some(x => x.space === chest.space && x.kind === 'chest' && x.until === s.turn));
+  assert.ok(s.fx.some(f => f.k === 'hotspot_gone'));
+});

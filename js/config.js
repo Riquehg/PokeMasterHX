@@ -14,12 +14,73 @@ export function setSpritesUrl(url) {
 
 const pad = n => String(n).padStart(3, '0');
 
+// ---------------------------------------------------------------- sprites dos Pokémon
+// O jogo aceita os arquivos pelo número da Pokédex (monsters/063.png) OU pelo nome (shinys/abra.png).
+// Se o primeiro endereço não existir, tenta os próximos da lista e lembra qual formato funcionou.
+const nameVariants = s => {
+  const id = s.id;                                   // ex.: mr_mime, ho_oh, nidoran_f
+  const low = s.name.toLowerCase();                  // ex.: mr. mime, ho-oh
+  // tamanho fixo (sem tirar repetidos) para o índice do formato valer para todas as espécies
+  return [id, id.replace(/_/g, '-'), low.replace(/[.':]/g, '').replace(/\s+/g, '-'), low.replace(/[^a-z0-9]/g, ''), id.replace(/_/g, ''), s.name];
+};
+const SHINY_DIRS = ['monsters/shiny/', 'shinys/', 'shiny/', 'monsters/shinys/'];
+const NORMAL_DIRS = ['monsters/', 'normal/', 'pokemon/'];
+/** Lista de endereços possíveis (em ordem) para a espécie. */
+export function spriteCandidates(spId, shiny) {
+  const s = getSpecies(spId);
+  if (!s) return [];
+  const dirs = shiny ? SHINY_DIRS : NORMAL_DIRS;
+  const out = [];
+  for (const d of dirs) out.push(`${d}${pad(s.dex)}.png`);
+  for (const d of dirs) for (const n of nameVariants(s)) out.push(`${d}${n}.png`);
+  return out;
+}
+const PREF_KEY = 'pmhx_sprite_fmt';
+const pref = (() => { try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}'); } catch { return {}; } })();
+/** Formato que já funcionou (índice na lista de candidatos), para ir direto nele nas próximas. */
+// Padrão: normais pelo número (monsters/063.png) e shinies pelo nome (shinys/abra.png = índice 10 da lista)
+const DEFAULT_FMT = { n: 0, s: 10 };
+function preferred(shiny) { const k = shiny ? 's' : 'n'; return pref[k] !== undefined ? Number(pref[k]) || 0 : DEFAULT_FMT[k]; }
+function rememberFormat(shiny, idx) {
+  pref[shiny ? 's' : 'n'] = idx;
+  try { localStorage.setItem(PREF_KEY, JSON.stringify(pref)); } catch { /* sem storage */ }
+}
+
 export function monSprite(spOrMon, shiny) {
   const id = typeof spOrMon === 'string' ? spOrMon : spOrMon.sp;
-  const isShiny = typeof spOrMon === 'string' ? shiny : spOrMon.shiny;
-  const s = getSpecies(id);
-  if (!s) return '';
-  return `${CFG.sprites}monsters/${isShiny ? 'shiny/' : ''}${pad(s.dex)}.png`;
+  const isShiny = !!(typeof spOrMon === 'string' ? shiny : spOrMon.shiny);
+  const list = spriteCandidates(id, isShiny);
+  if (!list.length) return '';
+  const i = Math.min(preferred(isShiny), list.length - 1);
+  return `${CFG.sprites}${list[i]}#${isShiny ? 's' : 'n'}:${id}:${i}`;
+}
+
+/** "Plano B" dos sprites: quando um <img> de Pokémon falha, tenta o próximo formato. Devolve true se tentou outro. */
+function trySpriteFallback(img) {
+  const m = /#([sn]):([a-z0-9_]+):(\d+)$/.exec(img.src);
+  if (!m) return false;
+  const shiny = m[1] === 's', id = m[2], start = Number(m[3]);
+  const list = spriteCandidates(id, shiny);
+  const tries = Number(img.dataset.spTries || 0) + 1;
+  if (tries >= list.length) { // nenhum formato achado
+    if (shiny && !img.dataset.spNormal) { img.dataset.spNormal = '1'; img.dataset.spTries = 0; delete img.dataset.spTry; img.src = monSprite(id, false); return true; } // mostra o normal
+    return false;
+  }
+  const next = (Number(img.dataset.spTry ?? start) + 1) % list.length;
+  img.dataset.spTry = next;
+  img.dataset.spTries = tries;
+  img.src = `${CFG.sprites}${list[next]}#${m[1]}:${id}:${next}`;
+  return true;
+}
+
+/** Lembra o formato de arquivo que funcionou (para ir direto nele nas próximas imagens). */
+export function installSpriteFallback() {
+  document.addEventListener('load', e => {
+    const img = e.target;
+    if (!(img instanceof HTMLImageElement) || img.dataset.spTry === undefined) return;
+    const m = /#([sn]):([a-z0-9_]+):(\d+)$/.exec(img.src);
+    if (m && !m[2].includes('_')) rememberFormat(m[1] === 's', Number(m[3])); // nomes comuns definem o formato padrão // este formato funcionou: usa direto daqui pra frente
+  }, true);
 }
 export const avatarUrl = n => `${CFG.sprites}player_${String(Math.max(1, Math.min(8, Number(n) || 1))).padStart(2, '0')}.png`;
 export const itemUrl = id => `${CFG.sprites}items/${ITEMS[id]?.image || id + '.png'}`;
@@ -47,6 +108,7 @@ export function placeholder(text, color = '#3b2b1d') {
 if (typeof window !== 'undefined') {
   window.addEventListener('error', e => {
     const el = e.target;
+    if (el && el.tagName === 'IMG' && trySpriteFallback(el)) return; // sprite de Pokémon: tenta outro formato antes
     if (el && el.tagName === 'IMG' && !el.dataset.fallback) {
       el.dataset.fallback = '1';
       el.src = placeholder(el.alt || '?', el.dataset.color || '#3b2b1d');
