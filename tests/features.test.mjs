@@ -269,3 +269,14 @@ test('companheiro: Misty aumenta o dano de golpes de Água', async () => {
   };
   assert.ok(dmgWith('misty') > dmgWith(null));
 });
+
+test('Pokédex shiny: ver e capturar shiny registra nas listas do jogador', async () => {
+  const { markSeen, giveMon: gm } = await import('../shared/rules/helpers.js');
+  const s = game(5);
+  const p = s.players[0];
+  markSeen(p, 'gyarados', true);
+  assert.deepEqual(p.shinySeen, ['gyarados']);
+  const mon = createMon(createRng(3), 'magikarp', 10, { shiny: true });
+  gm(p, mon);
+  assert.ok(p.shinyCaught.includes('magikarp') && p.shinySeen.includes('magikarp') && p.caught.includes('magikarp'));
+});

@@ -48,20 +48,22 @@ export function takeItem(player, itemId, qty = 1) {
   return true;
 }
 
-export function markSeen(player, speciesId) {
+export function markSeen(player, speciesId, shiny = false) {
   if (!player.seen.includes(speciesId)) player.seen.push(speciesId);
+  if (shiny) { const l = (player.shinySeen ||= []); if (!l.includes(speciesId)) l.push(speciesId); }
 }
 
-export function markCaught(player, speciesId) {
-  markSeen(player, speciesId);
+export function markCaught(player, speciesId, shiny = false) {
+  markSeen(player, speciesId, shiny);
   if (!player.caught.includes(speciesId)) player.caught.push(speciesId);
+  if (shiny) { const l = (player.shinyCaught ||= []); if (!l.includes(speciesId)) l.push(speciesId); }
 }
 
 /** Coloca o Pokémon na equipe (ou no PC se a equipe estiver cheia). */
 export function giveMon(player, mon) {
   delete mon.wild;
   mon.ot = mon.ot || player.id;
-  markCaught(player, mon.sp);
+  markCaught(player, mon.sp, !!mon.shiny);
   if (mon.shiny) player.stats.shinies += 1;
   player.stats.captures += 1;
   if (player.team.length < TEAM_SIZE) {

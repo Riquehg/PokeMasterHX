@@ -135,7 +135,7 @@ function move(from, to, side, found) {
     (from.tradedAway ||= []).push(mon.uid);
     to.tradedAway = (to.tradedAway || []).filter(u => u !== mon.uid);
     giveMon(to, mon);
-    markCaught(to, mon.sp);
+    markCaught(to, mon.sp, !!mon.shiny);
   }
 }
 

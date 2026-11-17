@@ -27,7 +27,7 @@ import { proposeTrade, respondTrade } from './rules/trade.js';
 import { initMissions, progressMission, playerCompanionBonus } from './rules/missions.js';
 import { COMPANIONS } from './data/companions.js';
 import { startGroupRaid, startCatchStage, raidWaiting, raidAction, raidBallChance } from './rules/raid.js';
-import { sanitizeCosmetic } from './data/cosmetics.js';
+import { sanitizeCosmetic, cleanNick } from './data/cosmetics.js';
 import { botAction } from './bots.js';
 
 export const ENGINE_VERSION = 2;
@@ -113,6 +113,7 @@ function newPlayer(rng, cfg, index) {
       mon.brought = true; // veio da Coleção (segue a regra das insígnias como qualquer outro)
       if (m.uid) mon.uid = String(m.uid);
       if (m.aura) mon.aura = m.aura;
+      if (m.nick) { const n = cleanNick(m.nick); if (n) mon.nick = n; } // apelido (Loja de Diamantes)
       return mon;
   };
   const brought = (Array.isArray(cfg.teamMons) ? cfg.teamMons : []).filter(m => m && SPECIES[m.sp]).slice(0, TEAM_SIZE).map(fromVault);
@@ -148,6 +149,8 @@ function newPlayer(rng, cfg, index) {
     champion: false,
     seen: [...new Set([...(brought.length ? brought : [mon]), ...cfgBox].map(m => m.sp))],
     caught: [...new Set([...(brought.length ? brought : [mon]), ...cfgBox].map(m => m.sp))],
+    shinyCaught: [...new Set([...(brought.length ? brought : [mon]), ...cfgBox].filter(m => m.shiny).map(m => m.sp))],
+    shinySeen: [...new Set([...(brought.length ? brought : [mon]), ...cfgBox].filter(m => m.shiny).map(m => m.sp))],
     skip: 0,
     moveBonus: 0,
     stats: { captures: 0, shinies: brought.length ? 0 : (mon.shiny ? 1 : 0), wins: 0, losses: 0, pvpWins: 0, ballsThrown: 0 },
@@ -157,7 +160,7 @@ function newPlayer(rng, cfg, index) {
   if (cfg.extraMon && SPECIES[cfg.extraMon.sp]) {
     const extra = createMon(rng, cfg.extraMon.sp, Math.min(10, cfg.extraMon.lvl || 5), { shiny: !!cfg.extraMon.shiny, ot: p.id, starter: true });
     p.team.push(extra);
-    markCaught(p, extra.sp);
+    markCaught(p, extra.sp, !!extra.shiny);
   }
   return p;
 }
@@ -172,6 +175,7 @@ function detectEvolutions(prev, next) {
       const old = before.get(m.uid);
       if (old && old !== m.sp) {
         next.fx.push({ k: 'evolve', pid: p.id, uid: m.uid, from: old, to: m.sp, shiny: !!m.shiny });
+        markCaught(p, m.sp, !!m.shiny); // a forma evoluída entra na Pokédex
         progressMission(next, p.id, { k: 'evolve' });
       }
     }
@@ -636,7 +640,7 @@ function useItem(state, rng, p, a) {
       if (!sp.evolvesTo || !getSpecies(sp.evolvesTo)) fail(`${sp.name} não evolui.`);
       takeItem(p, a.item);
       const ev = evolve(target);
-      markCaught(p, target.sp);
+      markCaught(p, target.sp, !!target.shiny);
       log(state, `💎 ${ev.from} evoluiu para ${ev.to} com a Pedra Evolutiva!`, 'good');
       return;
     }

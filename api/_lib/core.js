@@ -7,6 +7,7 @@ import { CUP_MAX_PLAYERS, DUEL_LEVEL_CAP } from '../../shared/data/cup.js';
 import { duelQueue, duelQueueStatus, duelQueueCancel, duelTeam, startCup, duelFinished } from './tournament.js';
 import { SPECIES, STARTERS } from '../../shared/data/pokemon.js';
 import { dailyPokemon } from '../../shared/daily.js';
+import { cleanNick } from '../../shared/data/cosmetics.js';
 import { equippedCosmetic, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment } from './shop.js';
 
 export class HttpError extends Error {
@@ -20,6 +21,8 @@ const forbidden = msg => { throw new HttpError(403, msg || 'Sem permissão.'); }
 export const notFound = msg => { throw new HttpError(404, msg || 'Não encontrado.'); };
 
 export const COLLECTION_MAX = 300;
+/** Vagas da Coleção desta conta (300, ou 350 com a conveniência da Loja de Diamantes). */
+export const collectionMax = prof => COLLECTION_MAX + Math.max(0, Math.min(50, Number(prof?.stats?.vaultBonus) || 0));
 export const START_RATING = 1000;
 const BOT_NAMES = ['Brendan', 'May', 'Dawn', 'Lucas', 'Hilda', 'Nate', 'Serena', 'Calem', 'Red', 'Leaf'];
 
@@ -100,6 +103,12 @@ export function accountGoldReward(state, p) {
   return Math.min(1200, base);
 }
 
+async function withCosmetic(db, prof) {
+  let cosmetic = null;
+  try { cosmetic = await equippedCosmetic(db, prof); } catch { /* ok */ }
+  return { ...prof, cosmetic };
+}
+
 export async function profileOp(db, user, body) {
   const p = await getOrCreateProfile(db, user);
   if (body.op === 'get' || !body.op) {
@@ -121,7 +130,7 @@ export async function profileOp(db, user, body) {
     const patch = {};
     if (body.trainerName !== undefined) patch.trainer_name = cleanName(body.trainerName);
     if (body.avatar !== undefined) patch.avatar = Math.max(1, Math.min(8, Number(body.avatar) || 1));
-    return { profile: await db.upsertProfile(user.id, patch) };
+    return { profile: await withCosmetic(db, await db.upsertProfile(user.id, patch)) };
   }
   if (body.op === 'companion') {
     const id = body.id || null;
@@ -130,14 +139,23 @@ export async function profileOp(db, user, body) {
       if (id && !(st.companions || []).includes(id)) bad('Você ainda não tem esse companheiro. Ganhe completando missões nas partidas.');
       st.companion = id;
       return { stats: st };
-    }) };
+    }).then(x => withCosmetic(db, x)) };
+  }
+  if (body.op === 'nickname') {
+    if (!p.stats?.nicknames) bad('Apelidos são liberados na Loja de Diamantes (Conveniência).');
+    const nick = cleanNick(body.nick);
+    const prof = await mutateProfile(db, user.id, cur => {
+      if (!(cur.vault || []).some(m => m.uid === body.uid)) bad('Pokémon não encontrado na Coleção.');
+      return { vault: cur.vault.map(m => (m.uid === body.uid ? { ...m, nick: nick || null } : m)) };
+    });
+    return { profile: await withCosmetic(db, prof) };
   }
   if (body.op === 'release') {
     // Soltar um Pokémon da Coleção (não afeta partidas em andamento)
-    return { profile: await mutateProfile(db, user.id, prof => ({ vault: (prof.vault || []).filter(m => m.uid !== body.uid) })) };
+    return { profile: await withCosmetic(db, await mutateProfile(db, user.id, prof => ({ vault: (prof.vault || []).filter(m => m.uid !== body.uid) }))) };
   }
   if (body.op === 'favorite') {
-    return { profile: await mutateProfile(db, user.id, prof => ({ vault: (prof.vault || []).map(m => (m.uid === body.uid ? { ...m, fav: !m.fav } : m)) })) };
+    return { profile: await withCosmetic(db, await mutateProfile(db, user.id, prof => ({ vault: (prof.vault || []).map(m => (m.uid === body.uid ? { ...m, fav: !m.fav } : m)) }))) };
   }
   bad('Operação inválida.');
 }
@@ -166,7 +184,7 @@ export async function leaderboard(db) {
 
 // ------------------------------------------------------------------ Coleção
 function collectionEntry(mon, matchId) {
-  return { uid: mon.uid, sp: mon.sp, lvl: mon.lvl, shiny: !!mon.shiny, aura: mon.aura || null, nature: mon.nature || null, iv: mon.iv || null, moves: mon.moves || null, capTier: mon.capTier || null, from: matchId, at: new Date().toISOString() };
+  return { uid: mon.uid, sp: mon.sp, lvl: mon.lvl, shiny: !!mon.shiny, aura: mon.aura || null, nature: mon.nature || null, iv: mon.iv || null, moves: mon.moves || null, capTier: mon.capTier || null, nick: mon.nick || null, from: matchId, at: new Date().toISOString() };
 }
 
 /**
@@ -189,22 +207,28 @@ function collectionPatch(prof, p, state) {
       const e = collectionEntry(mon, state.id);
       if (idx.has(mon.uid)) {
         const old = vault[idx.get(mon.uid)];
-        vault[idx.get(mon.uid)] = { ...old, sp: e.sp, lvl: Math.max(old.lvl || 1, e.lvl), shiny: e.shiny, aura: e.aura || old.aura || null, nature: old.nature || e.nature || null, iv: old.iv || e.iv || null, moves: old.moves || e.moves || null, capTier: old.capTier || e.capTier || null };
+        vault[idx.get(mon.uid)] = { ...old, sp: e.sp, lvl: Math.max(old.lvl || 1, e.lvl), shiny: e.shiny, aura: e.aura || old.aura || null, nature: old.nature || e.nature || null, iv: old.iv || e.iv || null, moves: old.moves || e.moves || null, capTier: old.capTier || e.capTier || null, nick: old.nick || null };
       } else {
         idx.set(mon.uid, vault.length);
         vault.push(e);
       }
     }
     // Limite: remove primeiro os mais fracos que não são shiny nem favoritos
-    if (vault.length > COLLECTION_MAX) {
+    const cap = collectionMax(prof);
+    if (vault.length > cap) {
       const keep = new Set([...p.team, ...p.box].map(m => m.uid));
       const removable = vault.filter(m => !m.shiny && !m.fav && !keep.has(m.uid)).sort((a, b) => a.lvl - b.lvl);
-      const drop = new Set(removable.slice(0, vault.length - COLLECTION_MAX).map(m => m.uid));
+      const drop = new Set(removable.slice(0, vault.length - cap).map(m => m.uid));
       for (let i = vault.length - 1; i >= 0; i--) if (drop.has(vault[i].uid)) vault.splice(i, 1);
     }
     const pokedex = [...new Set([...(prof.pokedex || []), ...p.caught])];
     const seen = [...new Set([...(prof.pokedex_seen || []), ...(p.seen || []), ...p.caught])];
-    return { vault, pokedex, pokedex_seen: seen, points: calcPoints(pokedex, prof.stats || {}) };
+    // Pokédex shiny (vistos e capturados) fica em stats — sem mudar o schema
+    const st = prof.stats || {};
+    const shinyDex = [...new Set([...(st.shinyDex || []), ...(p.shinyCaught || [])])];
+    const shinySeen = [...new Set([...(st.shinySeen || []), ...(p.shinySeen || []), ...shinyDex])];
+    const changed = shinyDex.length !== (st.shinyDex || []).length || shinySeen.length !== (st.shinySeen || []).length;
+    return { vault, pokedex, pokedex_seen: seen, points: calcPoints(pokedex, st), ...(changed ? { stats: { ...st, shinyDex, shinySeen } } : {}) };
   }
 }
 
@@ -640,7 +664,7 @@ export async function adminOp(db, user, body) {
       const ok = await mutateProfile(db, body.userId, prof => {
         const vault = [...(prof.vault || [])];
         vault.unshift({ uid: 'adm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), sp: body.species, lvl: Math.max(1, Math.min(60, Number(body.level) || 5)), shiny: !!body.shiny, aura: null, from: 'admin', at: new Date().toISOString() });
-        return { vault: vault.slice(0, COLLECTION_MAX) };
+        return { vault: vault.slice(0, collectionMax(prof)) };
       });
       if (!ok) notFound('Usuário não encontrado.');
       return { ok: true };

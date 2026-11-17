@@ -2,7 +2,7 @@
 // - Arquivos do jogo (HTML/JS/CSS/ícones): rede primeiro, cache como reserva (sempre pega a versão nova quando online).
 // - Sprites do Supabase Storage: cache primeiro (economiza dados no celular).
 // - /api: nunca passa pelo cache (sempre ao vivo).
-const VERSION = 'pmhx-v3';
+const VERSION = 'pmhx-v4';
 const SHELL = ['/', '/index.html', '/css/app.css', '/js/main.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/favicon.ico'];
 
 self.addEventListener('install', e => {

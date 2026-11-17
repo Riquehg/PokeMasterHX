@@ -3,7 +3,7 @@
 //  - anunciar tira o Pokémon da Coleção do vendedor até vender ou cancelar;
 //  - ofertar reserva o ouro/diamantes/Pokémon de quem oferta até a resposta.
 // As mudanças em dinheiro usam a função atômica wallet_add; a Coleção usa gravação condicional (rev).
-import { bad, notFound, mutateProfile, COLLECTION_MAX } from './core.js';
+import { bad, notFound, mutateProfile, collectionMax } from './core.js';
 import { getSpecies } from '../../shared/data/pokemon.js';
 
 export const MARKET_FEE = 0.05;          // taxa do mercado (sai de circulação: ajuda a economia)
@@ -68,7 +68,8 @@ async function giveMons(db, userId, mons) {
 
 async function vaultRoom(db, userId, n) {
   const prof = await db.getProfile(userId);
-  if ((prof?.vault || []).length + n > COLLECTION_MAX) bad(`Sua Coleção está cheia (${COLLECTION_MAX}). Solte ou venda alguns Pokémon antes.`);
+  const cap = collectionMax(prof);
+  if ((prof?.vault || []).length + n > cap) bad(`Sua Coleção está cheia (${cap}). Solte ou venda alguns Pokémon antes.`);
 }
 
 async function refundOffer(db, o) {

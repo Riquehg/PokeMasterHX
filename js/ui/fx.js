@@ -44,10 +44,10 @@ function faceHtml(n) {
   return `<div class="face f${n}">${cells}</div>`;
 }
 
-export async function rollDice({ value, bonus = 0, name, color, mine }) {
+export async function rollDice({ value, bonus = 0, name, color, mine, skin }) {
   if (!anim.speed) return;
   const el = layer('dim');
-  el.innerHTML = `<div class="dice-box" style="--pc:${color}">
+  el.innerHTML = `<div class="dice-box ${skin ? 'dice-' + esc(skin) : ''}" style="--pc:${color}">
     <div class="dice-who">🎲 ${mine ? 'Você rolou' : esc(name) + ' rolou'}</div>
     <div class="scene"><div class="cube throw">${[1, 2, 3, 4, 5, 6].map(faceHtml).join('')}</div></div>
     <div class="dice-result hidden"></div></div>`;
@@ -236,3 +236,48 @@ export function confetti(n = 80) {
 }
 
 export { sleep, wait };
+
+// ------------------------------------------------ efeito de vitória (cosmético da Loja de Diamantes)
+const VICTORY_SETS = {
+  fireworks: null,
+  stars: ['⭐', '🌟', '✨'],
+  hearts: ['💖', '💕', '💗', '❤️'],
+  pokeballs: ['pokeball'],
+  coins: ['🪙', '💰', '🪙'],
+  sakura: ['🌸', '🌸', '💮']
+};
+/** Toca o efeito de vitória equipado (ou o confete padrão). scale 0..1 = intensidade. */
+export function victoryFx(kind, scale = 1) {
+  if (!anim.speed) return;
+  if (!kind || !(kind in VICTORY_SETS)) return confetti(Math.round(90 * scale));
+  const box = document.createElement('div');
+  box.className = 'confetti vfx vfx-' + kind;
+  if (kind === 'fireworks') {
+    const n = Math.max(3, Math.round(7 * scale));
+    for (let i = 0; i < n; i++) {
+      const fw = document.createElement('div');
+      fw.className = 'fw';
+      fw.style.left = 10 + Math.random() * 80 + 'vw';
+      fw.style.top = 10 + Math.random() * 45 + 'vh';
+      fw.style.setProperty('--fc', ['#ffd34d', '#ff5a6e', '#58d1ff', '#9dff7a', '#d38cff'][i % 5]);
+      fw.style.animationDelay = i * 0.28 + 's';
+      for (let k = 0; k < 14; k++) { const sp = document.createElement('i'); sp.style.setProperty('--a', (k * 360) / 14 + 'deg'); fw.appendChild(sp); }
+      box.appendChild(fw);
+    }
+  } else {
+    const set = VICTORY_SETS[kind];
+    const n = Math.round(46 * scale);
+    for (let i = 0; i < n; i++) {
+      const c = document.createElement('b');
+      const g = set[i % set.length];
+      if (g === 'pokeball') c.className = 'vball'; else c.textContent = g;
+      c.style.left = Math.random() * 100 + 'vw';
+      c.style.fontSize = 16 + Math.random() * 18 + 'px';
+      c.style.animationDuration = 2 + Math.random() * 2 + 's';
+      c.style.animationDelay = Math.random() * 0.8 + 's';
+      box.appendChild(c);
+    }
+  }
+  document.body.appendChild(box);
+  setTimeout(() => box.remove(), 4800);
+}

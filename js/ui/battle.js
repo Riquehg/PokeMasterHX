@@ -101,7 +101,10 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
     return `<b style="color:${TYPE_COLORS[m.type]}">${esc(m.name)}</b>${mult !== 1 ? ` <b>x${mult}</b>` : ''}`;
   }).join(' · ')}`;
 
-  const arena = `<div class="arena t${tier} ${official ? 'official' : ''}" id="arena">
+  // cenário comprado na Loja: vale o de quem começou a batalha (ou do outro treinador)
+  const skinOf = side => side?.kind === 'player' ? state.players.find(x => x.id === side.pid)?.cosmetic?.arena : null;
+  const arenaSkin = skinOf(b.sides[0]) || skinOf(b.sides[1]);
+  const arena = `<div class="arena t${tier} ${official ? 'official' : ''} ${arenaSkin && !official ? 'arena-' + esc(arenaSkin) : ''}" id="arena">
       ${foe.kind === 'npc' && foe.sprite ? `<img class="foe-trainer" src="${leaderUrl(foe.sprite)}" alt="${esc(foe.name)}">` : ''}
       <div class="platform foe"></div><div class="platform me"></div>
       <img class="mon-sprite foe ${foeMon.shiny ? 'shiny' : ''} ${foeMon.raid ? 'raid-boss' : ''} ${foeMon.aura ? 'aura-' + esc(foeMon.aura) : ''}" data-uid="${esc(foeMon.uid)}" src="${monSprite(foeMon)}" alt="${esc(getSpecies(foeMon.sp).name)}">

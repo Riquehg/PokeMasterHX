@@ -3,13 +3,20 @@ import { esc, toast, openModal, setModalBody, bindActions } from './dom.js';
 import { api } from '../api.js';
 import { monSprite, avatarUrl } from '../config.js';
 import { SHOP_KINDS } from '../../shared/data/cosmetics.js';
-import { confetti } from './fx.js';
+import { confetti, victoryFx } from './fx.js';
+const VIC_ICON = { fireworks: '🎆', stars: '⭐', hearts: '💖', pokeballs: '🔴', coins: '🪙', sakura: '🌸' };
+const svcOwned = (me, v) => (v === 'vault50' ? me.vaultBonus : v === 'nickname' ? me.nicknames : false);
 
 const money = v => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 function preview(item, avatar) {
   if (item.kind === 'ball_style') return `<div class="cos-prev mon aura-${esc(item.value)}" style="min-height:0;cursor:default"><img src="${monSprite('pikachu')}" alt="Pikachu"></div>`;
   if (item.kind === 'frame') return `<img class="avatar frame-${esc(item.value)}" src="${avatarUrl(avatar)}" alt="moldura">`;
+  if (item.kind === 'dice') return `<div class="cos-dice dice-${esc(item.value)}"><div class="face f5"><i></i><i></i><i></i><i></i><i></i></div></div>`;
+  if (item.kind === 'arena') return `<div class="cos-arena arena arena-${esc(item.value)}"><img src="${monSprite('pikachu')}" alt=""></div>`;
+  if (item.kind === 'card') return `<div class="cos-card tcard-${esc(item.value)}"><img class="avatar" src="${avatarUrl(avatar)}" alt=""><span></span></div>`;
+  if (item.kind === 'victory') return `<button class="cos-victory" data-act="vic-try" data-v="${esc(item.value)}" title="Ver o efeito">${VIC_ICON[item.value] || '🎉'}<span class="tiny">ver</span></button>`;
+  if (item.kind === 'service') return `<div class="cos-svc">${item.value === 'vault50' ? '📦+50' : '✏️'}</div>`;
   return `<div class="cos-title">“${esc(item.value)}”</div>`;
 }
 
@@ -40,15 +47,16 @@ export async function openShop(profile, onChange, onClose) {
       const items = data.items.filter(i => i.kind === kind);
       if (!items.length) return '';
       return `<h3 style="margin:10px 0 6px">${esc(label)}</h3><div class="cos-grid">${items.map(i => {
-        const owned = me.owned.includes(i.id), on = me.equipped[kind] === i.id;
+        const svc = kind === 'service';
+        const owned = svc ? svcOwned(me, i.value) : me.owned.includes(i.id), on = me.equipped[kind] === i.id;
         return `<div class="cos ${on ? 'on' : ''}">${preview(i, profile?.avatar)}
           <b>${esc(i.name)}</b><div class="tiny muted">${esc(i.desc)}</div>
-          ${owned
+          ${owned && svc ? '<span class="chip green">✔ Liberado</span>' : owned
             ? `<button class="btn sm ${on ? '' : 'green'}" data-act="equip" data-kind="${kind}" data-id="${on ? '' : esc(i.id)}">${on ? 'Desequipar' : 'Equipar'}</button>`
             : `<button class="btn sm primary" data-act="buy" data-id="${esc(i.id)}" ${me.diamonds < i.price ? 'disabled' : ''}>💎 ${i.price}</button>`}</div>`;
       }).join('')}</div>`;
     }).join('');
-    return tabs + `<p class="small muted">Itens só de aparência — não deixam ninguém mais forte. O estilo de captura vale para os Pokémon que você capturar a partir de agora.</p>${groups}`;
+    return tabs + `<p class="small muted">Itens só de aparência ou conveniência — não deixam ninguém mais forte. O estilo de captura vale para os Pokémon que você capturar a partir de agora. Dado, cenário, cartão e efeito de vitória aparecem para todos na partida.</p>${groups}`;
   };
 
   const pixView = () => `<div class="pix">
@@ -86,6 +94,7 @@ export async function openShop(profile, onChange, onClose) {
   bindActions(ov, {
     tab: d => { tab = d.t; render(); },
     buy: async d => { try { const r = await api('shop', { op: 'buy', itemId: d.id }); toast(r.message, 'good'); confetti(40); await load(); } catch (e) { toast(e.message, 'bad'); } },
+    'vic-try': d => victoryFx(d.v, 1),
     equip: async d => { try { await api('shop', { op: 'equip', slot: d.kind, itemId: d.id || null }); await load(); } catch (e) { toast(e.message, 'bad'); } },
     pix: async d => { try { pix = await api('shop', { op: 'pix_create', packageId: d.id }); render(); watchPix(); } catch (e) { toast(e.message, 'bad'); } },
     copy: () => { const i = document.getElementById('pix-code'); i.select(); navigator.clipboard?.writeText(i.value); toast('Código Pix copiado!'); },

@@ -117,7 +117,7 @@ export function createMon(rng, speciesId, level, opts = {}) {
 export function monView(mon) {
   const sp = getSpecies(mon.sp);
   const st = statsOf(mon);
-  return { ...mon, name: sp.name, dex: sp.dex, types: sp.types, tier: sp.tier, maxHp: st.maxHp, atk: st.atk, spe: st.spe, potential: ivPercent(mon) };
+  return { ...mon, name: mon.nick || sp.name, species: sp.name, dex: sp.dex, types: sp.types, tier: sp.tier, maxHp: st.maxHp, atk: st.atk, spe: st.spe, potential: ivPercent(mon) };
 }
 
 export function maxHpOf(mon) {

@@ -7,7 +7,8 @@ import { GYMS } from '../../shared/data/trainers.js';
 import { natureLabel } from '../../shared/data/natures.js';
 import { movesOf, ROLE_LABELS, possibleSecondMoves } from '../../shared/data/moves.js';
 import { TYPE_COLORS } from '../../shared/rules/types.js';
-import { canUse, badgesNeeded } from '../../shared/rules/helpers.js';
+import { canUse, badgesNeeded, BADGES_TO_USE } from '../../shared/rules/helpers.js';
+import { STATUS, TYPE_STATUS } from '../../shared/rules/battle.js';
 import { monView, xpToNext } from '../../shared/rules/monsters.js';
 import { against, TYPES } from '../../shared/rules/types.js';
 import { score } from '../../shared/engine.js';
@@ -116,30 +117,43 @@ export function openFly(session, act) {
 const TIER_NAMES = { 1: 'Rosa', 2: 'Verde', 3: 'Azul', 4: 'Vermelho', 5: 'Lendário' };
 
 /**
- * Pokédex: capturados (cor), apenas vistos (cinza, com "visto") e desconhecidos (silhueta ???).
+ * Pokédex: capturados (cor), apenas vistos (cinza, com "visto") e desconhecidos (silhueta ???), mais a Pokédex ✨ shiny.
  * session: partida (usa seen/caught do jogador); extraCaught/extraSeen: Pokédex da conta.
+ * extra: { shinyCaught, shinySeen, vault } da conta (opcional).
  */
-export function openDex(session, extraCaught = [], extraSeen = []) {
+const WHERE_TIER = { 1: 'Casas Rosa (começo do mapa)', 2: 'Casas Verdes', 3: 'Casas Azuis', 4: 'Casas Vermelhas', 5: 'Casas Amarelas (Santuário), Raids e Ovo Ancestral' };
+export function openDex(session, extraCaught = [], extraSeen = [], extra = {}) {
   const p = session ? me(session) : null;
   const caught = new Set([...(p?.caught || []), ...extraCaught]);
   const seen = new Set([...(p?.seen || []), ...extraSeen, ...caught]);
-  const f = { show: 'all', q: '', tier: 0, type: '' };
+  const vault = extra.vault || [];
+  const shinyCaught = new Set([...(p?.shinyCaught || []), ...(extra.shinyCaught || []), ...vault.filter(m => m.shiny).map(m => m.sp),
+    ...(p ? [...p.team, ...p.box].filter(m => m.shiny).map(m => m.sp) : [])]);
+  const shinySeen = new Set([...(p?.shinySeen || []), ...(extra.shinySeen || []), ...shinyCaught]);
+  shinyCaught.forEach(id => caught.add(id)); shinySeen.forEach(id => seen.add(id));
+  const f = { show: 'all', q: '', tier: 0, type: '', shinyArt: false };
+  const pct = (a, b) => Math.round((a / b) * 100);
   const counts = `<div class="dex-stats">
       <span class="chip green">🔴 Capturados <b>${caught.size}</b></span>
       <span class="chip">👁️ Só vistos <b>${seen.size - caught.size}</b></span>
       <span class="chip">❔ Desconhecidos <b>${SPECIES_LIST.length - seen.size}</b></span>
-      <span class="chip gold">${Math.round((caught.size / SPECIES_LIST.length) * 100)}% de ${SPECIES_LIST.length}</span></div>`;
+      <span class="chip gold">${pct(caught.size, SPECIES_LIST.length)}% de ${SPECIES_LIST.length}</span>
+      <span class="chip shiny-chip">✨ Shiny: <b>${shinyCaught.size}</b> capturados · <b>${shinySeen.size - shinyCaught.size}</b> só vistos</span></div>
+    <div class="dex-tiers">${[1, 2, 3, 4, 5].map(t => { const all = SPECIES_LIST.filter(s => s.tier === t); const c = all.filter(s => caught.has(s.id)).length;
+      return `<div class="dex-tier t${t}" title="Tier ${t} · ${TIER_NAMES[t]}"><b>T${t}</b> ${c}/${all.length}<i style="width:${pct(c, all.length)}%"></i></div>`; }).join('')}</div>`;
   const controls = `<div class="dex-controls">
-      <div class="seg">${[['all', 'Todos'], ['caught', 'Capturados'], ['seen', 'Só vistos'], ['unseen', 'Desconhecidos']].map(([k, l]) => `<button class="btn sm ${k === 'all' ? 'on' : ''}" data-act="dex-show" data-v="${k}">${l}</button>`).join('')}</div>
+      <div class="seg">${[['all', 'Todos'], ['caught', 'Capturados'], ['seen', 'Só vistos'], ['unseen', 'Desconhecidos'], ['shiny', '✨ Shiny']].map(([k, l]) => `<button class="btn sm ${k === 'all' ? 'on' : ''}" data-act="dex-show" data-v="${k}">${l}</button>`).join('')}</div>
       <input class="input" id="dex-q" placeholder="Buscar nome ou nº" style="flex:1;min-width:120px">
       <select class="input" id="dex-tier"><option value="0">Todos os tiers</option>${[1, 2, 3, 4, 5].map(t => `<option value="${t}">Tier ${t} · ${TIER_NAMES[t]}</option>`).join('')}</select>
-      <select class="input" id="dex-type"><option value="">Todos os tipos</option>${TYPES.map(t => `<option value="${t}">${esc(typeLabel(t))}</option>`).join('')}</select></div>`;
+      <select class="input" id="dex-type"><option value="">Todos os tipos</option>${TYPES.map(t => `<option value="${t}">${esc(typeLabel(t))}</option>`).join('')}</select>
+      <button class="btn sm" data-act="dex-art" title="Mostrar a forma shiny de quem você já viu shiny">✨ Arte shiny</button></div>`;
 
   const grid = () => SPECIES_LIST.filter(s => {
     const c = caught.has(s.id), v = seen.has(s.id);
     if (f.show === 'caught' && !c) return false;
     if (f.show === 'seen' && (c || !v)) return false;
     if (f.show === 'unseen' && v) return false;
+    if (f.show === 'shiny' && !shinySeen.has(s.id)) return false;
     if (f.tier && s.tier !== f.tier) return false;
     if (f.type && (!v || !s.types.includes(f.type))) return false;
     if (f.q) {
@@ -148,10 +162,12 @@ export function openDex(session, extraCaught = [], extraSeen = []) {
     }
     return true;
   }).map(s => {
-    const c = caught.has(s.id), v = seen.has(s.id);
-    return `<div class="e ${c ? 'caught' : v ? 'seen' : 'unseen'}" data-act="dex-open" data-id="${s.id}" title="${v ? esc(s.name) : '???'}">
+    const c = caught.has(s.id), v = seen.has(s.id), sc = shinyCaught.has(s.id), ss = shinySeen.has(s.id);
+    const art = f.shinyArt && ss;
+    return `<div class="e ${c ? 'caught' : v ? 'seen' : 'unseen'} t${s.tier} ${sc ? 'shiny-c' : ss ? 'shiny-s' : ''}" data-act="dex-open" data-id="${s.id}" title="${v ? esc(s.name) : '???'}">
       ${c ? '<span class="dex-ball" title="Capturado">●</span>' : v ? '<span class="dex-eye" title="Visto">👁️</span>' : ''}
-      <img src="${monSprite(s.id)}" alt="${v ? esc(s.name) : '?'}" loading="lazy">
+      ${sc ? '<span class="dex-shiny" title="Shiny capturado">✨</span>' : ss ? '<span class="dex-shiny seen" title="Shiny visto">✧</span>' : ''}
+      <img src="${monSprite(s.id, art)}" alt="${v ? esc(s.name) : '?'}" loading="lazy">
       <div>#${String(s.dex).padStart(3, '0')}</div><div><b>${v ? esc(s.name) : '???'}</b></div>${v ? `<div>${typeChips(s.types)}</div>` : ''}</div>`;
   }).join('') || '<p class="muted">Nada encontrado com esses filtros.</p>';
 
@@ -162,17 +178,27 @@ export function openDex(session, extraCaught = [], extraSeen = []) {
   ov.querySelector('#dex-type').addEventListener('change', e => { f.type = e.target.value; redraw(); });
   bindActions(ov, {
     'dex-show': d => { f.show = d.v; ov.querySelectorAll('[data-act="dex-show"]').forEach(b => b.classList.toggle('on', b.dataset.v === d.v)); redraw(); },
+    'dex-art': (d, el) => { f.shinyArt = !f.shinyArt; ov.querySelector('[data-act="dex-art"]').classList.toggle('on', f.shinyArt); redraw(); },
     'dex-open': d => {
       const sp = getSpecies(d.id);
       if (!seen.has(sp.id)) return;
-      const evo = sp.evolvesTo ? `${getSpecies(sp.evolvesTo).name} (Nv. ${sp.evolutionLevel || '—'})` : 'não evolui';
+      const evo = sp.evolvesTo ? `${getSpecies(sp.evolvesTo).name} (${sp.evolutionLevel ? 'Nv. ' + sp.evolutionLevel : 'Pedra Evolutiva'})` : 'não evolui';
       const from = sp.evolvesFrom ? getSpecies(sp.evolvesFrom).name : null;
+      const ss = shinySeen.has(sp.id), sc = shinyCaught.has(sp.id);
+      const mine = vault.filter(m => m.sp === sp.id);
+      const conds = [...new Set(movesOf(sp.id).map(m => TYPE_STATUS[m.type]).filter(Boolean))];
+      const badges = BADGES_TO_USE[sp.tier] || 0;
       openModal('dex-entry', `#${String(sp.dex).padStart(3, '0')} ${esc(sp.name)}`, `<div class="row" style="align-items:flex-start">
-          <img src="${monSprite(sp.id)}" alt="" style="width:120px;height:120px;object-fit:contain;image-rendering:pixelated">
+          <div class="dex-arts"><div><img src="${monSprite(sp.id)}" alt=""><span class="tiny">Normal</span></div>
+            <div class="${ss ? '' : 'locked'}"><img src="${monSprite(sp.id, true)}" alt=""><span class="tiny">${sc ? '✨ Shiny capturado' : ss ? '✧ Shiny visto' : '✨ Shiny: ainda não viu'}</span></div></div>
           <div class="grow"><div>${typeChips(sp.types)} <span class="chip">Tier ${sp.tier} · ${TIER_NAMES[sp.tier]}</span> ${sp.legendary ? '<span class="chip gold">Lendário</span>' : ''}</div>
-          <div class="small" style="margin-top:6px">${caught.has(sp.id) ? '🔴 Capturado' : '👁️ Só visto'} · HP base ${sp.hp} · Força ${sp.str}</div>
+          <div class="small" style="margin-top:6px">${caught.has(sp.id) ? '🔴 Capturado' : '👁️ Só visto'} · HP base ${sp.hp} · Força ${sp.str}${mine.length ? ` · 📦 ${mine.length} na Coleção${mine.some(m => m.shiny) ? ' (✨)' : ''}` : ''}</div>
+          <div class="small">📍 Onde aparece: ${esc(WHERE_TIER[sp.tier])}</div>
+          <div class="small">🎖️ Obedece: ${badges ? `com ${badges} insígnias (se capturado neste tier)` : 'sempre'}</div>
           <div class="small">Evolução: ${from ? esc(from) + ' → ' : ''}<b>${esc(sp.name)}</b> → ${esc(evo)}</div>
-          ${movesHtml(sp.id)}<div class="tiny muted">Variações do 2º golpe: ${possibleSecondMoves(sp.id).map(m => esc(m.name)).join(', ')}</div></div></div>`);
+          ${conds.length ? `<div class="small">Pode causar: ${conds.map(c => `<span class="st-chip" style="--sc:${STATUS[c].color}">${STATUS[c].icon} ${esc(STATUS[c].name)}</span>`).join(' ')}</div>` : ''}
+          ${movesHtml(sp.id)}<div class="tiny muted">Variações do 2º golpe: ${possibleSecondMoves(sp.id).map(m => esc(m.name)).join(', ')}</div>
+          <div class="tiny muted">Cada um nasce com natureza e potencial (IV) próprios — capture de novo para achar um melhor.</div></div></div>`);
     }
   });
 }
@@ -190,7 +216,7 @@ export function openTrainer(session, pid) {
   if (!p) return;
   const canTrade = session.act && pid !== session.viewerId() && s.options.trades !== false && s.status === 'playing' && !p.left
     && s.players.some(x => x.id === session.viewerId());
-  const html = `<div class="trainer">${avatarImg(p, 'avatar', playerColor(s, p.id))}
+  const html = `<div class="trainer ${p.cosmetic?.card ? 'tcard tcard-' + esc(p.cosmetic.card) : ''}">${avatarImg(p, 'avatar', playerColor(s, p.id))}
       <div><h3 style="color:${playerColor(s, p.id)}">${esc(p.name)} ${p.isBot ? '<span class="chip">CPU</span>' : ''}</h3>${p.cosmetic?.title ? `<div class="player-title">“${esc(p.cosmetic.title)}”</div>` : ''}
       <div class="small">🪙 ${p.gold} · 📖 ${p.caught.length} capturados · ✨ ${p.stats.shinies} shiny · ⭐ ${score(p)} pts</div>
       <div class="small muted">📍 ${esc(getSpace(p.pos).name)} · vitórias ${p.stats.wins} · PvP ${p.stats.pvpWins}</div></div></div>
@@ -244,6 +270,8 @@ export function openHelp() {
       <p><b>Condições:</b> golpes podem deixar o rival 🔥 <b>Queimado</b> (Fogo: perde HP e ataca mais fraco), ☠️ <b>Envenenado</b> (Veneno: perde 1/8 do HP por rodada), ⚡ <b>Paralisado</b> (Elétrico: 25% de não agir, mais lento), 💤 <b>Dormindo</b> (Planta/Fantasma: perde 1–3 rodadas) ou 🧊 <b>Congelado</b> (Gelo: não age até descongelar). Golpes fortes e pesados têm mais chance. Pokémon do mesmo tipo são imunes. <b>Full Heal</b> (loja) cura qualquer condição durante a luta; ao fim da batalha as condições somem.</p>
       <p><b>🎯 Missões e 🤝 Companheiros:</b> na aba Metas ficam 3 missões fixas (capturar tipos, derrotar tipos, vencer treinadores, Raids...). Ao completar você ganha ouro, itens ou um <b>companheiro</b> (fica na sua conta). O companheiro anda ao lado do seu peão e dá bônus: Misty +15% em golpes de Água, Blaine mais chance de queimar, Prof. Oak +25% de XP, Enfermeira Joy poções mais fortes, Jessie &amp; James +20% de ouro... Troque na aba Metas ou no 🤝 do início.</p>
       <p><b>🏅 Insígnias no mapa:</b> as cidades mostram a insígnia do ginásio — colorida se você já tem, apagada se falta, e a <b>próxima mais perto</b> brilha com a distância. Toque numa insígnia da aba Metas para centralizar o mapa.</p>
+      <p><b>📖 Pokédex:</b> mostra as 806 espécies com tier (cor da casa onde aparece), insígnias para obedecer, condições que os golpes causam e variações de golpe. Registra também os <b>shinies</b>: ✧ visto e ✨ capturado (filtro “✨ Shiny” e botão “Arte shiny”).</p>
+      <p><b>💎 Loja de Diamantes:</b> só visual e conveniência — dado personalizado, cenário de batalha, cartão de treinador, efeito de vitória, +50 vagas na Coleção e apelidos para Pokémon. Ninguém fica mais forte por comprar.</p>
       <p><b>👀 Assistir:</b> durante a batalha de outro jogador, toque em “Assistir a batalha” para ver os golpes, o banco de cada lado e as capturas. Na ficha do treinador aparecem o PC e as últimas capturas.</p>
       <p><b>Trocas:</b> toque no peão ou no nome de outro treinador → 🤝 Propor troca. Dá para trocar Pokémon, itens e ouro (não vale no modo Competitivo). Pokémon recebido em troca precisa das insígnias para lutar.</p>
       <p><b>Raridade:</b> shiny é raríssimo (1 em 450) e lendários só são capturados com 10+ na rolagem (e costumam fugir depois de escapar da bola).</p>

@@ -8,7 +8,8 @@ import { monSprite, typeLabel } from '../config.js';
 import { monCard, playerColor, avatarImg, speciesName } from './common.js';
 import { battleHtml, outcomeText, playBattleFx } from './battle.js';
 import { BoardView } from './board.js';
-import { anim, rollDice, turnBanner, eventCard, battleIntro, captureAnim, confetti, evolutionAnim } from './fx.js';
+import { anim, rollDice, turnBanner, eventCard, battleIntro, captureAnim, confetti, evolutionAnim, victoryFx } from './fx.js';
+const vicOf = (s, pid) => s?.players?.find(x => x.id === pid)?.cosmetic?.victory || null;
 import * as M from './modals.js';
 import { renderTrades } from './trade.js';
 import { badgeStatus } from './board.js';
@@ -138,7 +139,7 @@ export function mountGame(root, session, opts = {}) {
       switch (f.k) {
         case 'dice': {
           const p = next.players.find(x => x.id === f.pid);
-          await rollDice({ value: f.value, bonus: f.bonus, name: p?.name, color: playerColor(next, f.pid), mine: f.pid === v && session.canAct(v) });
+          await rollDice({ value: f.value, bonus: f.bonus, name: p?.name, color: playerColor(next, f.pid), mine: f.pid === v && session.canAct(v), skin: p?.cosmetic?.dice });
           break;
         }
         case 'move':
@@ -177,7 +178,7 @@ export function mountGame(root, session, opts = {}) {
         case 'badge': {
           const g = GYMS.find(x => x.id === f.badge);
           toast(`🎖️ ${nameOf(f.pid)} conquistou a ${g?.badge}!`, 'good');
-          if (f.pid === v) confetti(90);
+          if (f.pid === v) victoryFx(vicOf(next, v), 0.8);
           break;
         }
         case 'mission_done':
@@ -190,7 +191,7 @@ export function mountGame(root, session, opts = {}) {
           toast('🔥 RAID EM GRUPO! Escolha um Pokémon para lutar juntos.', 'good');
           break;
         case 'raid_end':
-          if (f.win) confetti(100);
+          if (f.win && (f.party || []).includes(v)) victoryFx(vicOf(next, v), 0.9); else if (f.win) confetti(60);
           break;
         case 'trade_done':
           if (f.ok && (f.from === v || f.to === v)) { toast('🤝 Troca concluída!', 'good'); confetti(60); }
@@ -200,7 +201,7 @@ export function mountGame(root, session, opts = {}) {
           if (f.pid === v && f.where === 'box') toast(`💻 ${speciesName(f.sp)}${f.shiny ? ' ✨' : ''} foi para o PC — sua equipe já tem 6.`, 'info');
           break;
         case 'win':
-          confetti(140);
+          victoryFx(vicOf(next, f.pid || next.winner), 1);
           break;
       }
     }
@@ -409,7 +410,7 @@ export function mountGame(root, session, opts = {}) {
         ui.lastBattleSeen = lb.fxSeq;
         if (lb.sides.some(x => x.pid === p?.id) && lb.outcome?.result !== 'captured') {
           const txt = outcomeText(s, lb, p.id);
-          if (/Vitória/.test(txt)) confetti(50);
+          if (/Vitória/.test(txt)) victoryFx(vicOf(s, p.id), 0.6);
           openModal('battle-end', 'Fim da batalha', `<h3 class="center" style="font-size:22px;margin:6px 0 10px">${esc(txt)}</h3>
             <div class="battle-log">${lb.log.map(l => `<p>${esc(l)}</p>`).join('')}</div>
             <button class="btn primary block" data-close="battle-end" style="margin-top:10px">Continuar</button>`);
@@ -487,7 +488,7 @@ export function mountGame(root, session, opts = {}) {
     if (s.kind === 'duel') { // duelo: resultado simples (vitória/derrota e Elo)
       const vid = session.viewerId();
       const d = s.ratingChanges?.[vid];
-      confetti(w?.id === vid ? 150 : 40);
+      if (w?.id === vid) victoryFx(vicOf(s, vid), 1); else confetti(40);
       const ov = openModal('over', w?.id === vid ? '🏆 Vitória!' : '⚔️ Fim do duelo', `
         <div class="banner-win">${w ? avatarImg(w, 'avatar') : ''}<h2>${esc(w ? w.name : '—')} venceu o duelo!</h2>
         <p class="muted">${esc(s.log.filter(l => l.kind === 'win').slice(-1)[0]?.msg || '')}</p></div>
@@ -497,7 +498,7 @@ export function mountGame(root, session, opts = {}) {
       return;
     }
     const ranked = [...s.players].sort((a, b) => score(b) - score(a));
-    confetti(150);
+    victoryFx(vicOf(s, w?.id), 1);
     const ov = openModal('over', '🏆 Fim de jogo', `
       <div class="banner-win">${w ? avatarImg(w, 'avatar') : ''}<h2>${esc(w ? w.name : '—')} venceu!</h2>
       <p class="muted">${esc(s.log.filter(l => l.kind === 'win').slice(-1)[0]?.msg || '')}</p></div>

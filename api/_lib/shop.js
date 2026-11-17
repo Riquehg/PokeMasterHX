@@ -1,7 +1,7 @@
 // Loja de Diamantes (cosméticos) + pagamento Pix pelo Mercado Pago + feed global + avisos do admin.
 import { createHmac, randomUUID } from 'node:crypto';
-import { HttpError, getOrCreateProfile } from './core.js';
-import { DEFAULT_SHOP, AURA_PRESETS, FRAME_PRESETS, SHOP_KINDS, sanitizeCosmetic } from '../../shared/data/cosmetics.js';
+import { HttpError, getOrCreateProfile, mutateProfile } from './core.js';
+import { DEFAULT_SHOP, SHOP_KINDS, EQUIP_KINDS, PRESETS_BY_KIND, VAULT_BONUS, sanitizeCosmetic } from '../../shared/data/cosmetics.js';
 import { getSpecies } from '../../shared/data/pokemon.js';
 
 const bad = m => { throw new HttpError(400, m); };
@@ -12,7 +12,8 @@ export async function getShop(db) {
   let cfg = null;
   try { cfg = await db.getConfig('shop'); } catch (e) { console.error('[shop]', e.message); }
   return {
-    items: Array.isArray(cfg?.items) ? cfg.items : DEFAULT_SHOP.items,
+    // itens novos do catálogo padrão entram na vitrine salva pelo admin (ele pode desativar depois)
+    items: Array.isArray(cfg?.items) ? [...cfg.items, ...DEFAULT_SHOP.items.filter(d => !cfg.items.some(i => i.id === d.id))] : DEFAULT_SHOP.items,
     packages: Array.isArray(cfg?.packages) ? cfg.packages : DEFAULT_SHOP.packages
   };
 }
@@ -23,8 +24,8 @@ export function cleanShop(input) {
   const items = (input.items || []).map(it => {
     const kind = SHOP_KINDS[it.kind] ? it.kind : 'title';
     let value = str(it.value, 30);
-    if (kind === 'ball_style' && !AURA_PRESETS[value]) bad(`Estilo de captura inválido em "${it.name}". Use: ${Object.keys(AURA_PRESETS).join(', ')}`);
-    if (kind === 'frame' && !FRAME_PRESETS[value]) bad(`Moldura inválida em "${it.name}". Use: ${Object.keys(FRAME_PRESETS).join(', ')}`);
+    const presets = PRESETS_BY_KIND[kind];
+    if (presets && !presets[value]) bad(`Valor inválido em "${it.name}" (${SHOP_KINDS[kind]}). Use: ${Object.keys(presets).join(', ')}`);
     const id = str(it.id, 40).replace(/[^a-z0-9_]/gi, '_') || 'item_' + randomUUID().slice(0, 6);
     return { id, kind, value, name: str(it.name, 40) || id, desc: str(it.desc, 140), price: Math.max(0, Math.round(Number(it.price) || 0)), active: it.active !== false };
   });
@@ -41,6 +42,12 @@ export function cleanShop(input) {
   return { items, packages };
 }
 
+/** Conveniência já comprada? (guardada em stats para não depender da vitrine) */
+export function serviceOwned(profile, value) {
+  const st = profile?.stats || {};
+  return value === 'vault50' ? !!st.vaultBonus : value === 'nickname' ? !!st.nicknames : false;
+}
+
 function myCosmetics(profile) {
   const c = profile.cosmetics || {};
   return { owned: Array.isArray(c.owned) ? c.owned : [], equipped: c.equipped || {} };
@@ -54,7 +61,11 @@ export async function equippedCosmetic(db, profile) {
   return sanitizeCosmetic({
     aura: find(equipped.ball_style)?.value,
     frame: find(equipped.frame)?.value,
-    title: find(equipped.title)?.value
+    title: find(equipped.title)?.value,
+    dice: find(equipped.dice)?.value,
+    arena: find(equipped.arena)?.value,
+    card: find(equipped.card)?.value,
+    victory: find(equipped.victory)?.value
   });
 }
 
@@ -81,7 +92,7 @@ export async function shopOp(db, user, body, req) {
   const profile = await getOrCreateProfile(db, user);
   const shop = await getShop(db);
   const mine = myCosmetics(profile);
-  const view = p => ({ diamonds: p.diamonds || 0, ...myCosmetics(p) });
+  const view = p => ({ diamonds: p.diamonds || 0, ...myCosmetics(p), vaultBonus: !!p.stats?.vaultBonus, nicknames: !!p.stats?.nicknames });
 
   switch (body.op) {
     case 'catalog':
@@ -97,8 +108,18 @@ export async function shopOp(db, user, body, req) {
       const item = shop.items.find(i => i.id === body.itemId && i.active);
       if (!item) bad('Item indisponível.');
       if (mine.owned.includes(item.id)) bad('Você já tem este item.');
+      if (item.kind === 'service' && serviceOwned(profile, item.value)) bad('Você já tem esta conveniência.');
       const left = await db.addDiamonds(user.id, -item.price);
       if (left === null) bad('Diamantes insuficientes.');
+      if (item.kind === 'service') {
+        const p = await mutateProfile(db, user.id, prof => {
+          const c = myCosmetics(prof), st = { ...(prof.stats || {}) };
+          if (item.value === 'vault50') st.vaultBonus = VAULT_BONUS;
+          if (item.value === 'nickname') st.nicknames = true;
+          return { stats: st, cosmetics: { owned: [...new Set([...c.owned, item.id])], equipped: c.equipped } };
+        });
+        return { me: view(p), message: item.value === 'vault50' ? 'Coleção ampliada para 350 vagas!' : 'Apelidos liberados! Abra a Coleção e toque no ✏️ de um Pokémon.' };
+      }
       const cosmetics = { owned: [...mine.owned, item.id], equipped: { ...mine.equipped, [item.kind]: item.id } };
       const p = await db.upsertProfile(user.id, { cosmetics });
       await refreshCosmeticInMatches(db, user.id, p);
@@ -107,7 +128,7 @@ export async function shopOp(db, user, body, req) {
 
     case 'equip': {
       const slot = String(body.slot || '');
-      if (!SHOP_KINDS[slot]) bad('Tipo inválido.');
+      if (!EQUIP_KINDS.includes(slot)) bad('Tipo inválido.');
       if (body.itemId && !mine.owned.includes(body.itemId)) bad('Você não tem este item.');
       const cosmetics = { owned: mine.owned, equipped: { ...mine.equipped, [slot]: body.itemId || null } };
       const p = await db.upsertProfile(user.id, { cosmetics });

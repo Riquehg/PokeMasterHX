@@ -46,6 +46,7 @@ export function loginScreen(root, { onDone, onLocal }) {
       <div class="divider"></div>
       <button class="btn green" data-act="local">🏠 Jogar no modo local (sem conta)</button>
       <p class="tiny muted center">Local = mesmo aparelho, com amigos se revezando e/ou CPUs.</p>
+      ${isStandalone() ? '' : '<button class="btn install-btn" data-act="install">📲 Instalar o app no celular / PC</button>'}
     </div></div></div>`;
   const v = id => root.querySelector(id).value;
   let signupMode = false;
@@ -64,7 +65,8 @@ export function loginScreen(root, { onDone, onLocal }) {
       });
     },
     forgot: () => busy(async () => { await resetPassword(v('#l-email')); toast('Enviamos um link de redefinição para o seu e-mail.', 'good'); }),
-    local: () => onLocal()
+    local: () => onLocal(),
+    install: () => promptInstall()
   });
   root.querySelector('#l-pass').addEventListener('keydown', e => { if (e.key === 'Enter') root.querySelector('[data-act="login"]').click(); });
 }
@@ -128,7 +130,7 @@ export async function hubScreen(root, ctx) {
       <p class="small">${esc(profileError)}</p><p class="small muted">Abra <a href="/api/health" target="_blank" style="color:var(--gold)">/api/health</a> para ver o diagnóstico. Enquanto isso, o modo offline funciona.</p></div>` : ''}
     <div class="hub-grid">
       <div class="col">
-        <div class="trainer">
+        <div class="trainer ${profile?.cosmetic?.card ? 'tcard-' + esc(profile.cosmetic.card) : ''}">
           <img class="avatar ${profile?.cosmetic?.frame ? 'frame-' + esc(profile.cosmetic.frame) : ''}" src="${avatarUrl(profile?.avatar)}" alt="avatar">
           <div class="grow"><h3 style="color:var(--gold)">${esc(profile?.trainer_name || 'Treinador')}</h3>
             ${profile?.cosmetic?.title ? `<div class="player-title">“${esc(profile.cosmetic.title)}”</div>` : ''}
@@ -137,6 +139,7 @@ export async function hubScreen(root, ctx) {
           <div class="col" style="gap:6px;align-items:flex-end">
             <button class="btn sm" data-act="edit" ${profile ? '' : 'disabled'}>✏️</button>
             <button class="btn sm blue" data-act="dshop" ${profile ? '' : 'disabled'}><span class="diamonds">💎 ${profile?.diamonds || 0}</span> Loja</button>
+            ${isStandalone() ? '' : '<button class="btn sm install-btn" data-act="install" title="Instalar o app no celular / PC">📲 App</button>'}
             <span class="chip gold" title="Ouro da conta: ganho no fim de cada partida salva. Use no Mercado.">🪙 ${profile?.gold || 0}</span>
           </div>
         </div>
@@ -188,7 +191,7 @@ export async function hubScreen(root, ctx) {
     vault: () => collectionModal(profile, rerender),
     companions: () => openCompanionPicker({ owned: profile?.stats?.companions || [], current: profile?.stats?.companion || null,
       onPick: async id => { try { profile = (await api('profile', { op: 'companion', id })).profile; toast(id ? `🤝 ${COMPANIONS[id].name} vai com você nas próximas partidas!` : 'Sem companheiro.', 'good'); rerender(profile); } catch (e) { toast(e.message, 'bad'); } } }),
-    dex: () => openDex(null, profile?.pokedex || [], profile?.pokedex_seen || []),
+    dex: () => openDex(null, profile?.pokedex || [], profile?.pokedex_seen || [], { shinyCaught: profile?.stats?.shinyDex || [], shinySeen: profile?.stats?.shinySeen || [], vault: profile?.vault || [] }),
     duel: () => openDuelQueue(ctx, profile),
     install: () => promptInstall(),
     cup: async () => {
@@ -237,17 +240,18 @@ function soloModal(profile, ctx) {
 
 function collectionModal(profile, onChange) {
   let filter = 'all';
+  const cap = () => 300 + (profile?.stats?.vaultBonus ? 50 : 0);
   const body = () => {
     const all = sortCollection(profile?.vault);
     const list = filter === 'shiny' ? all.filter(m => m.shiny) : filter === 'fav' ? all.filter(m => m.fav) : filter === 'pot' ? [...all].sort((a, b) => (ivPercent(b) ?? 0) - (ivPercent(a) ?? 0)) : all;
-    return `<p class="small muted">Tudo que você captura em partidas salvas na conta (Treino contra CPUs e Online) fica aqui, com o nível atualizado. Use no modo <b>📦 Coleção</b> para levar seu time. Limite: 300 (os mais fracos saem primeiro; ⭐ favoritos e shinies nunca saem).</p>
+    return `<p class="small muted">Tudo que você captura em partidas salvas na conta (Treino contra CPUs e Online) fica aqui, com o nível atualizado. Use no modo <b>📦 Coleção</b> para levar seu time. Limite: ${cap()} (os mais fracos saem primeiro; ⭐ favoritos e shinies nunca saem).${profile?.stats?.vaultBonus ? '' : ' Dá para ampliar para 350 na 💎 Loja.'}</p>
       <div class="row" style="margin:8px 0"><button class="btn sm ${filter === 'all' ? 'primary' : ''}" data-act="f" data-f="all">Todos (${all.length})</button>
         <button class="btn sm ${filter === 'shiny' ? 'primary' : ''}" data-act="f" data-f="shiny">✨ Shiny (${all.filter(m => m.shiny).length})</button>
         <button class="btn sm ${filter === 'fav' ? 'primary' : ''}" data-act="f" data-f="fav">⭐ Favoritos</button>
         <button class="btn sm ${filter === 'pot' ? 'primary' : ''}" data-act="f" data-f="pot">📈 Maior potencial</button></div>
-      <div class="pk-grid">${list.map(m => statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px"><button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar">✕</button></div>` })).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div>`;
+      <div class="pk-grid">${list.map(m => statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px"><button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar">✕</button></div>` })).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div>`;
   };
-  const ov = openModal('vault', `📦 Coleção (${(profile?.vault || []).length}/300)`, body(), { wide: true });
+  const ov = openModal('vault', `📦 Coleção (${(profile?.vault || []).length}/${cap()})`, body(), { wide: true });
   const op = async (o, uid) => {
     try { profile = (await api('profile', { op: o, uid })).profile; setModalBody('vault', body()); onChange(profile); }
     catch (e) { toast(e.message, 'bad'); }
@@ -255,6 +259,14 @@ function collectionModal(profile, onChange) {
   bindActions(ov, {
     f: d => { filter = d.f; setModalBody('vault', body()); },
     fav: d => op('favorite', d.uid),
+    nick: async d => {
+      if (!profile?.stats?.nicknames) return toast('Apelidos são liberados na 💎 Loja de Diamantes → Conveniência.', 'info');
+      const m = (profile.vault || []).find(x => x.uid === d.uid);
+      const nick = prompt(`Apelido para ${getSpecies(m.sp).name} (até 12 letras; vazio tira o apelido):`, m.nick || '');
+      if (nick === null) return;
+      try { profile = (await api('profile', { op: 'nickname', uid: d.uid, nick })).profile; setModalBody('vault', body()); onChange(profile); toast(nick.trim() ? `✏️ Agora é ${nick.trim().slice(0, 12)}!` : 'Apelido removido.', 'good'); }
+      catch (e) { toast(e.message, 'bad'); }
+    },
     rel: d => { if (confirm('Soltar este Pokémon da sua Coleção? Não dá para desfazer.')) op('release', d.uid); }
   });
 }

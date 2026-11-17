@@ -63,7 +63,7 @@ test('admin edita a vitrine; valores inválidos são recusados', async () => {
   assert.ok(cat.items.some(i => i.id === 'title_lenda'));
   assert.equal(cat.packages[0].price, 5.9);
   shop.items.push({ id: 'x', kind: 'frame', value: 'nao-existe', name: 'X', price: 1 });
-  await assert.rejects(adminOp(db, admin, { op: 'save_shop', shop }), /Moldura inválida/);
+  await assert.rejects(adminOp(db, admin, { op: 'save_shop', shop }), /Valor inválido.*Moldura/);
 });
 
 test('aviso do admin aparece na config e no feed', async () => {
@@ -105,4 +105,31 @@ test('comprar/equipar cosmético atualiza na hora as partidas em andamento', asy
   await shopOp(db, ash, { op: 'equip', slot: 'frame', itemId: null });
   const after = await matchOp(db, ash, { op: 'get', matchId: match.id });
   assert.equal(after.match.state.players.find(p => p.id === ash.id).cosmetic, null);
+});
+
+test('dado, cenário, cartão e vitória vão para a partida; conveniências liberam Coleção 350 e apelidos', async () => {
+  const { db, ash, admin } = await setup();
+  await adminOp(db, admin, { op: 'give_diamonds', userId: ash.id, amount: 2000 });
+  for (const id of ['dice_gold', 'arena_volcano', 'card_legend', 'win_fireworks']) await shopOp(db, ash, { op: 'buy', itemId: id });
+  const { match } = await matchOp(db, ash, { op: 'solo', bots: 1 });
+  const me = match.state.players.find(p => p.id === ash.id);
+  assert.deepEqual(me.cosmetic, { dice: 'gold', arena: 'volcano', card: 'legend', victory: 'fireworks' });
+  // apelido bloqueado até comprar
+  await adminOp(db, admin, { op: 'grant_mon', userId: ash.id, species: 'pikachu', level: 20 });
+  let prof = (await profileOp(db, ash, { op: 'get' })).profile;
+  const uid = prof.vault.find(m => m.sp === 'pikachu').uid;
+  await assert.rejects(profileOp(db, ash, { op: 'nickname', uid, nick: 'Sparky' }), /Loja de Diamantes/);
+  const r = await shopOp(db, ash, { op: 'buy', itemId: 'svc_nickname' });
+  assert.equal(r.me.nicknames, true);
+  await assert.rejects(shopOp(db, ash, { op: 'buy', itemId: 'svc_nickname' }), /já tem/);
+  prof = (await profileOp(db, ash, { op: 'nickname', uid, nick: '  <b>Sparky</b> do Ash ' })).profile;
+  assert.equal(prof.vault.find(m => m.uid === uid).nick, 'bSparky/b do');
+  const v = await shopOp(db, ash, { op: 'buy', itemId: 'svc_vault50' });
+  assert.equal(v.me.vaultBonus, true);
+  const { collectionMax } = await import('../api/_lib/core.js');
+  assert.equal(collectionMax((await profileOp(db, ash, { op: 'get' })).profile), 350);
+  // o apelido entra na partida do modo Coleção
+  const { createMatch } = await import('../shared/engine.js');
+  const s = createMatch({ seed: 1, players: [{ id: 'a', name: 'A', teamMons: [prof.vault.find(m => m.uid === uid)] }] });
+  assert.equal(s.players[0].team.find(m => m.uid === uid).nick, 'bSparky/b do');
 });

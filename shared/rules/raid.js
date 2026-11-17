@@ -221,7 +221,7 @@ function raidWon(state, rng) {
     progressMission(state, p.id, { k: 'raid_win' });
   }
   log(state, `🔥 O grupo derrotou ${speciesName(boss.sp)}! Cada participante ganhou ${g} de ouro e 1 Rare Candy. Agora, a captura!`, 'win');
-  fx(state, { k: 'raid_end', win: true, sp: boss.sp });
+  fx(state, { k: 'raid_end', win: true, sp: boss.sp, party: r.party.map(x => x.pid) });
   r.stage = 'catch';
   r.catchIdx = 0;
   r.log.push(`🏆 Vitória! Ordem de captura (quem causou mais dano primeiro): ${catchOrder(r).map(x => getPlayer(state, x.pid).name).join(' → ')}`);

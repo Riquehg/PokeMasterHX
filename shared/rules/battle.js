@@ -82,8 +82,8 @@ export function startBattle(state, cfg) {
 
   // Pokédex: os dois lados "veem" o adversário
   const foeMon = sideActive(state, sides[1]);
-  markSeen(p, foeMon.sp);
-  if (sides[1].kind === 'player') markSeen(getPlayer(state, sides[1].pid), sideActive(state, sides[0]).sp);
+  markSeen(p, foeMon.sp, !!foeMon.shiny);
+  if (sides[1].kind === 'player') { const mm = sideActive(state, sides[0]); markSeen(getPlayer(state, sides[1].pid), mm.sp, !!mm.shiny); }
 
   const foeSide = sides[1];
   fx(state, {
@@ -197,7 +197,7 @@ export const STATUS = {
   freeze:    { name: 'Congelado',   adj: 'congelado',   icon: '🧊', short: 'CON', color: '#6fd0f0', desc: 'Não age; 25% de chance de descongelar por rodada (fogo descongela)' }
 };
 // tipo do golpe → condição que pode causar
-const TYPE_STATUS = { fire: 'burn', poison: 'poison', electric: 'paralysis', ice: 'freeze', grass: 'sleep', ghost: 'sleep' };
+export const TYPE_STATUS = { fire: 'burn', poison: 'poison', electric: 'paralysis', ice: 'freeze', grass: 'sleep', ghost: 'sleep' };
 const INFLICT_CHANCE = { q: 0.08, s: 0.15, x: 0.25 };
 const IMMUNE = { burn: ['fire'], poison: ['poison', 'steel'], paralysis: ['electric'], freeze: ['ice'], sleep: [] };
 
@@ -321,7 +321,7 @@ function doSwitch(state, si, index) {
   if (!side.seen.includes(team[index].uid)) side.seen.push(team[index].uid);
   log(state, `🔄 ${sideName(state, side)} enviou ${speciesName(team[index].sp)}!`);
   const other = state.battle.sides[1 - si];
-  if (other.kind === 'player') markSeen(getPlayer(state, other.pid), team[index].sp);
+  if (other.kind === 'player') markSeen(getPlayer(state, other.pid), team[index].sp, !!team[index].shiny);
 }
 
 function useBattleItem(state, si, choice) {
@@ -620,7 +620,7 @@ function handleFaint(state, rng, si) {
     const m = team[best];
     log(state, `➡️ ${sideName(state, side)} enviou ${speciesName(m.sp)} (Nv. ${m.lvl})!`);
     const other = b.sides[1 - si];
-    if (other.kind === 'player') markSeen(getPlayer(state, other.pid), m.sp);
+    if (other.kind === 'player') markSeen(getPlayer(state, other.pid), m.sp, !!m.shiny);
   }
   return false;
 }
