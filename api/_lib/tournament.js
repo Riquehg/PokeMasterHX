@@ -47,12 +47,15 @@ export async function createDuelMatch(db, { name, a, b, options, hostId }) {
 }
 
 // ---------------------------------------------------------------- Torneio: fila de duelos ranqueados
+/** As listas do banco não trazem state/version: busca a linha completa. */
+const full = (db, m) => (m ? db.getMatch(m.id) : null);
+
 export async function duelQueue(db, user, body, profile) {
   // já tem duelo em andamento? volta para ele
   const mine = await db.myMatches(user.id);
-  const live = mine.find(m => m.options?.mode === 'duel' && m.status === 'playing');
+  const live = await full(db, mine.find(m => m.options?.mode === 'duel' && m.status === 'playing'));
   if (live) return { match: publicMatch(live, user.id) };
-  const waiting = mine.find(m => m.options?.mode === 'duel_queue' && m.status === 'lobby');
+  const waiting = await full(db, mine.find(m => m.options?.mode === 'duel_queue' && m.status === 'lobby'));
   const entry = { id: user.id, name: profile.trainer_name, avatar: profile.avatar || 1, teamUids: (body.teamUids || []).map(String).slice(0, 6) };
   entry.teamMons = await duelTeam(db, entry);
   if (!entry.teamMons) bad('Sua Coleção está vazia. Capture Pokémon no Treino ou no Online para montar um time.');
@@ -61,7 +64,9 @@ export async function duelQueue(db, user, body, profile) {
   const open = (await db.listOpenMatches()).filter(m => m.options?.mode === 'duel_queue' && m.host_id !== user.id && m.status === 'lobby');
   const myRating = profile.rating ?? START_RATING;
   open.sort((x, y) => Math.abs((x.options.rating ?? START_RATING) - myRating) - Math.abs((y.options.rating ?? START_RATING) - myRating));
-  for (const q of open) {
+  for (const brief of open) {
+    const q = await db.getMatch(brief.id);
+    if (!q || q.status !== 'lobby') continue;
     // trava a vaga (só um consegue)
     const ok = await db.updateMatch(q.id, q.version, { status: 'finished', version: q.version + 1 });
     if (!ok) continue;
@@ -89,15 +94,17 @@ export async function duelQueue(db, user, body, profile) {
 /** Enquanto espera na fila: o duelo já começou? */
 export async function duelQueueStatus(db, user) {
   const mine = await db.myMatches(user.id);
-  const live = mine.find(m => m.options?.mode === 'duel' && m.status === 'playing');
+  const live = await full(db, mine.find(m => m.options?.mode === 'duel' && m.status === 'playing'));
   if (live) return { match: publicMatch(live, user.id) };
-  const waiting = mine.find(m => m.options?.mode === 'duel_queue' && m.status === 'lobby');
+  const waiting = await full(db, mine.find(m => m.options?.mode === 'duel_queue' && m.status === 'lobby'));
   return { queued: !!waiting, match: waiting ? publicMatch(waiting, user.id) : null };
 }
 
 export async function duelQueueCancel(db, user) {
   const mine = await db.myMatches(user.id);
-  for (const m of mine.filter(x => x.options?.mode === 'duel_queue' && x.status === 'lobby')) {
+  for (const b of mine.filter(x => x.options?.mode === 'duel_queue' && x.status === 'lobby')) {
+    const m = await db.getMatch(b.id);
+    if (!m) continue;
     await db.updateMatch(m.id, m.version, { status: 'finished', version: m.version + 1 });
     await db.removeMember(m.id, user.id);
   }

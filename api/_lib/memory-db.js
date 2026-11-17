@@ -18,6 +18,7 @@ export function createMemoryDb() {
   const friends = [];
   const offers = new Map();
   const now = () => new Date().toISOString();
+  const brief = m => { const { id, code, name, host_id, status, has_pin, options, lobby, updated_at } = copy(m); return { id, code, name, host_id, status, has_pin, options, lobby, updated_at }; };
   const notify = id => listeners.forEach(fn => fn(id));
   const copy = v => (v == null ? v : structuredClone(v));
 
@@ -114,11 +115,12 @@ export function createMemoryDb() {
     async getMatchByCode(code) {
       return copy([...matches.values()].find(m => m.code === code && ['lobby', 'playing'].includes(m.status)) || null);
     },
+    // Mesmas colunas que o Supabase devolve nas listas (sem state/version) — assim os testes pegam o uso errado
     async listOpenMatches() {
-      return [...matches.values()].filter(m => m.status === 'lobby' && m.is_public).map(copy);
+      return [...matches.values()].filter(m => m.status === 'lobby' && m.is_public).map(brief);
     },
     async myMatches(userId) {
-      return [...matches.values()].filter(m => members.get(m.id)?.has(userId) && ['lobby', 'playing'].includes(m.status)).map(copy);
+      return [...matches.values()].filter(m => members.get(m.id)?.has(userId) && ['lobby', 'playing'].includes(m.status)).map(brief);
     },
     async insertMatch(row) {
       const id = randomUUID();

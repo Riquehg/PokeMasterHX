@@ -1,3 +1,4 @@
+import { COMPANIONS } from '../../shared/data/companions.js';
 // Janelas da partida: loja, PC, mochila, voo, Pokédex, ficha do treinador, detalhes do Pokémon e regras.
 import { SPECIES_LIST, getSpecies } from '../../shared/data/pokemon.js';
 import { getSpace } from '../../shared/data/board.js';
@@ -11,7 +12,7 @@ import { monView, xpToNext } from '../../shared/rules/monsters.js';
 import { against, TYPES } from '../../shared/rules/types.js';
 import { score } from '../../shared/engine.js';
 import { esc, openModal, closeModal, setModalBody, bindActions } from './dom.js';
-import { monSprite, itemUrl, badgeUrl, typeLabel } from '../config.js';
+import { monSprite, itemUrl, badgeUrl, typeLabel, leaderUrl } from '../config.js';
 import { monCard, statCard, typeChips, avatarImg, playerColor, hpBar } from './common.js';
 import { openTradeBuilder } from './trade.js';
 
@@ -196,7 +197,9 @@ export function openTrainer(session, pid) {
     <div class="row" style="margin:10px 0">${GYMS.map(g => `<img src="${badgeUrl(g.id)}" alt="${esc(g.badge)}" title="${esc(g.badge)} (${esc(g.leader)})" style="width:34px;height:34px;object-fit:contain;${p.badges.includes(g.id) ? '' : 'filter:grayscale(1) brightness(.4)'}">`).join('')}
       ${p.eliteStage ? `<span class="chip gold">👑 Elite ${p.eliteStage}/4</span>` : ''}</div>
     <b>Equipe</b><div class="pk-grid" style="margin-top:6px">${p.team.map((m, i) => statCard(m, { owner: p, lead: i === 0 })).join('')}</div>
-    ${p.box.length ? `<p class="small muted">+ ${p.box.length} no PC</p>` : ''}
+    ${p.box.length ? `<details style="margin-top:8px"><summary class="small"><b>💻 Banco / PC (${p.box.length})</b> — toque para ver</summary><div class="pk-grid" style="margin-top:6px">${p.box.map(m => statCard(m, { owner: p })).join('')}</div></details>` : ''}
+    ${p.companion && COMPANIONS[p.companion] ? `<div class="comp-box" style="margin-top:8px"><img class="comp-img" src="${leaderUrl(COMPANIONS[p.companion].sprite)}" alt=""><div><b>${COMPANIONS[p.companion].icon} ${esc(COMPANIONS[p.companion].name)}</b><div class="tiny muted">${esc(COMPANIONS[p.companion].desc)}</div></div></div>` : ''}
+    ${(p.captureLog || []).length ? `<div class="small" style="margin-top:8px"><b>🔴 Últimas capturas</b><div class="row" style="gap:4px;margin-top:4px">${p.captureLog.slice(-12).reverse().map(c => `<img src="${monSprite({ sp: c.sp, shiny: c.shiny })}" title="${esc(getSpecies(c.sp).name)}${c.shiny ? ' ✨' : ''}" style="width:34px;height:34px;object-fit:contain">`).join('')}</div></div>` : ''}
     ${canTrade ? `<button class="btn primary block" data-act="trade-with" style="margin-top:10px">🤝 Propor troca (Pokémon, itens, ouro)</button>` : ''}`;
   const ov = openModal('trainer', '🪪 Ficha do Treinador', html, { wide: true });
   bindActions(ov, { 'trade-with': () => { closeModal('trainer'); openTradeBuilder(session, pid); } });
@@ -235,9 +238,13 @@ export function openHelp() {
   openModal('help', '❔ Como jogar', `
     <div class="small col">
       <p><b>Objetivo:</b> conquistar as 6 insígnias, vencer a Elite dos Quatro (Liga Pokémon) e derrotar o Campeão na Arena Final. Com limite de turnos, vence quem tiver mais pontos.</p>
-      <p><b>Turno:</b> role o dado e escolha uma das casas piscando. Casas <b>coloridas</b> têm Pokémon do tier da cor (Rosa → Verde → Azul → Vermelha → Amarela). Casas <b>?</b> são eventos (ouro, itens, treinadores, Equipe Rocket, atalhos...). Nas casas de evento <b>Azuis e Vermelhas</b> pode surgir uma <b>RAID</b> contra um lendário (sem pokébolas; vença e tenha chance de capturá-lo). As casas de evento <b>Amarelas</b> só têm <b>eventos especiais</b>: Santuário Lendário, Ás da Liga, Chuva de Estrelas (shiny garantido), Tesouro da Liga, Bênção de Mew e Ovo Ancestral. <b>Cidades</b> têm Centro Pokémon (cura grátis), Loja, PC e ginásio.</p>
+      <p><b>Turno:</b> role o dado e escolha uma das casas piscando. Casas <b>coloridas</b> têm Pokémon do tier da cor (Rosa → Verde → Azul → Vermelha → Amarela). Casas <b>?</b> são eventos (ouro, itens, treinadores, Equipe Rocket, atalhos...). Nas casas de evento <b>Azuis e Vermelhas</b> pode surgir uma <b>RAID</b> contra um lendário: <b>solo</b> ou <b>em grupo</b> (todos escolhem 1 Pokémon e lutam juntos; o HP do lendário cresce com o grupo). Pokébolas só depois de vencer: aí cada um escolhe a bola e tenta capturar, na ordem de quem causou mais dano. As casas de evento <b>Amarelas</b> só têm <b>eventos especiais</b>: Santuário Lendário, Ás da Liga, Chuva de Estrelas (shiny garantido), Tesouro da Liga, Bênção de Mew e Ovo Ancestral. <b>Cidades</b> têm Centro Pokémon (cura grátis), Loja, PC e ginásio.</p>
       <p><b>Batalha:</b> cada rodada os dois lados agem. Dano = ataque × 0,7 + 🎲, multiplicado pela vantagem de tipo (tabela oficial de 18 tipos; tipo duplo multiplica: x4, x2, x0,5, x0,25 ou x0). 🎲6 = crítico (x1,5); 🎲1 = golpe fraco (x0,5). Quem tem mais <b>Velocidade</b> (nível × natureza) ataca primeiro.</p>
       <p><b>Golpes:</b> cada Pokémon tem 2 golpes. O 1º é um golpe rápido do 1º tipo (nunca erra). O 2º é um golpe forte do 2º tipo (ou do mesmo tipo) com 140% de poder, mas erra no 🎲1. Golpe do mesmo tipo do Pokémon ganha +20%. Pokémon de suporte trocam o golpe forte por <b>Recover</b> (cura 40%), <b>Swords Dance</b> (+40% de ataque), <b>Intimidate</b> (−30% no ataque do rival) ou <b>Giga Drain</b> (dano que cura). Escolher o golpe certo para o tipo do rival faz toda a diferença.</p>
+      <p><b>Condições:</b> golpes podem deixar o rival 🔥 <b>Queimado</b> (Fogo: perde HP e ataca mais fraco), ☠️ <b>Envenenado</b> (Veneno: perde 1/8 do HP por rodada), ⚡ <b>Paralisado</b> (Elétrico: 25% de não agir, mais lento), 💤 <b>Dormindo</b> (Planta/Fantasma: perde 1–3 rodadas) ou 🧊 <b>Congelado</b> (Gelo: não age até descongelar). Golpes fortes e pesados têm mais chance. Pokémon do mesmo tipo são imunes. <b>Full Heal</b> (loja) cura qualquer condição durante a luta; ao fim da batalha as condições somem.</p>
+      <p><b>🎯 Missões e 🤝 Companheiros:</b> na aba Metas ficam 3 missões fixas (capturar tipos, derrotar tipos, vencer treinadores, Raids...). Ao completar você ganha ouro, itens ou um <b>companheiro</b> (fica na sua conta). O companheiro anda ao lado do seu peão e dá bônus: Misty +15% em golpes de Água, Blaine mais chance de queimar, Prof. Oak +25% de XP, Enfermeira Joy poções mais fortes, Jessie &amp; James +20% de ouro... Troque na aba Metas ou no 🤝 do início.</p>
+      <p><b>🏅 Insígnias no mapa:</b> as cidades mostram a insígnia do ginásio — colorida se você já tem, apagada se falta, e a <b>próxima mais perto</b> brilha com a distância. Toque numa insígnia da aba Metas para centralizar o mapa.</p>
+      <p><b>👀 Assistir:</b> durante a batalha de outro jogador, toque em “Assistir a batalha” para ver os golpes, o banco de cada lado e as capturas. Na ficha do treinador aparecem o PC e as últimas capturas.</p>
       <p><b>Trocas:</b> toque no peão ou no nome de outro treinador → 🤝 Propor troca. Dá para trocar Pokémon, itens e ouro (não vale no modo Competitivo). Pokémon recebido em troca precisa das insígnias para lutar.</p>
       <p><b>Raridade:</b> shiny é raríssimo (1 em 450) e lendários só são capturados com 10+ na rolagem (e costumam fugir depois de escapar da bola).</p>
       <p><b>Cada Pokémon é único:</b> além da natureza, nasce com <b>potencial (IV)</b> de 0 a 31 em HP, Ataque e Velocidade (até ±8%) — veja as estrelas ★ no card — e com uma <b>variação de golpes</b>: o 2º golpe pode ser forte (140%, erra no 🎲1), pesado (170%, erra no 🎲1–2), de outro tipo (cobertura, ex.: Pikachu com Iron Tail) ou de suporte. Vale a pena capturar de novo atrás de um melhor!</p>

@@ -1,3 +1,5 @@
+import { COMPANIONS } from '../../shared/data/companions.js';
+import { openCompanionPicker } from './missions.js';
 // Telas fora da partida: login, hub do treinador, lobby online, sala de espera, partida local, coleção, ranking e admin.
 import { STARTERS, getSpecies, SPECIES_LIST } from '../../shared/data/pokemon.js';
 import { dailyPokemon } from '../../shared/daily.js';
@@ -165,6 +167,7 @@ export async function hubScreen(root, ctx) {
         <div class="card col">
           <h3>📦 Minha coleção</h3>
           <div class="grid2"><button class="btn purple" data-act="vault" ${profile ? '' : 'disabled'}>📦 Coleção (${(profile?.vault || []).length})</button><button class="btn" data-act="dex">📖 Pokédex (${(profile?.pokedex || []).length})</button></div>
+          <button class="btn block" data-act="companions" ${profile ? '' : 'disabled'} style="margin-top:6px">🤝 Companheiros (${(profile?.stats?.companions || []).length}/${Object.keys(COMPANIONS).length})${profile?.stats?.companion && COMPANIONS[profile.stats.companion] ? ` · com ${esc(COMPANIONS[profile.stats.companion].name)}` : ''}</button>
           <button class="btn gold-btn" data-act="market" ${profile ? '' : 'disabled'}>🏪 Mercado Global (comprar, vender, trocar)</button>
           <button class="btn" data-act="ranking">🏆 Ranking</button>
           ${isStandalone() ? '' : '<button class="btn install-btn" data-act="install">📲 Instalar o app no celular / PC</button>'}
@@ -183,6 +186,8 @@ export async function hubScreen(root, ctx) {
     'new-local': () => ctx.go('local-setup'),
     solo: () => soloModal(profile, ctx),
     vault: () => collectionModal(profile, rerender),
+    companions: () => openCompanionPicker({ owned: profile?.stats?.companions || [], current: profile?.stats?.companion || null,
+      onPick: async id => { try { profile = (await api('profile', { op: 'companion', id })).profile; toast(id ? `🤝 ${COMPANIONS[id].name} vai com você nas próximas partidas!` : 'Sem companheiro.', 'good'); rerender(profile); } catch (e) { toast(e.message, 'bad'); } } }),
     dex: () => openDex(null, profile?.pokedex || [], profile?.pokedex_seen || []),
     duel: () => openDuelQueue(ctx, profile),
     install: () => promptInstall(),

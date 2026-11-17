@@ -24,6 +24,9 @@ import {
 import { speciesByTier } from './data/pokemon.js';
 import { cardsForTier } from './data/events.js';
 import { proposeTrade, respondTrade } from './rules/trade.js';
+import { initMissions, progressMission, playerCompanionBonus } from './rules/missions.js';
+import { COMPANIONS } from './data/companions.js';
+import { startGroupRaid, startCatchStage, raidWaiting, raidAction, raidBallChance } from './rules/raid.js';
 import { sanitizeCosmetic } from './data/cosmetics.js';
 import { botAction } from './bots.js';
 
@@ -72,6 +75,7 @@ export function createMatch(config) {
     fxSeq: 0
   };
   if (config.kind === 'duel') return startDuel(state, rng, config);
+  for (const p of state.players) initMissions(state, p);
   log(state, `🏁 Partida iniciada com ${players.map(p => p.name).join(', ')}. Boa sorte, treinadores!`);
   if (state.options.dailyPokemon) log(state, `⭐ Pokémon do Dia: ${speciesName(state.options.dailyPokemon)} (aparece mais, XP em dobro e shiny 1/64).`);
   // Se o primeiro jogador for CPU, já joga
@@ -136,6 +140,8 @@ function newPlayer(rng, cfg, index) {
     gold: STARTING_GOLD,
     items: { ...STARTING_ITEMS },
     team: brought.length ? brought : [mon],
+    companions: (Array.isArray(cfg.companions) ? cfg.companions : []).filter(id => COMPANIONS[id]),
+    companion: COMPANIONS[cfg.companion] ? cfg.companion : null,
     box: cfgBox,
     badges: [],
     eliteStage: 0,
@@ -164,7 +170,10 @@ function detectEvolutions(prev, next) {
   for (const p of next.players) {
     for (const m of [...p.team, ...p.box]) {
       const old = before.get(m.uid);
-      if (old && old !== m.sp) next.fx.push({ k: 'evolve', pid: p.id, uid: m.uid, from: old, to: m.sp, shiny: !!m.shiny });
+      if (old && old !== m.sp) {
+        next.fx.push({ k: 'evolve', pid: p.id, uid: m.uid, from: old, to: m.sp, shiny: !!m.shiny });
+        progressMission(next, p.id, { k: 'evolve' });
+      }
     }
   }
 }
@@ -193,6 +202,7 @@ export function applyAction(prevState, actorId, action, ctx = {}) {
 /** Quem precisa agir agora? Retorna lista de ids. Usado pela UI e pelos bots. */
 export function whoMustAct(state) {
   if (state.status !== 'playing') return [];
+  if (state.raid) return raidWaiting(state);
   if (state.pending?.kind === 'pvp_invite') return [state.pending.to];
   const b = state.battle;
   if (b && !b.over) {
@@ -219,12 +229,25 @@ function dispatch(state, rng, actorId, action, now) {
   if (type === 'skip_afk') return skipAfk(state, rng, actor, now);
   if (type === 'chat') return; // chat não passa pelo motor
   if (type === 'trade_offer') return proposeTrade(state, rng, actor, action);
+  if (type === 'set_companion') {
+    const id = action.id || null;
+    if (id && !(actor.companions || []).includes(id)) fail('Você ainda não tem esse companheiro.');
+    actor.companion = id;
+    log(state, id ? `${COMPANIONS[id].icon} ${actor.name} agora anda com ${COMPANIONS[id].name}.` : `${actor.name} dispensou o companheiro.`);
+    return;
+  }
   if (type === 'trade_respond') return respondTrade(state, rng, actor, action);
 
   // Convite de PvP pendente: só o desafiado responde
   if (state.pending?.kind === 'pvp_invite') {
     if (type !== 'respond') fail('Aguardando resposta ao desafio PvP.');
     return respondInvite(state, rng, actor, !!action.accept, now);
+  }
+
+  // Raid (solo na fase de captura, ou em grupo)
+  if (state.raid) {
+    if (type !== 'raid') fail('Aguarde a Raid terminar.');
+    return raidAction(state, rng, actor, action);
   }
 
   // Batalha em andamento
@@ -760,13 +783,23 @@ function boardEvent(state, rng, p, sp, forceId = null) {
       }
       const boss = raidBoss(rng, t, card.id === 'legend_shrine');
       ev.mon = { sp: boss.sp, shiny: boss.shiny };
-      effects.push({ text: `${speciesName(boss.sp)}${boss.shiny ? ' ✨SHINY' : ''} Nv.${boss.lvl} — HP de chefe (${maxHpOf(boss)})`, tone: 'battle', icon: '🔥' });
-      effects.push({ text: 'Pokébolas não funcionam durante a Raid', tone: 'neutral', icon: '🚫' });
-      effects.push({ text: `Vença para ganhar prêmios e ${Math.round(raidCatchChance(p) * 100)}% de chance de captura`, tone: 'good', icon: '🎯' });
-      then = () => {
-        startBattle(state, { kind: 'raid', pid: p.id, foe: { kind: 'wild', mon: boss } });
-        state.phase = 'battle';
-      };
+      const others = state.players.filter(x => !x.left && x.id !== p.id && hasUsable(x)).length;
+      const group = card.id === 'raid' && others >= 1 && !state.options.duel && rng.chance(0.5);
+      if (group) {
+        ev.title = 'RAID EM GRUPO';
+        effects.push({ text: `${speciesName(boss.sp)}${boss.shiny ? ' ✨SHINY' : ''} Nv.${boss.lvl} — todos os treinadores podem lutar juntos!`, tone: 'battle', icon: '🔥' });
+        effects.push({ text: 'Cada um escolhe 1 Pokémon; o HP do lendário cresce com o grupo', tone: 'neutral', icon: '👥' });
+        effects.push({ text: 'Vencendo, quem causou mais dano tenta capturar primeiro', tone: 'good', icon: '🎯' });
+        then = () => startGroupRaid(state, boss, p.id);
+      } else {
+        effects.push({ text: `${speciesName(boss.sp)}${boss.shiny ? ' ✨SHINY' : ''} Nv.${boss.lvl} — HP de chefe (${maxHpOf(boss)})`, tone: 'battle', icon: '🔥' });
+        effects.push({ text: 'Pokébolas não funcionam durante a luta', tone: 'neutral', icon: '🚫' });
+        effects.push({ text: 'Vença e depois escolha a Pokébola para tentar capturar', tone: 'good', icon: '🎯' });
+        then = () => {
+          startBattle(state, { kind: 'raid', pid: p.id, foe: { kind: 'wild', mon: boss } });
+          state.phase = 'battle';
+        };
+      }
       break;
     }
     case 'master_trainer': {
@@ -992,7 +1025,7 @@ setBattleEndHandler((state, rng, b, outcome) => {
       delete state.board[sid];
     } else if (r === 'win' && outcome.winner === 0) {
       delete state.board[sid];
-      const g = wild.lvl * 5 * getSpecies(wild.sp).tier;
+      const g = Math.round(wild.lvl * 5 * getSpecies(wild.sp).tier * (playerCompanionBonus(p0)?.gold || 1));
       p0.gold += g;
       p0.stats.wins += 1;
       log(state, `🏅 ${p0.name} venceu o selvagem e ganhou ${g} de ouro.`, 'good');
@@ -1012,18 +1045,9 @@ setBattleEndHandler((state, rng, b, outcome) => {
       p0.gold += g;
       addItem(p0, 'rare_candy', 1);
       addItem(p0, 'ultra_ball', 2);
-      log(state, `🔥 ${p0.name} venceu a RAID contra ${speciesName(boss.sp)}! +${g} de ouro, Rare Candy e 2 Ultra Balls.`, 'win');
-      const chance = raidCatchChance(p0);
-      const ok = rng.chance(chance);
-      fx(state, { k: 'capture', pid: p0.id, sp: boss.sp, shiny: !!boss.shiny, ball: 'ultra_ball', ok, shakes: ok ? 3 : rng.int(0, 2), raid: true });
-      if (ok) {
-        delete boss.bonusHp; delete boss.raid;
-        fullHeal(boss);
-        log(state, `🎯 ${speciesName(boss.sp)} se acalmou e aceitou ${p0.name}! (chance ${Math.round(chance * 100)}%)`, 'shiny');
-        deliverCapture(state, p0.id, boss, 'ultra_ball');
-      } else {
-        log(state, `💨 ${speciesName(boss.sp)} escapou para o céu… (chance era ${Math.round(chance * 100)}%)`, 'bad');
-      }
+      log(state, `🔥 ${p0.name} venceu a RAID contra ${speciesName(boss.sp)}! +${g} de ouro, Rare Candy e 2 Ultra Balls. Agora escolha a Pokébola!`, 'win');
+      progressMission(state, p0.id, { k: 'raid_win' });
+      startCatchStage(state, boss, [p0.id]);
     } else if (r !== 'draw') {
       p0.stats.losses += 1;
       log(state, `😓 ${p0.name} não resistiu ao lendário.`, 'bad');
@@ -1052,15 +1076,18 @@ setBattleEndHandler((state, rng, b, outcome) => {
   const foe = b.sides[1];
   if (r === 'draw') return;
   if (outcome.winner === 0) {
-    p0.gold += foe.prize;
+    const prize = Math.round(foe.prize * (playerCompanionBonus(p0)?.gold || 1));
+    p0.gold += prize;
     p0.stats.wins += 1;
-    log(state, `🏆 ${p0.name} venceu ${foe.name} e recebeu ${foe.prize} de ouro!`, 'win');
+    log(state, `🏆 ${p0.name} venceu ${foe.name} e recebeu ${prize} de ouro!`, 'win');
+    progressMission(state, p0.id, { k: 'trainer_win' });
     if (b.kind === 'gym') {
       const gym = GYMS.find(g => g.id === b.ref);
       p0.badges.push(gym.id);
       log(state, `🎖️ ${p0.name} conquistou a ${gym.badge}! (${p0.badges.length}/${GYMS.length})`, 'win');
       fx(state, { k: 'badge', pid: p0.id, badge: gym.id });
       grantBadgeReward(state, rng, p0);
+      progressMission(state, p0.id, { k: 'badge' });
     } else if (b.kind === 'elite') {
       p0.eliteStage += 1;
       if (p0.eliteStage < ELITE_FOUR.length) {

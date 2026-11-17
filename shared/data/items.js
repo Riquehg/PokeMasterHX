@@ -18,6 +18,7 @@ export const ITEMS = {
 
   // --- Cura e batalha ---
   potion:       { name: 'Potion',       kind: 'heal', healPct: 0.4, price: 80,   minTier: 1, image: 'potion.png',       desc: 'Recupera 40% do HP de um Pokémon.' },
+  full_heal:    { name: 'Full Heal',    kind: 'cure', price: 150,  minTier: 1, image: 'full_heal.png',    desc: 'Cura queimadura, veneno, paralisia, sono e congelamento (em batalha).' },
   super_potion: { name: 'Super Potion', kind: 'heal', healPct: 0.75, price: 220, minTier: 2, image: 'potion.png', desc: 'Recupera 75% do HP de um Pokémon.' },
   revive:       { name: 'Revive',       kind: 'revive', healPct: 0.5, price: 450, minTier: 2, image: 'revive.png',      desc: 'Revive um Pokémon desmaiado com 50% do HP.' },
   x_attack:     { name: 'X Attack',     kind: 'boost', atk: 3, price: 250,   minTier: 2, image: 'x_attack.png',     desc: '+3 de ataque para o Pokémon ativo até o fim da batalha.' },

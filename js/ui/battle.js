@@ -4,7 +4,7 @@ import { ITEMS, ballBonusAgainst } from '../../shared/data/items.js';
 import { monView, maxHpOf } from '../../shared/rules/monsters.js';
 import { canUse, badgesNeeded } from '../../shared/rules/helpers.js';
 import { monMoves } from '../../shared/data/moves.js';
-import { raidCatchChance } from '../../shared/engine.js';
+import { STATUS } from '../../shared/rules/battle.js';
 import { bestAttack, against, effectivenessLabel, TYPE_COLORS } from '../../shared/rules/types.js';
 import { whoMustAct } from '../../shared/engine.js';
 import { esc, hpClass } from './dom.js';
@@ -46,11 +46,37 @@ function hpBox(state, side, mon, cls) {
   return `<div class="hpbox ${cls}" data-uid="${esc(mon.uid)}">
     <div class="owner">${esc(owner || '')}</div>
     <div class="nm"><span>${esc(v.name)}${v.shiny ? ' ✨' : ''}${mon.raid ? ' <span class="chip red">CHEFE</span>' : ''}</span><span class="lv">Nv.${v.lvl}</span></div>
-    <div class="types">${typeChips(v.types)}${side.boost?.[mon.uid] ? ` <span class="chip green">ATQ +${side.boost[mon.uid]}</span>` : ''}</div>
+    <div class="types">${typeChips(v.types)}${side.boost?.[mon.uid] ? ` <span class="chip green">ATQ +${side.boost[mon.uid]}</span>` : ''}${statusChip(side, mon)}${stageChip(side, mon)}</div>
     <div class="hp ${hpClass(r)}"><i style="width:${(r * 100).toFixed(1)}%"></i></div>
     <div class="hpnum"><b class="cur">${Math.max(0, v.hp)}</b> / ${v.maxHp}</div>
     ${team.length > 1 ? `<div class="balls">${team.map(m => `<i class="${m.hp > 0 ? '' : 'off'}"></i>`).join('')}</div>` : ''}
   </div>`;
+}
+
+function statusChip(side, mon) {
+  const st = side.status?.[mon.uid];
+  if (!st) return '';
+  const S = STATUS[st.id];
+  return ` <span class="st-chip" style="--sc:${S.color}" title="${esc(S.name)}: ${esc(S.desc)}">${S.icon} ${S.short}</span>`;
+}
+function stageChip(side, mon) {
+  const st = side.stage?.[mon.uid] || 0;
+  return st ? ` <span class="chip ${st > 0 ? 'green' : 'red'}">ATQ ${st > 0 ? '▲' : '▼'}${Math.abs(st)}</span>` : '';
+}
+
+/** Painel do espectador: golpes e banco dos dois lados. */
+function spectatorHtml(state, b) {
+  const sideInfo = side => {
+    const team = sideTeam(state, side);
+    const act = team[side.active];
+    const owner = side.kind === 'player' ? state.players.find(p => p.id === side.pid)?.name : side.kind === 'wild' ? 'Selvagem' : side.name;
+    return `<div class="spec-side"><b>${esc(owner || '')}</b>
+      <div class="spec-moves">${act ? monMoves(act).map(m => `<span class="move-chip" style="--tc:${TYPE_COLORS[m.type]}"><b>${esc(m.name)}</b> <span class="tiny">${m.kind === 'dmg' || m.kind === 'drain' ? Math.round((m.power || 1) * 100) + '%' : 'suporte'}</span></span>`).join('') : ''}</div>
+      <div class="spec-bench">${team.map((m, i) => `<span class="spec-mon ${i === side.active ? 'on' : ''} ${m.hp <= 0 ? 'ko' : ''}" title="${esc(getSpecies(m.sp).name)} Nv.${m.lvl} — ${Math.max(0, m.hp)}/${maxHpOf(m)} HP">
+        <img src="${monSprite(m)}" alt=""><i style="width:${Math.max(0, (m.hp / maxHpOf(m)) * 100).toFixed(0)}%"></i></span>`).join('')}</div></div>`;
+  };
+  return `<div class="spectator"><div class="tiny muted center">👀 Assistindo — golpes em campo e banco de cada lado</div>
+    <div class="spec-grid">${sideInfo(b.sides[0])}${sideInfo(b.sides[1])}</div></div>`;
 }
 
 /** HTML completo. ui.sub = submenu ('switch'|'item'|'ball'). */
@@ -86,14 +112,14 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
 
   let controls = '';
   if (ui.busy) controls = `<p class="muted center" style="margin-top:10px">⚔️ ...</p>`;
-  else if (!participant) controls = `<p class="muted center" style="margin-top:10px">👀 Você está assistindo esta batalha.</p>`;
+  else if (!participant) controls = spectatorHtml(state, b);
   else if (!myTurn) controls = `<p class="muted center" style="margin-top:10px"><span class="spinner"></span> ${b.kind === 'pvp' ? 'Aguardando o adversário escolher...' : 'Aguarde...'}</p>`;
   else if (mustSwitch) controls = `<p class="center" style="margin-top:10px"><b>${esc(getSpecies(myMon.sp).name)} desmaiou!</b> Escolha quem entra:</p>${switchList(sideTeam(state, me), me.active, vp)}`;
   else {
     const p = state.players.find(x => x.id === vid);
     const myTeam = sideTeam(state, me);
     const balls = Object.entries(p.items).filter(([id, n]) => ITEMS[id]?.kind === 'ball' && n > 0);
-    const items = Object.entries(p.items).filter(([id, n]) => ['heal', 'revive', 'boost'].includes(ITEMS[id]?.kind) && n > 0);
+    const items = Object.entries(p.items).filter(([id, n]) => ['heal', 'revive', 'boost', 'cure'].includes(ITEMS[id]?.kind) && n > 0);
     const moveBtns = monMoves(myMon).map((m, i) => {
       const dmg = m.kind === 'dmg' || m.kind === 'drain';
       const mult = dmg ? against(m.type, getSpecies(foeMon.sp).types) : 1;
@@ -109,7 +135,7 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
         <button class="btn purple" data-act="b-sub" data-sub="item" ${items.length ? '' : 'disabled'}>🎒 Itens</button>
         <button class="btn green" data-act="b-sub" data-sub="ball" ${b.kind === 'wild' && balls.length ? '' : 'disabled'} ${b.kind === 'raid' ? 'title="Na Raid, vença primeiro: a captura é automática no fim"' : ''}>🔴 Capturar</button>
         <button class="btn" data-act="b-flee" ${official ? 'disabled' : ''}>${b.kind === 'wild' ? '🏃 Fugir' : '🏳️ Desistir'}</button>
-      </div>${b.kind === 'raid' ? `<p class="tiny muted center">🔥 Raid: pokébolas bloqueadas. Vença o chefe para ter ${Math.round(raidCatchChance(p) * 100)}% de chance de capturá-lo (sobe com insígnias).</p>` : ''}`;
+      </div>${b.kind === 'raid' ? '<p class="tiny muted center">🔥 Raid: pokébolas bloqueadas durante a luta. Vença o chefe e depois escolha a Pokébola para tentar capturar.</p>' : ''}`;
     if (ui.sub === 'switch') controls += switchList(myTeam, me.active, p);
     if (ui.sub === 'item') controls += `<div class="subpick">${items.map(([id, n]) => `<button class="btn sm pickbtn" data-act="b-item" data-item="${id}"><img src="${itemUrl(id)}" alt="${esc(ITEMS[id].name)}">${esc(ITEMS[id].name)} ×${n}</button>`).join('')}</div>`;
     if (ui.sub === 'ball') {
@@ -210,6 +236,15 @@ export async function playBattleFx(fxList) {
         e.textContent = eff;
         arena.appendChild(e); setTimeout(() => e.remove(), 950);
       }
+      await wait(650);
+    } else if (f.k === 'status' || f.k === 'status_dmg' || f.k === 'status_skip' || f.k === 'status_cure') {
+      const s = sprite(f.uid);
+      const S = STATUS[f.status] || { icon: '✨', name: 'Curado', color: '#3fd46b' };
+      if (s) {
+        float(arena, s, f.k === 'status_dmg' ? `${S.icon} -${f.dmg}` : f.k === 'status_cure' ? '✨ Curado' : f.k === 'status_skip' ? `${S.icon} ${S.name}` : `${S.icon} ${S.name}!`, f.k === 'status_cure' ? 'heal' : 'crit');
+        s.classList.remove('st-' + (f.status || 'x')); void s.offsetWidth; s.classList.add('st-anim', 'st-' + (f.status || 'cure'));
+      }
+      if (f.k === 'status_dmg') { const box = arena.querySelector(`.hpbox[data-uid="${f.uid}"]`); if (box) setHp(box, f.hpAfter, f.maxHp); }
       await wait(650);
     } else if (f.k === 'buff' || f.k === 'debuff') {
       const s = sprite(f.uid);

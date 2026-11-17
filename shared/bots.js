@@ -99,6 +99,12 @@ function battleAction(state, p) {
   // Se derruba agora, ataca
   if (myHit >= foe.hp) return { type: 'battle', move: 'attack', slot };
 
+  // Cura condição forte (sono/congelamento/queimadura) com Full Heal
+  const st = side.status?.[me.uid]?.id;
+  if (st && ['sleep', 'freeze', 'burn'].includes(st) && p.items.full_heal > 0 && hpRatio(me) > 0.35) {
+    return { type: 'battle', move: 'item', item: 'full_heal', index: side.active };
+  }
+
   // Cura quando o próximo golpe do rival derruba e a poção salva
   const heal = healItem(p);
   if (heal && me.hp <= foeHit * 1.1 && maxHpOf(me) * 0.4 > foeHit * 0.8 && (official || getSpecies(foe.sp).tier >= 2)) {
@@ -289,6 +295,30 @@ function strength(p) {
   return p.team.filter(m => m.hp > 0).reduce((a, m) => a + m.lvl * hpRatio(m), 0);
 }
 
+function raidBotAction(state, p) {
+  const r = state.raid;
+  if (r.stage === 'join') {
+    const best = p.team.filter(m => m.hp > 0 && canUse(p, m)).sort((a, b) => monPower(b) - monPower(a))[0];
+    return best ? { type: 'raid', op: 'join', uid: best.uid } : { type: 'raid', op: 'decline' };
+  }
+  if (r.stage === 'fight') {
+    const x = r.party.find(y => y.pid === p.id);
+    const mon = p.team.find(m => m.uid === x?.uid);
+    const moves = monMoves(mon);
+    const bossTypes = getSpecies(r.boss.sp).types;
+    const score = mv => {
+      if (mv.kind === 'heal') return mon.hp < maxHpOf(mon) * 0.4 ? 999 : 0;
+      if (mv.kind === 'buff') return (x.stage || 0) < 1 && r.round < 2 ? 1.5 : 0;
+      if (mv.kind === 'debuff') return r.bossStage > -1 ? 1.2 : 0;
+      return bestAttack([mv.type], bossTypes).mult * (mv.power || 1) * (1 - (mv.miss || 0) / 6) * (getSpecies(mon.sp).types.includes(mv.type) ? 1.2 : 1);
+    };
+    return { type: 'raid', op: 'attack', slot: score(moves[1]) > score(moves[0]) ? 1 : 0 };
+  }
+  const ball = ['master_ball', 'ultra_ball', 'rainbow_ball', 'great_ball', 'poke_ball'].find(id => p.items[id] > 0)
+    || Object.keys(p.items).find(id => ITEMS[id]?.kind === 'ball' && p.items[id] > 0);
+  return ball ? { type: 'raid', op: 'catch', ball } : { type: 'raid', op: 'skip' };
+}
+
 export function botAction(state, pid) {
   const p = getPlayer(state, pid);
 
@@ -296,6 +326,7 @@ export function botAction(state, pid) {
     const from = getPlayer(state, state.pending.from);
     return { type: 'respond', accept: strength(p) >= strength(from) * 0.85 };
   }
+  if (state.raid) return raidBotAction(state, p);
   if (state.battle && !state.battle.over) return battleAction(state, p);
 
   const cp = currentPlayer(state);

@@ -4,15 +4,20 @@ import { GYMS, gymAt, ELITE_SPACE, CHAMPION_SPACE, ELITE_FOUR, BADGES_TO_LEAGUE 
 import { ITEMS } from '../../shared/data/items.js';
 import { whoMustAct, score, AFK_SECONDS } from '../../shared/engine.js';
 import { esc, toast, bindActions, openModal, closeModal } from './dom.js';
-import { monSprite } from '../config.js';
+import { monSprite, typeLabel } from '../config.js';
 import { monCard, playerColor, avatarImg, speciesName } from './common.js';
 import { battleHtml, outcomeText, playBattleFx } from './battle.js';
 import { BoardView } from './board.js';
 import { anim, rollDice, turnBanner, eventCard, battleIntro, captureAnim, confetti, evolutionAnim } from './fx.js';
 import * as M from './modals.js';
 import { renderTrades } from './trade.js';
+import { badgeStatus } from './board.js';
+import { badgeUrl } from '../config.js';
+import { missionsHtml, companionHtml, openCompanionPicker } from './missions.js';
+import { COMPANIONS } from '../../shared/data/companions.js';
+import { renderRaid } from './raid.js';
 
-const BATTLE_FX = new Set(['hit', 'heal', 'faint', 'switch']);
+const BATTLE_FX = new Set(['hit', 'heal', 'faint', 'switch', 'status', 'status_dmg', 'status_skip', 'status_cure', 'buff', 'debuff']);
 const SPEEDS = [[1, '🎬 Animações: normal'], [2, '⚡ Animações: rápidas'], [0, '⏭️ Animações: desligadas']];
 
 export function mountGame(root, session, opts = {}) {
@@ -49,10 +54,17 @@ export function mountGame(root, session, opts = {}) {
           <div class="panel" id="g-battle-mini" style="display:none"></div>
           <div class="mtabs">
             <button class="btn sm" data-act="mtab" data-t="team">🛡️ Equipe</button>
+            <button class="btn sm" data-act="mtab" data-t="goals">🏅 Metas</button>
             <button class="btn sm" data-act="mtab" data-t="players">👥 Jogadores</button>
             <button class="btn sm" data-act="mtab" data-t="log">📜 Log/Chat</button>
           </div>
           <div class="panel panel-team-m" data-mtab="team"><div class="spread" style="margin-bottom:6px"><b>🛡️ Sua equipe</b><span class="tiny muted g-who"></span></div><div class="team" id="g-team-m"></div></div>
+          <div class="panel" data-mtab="goals" id="g-goals-panel">
+            <div id="g-companion"></div>
+            <div id="g-missions"></div>
+            <div class="spread" style="margin:8px 0 6px"><b>🏅 Insígnias</b><span class="tiny muted" id="g-badge-count"></span></div>
+            <div class="badge-panel" id="g-badges"></div>
+          </div>
           <div class="panel" data-mtab="players"><b>👥 Jogadores</b><div class="list" id="g-players" style="margin-top:6px;max-height:none"></div></div>
           <div class="panel" data-mtab="log">
             <div class="tabs"><button class="btn sm" data-act="tab" data-tab="log">📜 Log</button><button class="btn sm" data-act="tab" data-tab="chat">💬 Chat</button></div>
@@ -168,6 +180,18 @@ export function mountGame(root, session, opts = {}) {
           if (f.pid === v) confetti(90);
           break;
         }
+        case 'mission_done':
+          if (f.pid === v) {
+            await eventCard({ k: 'event', pid: f.pid, id: 'mission', title: 'Missão completa!', icon: '🎯', tone: 'good', lore: f.text,
+              effects: f.rewards.map(t => ({ text: t, tone: 'good', icon: '🎁' })), trainer: f.companion ? { name: '', sprite: COMPANIONS[f.companion]?.sprite } : undefined }, { name: nameOf(f.pid), mine: true });
+          } else toast(`🎯 ${nameOf(f.pid)} completou uma missão!`, 'info');
+          break;
+        case 'raid_start':
+          toast('🔥 RAID EM GRUPO! Escolha um Pokémon para lutar juntos.', 'good');
+          break;
+        case 'raid_end':
+          if (f.win) confetti(100);
+          break;
         case 'trade_done':
           if (f.ok && (f.from === v || f.to === v)) { toast('🤝 Troca concluída!', 'good'); confetti(60); }
           else if (!f.ok && f.from === v) toast(`🤝 ${nameOf(f.to)} recusou sua troca.`, 'bad');
@@ -209,10 +233,12 @@ export function mountGame(root, session, opts = {}) {
     renderTeam(p);
     renderActions(s, p, must, cur);
     renderPlayers(s);
+    renderGoals(s, p);
     renderLog(s);
     if (!ui.playing) {
       renderBattle(s);
       renderInvite(s);
+      renderRaid(s, vid(), act);
       if (p) renderTrades(root, s, p.id, viewSession());
       renderGameOver(s);
     }
@@ -324,11 +350,31 @@ export function mountGame(root, session, opts = {}) {
     return (sp.type === 'city' ? ' 🏙' : sp.type === 'event' ? ' ❓' : ' 🌿') + (w ? ` (${esc(speciesName(w.sp))}${w.shiny ? '✨' : ''})` : '');
   }
 
+  function renderGoals(s, p) {
+    const panel = root.querySelector('#g-goals-panel');
+    if (!panel) return;
+    panel.style.display = s.kind === 'duel' ? 'none' : '';
+    if (s.kind === 'duel') return;
+    const viewer = p || s.players[s.current];
+    const list = badgeStatus(s, viewer);
+    root.querySelector('#g-badge-count').textContent = `${viewer.badges.length}/${list.length}${viewer.badges.length >= list.length ? ' · Liga liberada!' : ''}`;
+    root.querySelector('#g-badges').innerHTML = list.map(g => `<div class="badge-item ${g.owned ? 'owned' : 'missing'} ${g.next ? 'next' : ''}" data-act="goto-gym" data-space="${g.space}" title="${esc(g.leader)} · ${esc(typeLabel(g.type))}">
+      <img src="${badgeUrl(g.id)}" alt=""><b>${esc(g.city.replace(' City', '').replace(' Island', ''))}</b>
+      <span class="tiny">${g.owned ? '✔ conquistada' : g.dist !== null ? `${g.next ? '➜ ' : ''}${g.dist} casas` : '—'}</span></div>`).join('');
+    renderMissions(s, viewer);
+  }
+
+  function renderMissions(s, viewer) {
+    const el = root.querySelector('#g-missions'), comp = root.querySelector('#g-companion');
+    if (el) el.innerHTML = missionsHtml(s, viewer);
+    if (comp) comp.innerHTML = companionHtml(s, viewer, viewer.id === session.viewerId());
+  }
+
   function renderPlayers(s) {
     root.querySelector('#g-players').innerHTML = s.players.map((pl, i) => `
       <div class="list-item" data-act="trainer" data-pid="${esc(pl.id)}" style="cursor:pointer;${s.current === i ? 'border-color:' + playerColor(s, pl.id) : ''}">
         ${avatarImg(pl, 'avatar sm', playerColor(s, pl.id))}
-        <div class="grow"><b style="color:${playerColor(s, pl.id)}">${esc(pl.name)}</b>${pl.isBot ? ' <span class="chip">CPU</span>' : ''}${pl.left ? ' <span class="chip red">saiu</span>' : ''}${pl.cosmetic?.title ? `<div class="player-title">${esc(pl.cosmetic.title)}</div>` : ''}
+        <div class="grow"><b style="color:${playerColor(s, pl.id)}">${esc(pl.name)}</b>${pl.companion && COMPANIONS[pl.companion] ? ` <span class="chip" title="${esc(COMPANIONS[pl.companion].desc)}">${COMPANIONS[pl.companion].icon} ${esc(COMPANIONS[pl.companion].name)}</span>` : ''}${pl.isBot ? ' <span class="chip">CPU</span>' : ''}${pl.left ? ' <span class="chip red">saiu</span>' : ''}${pl.cosmetic?.title ? `<div class="player-title">${esc(pl.cosmetic.title)}</div>` : ''}
           <div class="tiny muted">📍 ${esc(getSpace(pl.pos).name)} · 🪙 ${pl.gold} · 🎖️ ${pl.badges.length} · 📖 ${pl.caught.length}${pl.eliteStage ? ` · 👑 ${pl.eliteStage}/4` : ''}${pl.skip ? ' · ⏸️' : ''}</div></div>
         <div class="row" style="gap:2px">${pl.team.slice(0, 6).map(m => `<img src="${monSprite(m)}" alt="${esc(speciesName(m.sp))}" style="width:24px;height:24px;object-fit:contain;${m.hp <= 0 ? 'filter:grayscale(1);opacity:.5' : ''}">`).join('')}</div>
       </div>`).join('');
@@ -389,7 +435,8 @@ export function mountGame(root, session, opts = {}) {
       mini.style.display = '';
       const foe = b.sides[1];
       mini.innerHTML = `<b>⚔️ Batalha em andamento</b><div class="small muted">${esc(nameOf(b.sides[0].pid))} vs ${esc(foe.kind === 'player' ? nameOf(foe.pid) : foe.kind === 'wild' ? speciesName(foe.team[0].sp) + ' selvagem' : foe.name)}</div>
-        <div class="tiny" style="margin-top:4px">${b.log.slice(-3).map(esc).join('<br>')}</div>`;
+        <div class="tiny" style="margin-top:4px">${b.log.slice(-3).map(esc).join('<br>')}</div>
+        <button class="btn sm blue block" data-act="spectate" style="margin-top:6px">👀 Assistir a batalha</button>`;
     }
   }
 
@@ -480,8 +527,11 @@ export function mountGame(root, session, opts = {}) {
     'open-help': () => M.openHelp(),
     'open-battle': () => render(),
     spectate: () => { ui.spectate = true; render(); },
+    'comp-open': () => { const p = me(); if (p) openCompanionPicker({ owned: p.companions || [], current: p.companion, onPick: id => act({ type: 'set_companion', id }) }); },
     'show-over': () => showOver(S()),
     trainer: d => M.openTrainer(viewSession(), d.pid),
+    spectate: () => { ui.spectate = true; render(); },
+    'goto-gym': d => board.centerOn(Number(d.space), undefined, true),
     'trade-cancel': d => act({ type: 'trade_respond', id: d.id, cancel: true }),
     mon: d => M.openMon(viewSession(), act, Number(d.index)),
     tab: d => { ui.tab = d.tab; render(); },

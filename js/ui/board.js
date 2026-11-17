@@ -1,6 +1,9 @@
 // Tabuleiro com zoom (roda do mouse / pinça / botões), arrastar para mover e animação dos peões.
 import { SPACE_LIST, getSpace } from '../../shared/data/board.js';
-import { gymAt, ELITE_SPACE, CHAMPION_SPACE } from '../../shared/data/trainers.js';
+import { gymAt, ELITE_SPACE, CHAMPION_SPACE, GYMS, BADGES_TO_LEAGUE } from '../../shared/data/trainers.js';
+import { distancesFrom } from '../../shared/rules/movement.js';
+import { badgeUrl, leaderUrl } from '../config.js';
+import { COMPANIONS } from '../../shared/data/companions.js';
 import { maxHpOf } from '../../shared/rules/monsters.js';
 import { esc } from './dom.js';
 import { monSprite, avatarUrl, mapUrl } from '../config.js';
@@ -21,7 +24,7 @@ export class BoardView {
       <div class="board-stage stage-noimg" id="stage">
         <div class="board-fallback"></div>
         <img class="board-img" alt="" draggable="false">
-        <div class="layer-spaces"></div><div class="layer-wild"></div><div class="layer-tokens"></div>
+        <div class="layer-spaces"></div><div class="layer-badges"></div><div class="layer-wild"></div><div class="layer-tokens"></div>
       </div>
       <div class="zoom-ctrl">
         <button data-z="in" title="Aproximar">+</button><button data-z="out" title="Afastar">−</button>
@@ -202,6 +205,7 @@ export class BoardView {
       spaces += `<div class="space t${sp.tier} ${sp.type} ${isOpt ? 'opt' : ''}" style="left:${sp.x}%;top:${sp.y}%" ${isOpt ? `data-to="${sp.id}"` : ''} title="${esc(sp.name)}${extra}">${icon}<span class="lbl">${esc(sp.name)}</span></div>`;
     }
     this.stage.querySelector('.layer-spaces').innerHTML = spaces;
+    this.stage.querySelector('.layer-badges').innerHTML = state.kind === 'duel' ? '' : badgeMarkers(state, me);
 
     let wild = '';
     for (const [id, mon] of Object.entries(state.board || {})) {
@@ -243,6 +247,7 @@ export class BoardView {
     return `<div class="${cls}" data-pid="${esc(pl.id)}" style="left:${sp.x}%;top:${sp.y}%;margin-left:calc(${off}px * var(--ms, 1));--pc:${playerColor(state, pl.id)}" title="${esc(pl.name)}${c.title ? ' — ' + esc(c.title) : ''}">
       ${fr ? '<div class="halo"></div><div class="halo h2"></div>' : ''}${sparks}
       <div class="pin ${fr ? 'frame-' + fr : ''}"><img src="${avatarUrl(pl.avatar)}" alt="${esc(pl.name)}" data-color="${playerColor(state, pl.id)}" draggable="false"></div>
+      ${pl.companion && COMPANIONS[pl.companion] ? `<img class="tk-comp" src="${leaderUrl(COMPANIONS[pl.companion].sprite)}" alt="" title="${esc(COMPANIONS[pl.companion].name)}" draggable="false">` : ''}
       <span class="name">${pl.id === viewerId ? 'Você' : esc(pl.name.split(' ')[0])}</span>
       ${c.title ? `<span class="ttitle">★ ${esc(c.title)}</span>` : ''}</div>`;
   }
@@ -266,3 +271,28 @@ export class BoardView {
 }
 
 export { TIER_COLORS };
+
+/** Situação das insígnias para um jogador: conquistadas, faltando e a mais próxima (sugestão de caminho). */
+export function badgeStatus(state, me) {
+  if (!me) return GYMS.map(g => ({ ...g, owned: false, dist: null, next: false }));
+  let dist = {};
+  try { dist = distancesFrom(me, me.pos); } catch { dist = {}; }
+  const list = GYMS.map(g => ({ ...g, owned: me.badges.includes(g.id), dist: dist[g.space] ?? null, next: false }));
+  const missing = list.filter(g => !g.owned && g.dist !== null).sort((a, b) => a.dist - b.dist);
+  if (missing[0]) missing[0].next = true;
+  return list;
+}
+
+function badgeMarkers(state, me) {
+  return badgeStatus(state, me).map(g => {
+    const sp = SPACE_LIST.find(x => x.id === g.space);
+    if (!sp) return '';
+    const tip = `${g.city} — ${g.leader} (${g.badge})${g.owned ? ' ✔ conquistada' : g.dist !== null ? ` · ${g.dist} casa(s) daqui` : ''}`;
+    return `<div class="gym-badge ${g.owned ? 'owned' : 'missing'} ${g.next ? 'next' : ''}" style="left:${sp.x}%;top:${sp.y}%" title="${esc(tip)}">
+      <img src="${badgeUrl(g.id)}" alt="" draggable="false"><span class="gb-mark">${g.owned ? '✔' : g.next ? '➜' : ''}</span>
+      ${g.next ? `<span class="gb-next">Próxima · ${g.dist} casas</span>` : ''}</div>`;
+  }).join('') + (me && me.badges.length >= BADGES_TO_LEAGUE ? (() => {
+    const sp = SPACE_LIST.find(x => x.id === ELITE_SPACE);
+    return sp ? `<div class="gym-badge next league" style="left:${sp.x}%;top:${sp.y}%" title="Liga liberada!"><span class="gb-league">👑</span><span class="gb-next">Liga liberada!</span></div>` : '';
+  })() : '');
+}

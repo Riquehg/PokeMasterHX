@@ -123,6 +123,15 @@ export async function profileOp(db, user, body) {
     if (body.avatar !== undefined) patch.avatar = Math.max(1, Math.min(8, Number(body.avatar) || 1));
     return { profile: await db.upsertProfile(user.id, patch) };
   }
+  if (body.op === 'companion') {
+    const id = body.id || null;
+    return { profile: await mutateProfile(db, user.id, prof => {
+      const st = { ...(prof.stats || {}) };
+      if (id && !(st.companions || []).includes(id)) bad('Você ainda não tem esse companheiro. Ganhe completando missões nas partidas.');
+      st.companion = id;
+      return { stats: st };
+    }) };
+  }
   if (body.op === 'release') {
     // Soltar um Pokémon da Coleção (não afeta partidas em andamento)
     return { profile: await mutateProfile(db, user.id, prof => ({ vault: (prof.vault || []).filter(m => m.uid !== body.uid) })) };
@@ -381,6 +390,7 @@ async function startRoom(db, row, lobby, userId) {
     const p = { id: e.id, name: e.name, avatar: e.avatar, isBot: e.isBot, starter: e.starter };
     const prof = e.isBot ? null : await db.getProfile(e.id);
     if (prof) { try { p.cosmetic = await equippedCosmetic(db, prof); } catch { /* sem cosmético */ } }
+    if (prof) { p.companions = prof.stats?.companions || []; p.companion = prof.stats?.companion || null; } // companheiros da conta
     if (mode === 'collection' && !e.isBot && e.teamUids?.length) {
       const vault = prof?.vault || [];
       p.teamMons = e.teamUids.map(u => vault.find(v => v.uid === u)).filter(Boolean)
@@ -528,6 +538,20 @@ export async function actionOp(db, user, body) {
     const ok = await db.updateMatch(row.id, row.version, patch);
     if (!ok) continue; // conflito de versão: outra jogada entrou antes — recalcula
     try { await publishCaptures(db, state, state.fx); } catch (e) { console.error('[feed]', e.message); }
+    // companheiros ganhos em missões ficam na conta
+    for (const f of state.fx || []) {
+      if (f.k !== 'mission_done' || !f.companion || String(f.pid).startsWith('cpu_') || row.options?.mode === 'solo_local') continue;
+      try {
+        await mutateProfile(db, f.pid, prof => {
+          const st = { ...(prof.stats || {}) };
+          const list = st.companions || [];
+          if (list.includes(f.companion)) return null;
+          st.companions = [...list, f.companion];
+          if (!st.companion) st.companion = f.companion;
+          return { stats: st };
+        });
+      } catch (e) { console.error('[companion]', e.message); }
+    }
     if (finished && row.options?.mode === 'duel') await duelFinished(db, { ...row, ...patch });
     else if (finished) await recordResults(db, state, row.options || {});
     else {

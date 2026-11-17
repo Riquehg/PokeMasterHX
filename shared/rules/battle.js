@@ -8,6 +8,7 @@ import { getSpecies } from '../data/pokemon.js';
 import { getItem, ballBonusAgainst } from '../data/items.js';
 import { against, bestAttack, effectivenessLabel, TYPE_LABELS } from './types.js';
 import { monMoves, STAB } from '../data/moves.js';
+import { companionBonus, progressMission } from './missions.js';
 import { statsOf, maxHpOf, gainXp, xpReward, healMon } from './monsters.js';
 import {
   fail, getPlayer, log, fx, takeItem, giveMon, markSeen, healthyIndex, hasHealthy, speciesName, canUse, usableIndex, badgesNeeded
@@ -138,12 +139,13 @@ function validateChoice(state, si, choice) {
     }
     case 'item': {
       const it = getItem(choice.item);
-      if (!it || !['heal', 'revive', 'boost'].includes(it.kind)) fail('Esse item não pode ser usado em batalha.');
+      if (!it || !['heal', 'revive', 'boost', 'cure'].includes(it.kind)) fail('Esse item não pode ser usado em batalha.');
       if (!(player.items[choice.item] > 0)) fail('Você não tem esse item.');
       const target = team[choice.index ?? side.active];
       if (!target) fail('Alvo inválido.');
       if (it.kind === 'heal' && (target.hp <= 0 || target.hp >= maxHpOf(target))) fail('Esse Pokémon não precisa de cura.');
       if (it.kind === 'revive' && target.hp > 0) fail('Revive só funciona em Pokémon desmaiado.');
+      if (it.kind === 'cure' && !side.status?.[target.uid]) fail('Esse Pokémon não tem nenhuma condição para curar.');
       return;
     }
     case 'ball': {
@@ -186,6 +188,75 @@ export function submitChoice(state, rng, pid, choice) {
   }
 }
 
+// ---------------------------------------------------------------- condições (status) — valem até o fim da batalha
+export const STATUS = {
+  burn:      { name: 'Queimado',    adj: 'queimado',    icon: '🔥', short: 'QUE', color: '#e2583a', desc: 'Perde 1/12 do HP por rodada e ataca 25% mais fraco' },
+  poison:    { name: 'Envenenado',  adj: 'envenenado',  icon: '☠️', short: 'ENV', color: '#9b4bc9', desc: 'Perde 1/8 do HP por rodada' },
+  paralysis: { name: 'Paralisado',  adj: 'paralisado',  icon: '⚡', short: 'PAR', color: '#e8c12e', desc: '25% de chance de não agir; metade da velocidade' },
+  sleep:     { name: 'Dormindo',    adj: 'dormindo',    icon: '💤', short: 'DOR', color: '#7f8aa6', desc: 'Não age por 1 a 3 rodadas' },
+  freeze:    { name: 'Congelado',   adj: 'congelado',   icon: '🧊', short: 'CON', color: '#6fd0f0', desc: 'Não age; 25% de chance de descongelar por rodada (fogo descongela)' }
+};
+// tipo do golpe → condição que pode causar
+const TYPE_STATUS = { fire: 'burn', poison: 'poison', electric: 'paralysis', ice: 'freeze', grass: 'sleep', ghost: 'sleep' };
+const INFLICT_CHANCE = { q: 0.08, s: 0.15, x: 0.25 };
+const IMMUNE = { burn: ['fire'], poison: ['poison', 'steel'], paralysis: ['electric'], freeze: ['ice'], sleep: [] };
+
+export function statusOf(b, si, mon) {
+  return mon ? b.sides[si].status?.[mon.uid] || null : null;
+}
+
+function tryInflict(state, rng, defSi, d, move, aSp) {
+  const b = state.battle;
+  const id = TYPE_STATUS[move.type];
+  if (!id || move.kind !== 'dmg') return;
+  const side = b.sides[defSi];
+  side.status ||= {};
+  if (side.status[d.uid]) return; // já tem uma condição
+  if (IMMUNE[id].some(t => getSpecies(d.sp).types.includes(t))) return;
+  const tier = move.id?.slice(-1) || 's';
+  let chance = INFLICT_CHANCE[tier] || 0.15;
+  if (id === 'poison') chance += 0.1;
+  if (companionBonus(state, 1 - defSi)?.inflict === move.type) chance += 0.1; // companheiro (ex.: Koga) aumenta a chance
+  if (!rng.chance(chance)) return;
+  side.status[d.uid] = { id, turns: id === 'sleep' ? rng.int(1, 3) : 0 };
+  log(state, `${STATUS[id].icon} ${monLabel(state, side)} ficou ${STATUS[id].adj}!`, 'bad');
+  fx(state, { k: 'status', side: defSi, uid: d.uid, status: id });
+}
+
+/** Antes de atacar: dormindo/congelado/paralisado podem perder a vez. */
+function canActWithStatus(state, rng, si) {
+  const b = state.battle;
+  const side = b.sides[si];
+  const mon = sideActive(state, side);
+  const st = side.status?.[mon.uid];
+  if (!st) return true;
+  const who = monLabel(state, side);
+  if (st.id === 'sleep') {
+    if (st.turns > 0) { st.turns -= 1; log(state, `💤 ${who} está dormindo...`); fx(state, { k: 'status_skip', side: si, uid: mon.uid, status: 'sleep' }); return false; }
+    delete side.status[mon.uid];
+    log(state, `☀️ ${who} acordou!`, 'good');
+    return true;
+  }
+  if (st.id === 'freeze') {
+    if (rng.chance(0.25)) { delete side.status[mon.uid]; log(state, `☀️ ${who} descongelou!`, 'good'); return true; }
+    log(state, `🧊 ${who} está congelado e não consegue se mexer!`);
+    fx(state, { k: 'status_skip', side: si, uid: mon.uid, status: 'freeze' });
+    return false;
+  }
+  if (st.id === 'paralysis' && rng.chance(0.25)) {
+    log(state, `⚡ ${who} está paralisado e não conseguiu agir!`);
+    fx(state, { k: 'status_skip', side: si, uid: mon.uid, status: 'paralysis' });
+    return false;
+  }
+  return true;
+}
+
+/** Cura condição (item Cura Total). */
+export function cureStatus(b, si, uid) {
+  if (b?.sides[si]?.status?.[uid]) { delete b.sides[si].status[uid]; return true; }
+  return false;
+}
+
 /** IA para NPC/selvagem: escolhe o melhor golpe (selvagens às vezes erram a escolha). */
 function aiChoice(state, si, rng) {
   const b = state.battle;
@@ -201,7 +272,8 @@ function atkOf(state, si) {
   const side = state.battle.sides[si];
   const a = sideActive(state, side);
   const st = (side.stage || {})[a.uid] || 0;
-  return Math.max(1, (statsOf(a).atk + (side.boost[a.uid] || 0)) * stageMult(st));
+  const burned = side.status?.[a.uid]?.id === 'burn' ? 0.75 : 1;
+  return Math.max(1, (statsOf(a).atk + (side.boost[a.uid] || 0)) * stageMult(st) * burned);
 }
 
 /** Dano esperado (média do dado) de um golpe do lado si contra o ativo do outro lado. */
@@ -259,8 +331,12 @@ function useBattleItem(state, si, choice) {
   const it = getItem(choice.item);
   const target = team[choice.index ?? side.active];
   takeItem(player, choice.item);
-  if (it.kind === 'heal') {
-    const healed = healMon(target, it.healPct);
+  if (it.kind === 'cure') {
+    cureStatus(state.battle, si, target.uid);
+    log(state, `💊 ${player.name} usou ${it.name}: ${speciesName(target.sp)} está curado da condição.`, 'good');
+    fx(state, { k: 'status_cure', side: si, uid: target.uid });
+  } else if (it.kind === 'heal') {
+    const healed = healMon(target, it.healPct * (companionBonus(state, si)?.potion || 1));
     fx(state, { k: 'heal', side: si, uid: target.uid, amount: healed, hpAfter: target.hp, maxHp: maxHpOf(target) });
     log(state, `💊 ${player.name} usou ${it.name}: ${speciesName(target.sp)} recuperou ${healed} HP.`);
   } else if (it.kind === 'revive') {
@@ -296,13 +372,16 @@ function tryCapture(state, rng, si, ballId) {
   const bBonus = ballBonusAgainst(ballId, sp.types);
   const target = CAPTURE_TARGET[sp.tier] + (wild.shiny ? 1 : 0);
   const roll = rng.d6();
-  const total = roll + bBonus + hpBonus + lvlBonus;
+  const st = statusOf(b, 1 - si, wild);
+  const stBonus = st ? (st.id === 'sleep' || st.id === 'freeze' ? 2 : 1) : 0; // condição ajuda a capturar (como nos jogos)
+  const total = roll + bBonus + hpBonus + lvlBonus + stBonus;
   const ok = roll !== 1 && total >= target;
 
   const parts = [`🎲 ${roll}`];
   if (bBonus) parts.push(`bola +${bBonus}`);
   if (hpBonus) parts.push(`HP baixo +${hpBonus}`);
   if (lvlBonus) parts.push(`nível +${lvlBonus}`);
+  if (stBonus) parts.push(`${STATUS[st.id].adj} +${stBonus}`);
   const detail = `${parts.join(' · ')} = ${total} (precisa ${target}+)`;
   const shakes = ok ? 3 : roll === 1 ? 0 : Math.max(0, Math.min(2, 3 + (total - target)));
   fx(state, { k: 'capture', pid: player.id, roll, total, target, ok, ball: ballId, sp: wild.sp, shiny: !!wild.shiny, shakes });
@@ -383,7 +462,9 @@ function attackDamage(state, rng, si, slot = 0) {
     return false;
   }
   const critMod = roll === 6 ? 1.5 : roll === 1 ? 0.5 : 1;
-  let dmg = mult === 0 ? 0 : Math.max(1, Math.round((atk * 0.7 + roll) * (move.power || 1) * stab * mult * critMod));
+  const cb = companionBonus(state, si);
+  const compMult = cb?.types?.includes(type) ? 1 + cb.dmg : 1; // bônus do companheiro (ex.: Misty em golpes de Água)
+  let dmg = mult === 0 ? 0 : Math.max(1, Math.round((atk * 0.7 + roll) * (move.power || 1) * stab * mult * critMod * compMult));
   dmg = Math.min(dmg, d.hp);
   d.hp -= dmg;
   let drained = 0;
@@ -400,6 +481,10 @@ function attackDamage(state, rng, si, slot = 0) {
     else if (roll !== 6) msg += '.';
   }
   if (drained) msg += ` 💚 +${drained} HP`;
+  // chance de causar condição (queimadura, veneno, paralisia, sono, congelamento)
+  if (dmg > 0 && d.hp > 0) tryInflict(state, rng, 1 - si, d, move, aSp);
+  // golpe de fogo descongela
+  if (type === 'fire' && defSide.status?.[d.uid]?.id === 'freeze') { delete defSide.status[d.uid]; log(state, `🔥 ${speciesName(d.sp)} descongelou!`, 'good'); }
   log(state, msg, mult >= 2 ? 'good' : mult < 1 ? 'bad' : 'battle');
   fx(state, { k: 'hit', side: si, roll, dmg, mult, crit: roll === 6, weak: roll === 1, type, move: move.name, atkUid: a.uid, defUid: d.uid, hpAfter: d.hp, maxHp: maxHpOf(d) });
   if (drained) fx(state, { k: 'heal', side: si, uid: a.uid, amount: drained, hpAfter: a.hp, maxHp: maxHpOf(a) });
@@ -415,10 +500,11 @@ function awardKO(state, winnerSi, loserSi) {
   fx(state, { k: 'faint', side: loserSi, uid: foe.uid });
   if (state.options.duel) return; // duelo não dá XP (não muda a Coleção)
   if (winSide.kind !== 'player') return;
+  progressMission(state, winSide.pid, { k: 'ko', sp: foe.sp });
 
   const player = getPlayer(state, winSide.pid);
   const isTrainer = loseSide.kind !== 'wild';
-  let xp = xpReward(foe, isTrainer);
+  let xp = xpReward(foe, isTrainer) * (companionBonus(state, winnerSi)?.xp || 1);
   if (state.options.dailyPokemon && foe.sp === state.options.dailyPokemon) xp *= 2;
   if (foe.shiny) xp = Math.round(xp * 1.5);
   const team = player.team;
@@ -461,16 +547,36 @@ function resolveRound(state, rng, choices) {
   // 2) ataques, por velocidade (nível; empate: lado 0)
   const attackers = [0, 1].filter(si => choices[si].move === 'attack');
   // velocidade = nível × natureza (+/-10%); empate: lado 0
-  attackers.sort((x, y) => statsOf(sideActive(state, b.sides[y])).spe - statsOf(sideActive(state, b.sides[x])).spe || x - y);
+  const speedOf = si => { const m = sideActive(state, b.sides[si]); return statsOf(m).spe * (b.sides[si].status?.[m.uid]?.id === 'paralysis' ? 0.5 : 1); };
+  attackers.sort((x, y) => speedOf(y) - speedOf(x) || x - y);
   for (const si of attackers) {
     const me = sideActive(state, b.sides[si]);
     if (!me || me.hp <= 0) continue; // desmaiou antes de agir
+    if (!canActWithStatus(state, rng, si)) continue; // dormindo, congelado ou paralisado
     const fainted = attackDamage(state, rng, si, Number(choices[si].slot || 0));
     if (fainted) {
       const loser = 1 - si;
       awardKO(state, si, loser);
       if (handleFaint(state, rng, loser)) return;
       break; // quem desmaiou não ataca nesta rodada
+    }
+  }
+
+  // 3) fim da rodada: queimadura e veneno tiram HP
+  if (!b.over) {
+    for (let si = 0; si < 2; si++) {
+      const mon = sideActive(state, b.sides[si]);
+      if (!mon || mon.hp <= 0 || b.mustSwitch[si]) continue;
+      const st = statusOf(b, si, mon);
+      if (st?.id !== 'burn' && st?.id !== 'poison') continue;
+      const dmg = Math.max(1, Math.round(maxHpOf(mon) / (st.id === 'burn' ? 12 : 8)));
+      mon.hp = Math.max(0, mon.hp - dmg);
+      log(state, `${STATUS[st.id].icon} ${monLabel(state, b.sides[si])} sofreu ${dmg} de dano por estar ${STATUS[st.id].adj}.`, 'bad');
+      fx(state, { k: 'status_dmg', side: si, uid: mon.uid, status: st.id, dmg, hpAfter: mon.hp, maxHp: maxHpOf(mon) });
+      if (mon.hp <= 0) {
+        awardKO(state, 1 - si, si);
+        if (handleFaint(state, rng, si)) return;
+      }
     }
   }
 
@@ -540,7 +646,10 @@ export function deliverCapture(state, pid, mon, ballId) {
   if (ball && ball.aura) mon.aura = ball.aura;
   if (p.cosmetic?.aura) mon.aura = p.cosmetic.aura; // estilo de captura comprado na loja (só visual)
   mon.ball = ballId;
+  if (ballId) progressMission(state, pid, { k: 'capture', sp: mon.sp });
   const where = giveMon(p, mon);
+  (p.captureLog ||= []).push({ sp: mon.sp, shiny: !!mon.shiny, t: state.turn || 0 });
+  if (p.captureLog.length > 20) p.captureLog.splice(0, p.captureLog.length - 20);
   fx(state, { k: 'placed', pid, sp: mon.sp, shiny: !!mon.shiny, where, via: ballId ? 'capture' : 'egg' });
   log(state, `🎉 ${speciesName(mon.sp)}${mon.shiny ? ' ✨' : ''} entrou ${where === 'team' ? 'na equipe' : 'no PC (equipe cheia)'} de ${p.name}!`, mon.shiny ? 'shiny' : 'good');
 }
