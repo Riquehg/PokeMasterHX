@@ -229,7 +229,7 @@ export class BoardView {
       const g = sp.gate && GATES[sp.gate];
       const locked = g && me && !hasGate(me, sp.gate);
       const extra = `${BIOMES[sp.biome] ? ' · ' + BIOMES[sp.biome].name : ''}${g ? ` · ${g.icon} ${g.name}: precisa de Pokémon (ou golpe) ${g.types.map(t => typeNames[t] || t).join('/')} para ${g.desc}` : ''}`;
-      spaces += `<div class="space t${sp.tier} ${sp.type} ${isOpt ? 'opt' : ''} ${locked ? 'locked' : ''} ${storm} ${center}" style="left:${sp.x}%;top:${sp.y}%" ${isOpt ? `data-to="${sp.id}"` : ''} title="${esc(sp.name)}${esc(extra)}">${icon}${g ? `<i class="gate-ic" title="${esc(g.name)}">${g.icon}</i>` : ''}<span class="lbl">${esc(sp.name)}</span></div>`;
+      spaces += `<div class="space t${sp.tier} ${sp.type} ${isOpt ? 'opt' : ''} ${locked ? 'locked' : ''} ${storm} ${center}" style="left:${sp.x}%;top:${sp.y}%" ${isOpt ? `data-to="${sp.id}"` : ''} title="${esc(sp.name)}${esc(extra)}">${icon || (sp.type === 'event' ? '<i class="sp-ic ev">?</i>' : sp.type === 'pokemon' ? '<i class="sp-ic pk"></i>' : '')}${g ? `<i class="gate-ic" title="${esc(g.name)}">${g.icon}</i>` : ''}<span class="lbl">${esc(sp.name)}</span></div>`;
     }
     this.stage.querySelector('.layer-spaces').innerHTML = spaces;
     this.stage.querySelector('.layer-badges').innerHTML = state.kind === 'duel' || state.rules === 'royale' ? '' : state.rules === 'conquest' ? conquestMarkers(state) : badgeMarkers(state, me);
