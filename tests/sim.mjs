@@ -3,7 +3,7 @@ import { createMatch, runBots, score } from '../shared/engine.js';
 import { createRng } from '../shared/rules/rng.js';
 
 export function simulate(seed, nPlayers = 4, maxTurns = 400) {
-  let state = createMatch({ map: process.env.SIM_MAP || 'kanto',
+  let state = createMatch({ map: process.env.SIM_MAP || 'kanto', rules: process.env.SIM_RULES || 'classic',
     seed, mode: 'local', now: 0,
     players: Array.from({ length: nPlayers }, (_, i) => ({ id: 'b' + i, name: 'CPU ' + (i + 1), isBot: true })),
     options: { dailyPokemon: 'pikachu' }
@@ -39,7 +39,9 @@ if ((process.argv[1] || '').endsWith('sim.mjs')) {
       elite: st.players.map(p => p.eliteStage).join('/'),
       lv: st.players.map(p => Math.max(...p.team.map(m => m.lvl))).join('/'),
       caught: st.players.map(p => p.caught.length).join('/'),
-      shiny: st.players.map(p => p.stats.shinies).join('/')
+      shiny: st.players.map(p => p.stats.shinies).join('/'),
+      ...(st.rules === 'royale' ? { places: st.players.map(p => p.place || '-').join('/'), ring: st.royale.ring } : {}),
+      ...(st.rules === 'conquest' ? { cities: st.players.map(p => Object.values(st.conquest.owners).filter(o => o === p.id).length).join('/') } : {})
     });
     if (r.stuck) { console.log('STUCK', r.seed, st.phase, st.battle && st.battle.kind, st.log.slice(-5)); }
   }
