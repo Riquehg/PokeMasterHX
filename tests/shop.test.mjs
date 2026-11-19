@@ -133,3 +133,43 @@ test('dado, cenário, cartão e vitória vão para a partida; conveniências lib
   const s = createMatch({ seed: 1, players: [{ id: 'a', name: 'A', teamMons: [prof.vault.find(m => m.uid === uid)] }] });
   assert.equal(s.players[0].team.find(m => m.uid === uid).nick, 'bSparky/b do');
 });
+
+test('ouro da conta: levar para partida da Coleção (desconta e o que sobra volta) e Centro de Treino', async () => {
+  const { db, ash, admin } = await setup();
+  const C = await import('../api/_lib/core.js');
+  await adminOp(db, admin, { op: 'give_gold', userId: ash.id, amount: 3000 });
+  await adminOp(db, admin, { op: 'grant_mon', userId: ash.id, species: 'charmander', level: 14 });
+  let prof = (await profileOp(db, ash, { op: 'get' })).profile;
+  const uid = prof.vault.find(m => m.sp === 'charmander').uid;
+  // levar 1000
+  const { match } = await matchOp(db, ash, { op: 'solo', bots: 1, teamUids: [uid], bringGold: 1000 });
+  const me = match.state.players.find(p => p.id === ash.id);
+  assert.equal(me.broughtGold, 1000);
+  assert.ok(me.gold >= 1000);
+  prof = (await profileOp(db, ash, { op: 'get' })).profile;
+  assert.equal(prof.gold, 2000);
+  // devolução: sobra até o valor trazido; recompensa só sobre o que ganhou
+  assert.equal(C.refundBrought({ gold: 700, broughtGold: 1000 }), 700);
+  assert.equal(C.refundBrought({ gold: 1600, broughtGold: 1000 }), 1000);
+  assert.equal(C.accountGoldReward({ winner: null }, { gold: 1600, broughtGold: 1000, badges: [] }), 60);
+  // Centro de Treino: Nv.14 → 16 evolui Charmander em Charmeleon
+  const r = await profileOp(db, ash, { op: 'train', uid, levels: 2 });
+  const m = r.profile.vault.find(x => x.uid === uid);
+  assert.equal(m.lvl, 16);
+  assert.equal(m.sp, 'charmeleon');
+  assert.equal(r.cost, C.trainCost(14) + C.trainCost(15));
+  assert.equal(r.profile.gold, 2000 - r.cost);
+  await assert.rejects(profileOp(db, ash, { op: 'train', uid: 'nope' }), /não encontrado/);
+});
+
+test('mural do início: lista as últimas capturas de lendários e shinies', async () => {
+  const { db } = await setup();
+  await db.insertFeed({ kind: 'champion', text: 'x', data: {} });
+  await db.insertFeed({ kind: 'legendary', text: 'Ana capturou o lendário Mewtwo!', data: { sp: 'mewtwo', shiny: false, name: 'Ana', avatar: 2 } });
+  await db.insertFeed({ kind: 'shiny', text: 'Beto capturou Abra ✨', data: { sp: 'abra', shiny: true, name: 'Beto', avatar: 3 } });
+  const r = await feedOp(db, { kinds: 'captures' });
+  assert.equal(r.captures.length, 2);
+  assert.equal(r.captures[0].sp, 'abra');
+  assert.equal(r.captures[0].shiny, true);
+  assert.equal(r.captures[1].name, 'Ana');
+});

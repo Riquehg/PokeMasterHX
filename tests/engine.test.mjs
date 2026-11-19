@@ -99,9 +99,9 @@ test('XP sobe nível e evolui no nível certo', () => {
 });
 
 // ---------------------------------------------------------------- tabuleiro
-test('tabuleiro: 120 casas todas conectadas e vizinhança simétrica', () => {
+test('tabuleiro: Kanto com 125 casas (120 + 5 escondidas), vizinhança simétrica', () => {
   const ids = Object.keys(SPACES).map(Number);
-  assert.equal(ids.length, 120);
+  assert.equal(ids.length, 125);
   for (const id of ids) for (const n of SPACES[id].links) assert.ok(SPACES[n].links.includes(id), `${id}<->${n}`);
 });
 

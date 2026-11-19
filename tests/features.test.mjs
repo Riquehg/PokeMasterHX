@@ -310,3 +310,59 @@ test('evento relâmpago: aparece em casa de evento, some com o tempo e ativa ao 
   assert.ok(!s.hotspots.some(x => x.space === chest.space && x.kind === 'chest' && x.until === s.turn));
   assert.ok(s.fx.some(f => f.k === 'hotspot_gone'));
 });
+
+test('mapas: Expedição gera mapa sem rotas cruzadas, com cidades alcançáveis e áreas que exigem habilidade', async () => {
+  const { generateMap } = await import('../shared/data/maps/generator.js');
+  const { hasGate } = await import('../shared/rules/movement.js');
+  for (const seed of [1, 42, 777, 123456]) {
+    const m = generateMap(seed);
+    assert.equal(m.crossings, 0);
+    assert.deepEqual(generateMap(seed).spaces.length, m.spaces.length); // mesma semente = mesmo mapa
+    const S = Object.fromEntries(m.spaces.map(s => [s.id, s]));
+    const seen = new Set([m.start]); const q = [m.start];
+    while (q.length) { const c = q.shift(); for (const n of S[c].links) if (!seen.has(n) && !S[n].gate) { seen.add(n); q.push(n); } }
+    for (const id of [...Object.values(m.gyms), m.elite, m.champion]) assert.ok(seen.has(id), `seed ${seed}: casa ${id} alcançável`);
+    assert.ok(m.spaces.filter(s => s.gate).length >= 5);
+  }
+  // Surf: Pokémon de Água OU golpe de Água
+  assert.equal(hasGate({ team: [{ sp: 'pidgey', hp: 5, lvl: 5 }] }, 'surf'), false);
+  assert.equal(hasGate({ team: [{ sp: 'squirtle', hp: 5, lvl: 5 }] }, 'surf'), true);
+  assert.equal(hasGate({ team: [{ sp: 'squirtle', hp: 0, lvl: 5 }] }, 'surf'), false);
+});
+
+test('mapas: partida na Expedição usa o mapa gerado (início, ginásios e Liga do mapa)', async () => {
+  const { createMatch, applyAction } = await import('../shared/engine.js');
+  const { generateMap } = await import('../shared/data/maps/generator.js');
+  const T = await import('../shared/data/trainers.js');
+  const { useMap } = await import('../shared/data/board.js');
+  const s = createMatch({ seed: 99, map: 'gen', players: [{ id: 'a', name: 'A', starter: 'bulbasaur' }, { id: 'b', name: 'B', starter: 'charmander', isBot: true }] });
+  assert.match(s.map, /^gen:\d+$/);
+  const m = generateMap(Number(s.map.slice(4)));
+  assert.equal(s.players[0].pos, m.start);
+  // outra partida em Kanto no meio não estraga a primeira
+  const k = createMatch({ seed: 5, players: [{ id: 'x', name: 'X', starter: 'bulbasaur' }] });
+  assert.equal(k.players[0].pos, 5);
+  const r = applyAction(s, 'a', { type: 'roll' }, { now: 1 });
+  assert.ok(!r.error, r.error);
+  assert.equal(T.ELITE_SPACE, m.elite);
+  assert.equal(T.GYMS[0].space, m.gyms.boulder);
+  useMap('kanto');
+});
+
+test('clima: muda nas rodadas, mexe no dano por tipo e Nevasca tira HP de quem não é Gelo', async () => {
+  const W = await import('../shared/rules/weather.js');
+  const s = game(21);
+  s.weather = { id: 'clear', until: 2 };
+  let changed = false;
+  for (let t = 2; t < 30 && !changed; t++) { s.turn = t; s.fx = []; if (W.tickWeather(s, (st, f) => st.fx.push(f), () => {}) ) changed = true; }
+  assert.ok(changed && s.weather.id !== 'clear' && s.weather.until > s.turn);
+  assert.ok(s.fx.some(f => f.k === 'weather'));
+  s.weather = { id: 'rain', until: 99 };
+  assert.equal(W.weatherMult(s, 'water'), 1.3);
+  assert.equal(W.weatherMult(s, 'fire'), 0.7);
+  s.weather = { id: 'snow', until: 99 };
+  assert.ok(W.weatherChip(s, { sp: 'pikachu' }, 64) > 0);
+  assert.equal(W.weatherChip(s, { sp: 'lapras' }, 64), 0);
+  s.weather = { id: 'storm', until: 99 };
+  assert.equal(W.weatherInflict(s, 'paralysis'), 2);
+});

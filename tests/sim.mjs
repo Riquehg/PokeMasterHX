@@ -3,7 +3,7 @@ import { createMatch, runBots, score } from '../shared/engine.js';
 import { createRng } from '../shared/rules/rng.js';
 
 export function simulate(seed, nPlayers = 4, maxTurns = 400) {
-  let state = createMatch({
+  let state = createMatch({ map: process.env.SIM_MAP || 'kanto',
     seed, mode: 'local', now: 0,
     players: Array.from({ length: nPlayers }, (_, i) => ({ id: 'b' + i, name: 'CPU ' + (i + 1), isBot: true })),
     options: { dailyPokemon: 'pikachu' }
