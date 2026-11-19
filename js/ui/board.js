@@ -49,7 +49,7 @@ export class BoardView {
       if (z === 'in') this.zoomAt(1.4);
       if (z === 'out') this.zoomAt(1 / 1.4);
       if (z === 'fit') this.fit(true);
-      if (z === 'me' && this.meSpace) this.centerOn(this.meSpace, Math.max(this.scale, this.min * 2.2), true);
+      if (z === 'me' && this.meSpace) this.centerOn(this.meSpace, Math.max(this.scale, this.portrait ? this.cover * 1.3 : this.min * 2.2), true);
     });
   }
 
@@ -80,16 +80,19 @@ export class BoardView {
   layout() {
     const w = this.vp.clientWidth, h = this.vp.clientHeight;
     if (!w || !h) return;
-    // o "palco" tem a largura do viewport; a escala mínima faz o mapa inteiro caber
-    this.baseW = w;
-    this.baseH = w / this.ratio;
+    // tela deitada (PC): o "palco" tem a largura da tela. Tela em pé (celular): o palco tem a altura da tela
+    // (mesmas proporções de casas, bordas e ícones do PC) e dá para arrastar para os lados.
+    this.portrait = w / h < this.ratio * 0.9;
+    this.baseW = this.portrait ? h * this.ratio : w;
+    this.baseH = this.baseW / this.ratio;
     this.stage.style.width = this.baseW + 'px';
     this.stage.style.height = this.baseH + 'px';
-    this.min = Math.min(1, h / this.baseH);
+    this.min = Math.min(w / this.baseW, h / this.baseH);   // mapa inteiro na tela
+    this.cover = Math.max(this.min, h / this.baseH);       // preenche a altura
     if (!this.fitted) {
       this.fitted = true;
-      // celular: começa aproximado no jogador; computador: mapa inteiro
-      if (w < 700 && this.meSpace) this.centerOn(this.meSpace, this.min * 2.4, false);
+      if (this.portrait && this.meSpace) { this.centered = true; this.centerOn(this.meSpace, this.cover * 1.15, false); }
+      else if (this.portrait) this.centerOn(SPACE_LIST[0]?.id, this.cover, false);
       else this.fit(false);
     } else this.apply(false);
   }
@@ -114,8 +117,9 @@ export class BoardView {
     this.clamp();
     this.stage.classList.toggle('smooth', !!smooth);
     this.stage.style.transform = `translate(${this.x}px, ${this.y}px) scale(${this.scale})`;
-    // peões e Pokémon ficam com tamanho constante na tela, qualquer que seja o zoom
-    this.stage.style.setProperty('--ms', (1 / this.scale).toFixed(4));
+    // peões, Pokémon e nomes: quase o mesmo tamanho na tela em qualquer zoom (crescem um pouco ao aproximar)
+    const zf = Math.min(1.3, Math.max(0.85, Math.pow(this.scale / (this.portrait ? this.cover : this.min), 0.22)));
+    this.stage.style.setProperty('--ms', (zf / this.scale).toFixed(4));
   }
 
   zoomAt(factor, cx, cy) {
@@ -203,11 +207,28 @@ export class BoardView {
     // clique só conta se não arrastou
     vp.addEventListener('click', e => {
       if (moved > 6) { e.stopPropagation(); e.preventDefault(); moved = 0; return; }
+      // destino: a casa possível mais perto do toque (não depende de qual enfeite ficou por cima)
+      if (this.vp.classList.contains('moving')) {
+        const to = this.nearestOption(e.clientX, e.clientY);
+        if (to) return this.onMove(to);
+      }
       const opt = e.target.closest('.space.opt');
       if (opt) return this.onMove(Number(opt.dataset.to));
       const tok = e.target.closest('.token');
       if (tok) return this.onToken(tok.dataset.pid);
     }, true);
+  }
+
+  /** Casa possível mais perto de um ponto da tela (dentro de um raio confortável para o dedo). */
+  nearestOption(cx, cy) {
+    let best = null, bestD = Infinity;
+    for (const el of this.stage.querySelectorAll('.space.opt')) {
+      const r = el.getBoundingClientRect();
+      const d = Math.hypot(r.left + r.width / 2 - cx, r.top + r.height / 2 - cy);
+      const reach = Math.max(r.width * 0.9, 26);
+      if (d <= reach && d < bestD) { bestD = d; best = Number(el.dataset.to); }
+    }
+    return best;
   }
 
   // ------------------------------------------------ desenho
@@ -217,6 +238,8 @@ export class BoardView {
     this.weather.set(state.kind === 'duel' ? 'clear' : state.weather?.id || 'clear');
     const me = state.players.find(p => p.id === viewerId);
     this.meSpace = me ? me.pos : null;
+    // celular: na primeira vez que sabe onde você está, aproxima no seu peão
+    if (this.portrait && !this.centered && this.meSpace && this.baseW) { this.centered = true; requestAnimationFrame(() => this.centerOn(this.meSpace, this.cover * 1.15, false)); }
     const opts = new Set(options);
     const royale = state.rules === 'royale' && state.royale;
     let spaces = '';
@@ -267,11 +290,11 @@ export class BoardView {
 
   tokenHtml(state, pl, i, pos, k, n, viewerId) {
     const sp = getSpace(pos);
-    const off = (k - (n - 1) / 2) * 38; // px na tela (multiplicado por 1/zoom)
+    const off = (k - (n - 1) / 2) * (this.portrait ? 26 : 32); // px na tela (multiplicado por 1/zoom)
     const c = pl.cosmetic || {};
     const fr = c.frame ? esc(c.frame) : '';
     const au = c.aura ? esc(c.aura) : '';
-    const cls = ['token', state.current === i ? 'active' : '', fr || au ? 'vip' : '', fr ? 'tf-' + fr : '', au ? 'ta-' + au : '', pl.out ? 'out' : ''].join(' ');
+    const cls = ['token', state.current === i ? 'active' : '', fr || au ? 'vip' : '', fr ? 'tf-' + fr : '', au ? 'ta-' + au : '', pl.out ? 'out' : '', n > 1 ? 'stacked' : '', pl.id === viewerId ? 'mine' : ''].join(' ');
     const sparks = au ? `<div class="sparks">${'<i></i>'.repeat(7)}</div>` : '';
     return `<div class="${cls}" data-pid="${esc(pl.id)}" style="left:${sp.x}%;top:${sp.y}%;margin-left:calc(${off}px * var(--ms, 1));--pc:${playerColor(state, pl.id)}" title="${esc(pl.name)}${c.title ? ' — ' + esc(c.title) : ''}">
       ${fr ? '<div class="halo"></div><div class="halo h2"></div>' : ''}${sparks}

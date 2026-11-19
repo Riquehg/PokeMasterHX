@@ -1168,13 +1168,37 @@ body.in-game #social { bottom: 70px; }
 .gar-card img { width: 56px; height: 56px; object-fit: contain; }
 .gar-card.on { border-color: var(--gold); box-shadow: 0 0 14px rgba(244, 194, 91, .55); background: rgba(244, 194, 91, .12); }
 
-/* ===== Casas maiores, com ícone de Pokémon (Pokébola) ou Evento (?) ===== */
-.stage-noimg .space { width: 2.15%; border-width: 2px; }
+/* ===== Casas maiores, com ícone de Pokémon (Pokébola) ou Evento (?) — ícones proporcionais à casa ===== */
+.stage-noimg .space { width: 2.15%; border-width: 2px; container-type: inline-size; }
 .stage-noimg .space.city { width: 2.9%; }
 .sp-ic { font-style: normal; pointer-events: none; display: flex; align-items: center; justify-content: center; }
-.sp-ic.ev { width: 100%; height: 100%; font-family: var(--title, serif); font-weight: 900; font-size: 1em; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .85), 0 0 2px #000; container-type: size; }
-.sp-ic.pk { width: 58%; height: 58%; border-radius: 50%; border: 1.5px solid #1a1a1a;
-  background: linear-gradient(180deg, #fff 0 44%, #1a1a1a 44% 56%, #f4f4f4 56% 100%); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .15); position: relative; }
-.sp-ic.pk::after { content: ""; position: absolute; left: 50%; top: 50%; width: 34%; height: 34%; transform: translate(-50%, -50%); border-radius: 50%; background: #fff; border: 1.5px solid #1a1a1a; }
-.board-viewport .space { font-size: clamp(9px, 1.15vw, 15px); }
-.space.event .sp-ic.ev { font-size: 1.15em; }
+.sp-ic.ev { width: 100%; height: 100%; font-family: var(--title, serif); font-weight: 900; font-size: 62cqw; line-height: 1; color: #fff; text-shadow: 0 0 2px #000, 0 1px 2px rgba(0, 0, 0, .8); }
+.sp-ic.pk { width: 60%; height: 60%; border-radius: 50%; border: 6cqw solid #1a1a1a;
+  background: linear-gradient(180deg, #ffffff 0 43%, #1a1a1a 43% 57%, #f1f1f1 57% 100%); position: relative; }
+.sp-ic.pk::after { content: ""; position: absolute; left: 50%; top: 50%; width: 38%; height: 38%; transform: translate(-50%, -50%); border-radius: 50%; background: #fff; border: 5cqw solid #1a1a1a; }
+
+/* enfeites das casas não "roubam" o toque da casa vizinha */
+.space.opt::before, .space.opt::after, .space .gate-ic, .space .lbl, .sp-ic { pointer-events: none; }
+
+/* ===== Tamanhos no tabuleiro (PC e celular) ===== */
+.token { width: 40px; }
+.stage-noimg .space.city .lbl { transform: translateX(-50%) scale(var(--ms, 1)); transform-origin: 50% 0; font-size: 11px; top: 110%; }
+.gym-badge { width: 28px; height: 28px; }
+@media (max-width: 700px) {
+  .token { width: 34px; }
+  .token .name { font-size: 9px; }
+  .wild { width: 36px; }
+  .gym-badge { width: 22px; height: 22px; }
+  .gb-next { font-size: 9px; }
+  .hotspot { width: 34px; height: 34px; }
+  .hs-emoji { font-size: 18px; }
+  .conq-flag .cf-cloth { font-size: 11px; }
+  .stage-noimg .space.city .lbl { font-size: 10px; }
+}
+
+/* vários peões na mesma casa: só o seu mostra o nome */
+.token.stacked:not(.mine) .name { display: none; }
+@media (max-width: 700px) {
+  .zoom-ctrl { gap: 4px; right: 6px; top: 6px; }
+  .zoom-ctrl button { width: 34px; height: 34px; font-size: 15px; border-radius: 9px; }
+}
