@@ -12,7 +12,8 @@ const T0 = 1_700_000_000_000;
 
 test('todas as Pokébolas existem, têm bônus e estão na loja certa', () => {
   const balls = Object.entries(ITEMS).filter(([, it]) => it.kind === 'ball').map(([id]) => id);
-  assert.deepEqual(balls.sort(), ['aqua_ball', 'flame_ball', 'great_ball', 'master_ball', 'mystic_ball', 'poke_ball', 'rainbow_ball', 'shadow_ball', 'ultra_ball', 'volt_ball']);
+  assert.deepEqual(balls.sort(), ['aqua_ball', 'flame_ball', 'great_ball', 'master_ball', 'mystic_ball', 'poke_ball', 'rainbow_ball', 'shadow_ball', 'trust_ball', 'ultra_ball', 'volt_ball']);
+  assert.ok(!shopFor(5).some(o => o.id === 'trust_ball'), 'Bola da Confiança não é vendida');
   assert.ok(shopFor(1).some(o => o.id === 'poke_ball'));
   assert.ok(!shopFor(1).some(o => o.id === 'ultra_ball'), 'Ultra só a partir de cidade tier 3');
   assert.ok(shopFor(3).some(o => o.id === 'flame_ball'));

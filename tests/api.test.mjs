@@ -164,8 +164,8 @@ test('modo Coleção: leva até 6 da conta, com limite de nível', async () => {
   assert.equal(team[0].starter, true);
   assert.equal(team[1].lvl, 35, 'limite de nível aplicado');
   assert.equal(team[1].uid, 'v1', 'mantém o uid para sincronizar de volta');
-  assert.equal(badgesNeeded(team[1]), 3);
-  assert.equal(badgesNeeded(team[2]), 2);
+  assert.equal(badgesNeeded(team[1]), 2);
+  assert.equal(badgesNeeded(team[2]), 1);
   assert.equal(s.players.find(p => p.id === gary.id).team[0].lvl, 5, 'quem não escolheu usa o inicial');
 });
 

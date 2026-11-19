@@ -53,15 +53,18 @@ test('naturezas: 25 nomes, 5 neutras, +10%/−10% nos status', () => {
   assert.ok(NATURE_NAMES.includes(m.nature));
 });
 
-test('obediência: tier 3 precisa de 2 insígnias, tier 4 de 3, tier 5 de 4; inicial sempre obedece', () => {
+test('obediência: Rosa/Verde nenhuma, Azul 1, Vermelho 2, Amarelo 3; inicial e Bola da Confiança sempre obedecem', () => {
   const rng = createRng(2);
-  const p = { badges: ['a'], team: [] };
+  const p = { badges: [], team: [] };
   const t3 = createMon(rng, 'venusaur', 30), t4 = hatchEgg(rng, 4), t5 = createMon(rng, 'mewtwo', 40);
-  assert.deepEqual([badgesNeeded(t3), badgesNeeded(t4), badgesNeeded(t5)], [2, 3, 4]);
+  assert.deepEqual([badgesNeeded(t3), badgesNeeded(t4), badgesNeeded(t5)], [1, 2, 3]);
+  assert.equal(canUse(p, createMon(rng, 'rattata', 10)), true, 'tier 1 sem insígnias');
   assert.equal(canUse(p, t3), false);
-  p.badges.push('b');
+  p.badges.push('a');
   assert.equal(canUse(p, t3), true);
   assert.equal(canUse(p, t4), false);
+  const trusted = createMon(rng, 'mewtwo', 40); trusted.trust = true;
+  assert.equal(canUse({ badges: [] }, trusted), true, 'Bola da Confiança: lendário obedece sem insígnias');
   assert.equal(canUse({ badges: [] }, createMon(rng, 'pikachu', 5, { starter: true })), true);
   // evolução não muda a regra: um Bulbasaur capturado (tier 1) vira Venusaur e continua obedecendo
   const bulba = createMon(rng, 'bulbasaur', 40);
@@ -401,4 +404,58 @@ test('Raid em grupo: dá para usar Potion e X Attack no lugar do golpe', () => {
   // itens que não valem na Raid
   r = applyAction(g, 'ash', { type: 'raid', op: 'item', item: 'ultra_ball' }, { now: T0 });
   assert.ok(r.error);
+});
+
+test('shiny é mais forte (+15% HP e Ataque, +10% Velocidade); lendário mais difícil de capturar', async () => {
+  const { computeStats } = await import('../shared/rules/monsters.js');
+  const { CAPTURE_TARGET } = await import('../shared/rules/battle.js');
+  const { raidBallChance } = await import('../shared/rules/raid.js');
+  const n = computeStats('charizard', 40, false), s = computeStats('charizard', 40, true);
+  assert.ok(s.maxHp > n.maxHp * 1.12 && s.atk > n.atk * 1.12 && s.spe > n.spe * 1.05);
+  assert.equal(CAPTURE_TARGET[5], 11);
+  assert.ok(raidBallChance({ badges: ['a', 'b', 'c', 'd', 'e', 'f'] }, 'ultra_ball') <= 0.28);
+  assert.ok(raidBallChance({ badges: [] }, 'poke_ball') > 0);
+});
+
+test('Bola da Confiança: capturado nela fica com trust e obedece sem insígnias', async () => {
+  const { deliverCapture } = await import('../shared/rules/battle.js');
+  const s = game(3);
+  const mon = createMon(createRng(9), 'zapdos', 40);
+  deliverCapture(s, 'ash', mon, 'trust_ball');
+  const got = [...s.players[0].team, ...s.players[0].box].find(m => m.sp === 'zapdos');
+  assert.equal(got.trust, true);
+  assert.equal(canUse(s.players[0], got), true);
+});
+
+test('Ajuda do Professor: quem tem menos Pokémon ganha ajuda (e uma Insígnia de Incentivo se estiver atrás)', async () => {
+  const { assistTick } = await import('../shared/rules/assist.js');
+  const s = game(8);
+  const [a, g] = s.players;
+  for (let i = 0; i < 5; i++) g.box.push(createMon(createRng(20 + i), 'rattata', 5));
+  g.badges = ['boulder', 'cascade', 'thunder'];
+  s.turn = 4; s.fx = [];
+  const n0 = a.team.length + a.box.length;
+  assistTick(s);
+  assert.equal(a.team.length + a.box.length, n0 + 1, 'ganhou um Pokémon');
+  assert.ok(a.badges.length === 1 && a.helpBadge, 'Insígnia de Incentivo');
+  assert.ok(s.fx.some(f => f.id === 'professor_help' && f.pid === 'ash'));
+  s.turn = 8; assistTick(s);
+  assert.equal(a.badges.length, 1, 'só uma insígnia de incentivo por partida');
+});
+
+test('Convite de viagem: pede uma cidade nova, dá prêmio ao chegar e expira', async () => {
+  const { giveTravelQuest, questVisit, assistTick } = await import('../shared/rules/assist.js');
+  const { getSpace } = await import('../shared/data/board.js');
+  const s = game(9);
+  const p = s.players[0];
+  const txt = giveTravelQuest(s, createRng(1), p);
+  assert.ok(txt && p.quest);
+  assert.ok(!p.visited.includes(p.quest.space));
+  const g0 = p.gold;
+  questVisit(s, createRng(2), p, getSpace(p.quest.space));
+  assert.ok(p.gold > g0 && !p.quest);
+  giveTravelQuest(s, createRng(3), p);
+  s.turn = p.quest.until + 1;
+  assistTick(s);
+  assert.equal(p.quest, null);
 });
