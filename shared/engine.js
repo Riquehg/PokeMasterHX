@@ -30,6 +30,8 @@ import { COMPANIONS } from './data/companions.js';
 import { startGroupRaid, startCatchStage, raidWaiting, raidAction, raidBallChance } from './rules/raid.js';
 import { sanitizeCosmetic, cleanNick } from './data/cosmetics.js';
 import { botAction } from './bots.js';
+import { RULE_IDS, setupRules, onRound, knockOut, rulesOf, royaleClash, royaleHealCheck, checkRoyaleEnd, royaleRank,
+  conquestGym, conquestBattleEnd, garrisonAction, conquestVisit, conquestRank, ownerOf } from './rules/modes.js';
 
 export const ENGINE_VERSION = 2;
 export const AFK_SECONDS = 90;
@@ -57,6 +59,7 @@ export function createMatch(config) {
     mode: config.mode || 'local',
     status: 'playing',
     map: mapId,
+    rules: config.kind !== 'duel' && RULE_IDS.includes(config.rules) ? config.rules : 'classic',
     weather: { id: 'clear', until: 3 },
     seed: rng.state,
     turn: 1,
@@ -81,6 +84,7 @@ export function createMatch(config) {
     fxSeq: 0
   };
   if (config.kind === 'duel') return startDuel(state, rng, config);
+  setupRules(state, rng); // Battle Royale / Conquista
   for (const p of state.players) initMissions(state, p);
   log(state, `🏁 Partida iniciada com ${players.map(p => p.name).join(', ')}. Boa sorte, treinadores!`);
   if (state.options.dailyPokemon) log(state, `⭐ Pokémon do Dia: ${speciesName(state.options.dailyPokemon)} (aparece mais, XP em dobro e shiny 1/64).`);
@@ -200,7 +204,9 @@ export function applyAction(prevState, actorId, action, ctx = {}) {
   try {
     if (state.status !== 'playing') fail('A partida já terminou.');
     dispatch(state, rng, String(actorId), action || {}, now);
+    endByRules(state);
     runBots(state, rng, now);
+    endByRules(state);
     for (const p of state.players) if (p._afkTemp) { delete p._afkTemp; p.isBot = false; }
     checkTurnLimit(state);
   } catch (e) {
@@ -219,6 +225,7 @@ export function whoMustAct(state) {
   useStateMap(state);
   if (state.raid) return raidWaiting(state);
   if (state.pending?.kind === 'pvp_invite') return [state.pending.to];
+  if (state.pending?.kind === 'garrison') return [state.pending.pid];
   const b = state.battle;
   if (b && !b.over) {
     const ids = [];
@@ -257,6 +264,12 @@ function dispatch(state, rng, actorId, action, now) {
   if (state.pending?.kind === 'pvp_invite') {
     if (type !== 'respond') fail('Aguardando resposta ao desafio PvP.');
     return respondInvite(state, rng, actor, !!action.accept, now);
+  }
+
+  // Conquista: escolher quem fica defendendo a cidade
+  if (state.pending?.kind === 'garrison') {
+    if (type !== 'garrison' || actor.id !== state.pending.pid) fail('Aguardando a escolha da guarnição.');
+    return garrisonAction(state, actor, action);
   }
 
   // Raid (solo na fase de captura, ou em grupo)
@@ -341,6 +354,7 @@ function move(state, rng, p, to) {
 
 function resolveSpace(state, rng, p, sp) {
   state.phase = 'action';
+  if (royaleClash(state, p, sp)) return; // Battle Royale: encontrou outro treinador = batalha
   const hs = (state.hotspots || []).find(h => h.space === sp.id);
   if (hs) return triggerHotspot(state, rng, p, sp, hs);
   if (sp.type === 'city') return visitCity(state, p, sp);
@@ -356,15 +370,19 @@ function endTurn(state, rng, now) {
 function advanceTurn(state, now) {
   state.pending = null;
   state.turnFlags = {};
-  for (let guard = 0; guard < state.players.length * 3; guard++) {
+  for (let guard = 0; guard < state.players.length * 4; guard++) {
     state.current += 1;
     if (state.current >= state.players.length) {
       state.current = 0;
       state.turn += 1;
       tickHotspots(state);
       tickWeather(state, fx, log);
+      onRound(state);
+      endByRules(state, false);
+      if (state.status !== 'playing') return;
     }
     const np = currentPlayer(state);
+    if (np.out) continue; // eliminado no Battle Royale
     if (np.skip > 0) {
       np.skip -= 1;
       log(state, `⏸️ ${np.name} perde esta vez.`);
@@ -383,9 +401,35 @@ function advanceTurn(state, now) {
 function checkTurnLimit(state) {
   if (state.status !== 'playing' || !state.options.turnLimit) return;
   if (state.turn > state.options.turnLimit) {
+    const r = rulesOf(state);
+    if (r === 'conquest') {
+      const w = conquestRank(state, score)[0];
+      return finishMatch(state, w, `Fim dos ${state.options.turnLimit} turnos — mais cidades dominadas.`);
+    }
+    if (r === 'royale') {
+      const alive = state.players.filter(p => !p.out).sort((a, b) => teamHpPct(b) - teamHpPct(a));
+      alive.forEach((p, i) => { p.place = i + 1; });
+      return finishMatch(state, alive[0] || royaleRank(state)[0], 'Tempo esgotado — sobrevivente com a equipe mais inteira.');
+    }
     const ranked = [...state.players].sort((a, b) => score(b) - score(a));
     finishMatch(state, ranked[0], `Limite de ${state.options.turnLimit} turnos atingido — vitória por pontos.`);
   }
+}
+
+const teamHpPct = p => p.team.reduce((a, m) => a + Math.max(0, m.hp), 0) / Math.max(1, p.team.reduce((a, m) => a + maxHpOf(m), 0));
+
+/** Verifica fim de partida pelos modos (Battle Royale). */
+function endByRules(state, advance = true) {
+  const end = checkRoyaleEnd(state);
+  if (end && state.status === 'playing') {
+    state.battle = null;
+    state.raid = null;
+    finishMatch(state, end.winner, end.reason);
+    return;
+  }
+  // eliminado durante a própria vez: passa a vez sozinho
+  const cp = currentPlayer(state);
+  if (advance && state.status === 'playing' && cp?.out && !state.battle && !state.raid && !state.pending) advanceTurn(state, state.turnStartedAt);
 }
 
 export function score(p) {
@@ -482,6 +526,7 @@ function skipAfk(state, rng, actor, now) {
 // ------------------------------------------------------------------ cidades
 function visitCity(state, p, sp) {
   p.lastCity = sp.id;
+  if (rulesOf(state) === 'conquest') conquestVisit(state, p, sp);
   if (!p.visited.includes(sp.id)) p.visited.push(sp.id);
   const gym = gymAt(sp.id);
   let extra = ' Centro Pokémon e Loja disponíveis.';
@@ -507,6 +552,7 @@ function cityAction(state, rng, p, a) {
 
   switch (a.op) {
     case 'heal': {
+      royaleHealCheck(state, p, sp);
       [...p.team, ...p.box].forEach(fullHeal);
       log(state, `🏥 Enfermeira Joy curou toda a equipe de ${p.name}.`, 'good');
       return;
@@ -527,6 +573,8 @@ function cityAction(state, rng, p, a) {
     case 'gym': {
       const gym = gymAt(sp.id);
       if (!gym) fail('Não há ginásio nesta cidade.');
+      if (rulesOf(state) === 'royale') fail('No Battle Royale os ginásios estão fechados — sobreviva!');
+      if (rulesOf(state) === 'conquest') return conquestGym(state, rng, p, sp, gym);
       if (p.badges.includes(gym.id)) fail('Você já tem esta insígnia.');
       if (state.turnFlags.gym) fail('Só um desafio oficial por turno.');
       state.turnFlags.gym = true;
@@ -538,6 +586,7 @@ function cityAction(state, rng, p, a) {
       return;
     }
     case 'league': {
+      if (rulesOf(state) !== 'classic') fail('A Liga não faz parte deste modo de jogo.');
       if (state.turnFlags.gym) fail('Só um desafio oficial por turno.');
       if (p.badges.length < BADGES_TO_LEAGUE) fail(`Precisa de ${BADGES_TO_LEAGUE} insígnias.`);
       if (sp.id === ELITE_SPACE) {
@@ -1002,8 +1051,8 @@ function challenge(state, rng, p, targetId, now) {
   if (!hasUsable(p)) fail('Você não tem Pokémon de pé que te obedeça.');
   if (!hasUsable(q)) fail(`${q.name} não tem Pokémon em condições de lutar.`);
   state.turnFlags.pvp = true;
-  if (q.isBot) {
-    log(state, `🤺 ${p.name} desafiou ${q.name} (CPU), que aceitou na hora!`);
+  if (q.isBot || rulesOf(state) === 'royale') {
+    log(state, rulesOf(state) === 'royale' ? `🤺 ${p.name} desafiou ${q.name}! No Battle Royale não dá para recusar.` : `🤺 ${p.name} desafiou ${q.name} (CPU), que aceitou na hora!`);
     beginPvp(state, p, q);
     return;
   }
@@ -1054,7 +1103,7 @@ setBattleEndHandler((state, rng, b, outcome) => {
       log(state, `🏅 ${p0.name} venceu o selvagem e ganhou ${g} de ouro.`, 'good');
     } else if (r === 'win' && outcome.winner === 1) {
       p0.stats.losses += 1;
-      blackout(state, p0);
+      knockOut(state, p0);
     }
     return;
   }
@@ -1074,7 +1123,7 @@ setBattleEndHandler((state, rng, b, outcome) => {
     } else if (r !== 'draw') {
       p0.stats.losses += 1;
       log(state, `😓 ${p0.name} não resistiu ao lendário.`, 'bad');
-      if (!outcome.surrender && !hasUsable(p0)) blackout(state, p0, 0);
+      if (!outcome.surrender && !hasUsable(p0)) knockOut(state, p0, 0);
     }
     return;
   }
@@ -1091,9 +1140,16 @@ setBattleEndHandler((state, rng, b, outcome) => {
     w.stats.wins += 1;
     l.stats.losses += 1;
     log(state, `🏆 ${w.name} venceu o PvP e levou ${pay} de ouro de ${l.name}!`, 'win');
-    if (!hasUsable(l)) blackout(state, l, 0);
+    if (!hasUsable(l)) knockOut(state, l, 0, 'pvp');
     return;
   }
+
+  // Conquista: ginásio neutro ou cerco a cidade de outro jogador
+  const cq = conquestBattleEnd(state, rng, b, outcome, p0, {
+    badge: pl => { grantBadgeReward(state, rng, pl); progressMission(state, pl.id, { k: 'badge' }); },
+    mission: pl => progressMission(state, pl.id, { k: 'trainer_win' })
+  });
+  if (cq) { if (cq.finish) finishMatch(state, cq.finish, cq.reason); return; }
 
   // NPC: treinador, rocket, ginásio, elite, campeão
   const foe = b.sides[1];
@@ -1142,7 +1198,7 @@ setBattleEndHandler((state, rng, b, outcome) => {
     p0.gold -= stolen;
     log(state, `🦹 A Equipe Rocket roubou ${stolen} de ouro de ${p0.name}!`, 'bad');
   }
-  if (!hasUsable(p0)) blackout(state, p0, b.kind === 'rocket' || b.kind === 'raid' ? 0 : 0.1);
+  if (!hasUsable(p0)) knockOut(state, p0, b.kind === 'rocket' || b.kind === 'raid' ? 0 : 0.1);
 });
 
 // ------------------------------------------------------------------ bots
@@ -1201,7 +1257,8 @@ function tickHotspots(state) {
       log(state, `⌛ O ${HOTSPOT_INFO[h.kind].name} em ${getSpace(h.space).name} sumiu.`);
     }
   }
-  if (list.length >= HOTSPOT_MAX || rng.next() > HOTSPOT_CHANCE) return;
+  const royale = rulesOf(state) === 'royale';
+  if (list.length >= (royale ? 3 : HOTSPOT_MAX) || rng.next() > (royale ? 0.75 : HOTSPOT_CHANCE)) return;
   const taken = new Set([...list.map(h => h.space), ...state.players.map(p => p.pos)]);
   const spots = SPACE_LIST.filter(x => x.type === 'event' && !taken.has(x.id));
   if (!spots.length) return;

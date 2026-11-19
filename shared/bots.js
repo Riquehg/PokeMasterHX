@@ -14,6 +14,7 @@ import { getPlayer, currentPlayer, canUse } from './rules/helpers.js';
 import { sideTeam, sideActive, sideIndexOf, bestMoveSlot, expectedDamage, CAPTURE_TARGET } from './rules/battle.js';
 import { monMoves } from './data/moves.js';
 import { statsOf } from './rules/monsters.js';
+import { rulesOf, stormAt, ownerOf, GARRISON_MAX } from './rules/modes.js';
 
 
 
@@ -178,8 +179,18 @@ function gymReady(p, gym) {
   return topLevels(p, 2) >= strongest - 2 && teamHealth(p) > 0.8;
 }
 
-function goalSpace(p) {
+function goalSpace(p, state) {
+  const rules = rulesOf(state);
+  if (rules === 'royale') return state.royale.center; // corre para o centro, longe da tempestade
   if (teamHealth(p) < 0.45) return 'heal';
+  if (rules === 'conquest') {
+    // cidade de ginásio mais perto que não é minha e que dá para encarar
+    const dist = distancesFrom(p, p.pos);
+    const best = Math.max(...p.team.map(m => m.lvl));
+    const targets = GYMS.filter(g => ownerOf(state, g.id) !== p.id && best >= siegeLevel(state, g) - 5)
+      .sort((a, b) => (dist[a.space] ?? 99) - (dist[b.space] ?? 99));
+    return targets[0] ? targets[0].space : 'train';
+  }
   if (p.badges.length >= BADGES_TO_LEAGUE) {
     const need = p.eliteStage < ELITE_FOUR.length ? ELITE_FOUR[p.eliteStage].team : CHAMPION.team;
     const strongest = Math.max(...need.map(t => t[1]));
@@ -198,7 +209,7 @@ function goalSpace(p) {
 
 function chooseDestination(state, p) {
   const opts = state.pending.options;
-  const goal = goalSpace(p);
+  const goal = goalSpace(p, state);
   const top = topLevels(p);
   let dist = null;
   if (typeof goal === 'number') dist = distancesFrom(p, goal);
@@ -222,6 +233,17 @@ function chooseDestination(state, p) {
     if (state.board[id]?.shiny) s += 20;
     const hs = (state.hotspots || []).find(h => h.space === id);
     if (hs) s += hs.kind === 'chest' ? 25 : hs.kind === 'mystery' ? 22 : hasUsableBot(p) ? 18 : -5; // evento relâmpago
+    if (rulesOf(state) === 'royale') {
+      const st = stormAt(state, id);
+      if (st.soon) s -= 120;                      // fica na tempestade na próxima rodada
+      const rival = state.players.find(q => q.id !== p.id && !q.out && q.pos === id);
+      if (rival) s += strength(p) > strength(rival) * 1.2 ? 25 : -40; // batalha obrigatória
+      if (sp.type === 'city' && teamHealth(p) < 0.7 && !(p.healedAt || []).includes(id) && !st.soon) s += 30;
+    }
+    if (rulesOf(state) === 'conquest' && sp.type === 'city') {
+      const g = gymAt(id);
+      if (g && ownerOf(state, g.id) !== p.id && topLevels(p, 2) >= siegeLevel(state, g) - 2 && teamHealth(p) > 0.7) s += 35;
+    }
     s += (state.seed % 7 === id % 7) ? 0.5 : 0; // desempate leve
     if (s > bestScore) { bestScore = s; best = id; }
   }
@@ -232,7 +254,9 @@ function cityActions(state, p) {
   const sp = getSpace(p.pos);
   if (!sp || sp.type !== 'city') return null;
 
-  if ([...p.team].some(m => m.hp < maxHpOf(m))) return { type: 'city', op: 'heal' };
+  const rules = rulesOf(state);
+  const canHeal = rules !== 'royale' || (!(p.healedAt || []).includes(sp.id) && !stormAt(state, sp.id).in && teamHealth(p) < 0.85);
+  if (canHeal && [...p.team].some(m => m.hp < maxHpOf(m))) return { type: 'city', op: 'heal' };
 
   // PC: equipe só com quem obedece e é mais forte; quem não obedece vai para o PC
   if (p.box.length) {
@@ -266,12 +290,23 @@ function cityActions(state, p) {
     if (rv) return { type: 'city', op: 'buy', item: 'revive', qty: 1 };
   }
 
+  // Conquista: atacar cidade de outro (ou neutra); arrumar a guarnição da própria se estiver vazia
+  if (rules === 'conquest') {
+    const g = gymAt(sp.id);
+    if (!g) return null;
+    const owner = ownerOf(state, g.id);
+    if (owner !== p.id && !state.turnFlags.gym && topLevels(p, 2) >= siegeLevel(state, g) - 2 && teamHealth(p) > 0.7) return { type: 'city', op: 'gym' };
+    if (owner === p.id && !state.turnFlags.manage && !state.conquest.garrison[g.id].length && p.box.some(m => m.hp > 0 || true) && p.box.length) return { type: 'city', op: 'gym' };
+    return null;
+  }
+  if (rules === 'royale') return null;
+
   // Desafios oficiais
   if (!state.turnFlags.gym) {
     const gym = gymAt(sp.id);
     if (gym && !p.badges.includes(gym.id) && gymReady(p, gym)) return { type: 'city', op: 'gym' };
     if (p.badges.length >= BADGES_TO_LEAGUE && teamHealth(p) > 0.95) {
-      if (sp.id === ELITE_SPACE && p.eliteStage < ELITE_FOUR.length && goalSpace(p) === ELITE_SPACE) return { type: 'city', op: 'league' };
+      if (sp.id === ELITE_SPACE && p.eliteStage < ELITE_FOUR.length && goalSpace(p, state) === ELITE_SPACE) return { type: 'city', op: 'league' };
       if (sp.id === CHAMPION_SPACE && p.eliteStage >= ELITE_FOUR.length) return { type: 'city', op: 'league' };
     }
   }
@@ -323,8 +358,27 @@ function raidBotAction(state, p) {
   return ball ? { type: 'raid', op: 'catch', ball } : { type: 'raid', op: 'skip' };
 }
 
+/** Conquista: quem fica defendendo — prefere Pokémon do PC; da equipe só se sobrar time forte. */
+function garrisonBot(state, p) {
+  const val = m => monPower(m);
+  const box = p.box.slice().sort((a, b) => val(b) - val(a));
+  const team = p.team.slice().sort((a, b) => val(b) - val(a));
+  const picks = box.slice(0, 2).map(m => m.uid);
+  if (picks.length < 2 && team.length > 3) picks.push(...team.slice(3, 3 + (2 - picks.length)).map(m => m.uid));
+  return { type: 'garrison', uids: picks.slice(0, GARRISON_MAX) };
+}
+
+/** Nível do mais forte que defende a cidade (líder se neutra, guarnição se de alguém). */
+function siegeLevel(state, g) {
+  const own = ownerOf(state, g.id);
+  if (!own) return Math.max(...g.team.map(t => t[1]));
+  const gar = state.conquest.garrison[g.id].filter(m => m.hp > 0);
+  return gar.length ? Math.max(...gar.map(m => m.lvl)) : Math.max(5, g.team[0][1] - 3);
+}
+
 export function botAction(state, pid) {
   const p = getPlayer(state, pid);
+  if (state.pending?.kind === 'garrison' && state.pending.pid === pid) return garrisonBot(state, p);
 
   if (state.pending?.kind === 'pvp_invite' && state.pending.to === pid) {
     const from = getPlayer(state, state.pending.from);

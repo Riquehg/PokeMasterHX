@@ -3,6 +3,7 @@ import { SPACE_LIST, getSpace, useStateMap, GATES, BIOMES } from '../../shared/d
 import { hasGate } from '../../shared/rules/movement.js';
 import { drawTerrain, roadsSvg } from './terrain.js';
 import { WeatherLayer } from './weather.js';
+import { stormAt, ownerOf } from '../../shared/rules/modes.js';
 import { gymAt, ELITE_SPACE, CHAMPION_SPACE, GYMS, BADGES_TO_LEAGUE } from '../../shared/data/trainers.js';
 import { distancesFrom } from '../../shared/rules/movement.js';
 import { badgeUrl, leaderUrl } from '../config.js';
@@ -217,17 +218,22 @@ export class BoardView {
     const me = state.players.find(p => p.id === viewerId);
     this.meSpace = me ? me.pos : null;
     const opts = new Set(options);
+    const royale = state.rules === 'royale' && state.royale;
     let spaces = '';
     for (const sp of SPACE_LIST) {
+      const st = royale ? stormAt(state, sp.id) : null;
+      const storm = st ? (st.in ? 'storm' : st.soon && state.turn + 1 >= 3 ? 'storm-soon' : '') : '';
+      const center = royale && sp.id === state.royale.center ? 'storm-center' : '';
       const isOpt = opts.has(sp.id);
       const icon = sp.type === 'city' ? (gymAt(sp.id) ? '🏟' : sp.id === ELITE_SPACE || sp.id === CHAMPION_SPACE ? '👑' : '') : '';
       const g = sp.gate && GATES[sp.gate];
       const locked = g && me && !hasGate(me, sp.gate);
       const extra = `${BIOMES[sp.biome] ? ' · ' + BIOMES[sp.biome].name : ''}${g ? ` · ${g.icon} ${g.name}: precisa de Pokémon (ou golpe) ${g.types.map(t => typeNames[t] || t).join('/')} para ${g.desc}` : ''}`;
-      spaces += `<div class="space t${sp.tier} ${sp.type} ${isOpt ? 'opt' : ''} ${locked ? 'locked' : ''}" style="left:${sp.x}%;top:${sp.y}%" ${isOpt ? `data-to="${sp.id}"` : ''} title="${esc(sp.name)}${esc(extra)}">${icon}${g ? `<i class="gate-ic" title="${esc(g.name)}">${g.icon}</i>` : ''}<span class="lbl">${esc(sp.name)}</span></div>`;
+      spaces += `<div class="space t${sp.tier} ${sp.type} ${isOpt ? 'opt' : ''} ${locked ? 'locked' : ''} ${storm} ${center}" style="left:${sp.x}%;top:${sp.y}%" ${isOpt ? `data-to="${sp.id}"` : ''} title="${esc(sp.name)}${esc(extra)}">${icon}${g ? `<i class="gate-ic" title="${esc(g.name)}">${g.icon}</i>` : ''}<span class="lbl">${esc(sp.name)}</span></div>`;
     }
     this.stage.querySelector('.layer-spaces').innerHTML = spaces;
-    this.stage.querySelector('.layer-badges').innerHTML = state.kind === 'duel' ? '' : badgeMarkers(state, me);
+    this.stage.querySelector('.layer-badges').innerHTML = state.kind === 'duel' || state.rules === 'royale' ? '' : state.rules === 'conquest' ? conquestMarkers(state) : badgeMarkers(state, me);
+    this.stage.classList.toggle('royale', !!royale);
     this.stage.querySelector('.layer-hotspots').innerHTML = hotspotMarkers(state);
 
     let wild = '';
@@ -265,7 +271,7 @@ export class BoardView {
     const c = pl.cosmetic || {};
     const fr = c.frame ? esc(c.frame) : '';
     const au = c.aura ? esc(c.aura) : '';
-    const cls = ['token', state.current === i ? 'active' : '', fr || au ? 'vip' : '', fr ? 'tf-' + fr : '', au ? 'ta-' + au : ''].join(' ');
+    const cls = ['token', state.current === i ? 'active' : '', fr || au ? 'vip' : '', fr ? 'tf-' + fr : '', au ? 'ta-' + au : '', pl.out ? 'out' : ''].join(' ');
     const sparks = au ? `<div class="sparks">${'<i></i>'.repeat(7)}</div>` : '';
     return `<div class="${cls}" data-pid="${esc(pl.id)}" style="left:${sp.x}%;top:${sp.y}%;margin-left:calc(${off}px * var(--ms, 1));--pc:${playerColor(state, pl.id)}" title="${esc(pl.name)}${c.title ? ' — ' + esc(c.title) : ''}">
       ${fr ? '<div class="halo"></div><div class="halo h2"></div>' : ''}${sparks}
@@ -317,6 +323,20 @@ function hotspotMarkers(state) {
       : `<img class="hs-sil" src="${monSprite(h.mon.sp)}" alt="" draggable="false"><span class="hs-q">?</span>`;
     return `<div class="hotspot hs-${h.kind}" style="left:${sp.x}%;top:${sp.y}%" title="${HS_NAME[h.kind]} — pare nesta casa para ativar · some em ${left} rodada(s)">
       ${art}<span class="hs-timer">⏳${left}</span></div>`;
+  }).join('');
+}
+
+/** Conquista: bandeira com a cor do dono e quantos defendem. */
+function conquestMarkers(state) {
+  return GYMS.map(g => {
+    const sp = getSpace(g.space);
+    if (!sp) return '';
+    const o = ownerOf(state, g.id);
+    const gar = state.conquest.garrison[g.id].filter(m => m.hp > 0).length;
+    const col = o ? playerColor(state, o) : '#8a8a8a';
+    const name = o ? state.players.find(p => p.id === o)?.name : 'Neutra';
+    return `<div class="conq-flag ${o ? '' : 'neutral'}" style="left:${sp.x}%;top:${sp.y}%;--fc:${col}" title="${esc(sp.name)} — ${esc(name)}${o ? ` · ${gar} defensor(es)` : ` · líder ${esc(g.leader)}`}">
+      <span class="cf-pole"></span><span class="cf-cloth">${o ? '🏰' : '⚑'}</span>${o ? `<span class="cf-gar">🛡️${gar}</span>` : ''}</div>`;
   }).join('');
 }
 

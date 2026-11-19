@@ -303,7 +303,7 @@ export async function listRooms(db, user) {
   const mine = user ? await db.myMatches(user.id) : [];
   const brief = r => ({
     id: r.id, code: r.code, name: r.name, status: r.status, hasPin: !!r.has_pin,
-    mode: r.options?.mode || 'balanced', levelCap: r.options?.levelCap || 0, turnLimit: r.options?.turnLimit || 0,
+    mode: r.options?.mode || 'balanced', levelCap: r.options?.levelCap || 0, turnLimit: r.options?.turnLimit || 0, rules: r.options?.rules || 'classic', map: r.options?.map || 'kanto',
     players: (r.lobby || []).length, maxPlayers: r.options?.maxPlayers || 4,
     host: (r.lobby || []).find(e => e.id === r.host_id)?.name || '?', updatedAt: r.updated_at
   });
@@ -335,6 +335,10 @@ function normalizeOptions(body, prev = {}) {
   if (body.levelCap !== undefined) o.levelCap = Math.max(0, Math.min(60, Number(body.levelCap) || 0));
   if (body.map !== undefined) o.map = body.map === 'gen' ? 'gen' : 'kanto'; // Kanto ou Expedição (mapa gerado)
   o.map = o.map || 'kanto';
+  // tipo de partida: Clássico, Battle Royale ou Conquista (funciona no Balanceado e no Coleção)
+  if (body.rules !== undefined) o.rules = ['royale', 'conquest'].includes(body.rules) ? body.rules : 'classic';
+  if (!['balanced', 'collection', 'solo'].includes(o.mode)) o.rules = 'classic';
+  o.rules = o.rules || 'classic';
   o.levelCap = o.levelCap || 0;
   if (o.mode === 'ranked' && !o.turnLimit) o.turnLimit = 40; // competitivo sempre termina
   if ((o.mode === 'duel' || o.mode === 'cup') && !o.levelCap) o.levelCap = DUEL_LEVEL_CAP;
@@ -489,7 +493,7 @@ async function startRoom(db, row, lobby, userId) {
     }
   }
   const state = createMatch({
-    id: row.id, mode: 'online', seed: randomSeed(), now: Date.now(), players, map: options.map,
+    id: row.id, mode: 'online', seed: randomSeed(), now: Date.now(), players, map: options.map, rules: options.rules,
     options: { dailyPokemon: await currentDaily(db), turnLimit: options.turnLimit || 0, trades: mode !== 'ranked' }
   });
   state.roomMode = mode;
@@ -501,7 +505,7 @@ async function startRoom(db, row, lobby, userId) {
 async function createRoom(db, user, body) {
   const profile = await getOrCreateProfile(db, user);
   const name = cleanName(body.name, `Sala de ${profile.trainer_name}`).slice(0, 30);
-  const options = normalizeOptions({ mode: body.mode, maxPlayers: body.maxPlayers, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap, map: body.map });
+  const options = normalizeOptions({ mode: body.mode, maxPlayers: body.maxPlayers, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap, map: body.map, rules: body.rules });
   if (options.mode === 'solo') options.mode = 'balanced';
   const pin = String(body.pin || '').replace(/\D/g, '').slice(0, 6);
   const row = await insertRoom(db, user, { name, options, isPublic: body.isPublic !== false, pin, lobby: [lobbyEntry(profile, body)] });
@@ -531,7 +535,7 @@ async function createSolo(db, user, body) {
   const profile = await getOrCreateProfile(db, user);
   const bots = Math.max(1, Math.min(5, Number(body.bots) || 1));
   const useCollection = Array.isArray(body.teamUids) && body.teamUids.length > 0;
-  const options = normalizeOptions({ mode: useCollection ? 'collection' : 'balanced', maxPlayers: bots + 1, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap || 0, map: body.map });
+  const options = normalizeOptions({ mode: useCollection ? 'collection' : 'balanced', maxPlayers: bots + 1, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap || 0, map: body.map, rules: body.rules });
   const entry = lobbyEntry(profile, body);
   if (useCollection) {
     const owned = new Set((profile.vault || []).map(v => v.uid));

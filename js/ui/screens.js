@@ -1,3 +1,4 @@
+import { GAME_RULES } from '../../shared/rules/modes.js';
 import { MAP_CHOICES } from '../../shared/data/board.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
 import { openCompanionPicker } from './missions.js';
@@ -211,11 +212,12 @@ export async function hubScreen(root, ctx) {
 }
 
 function soloModal(profile, ctx) {
-  const st = { bots: 2, turnLimit: 60, useTeam: false, starter: 'charmander', team: [], map: 'kanto', bring: 0 };
+  const st = { bots: 2, turnLimit: 60, useTeam: false, starter: 'charmander', team: [], map: 'kanto', bring: 0, rules: 'classic' };
   const body = () => `
     <div class="grid2">
       <div class="field"><label>Adversários (CPU)</label><select class="input" id="s-bots">${[1, 2, 3, 4, 5].map(n => `<option ${n === st.bots ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
       <div class="field"><label>Duração</label><select class="input" id="s-turns"><option value="30" ${st.turnLimit === 30 ? 'selected' : ''}>Rápida (30 turnos)</option><option value="60" ${st.turnLimit === 60 ? 'selected' : ''}>Normal (60 turnos)</option><option value="0" ${st.turnLimit === 0 ? 'selected' : ''}>Completa (até o Campeão)</option></select></div>
+<div class="field"><label>Tipo de partida</label><select class="input" id="s-rules">${Object.entries(GAME_RULES).map(([k, g]) => `<option value="${k}" ${k === (st.rules) ? 'selected' : ''} title="${esc(g.desc)}">${g.icon} ${g.name}</option>`).join('')}</select></div>
       <div class="field"><label>Mapa</label><select class="input" id="s-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (st.map) ? 'selected' : ''} title="${esc(m.desc)}">${m.id === 'gen' ? '🧭' : '🗺️'} ${m.name}</option>`).join('')}</select></div>
     </div>
     <div class="tabs" style="margin:10px 0"><button class="btn sm ${!st.useTeam ? 'primary' : ''}" data-act="use-starter">🌱 Começar com inicial</button><button class="btn sm ${st.useTeam ? 'primary' : ''}" data-act="use-team">📦 Levar time da Coleção</button></div>
@@ -224,7 +226,7 @@ function soloModal(profile, ctx) {
                 <div class="row" style="gap:4px;margin-top:4px">${[0, 300, 600, 1000, 2000].map(v => `<button class="btn sm ${(st.bring) === v ? 'primary' : ''}" data-act="s-bring" data-v="${v}" ${v > (profile?.gold || 0) ? 'disabled' : ''}>${v ? v : 'Nada'}</button>`).join('')}</div></div>` : starterPicker(st.starter)}
     <button class="btn primary block" data-act="go" style="margin-top:10px">▶ Começar treino</button>`;
   const ov = openModal('solo', '🤖 Treino contra CPUs', body(), { wide: true });
-  const keep = () => { st.bots = Number(ov.querySelector('#s-bots').value); st.turnLimit = Number(ov.querySelector('#s-turns').value); st.map = ov.querySelector('#s-map').value; };
+  const keep = () => { st.bots = Number(ov.querySelector('#s-bots').value); st.turnLimit = Number(ov.querySelector('#s-turns').value); st.map = ov.querySelector('#s-map').value; st.rules = ov.querySelector('#s-rules').value; };
   const re = () => { keep(); setModalBody('solo', body()); };
   bindActions(ov, {
     'use-starter': () => { st.useTeam = false; re(); },
@@ -235,7 +237,7 @@ function soloModal(profile, ctx) {
     go: async () => {
       keep();
       try {
-        const { match } = await api('match', { op: 'solo', bots: st.bots, turnLimit: st.turnLimit, map: st.map, bringGold: st.useTeam ? st.bring : 0, starter: st.starter, teamUids: st.useTeam ? st.team : [] });
+        const { match } = await api('match', { op: 'solo', bots: st.bots, turnLimit: st.turnLimit, map: st.map, rules: st.rules, bringGold: st.useTeam ? st.bring : 0, starter: st.starter, teamUids: st.useTeam ? st.team : [] });
         closeModal('solo');
         ctx.openOnline(match.id);
       } catch (e) { toast(e.message, 'bad'); }
@@ -321,6 +323,7 @@ export async function lobbyScreen(root, ctx) {
         <div class="grid2">
           <div class="field"><label>Jogadores</label><select class="input" id="c-max">${[2, 3, 4, 5, 6, 8].map(n => `<option ${n === 4 ? 'selected' : ''}>${n}</option>`).join('')}</select><div class="tiny muted">8 só na Copa · Duelo é sempre 2</div></div>
           <div class="field"><label>Duração</label><select class="input" id="c-turns"><option value="30">Rápida (30 turnos)</option><option value="40">Competitiva (40 turnos)</option><option value="60" selected>Normal (60 turnos)</option><option value="0">Completa (até o Campeão)</option></select></div>
+<div class="field"><label>Tipo de partida</label><select class="input" id="c-rules">${Object.entries(GAME_RULES).map(([k, g]) => `<option value="${k}" ${k === ('classic') ? 'selected' : ''} title="${esc(g.desc)}">${g.icon} ${g.name}</option>`).join('')}</select></div>
           <div class="field"><label>Mapa</label><select class="input" id="c-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === ('kanto') ? 'selected' : ''} title="${esc(m.desc)}">${m.id === 'gen' ? '🧭' : '🗺️'} ${m.name}</option>`).join('')}</select></div>
         </div>
         <div class="field hidden" id="c-cap-f"><label>Nível máximo dos Pokémon levados</label><select class="input" id="c-cap"><option value="0">Sem limite</option><option value="15">15</option><option value="25">25</option><option value="35">35</option><option value="45">45</option></select></div>
@@ -347,14 +350,14 @@ export async function lobbyScreen(root, ctx) {
     try {
       const { rooms } = await api('rooms', null, 'GET');
       root.querySelector('#rooms').innerHTML = rooms.length ? rooms.map(r => `
-        <div class="list-item"><div class="grow"><b>${esc(r.name)}</b> ${r.hasPin ? '🔒' : ''} ${modeChip(r.mode, r.levelCap)}<div class="tiny muted">Anfitrião: ${esc(r.host)} · ${r.players}/${r.maxPlayers} · ${r.turnLimit ? r.turnLimit + ' turnos' : 'completa'} · código ${esc(r.code)}</div></div>
+        <div class="list-item"><div class="grow"><b>${esc(r.name)}</b> ${r.hasPin ? '🔒' : ''} ${modeChip(r.mode, r.levelCap)}${r.rules && r.rules !== 'classic' ? ` <span class="chip">${GAME_RULES[r.rules].icon} ${GAME_RULES[r.rules].name}</span>` : ''}<div class="tiny muted">Anfitrião: ${esc(r.host)} · ${r.players}/${r.maxPlayers} · ${r.turnLimit ? r.turnLimit + ' turnos' : 'completa'} · código ${esc(r.code)}</div></div>
         <button class="btn sm blue" data-act="join" data-id="${r.id}" data-pin="${r.hasPin ? '1' : ''}" ${r.players >= r.maxPlayers ? 'disabled' : ''}>Entrar</button></div>`).join('')
         : '<p class="muted small">Nenhuma sala aberta. Crie uma!</p>';
     } catch (e) { root.querySelector('#rooms').innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
   };
   const go = async p => { try { const { match } = await p; ctx.openRoom(match.id); } catch (e) { toast(e.message, 'bad'); } };
   bindActions(root, {
-    create: () => go(api('match', { op: 'create', name: v('#c-name'), mode: v('#c-mode'), maxPlayers: Number(v('#c-max')), turnLimit: Number(v('#c-turns')), levelCap: Number(v('#c-cap')), map: v('#c-map'), pin: v('#c-pin'), isPublic: v('#c-pub') === '1' })),
+    create: () => go(api('match', { op: 'create', name: v('#c-name'), mode: v('#c-mode'), maxPlayers: Number(v('#c-max')), turnLimit: Number(v('#c-turns')), levelCap: Number(v('#c-cap')), map: v('#c-map'), rules: v('#c-rules'), pin: v('#c-pin'), isPublic: v('#c-pub') === '1' })),
     'join-code': () => go(api('match', { op: 'join', code: v('#j-code'), pin: v('#j-pin') })),
     join: d => go(api('match', { op: 'join', matchId: d.id, pin: d.pin ? prompt('PIN da sala:') || '' : '' })),
     refresh: load,
@@ -387,10 +390,11 @@ export async function roomScreen(root, ctx, matchId) {
       <div class="hub-grid">
         <div class="card col">
           <div class="spread"><h3>🏟️ ${esc(match.name)}</h3><span class="chip gold" style="font-size:14px">Código: ${esc(match.code)}</span></div>
-          <div class="row">${modeChip(mode, o.levelCap)}<span class="small muted">${o.maxPlayers} jogadores · ${o.turnLimit ? o.turnLimit + ' turnos' : 'até o Campeão'} · ${o.map === 'gen' ? '🧭 Expedição' : '🗺️ Kanto'} ${match.hasPin ? '· 🔒 PIN' : ''}</span></div>
-          <div class="tiny muted">${esc(MODE_INFO[mode]?.desc || '')}</div>
+          <div class="row">${modeChip(mode, o.levelCap)}<span class="small muted">${o.maxPlayers} jogadores · ${o.turnLimit ? o.turnLimit + ' turnos' : 'até o Campeão'} · ${o.map === 'gen' ? '🧭 Expedição' : '🗺️ Kanto'} · ${GAME_RULES[o.rules || 'classic'].icon} ${GAME_RULES[o.rules || 'classic'].name} ${match.hasPin ? '· 🔒 PIN' : ''}</span></div>
+          <div class="tiny muted">${esc(MODE_INFO[mode]?.desc || '')}${o.rules && o.rules !== 'classic' ? ' · ' + esc(GAME_RULES[o.rules].desc) : ''}</div>
           ${isHost ? `<div class="grid2">
             <select class="input" id="o-mode">${Object.entries(MODE_INFO).map(([k, m]) => `<option value="${k}" ${k === mode ? 'selected' : ''}>${m.icon} ${m.name}</option>`).join('')}</select>
+            ${['balanced', 'collection'].includes(mode) ? `<select class="input" id="o-rules">${Object.entries(GAME_RULES).map(([k, g]) => `<option value="${k}" ${k === (o.rules || 'classic') ? 'selected' : ''}>${g.icon} ${g.name}</option>`).join('')}</select>` : ''}
             <select class="input" id="o-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (o.map || 'kanto') ? 'selected' : ''}>${m.id === 'gen' ? '🧭' : '🗺️'} ${m.name}</option>`).join('')}</select>
             <select class="input" id="o-turns">${[[30, 'Rápida (30)'], [40, 'Competitiva (40)'], [60, 'Normal (60)'], [0, 'Completa']].map(([v, l]) => `<option value="${v}" ${v === (o.turnLimit || 0) ? 'selected' : ''}>${l}</option>`).join('')}</select>
             ${TEAM_MODES.includes(mode) ? `<select class="input" id="o-cap">${[[0, 'Sem limite de nível'], [15, 'Nível máx 15'], [25, 'Nível máx 25'], [35, 'Nível máx 35'], [45, 'Nível máx 45'], [50, 'Nível máx 50']].map(([v, l]) => `<option value="${v}" ${v === (o.levelCap || 0) ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}
@@ -430,7 +434,7 @@ export async function roomScreen(root, ctx, matchId) {
       const text = root.querySelector('#r-msg').value.trim();
       if (text) await op({ op: 'chat', text });
     });
-    const sendOpts = () => op({ op: 'options', mode: root.querySelector('#o-mode').value, map: root.querySelector('#o-map')?.value, turnLimit: Number(root.querySelector('#o-turns').value), levelCap: Number(root.querySelector('#o-cap')?.value || 0) });
+    const sendOpts = () => op({ op: 'options', mode: root.querySelector('#o-mode').value, map: root.querySelector('#o-map')?.value, rules: root.querySelector('#o-rules')?.value, turnLimit: Number(root.querySelector('#o-turns').value), levelCap: Number(root.querySelector('#o-cap')?.value || 0) });
     root.querySelectorAll('#o-mode, #o-turns, #o-cap').forEach(el => el.addEventListener('change', sendOpts));
   };
 
@@ -599,7 +603,7 @@ export function localSetupScreen(root, ctx) {
     { name: 'Jogador 1', avatar: 1, starter: 'charmander', isBot: false },
     { name: 'CPU Gary', avatar: 4, starter: 'squirtle', isBot: true }
   ];
-  let turnLimit = 60, mapId = 'kanto';
+  let turnLimit = 60, mapId = 'kanto', rulesId = 'classic';
   let editing = 0;
   const render = () => {
     const e = players[editing];
@@ -612,6 +616,7 @@ export function localSetupScreen(root, ctx) {
               ${players.length > 1 ? `<button class="btn sm red" data-act="del" data-i="${i}">✕</button>` : ''}</div>`).join('')}</div>
           <div class="grid2"><button class="btn sm" data-act="add-human" ${players.length >= 6 ? 'disabled' : ''}>+ Humano</button><button class="btn sm" data-act="add-bot" ${players.length >= 6 ? 'disabled' : ''}>+ CPU</button></div>
           <div class="field"><label>Duração</label><select class="input" id="ls-turns"><option value="30" ${turnLimit === 30 ? 'selected' : ''}>Rápida (30 turnos)</option><option value="60" ${turnLimit === 60 ? 'selected' : ''}>Normal (60 turnos)</option><option value="0" ${turnLimit === 0 ? 'selected' : ''}>Completa (até o Campeão)</option></select></div>
+<div class="field"><label>Tipo de partida</label><select class="input" id="ls-rules">${Object.entries(GAME_RULES).map(([k, g]) => `<option value="${k}" ${k === (rulesId) ? 'selected' : ''} title="${esc(g.desc)}">${g.icon} ${g.name}</option>`).join('')}</select></div>
           <div class="field"><label>Mapa</label><select class="input" id="ls-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (mapId) ? 'selected' : ''} title="${esc(m.desc)}">${m.id === 'gen' ? '🧭' : '🗺️'} ${m.name}</option>`).join('')}</select></div>
           <button class="btn primary" data-act="start">▶ Começar</button>
           <button class="btn ghost" data-act="back">← Voltar</button>
@@ -628,6 +633,7 @@ export function localSetupScreen(root, ctx) {
     root.querySelector('#ls-bot').addEventListener('change', ev => { players[editing].isBot = ev.target.checked; render(); });
     root.querySelector('#ls-turns').addEventListener('change', ev => { turnLimit = Number(ev.target.value); });
     root.querySelector('#ls-map').addEventListener('change', ev => { mapId = ev.target.value; });
+    root.querySelector('#ls-rules').addEventListener('change', ev => { rulesId = ev.target.value; });
   };
   bindActions(root, {
     edit: d => { editing = Number(d.i); render(); },
@@ -642,7 +648,7 @@ export function localSetupScreen(root, ctx) {
       const s = LocalSession.create({
         players: players.map((p, i) => ({ id: 'p' + (i + 1), name: p.name, avatar: p.avatar, starter: p.starter, isBot: p.isBot,
           cosmetic: !p.isBot && i === players.findIndex(q => !q.isBot) ? ctx.myCosmetic : null })),
-        options: { dailyPokemon: ctx.daily, turnLimit, map: mapId }
+        options: { dailyPokemon: ctx.daily, turnLimit, map: mapId, rules: rulesId }
       });
       ctx.openLocal(s);
     },

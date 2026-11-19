@@ -3,7 +3,8 @@ import { getSpace, useStateMap } from '../../shared/data/board.js';
 import { GYMS, gymAt, ELITE_SPACE, CHAMPION_SPACE, ELITE_FOUR, BADGES_TO_LEAGUE } from '../../shared/data/trainers.js';
 import { ITEMS } from '../../shared/data/items.js';
 import { whoMustAct, score, AFK_SECONDS } from '../../shared/engine.js';
-import { esc, toast, bindActions, openModal, closeModal } from './dom.js';
+import { esc, toast, bindActions, openModal, closeModal, setModalBody } from './dom.js';
+import { maxHpOf } from '../../shared/rules/monsters.js';
 import { monSprite, typeLabel } from '../config.js';
 import { monCard, playerColor, avatarImg, speciesName } from './common.js';
 import { battleHtml, outcomeText, playBattleFx } from './battle.js';
@@ -19,6 +20,7 @@ import { COMPANIONS } from '../../shared/data/companions.js';
 import { renderRaid } from './raid.js';
 import { WeatherLayer, weatherChipHtml } from './weather.js';
 import { WEATHERS } from '../../shared/rules/weather.js';
+import { GAME_RULES, stormAt, ownerOf, citiesOf, GARRISON_MAX, alivePlayers } from '../../shared/rules/modes.js';
 
 const BATTLE_FX = new Set(['hit', 'heal', 'faint', 'switch', 'status', 'status_dmg', 'status_skip', 'status_cure', 'buff', 'debuff', 'weather_dmg']);
 const SPEEDS = [[1, '🎬 Animações: normal'], [2, '⚡ Animações: rápidas'], [0, '⏭️ Animações: desligadas']];
@@ -34,7 +36,7 @@ export function mountGame(root, session, opts = {}) {
   root.innerHTML = `
     <div id="game" data-mtab="team">
       <header class="topbar">
-        <div class="row"><h1>Pokémon Master Trainer HEX</h1><span class="chip" id="g-mode"></span><span class="chip gold" id="g-turn"></span><span id="g-weather"></span></div>
+        <div class="row"><h1>Pokémon Master Trainer HEX</h1><span class="chip" id="g-mode"></span><span class="chip gold" id="g-turn"></span><span id="g-rules"></span><span id="g-weather"></span></div>
         <div class="stats" id="g-stats"></div>
         <div class="row tb-btns">
           <button class="btn sm" data-act="open-bag" title="Mochila">🎒<span class="lbl-txt"> Mochila</span></button>
@@ -66,6 +68,7 @@ export function mountGame(root, session, opts = {}) {
           <div class="panel" data-mtab="goals" id="g-goals-panel">
             <div id="g-companion"></div>
             <div id="g-missions"></div>
+            <div id="g-modepanel"></div>
             <div class="spread" style="margin:8px 0 6px"><b>🏅 Insígnias</b><span class="tiny muted" id="g-badge-count"></span></div>
             <div class="badge-panel" id="g-badges"></div>
           </div>
@@ -195,6 +198,25 @@ export function mountGame(root, session, opts = {}) {
               effects: f.rewards.map(t => ({ text: t, tone: 'good', icon: '🎁' })), trainer: f.companion ? { name: '', sprite: COMPANIONS[f.companion]?.sprite } : undefined }, { name: nameOf(f.pid), mine: true });
           } else toast(`🎯 ${nameOf(f.pid)} completou uma missão!`, 'info');
           break;
+        case 'storm':
+          toast(`🌀 A tempestade avançou! Área segura: ${f.ring} casa${f.ring === 1 ? '' : 's'} do centro.`, 'bad');
+          break;
+        case 'storm_dmg':
+          if (f.pid === v) toast(`🌀 Você está na tempestade! Sua equipe perdeu ${f.dmg} de HP.`, 'bad');
+          break;
+        case 'eliminated':
+          if (f.pid === v) await eventCard({ k: 'event', pid: f.pid, id: 'eliminated', title: 'Você foi eliminado!', icon: '💀', tone: 'bad', lore: `${f.why[0].toUpperCase() + f.why.slice(1)}. Você ficou em ${f.place}º lugar — dá para continuar assistindo.`, effects: [] }, { name: nameOf(f.pid), mine: true });
+          else toast(`💀 ${nameOf(f.pid)} ${f.why} e foi eliminado (${f.place}º)!`, 'info');
+          break;
+        case 'city_taken': {
+          const g = GYMS.find(x => x.id === f.city);
+          toast(`🏰 ${nameOf(f.pid)} dominou ${g?.city}${f.from ? ` (tomada de ${nameOf(f.from)})` : ''}!`, f.pid === v ? 'good' : 'info');
+          if (f.pid === v) victoryFx(vicOf(next, v), 0.6);
+          break;
+        }
+        case 'city_lost':
+          if (f.pid === v) toast(`😱 Você perdeu ${GYMS.find(x => x.id === f.city)?.city}! Seus defensores voltaram para o PC.`, 'bad');
+          break;
         case 'weather': {
           const W = WEATHERS[f.id];
           toast(`${W.icon} O clima mudou: ${W.name}! ${W.desc}`, 'info');
@@ -244,6 +266,8 @@ export function mountGame(root, session, opts = {}) {
     const mo = session.match?.options || {};
     root.querySelector('#g-mode').textContent = session.kind !== 'online' ? '📱 Offline' : mo.solo ? '🤖 Treino (salva na conta)' : `🌐 Sala ${session.match?.code || ''} · ${{ balanced: '⚖️ Balanceado', collection: '📦 Coleção', ranked: '🏆 Competitivo' }[mo.mode] || ''}`;
     root.querySelector('#g-turn').textContent = `Turno ${s.turn}${s.options.turnLimit ? '/' + s.options.turnLimit : ''}`;
+    const mc = root.querySelector('#g-rules');
+    if (mc) mc.innerHTML = s.rules && s.rules !== 'classic' ? `<span class="chip ${s.rules === 'royale' ? 'red' : 'gold'}">${GAME_RULES[s.rules].icon} ${GAME_RULES[s.rules].name}${s.rules === 'royale' ? ` · 🌀 ${s.royale.ring}` : ''}</span>` : '';
     const wc = root.querySelector('#g-weather');
     if (wc) wc.innerHTML = s.kind === 'duel' ? '' : weatherChipHtml(s);
     root.querySelector('#g-speed').textContent = SPEEDS.find(x => x[0] === anim.speed)?.[1].split(' ')[0] || '🎬';
@@ -264,6 +288,7 @@ export function mountGame(root, session, opts = {}) {
       renderBattle(s);
       renderInvite(s);
       renderRaid(s, vid(), act);
+      if (s.rules === 'conquest') renderGarrison(s, p);
       if (p) renderTrades(root, s, p.id, viewSession());
       renderGameOver(s);
     }
@@ -351,17 +376,27 @@ export function mountGame(root, session, opts = {}) {
       <button class="btn sm" data-act="shop">🛒 Loja</button>
       <button class="btn sm" data-act="pc">💻 PC (${p.box.length})</button>
       ${p.items.fly ? `<button class="btn sm" data-act="fly">🕊️ Voar</button>` : ''}</div>`;
-    if (gym) {
+    if (gym && s.rules === 'conquest') {
+      const owner = ownerOf(s, gym.id);
+      const gar = s.conquest.garrison[gym.id];
+      if (owner === p.id) h += `<p class="small">🏰 Cidade sua · guarnição: ${gar.length ? gar.map(m => esc(speciesName(m.sp))).join(', ') : 'guarda da cidade'}</p>
+        <button class="btn block" data-act="gym" ${s.turnFlags.manage ? 'disabled' : ''}>🛡️ Reorganizar a guarnição</button>`;
+      else if (!owner) h += `<button class="btn primary block" data-act="gym" ${s.turnFlags.gym ? 'disabled' : ''}>⚔️ Desafiar ${esc(gym.leader)} e dominar a cidade</button>`;
+      else h += `<p class="small">🏰 Dominada por <b style="color:${playerColor(s, owner)}">${esc(nameOf(owner))}</b> · ${gar.filter(m => m.hp > 0).length || 'só a guarda'} ${gar.filter(m => m.hp > 0).length ? 'defensor(es)' : ''}</p>
+        <button class="btn red block" data-act="gym" ${s.turnFlags.gym ? 'disabled' : ''}>⚔️ Atacar a cidade</button>`;
+    } else if (gym && s.rules === 'royale') {
+      h += '<p class="small muted">⚔️ Battle Royale: ginásios fechados. Cada Centro Pokémon cura você só uma vez.</p>';
+    } else if (gym) {
       const lv = gym.team.map(t => t[1]);
       h += p.badges.includes(gym.id) ? `<p class="small">🎖️ Você já tem a ${esc(gym.badge)}.</p>`
         : `<button class="btn primary block" data-act="gym" ${s.turnFlags.gym ? 'disabled' : ''}>🏟️ Desafiar ${esc(gym.leader)} (Nv. ${Math.min(...lv)}–${Math.max(...lv)})</button>`;
     }
-    if (sp.id === ELITE_SPACE) {
+    if (sp.id === ELITE_SPACE && (s.rules || 'classic') === 'classic') {
       h += p.badges.length >= BADGES_TO_LEAGUE && p.eliteStage < ELITE_FOUR.length
         ? `<button class="btn purple block" data-act="league" ${s.turnFlags.gym ? 'disabled' : ''}>👑 Enfrentar a Elite dos Quatro (${p.eliteStage}/4)</button><p class="tiny muted">4 batalhas seguidas, sem cura. Perder reinicia o desafio.</p>`
         : p.eliteStage >= ELITE_FOUR.length ? `<p class="small">👑 Elite vencida! Vá à Arena Final.</p>` : '';
     }
-    if (sp.id === CHAMPION_SPACE) {
+    if (sp.id === CHAMPION_SPACE && (s.rules || 'classic') === 'classic') {
       h += p.eliteStage >= ELITE_FOUR.length
         ? `<button class="btn red block pulse" data-act="league" ${s.turnFlags.gym ? 'disabled' : ''}>🏆 Desafiar o Campeão</button>`
         : `<p class="small muted">Vença a Elite dos Quatro na Liga Pokémon primeiro.</p>`;
@@ -381,12 +416,64 @@ export function mountGame(root, session, opts = {}) {
     panel.style.display = s.kind === 'duel' ? 'none' : '';
     if (s.kind === 'duel') return;
     const viewer = p || s.players[s.current];
+    const mp = root.querySelector('#g-modepanel');
+    if (mp) mp.innerHTML = modePanelHtml(s, viewer);
     const list = badgeStatus(s, viewer);
     root.querySelector('#g-badge-count').textContent = `${viewer.badges.length}/${list.length}${viewer.badges.length >= list.length ? ' · Liga liberada!' : ''}`;
     root.querySelector('#g-badges').innerHTML = list.map(g => `<div class="badge-item ${g.owned ? 'owned' : 'missing'} ${g.next ? 'next' : ''}" data-act="goto-gym" data-space="${g.space}" title="${esc(g.leader)} · ${esc(typeLabel(g.type))}">
       <img src="${badgeUrl(g.id)}" alt=""><b>${esc(g.city.replace(' City', '').replace(' Island', ''))}</b>
       <span class="tiny">${g.owned ? '✔ conquistada' : g.dist !== null ? `${g.next ? '➜ ' : ''}${g.dist} casas` : '—'}</span></div>`).join('');
     renderMissions(s, viewer);
+  }
+
+  /** Painel do modo: Battle Royale (vivos e tempestade) ou Conquista (cidades). */
+  function modePanelHtml(s, viewer) {
+    if (s.rules === 'royale') {
+      const R = s.royale;
+      const alive = alivePlayers(s);
+      const me = stormAt(s, viewer.pos);
+      return `<div class="mode-box royale"><div class="spread"><b>⚔️ Battle Royale</b><span class="tiny">${alive.length}/${s.players.length} vivos</span></div>
+        <div class="small">🌀 Área segura: até <b>${R.ring}</b> casa${R.ring === 1 ? '' : 's'} de <b class="link" data-act="goto-gym" data-space="${R.center}" style="color:#8ff0bd;cursor:pointer">🎯 ${esc(getSpace(R.center).name)}</b>${s.turn < 3 ? ' · fecha a partir da rodada 3' : ''}</div>
+        <div class="small ${me.in ? 'bad' : me.soon ? 'warn' : 'good'}">${me.in ? '⚠️ Você está NA tempestade — a equipe perde HP a cada rodada!' : me.soon ? '⚠️ A tempestade chega aqui na próxima rodada!' : '✅ Você está na área segura.'}</div>
+        <div class="row" style="gap:4px;margin-top:6px;flex-wrap:wrap">${s.players.map(pl => `<span class="chip ${pl.out ? 'red' : ''}" style="${pl.out ? '' : 'border-color:' + playerColor(s, pl.id)}">${pl.out ? '💀' : '❤️'} ${esc(pl.name)}${pl.out ? ` (${pl.place}º)` : ''}</span>`).join('')}</div></div>`;
+    }
+    if (s.rules === 'conquest') {
+      const rank = [...s.players].sort((a, b) => citiesOf(s, b.id) - citiesOf(s, a.id));
+      return `<div class="mode-box conquest"><div class="spread"><b>🏰 Conquista</b><span class="tiny">até o turno ${s.options.turnLimit}</span></div>
+        <div class="conq-list">${GYMS.map(g => {
+          const o = ownerOf(s, g.id), gar = s.conquest.garrison[g.id];
+          return `<div class="conq-city" data-act="goto-gym" data-space="${g.space}" style="--oc:${o ? playerColor(s, o) : '#777'}">
+            <b>${esc(g.city.replace(' City', '').replace(' Island', ''))}</b><span class="tiny">${o ? esc(nameOf(o)) : 'neutra'} · ${esc(typeLabel(g.type))} +10%</span>
+            <span class="conq-gar">${o ? (gar.length ? gar.map(m => `<img src="${monSprite(m)}" alt="" title="${esc(speciesName(m.sp))} Nv.${m.lvl} ${m.hp}/${maxHpOf(m)}" style="${m.hp <= 0 ? 'filter:grayscale(1);opacity:.4' : ''}">`).join('') : '🛡️') : `👤 ${esc(g.leader)}`}</span></div>`;
+        }).join('')}</div>
+        <div class="row" style="gap:4px;margin-top:6px;flex-wrap:wrap">${rank.map(pl => `<span class="chip" style="border-color:${playerColor(s, pl.id)}">🏰 ${citiesOf(s, pl.id)} · ${esc(pl.name)}</span>`).join('')}</div></div>`;
+    }
+    return '';
+  }
+
+  /** Conquista: escolher até 3 Pokémon (equipe ou PC) para defender a cidade. */
+  function renderGarrison(s, p) {
+    const pend = s.pending;
+    const mine = pend?.kind === 'garrison' && pend.pid === p?.id && session.canAct(p.id);
+    if (!mine) { closeModal('garrison'); ui.garrisonPick = null; return; }
+    if (document.getElementById('garrison')) return;
+    ui.garrisonPick = [];
+    const gym = GYMS.find(g => g.id === pend.city);
+    const old = s.conquest.garrison[pend.city];
+    const all = [...p.team.map(m => ({ m, where: 'Equipe' })), ...old.map(m => ({ m, where: 'Guarnição' })), ...p.box.map(m => ({ m, where: 'PC' }))];
+    const body = () => `<p class="small">Escolha até <b>${GARRISON_MAX}</b> Pokémon para defender <b>${esc(gym.city)}</b>. Eles saem da sua equipe/PC e lutam sozinhos (CPU) contra quem atacar. Sem ninguém, fica a guarda da cidade (fraca). A equipe precisa manter pelo menos 1 de pé.</p>
+      <div class="gar-grid">${all.map(({ m, where }) => `<div class="gar-card ${ui.garrisonPick.includes(m.uid) ? 'on' : ''}" data-act="gar-pick" data-uid="${esc(m.uid)}">
+        <img src="${monSprite(m)}" alt=""><b>${esc(m.nick || speciesName(m.sp))}</b><span class="tiny">Nv.${m.lvl} · ${m.hp}/${maxHpOf(m)} HP · ${where}</span></div>`).join('')}</div>
+      <button class="btn primary block" data-act="gar-ok" style="margin-top:8px">🛡️ Confirmar guarnição (${ui.garrisonPick.length}/${GARRISON_MAX})</button>`;
+    const ov = openModal('garrison', '🏰 Guarnição da cidade', body(), { wide: true, closable: false });
+    bindActions(ov, {
+      'gar-pick': d => {
+        const i = ui.garrisonPick.indexOf(d.uid);
+        if (i >= 0) ui.garrisonPick.splice(i, 1); else if (ui.garrisonPick.length < GARRISON_MAX) ui.garrisonPick.push(d.uid);
+        setModalBody('garrison', body());
+      },
+      'gar-ok': () => { const uids = ui.garrisonPick.slice(); closeModal('garrison'); act({ type: 'garrison', uids }); }
+    });
   }
 
   function renderMissions(s, viewer) {
@@ -399,7 +486,7 @@ export function mountGame(root, session, opts = {}) {
     root.querySelector('#g-players').innerHTML = s.players.map((pl, i) => `
       <div class="list-item" data-act="trainer" data-pid="${esc(pl.id)}" style="cursor:pointer;${s.current === i ? 'border-color:' + playerColor(s, pl.id) : ''}">
         ${avatarImg(pl, 'avatar sm', playerColor(s, pl.id))}
-        <div class="grow"><b style="color:${playerColor(s, pl.id)}">${esc(pl.name)}</b>${pl.companion && COMPANIONS[pl.companion] ? ` <span class="chip" title="${esc(COMPANIONS[pl.companion].desc)}">${COMPANIONS[pl.companion].icon} ${esc(COMPANIONS[pl.companion].name)}</span>` : ''}${pl.isBot ? ' <span class="chip">CPU</span>' : ''}${pl.left ? ' <span class="chip red">saiu</span>' : ''}${pl.cosmetic?.title ? `<div class="player-title">${esc(pl.cosmetic.title)}</div>` : ''}
+        <div class="grow"><b style="color:${playerColor(s, pl.id)}">${esc(pl.name)}</b>${pl.companion && COMPANIONS[pl.companion] ? ` <span class="chip" title="${esc(COMPANIONS[pl.companion].desc)}">${COMPANIONS[pl.companion].icon} ${esc(COMPANIONS[pl.companion].name)}</span>` : ''}${pl.isBot ? ' <span class="chip">CPU</span>' : ''}${pl.left ? ' <span class="chip red">saiu</span>' : ''}${pl.out ? ` <span class="chip red">💀 ${pl.place}º</span>` : ''}${s.rules === 'conquest' ? ` <span class="chip">🏰 ${citiesOf(s, pl.id)}</span>` : ''}${pl.cosmetic?.title ? `<div class="player-title">${esc(pl.cosmetic.title)}</div>` : ''}
           <div class="tiny muted">📍 ${esc(getSpace(pl.pos).name)} · 🪙 ${pl.gold} · 🎖️ ${pl.badges.length} · 📖 ${pl.caught.length}${pl.eliteStage ? ` · 👑 ${pl.eliteStage}/4` : ''}${pl.skip ? ' · ⏸️' : ''}</div></div>
         <div class="row" style="gap:2px">${pl.team.slice(0, 6).map(m => `<img src="${monSprite(m)}" alt="${esc(speciesName(m.sp))}" style="width:24px;height:24px;object-fit:contain;${m.hp <= 0 ? 'filter:grayscale(1);opacity:.5' : ''}">`).join('')}</div>
       </div>`).join('');
@@ -530,13 +617,17 @@ export function mountGame(root, session, opts = {}) {
       bindActions(ov, { exit: () => { closeModal('over'); onExit(); } });
       return;
     }
-    const ranked = [...s.players].sort((a, b) => score(b) - score(a));
+    const ranked = s.rules === 'royale' ? [...s.players].sort((a, b) => (a.place || 1) - (b.place || 1))
+      : s.rules === 'conquest' ? [...s.players].sort((a, b) => citiesOf(s, b.id) - citiesOf(s, a.id) || score(b) - score(a))
+      : [...s.players].sort((a, b) => score(b) - score(a));
     victoryFx(vicOf(s, w?.id), 1);
+    const extraTh = s.rules === 'royale' ? '<th>Lugar</th>' : s.rules === 'conquest' ? '<th>Cidades</th>' : '';
+    const extraTd = p => s.rules === 'royale' ? `<td><b>${p.place || 1}º</b></td>` : s.rules === 'conquest' ? `<td><b>🏰 ${citiesOf(s, p.id)}</b></td>` : '';
     const ov = openModal('over', '🏆 Fim de jogo', `
       <div class="banner-win">${w ? avatarImg(w, 'avatar') : ''}<h2>${esc(w ? w.name : '—')} venceu!</h2>
       <p class="muted">${esc(s.log.filter(l => l.kind === 'win').slice(-1)[0]?.msg || '')}</p></div>
-      <table class="score"><tr><th>Treinador</th><th>Insígnias</th><th>Pokédex</th><th>Shinies</th><th>Pontos</th>${s.ratingChanges ? '<th>Rating</th>' : ''}</tr>
-      ${ranked.map(p => { const d = s.ratingChanges?.[p.id]; return `<tr><td>${esc(p.name)}</td><td>${p.badges.length}</td><td>${p.caught.length}</td><td>${p.stats.shinies}</td><td><b>${score(p)}</b></td>${s.ratingChanges ? `<td style="color:${d >= 0 ? '#8ff0bd' : '#ff9b9e'}"><b>${d >= 0 ? '+' : ''}${d ?? 0}</b></td>` : ''}</tr>`; }).join('')}</table>
+      <table class="score"><tr><th>Treinador</th>${extraTh}<th>Insígnias</th><th>Pokédex</th><th>Shinies</th><th>Pontos</th>${s.ratingChanges ? '<th>Rating</th>' : ''}</tr>
+      ${ranked.map(p => { const d = s.ratingChanges?.[p.id]; return `<tr><td>${esc(p.name)}</td>${extraTd(p)}<td>${p.badges.length}</td><td>${p.caught.length}</td><td>${p.stats.shinies}</td><td><b>${score(p)}</b></td>${s.ratingChanges ? `<td style="color:${d >= 0 ? '#8ff0bd' : '#ff9b9e'}"><b>${d >= 0 ? '+' : ''}${d ?? 0}</b></td>` : ''}</tr>`; }).join('')}</table>
       ${session.kind === 'online' ? '<p class="small muted">Seus Pokémon (equipe e PC), Pokédex e estatísticas foram salvos na sua conta — veja em 📦 Coleção.</p>' : '<p class="small muted">Modo offline: o progresso não vai para a conta.</p>'}
       <button class="btn primary block" data-act="exit" style="margin-top:10px">Voltar ao menu</button>`);
     bindActions(ov, { exit: () => { closeModal('over'); onExit(); } });

@@ -10,6 +10,8 @@ import { against, bestAttack, effectivenessLabel, TYPE_LABELS } from './types.js
 import { monMoves, STAB } from '../data/moves.js';
 import { companionBonus, progressMission } from './missions.js';
 import { weatherMult, weatherInflict, weatherChip, weatherOf } from './weather.js';
+import { conquestMult } from './modeBonus.js';
+import { GYMS } from '../data/trainers.js';
 import { statsOf, maxHpOf, gainXp, xpReward, healMon } from './monsters.js';
 import {
   fail, getPlayer, log, fx, takeItem, giveMon, markSeen, healthyIndex, hasHealthy, speciesName, canUse, usableIndex, badgesNeeded
@@ -467,7 +469,8 @@ function attackDamage(state, rng, si, slot = 0) {
   const cb = companionBonus(state, si);
   const compMult = cb?.types?.includes(type) ? 1 + cb.dmg : 1; // bônus do companheiro (ex.: Misty em golpes de Água)
   const wMult = weatherMult(state, type); // clima (ex.: Chuva +30% em Água)
-  let dmg = mult === 0 ? 0 : Math.max(1, Math.round((atk * 0.7 + roll) * (move.power || 1) * stab * mult * critMod * compMult * wMult));
+  const cqMult = atkSide.kind === 'player' ? conquestMult(state, atkSide.pid, type, GYMS) : 1; // Conquista: cidades dominadas
+  let dmg = mult === 0 ? 0 : Math.max(1, Math.round((atk * 0.7 + roll) * (move.power || 1) * stab * mult * critMod * compMult * wMult * cqMult));
   dmg = Math.min(dmg, d.hp);
   d.hp -= dmg;
   let drained = 0;

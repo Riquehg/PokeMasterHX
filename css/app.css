@@ -1137,3 +1137,33 @@ body.in-game #social { bottom: 70px; }
 .wall-item.shiny .wi-mon { filter: drop-shadow(0 0 6px #ffd34d); }
 .wi-av { width: 16px; height: 16px; border-radius: 50%; vertical-align: middle; }
 @media (max-width: 760px) { #wall { bottom: 64px; } .wall-fab { padding: 7px 11px; font-size: 12px; } }
+
+/* ===== Battle Royale ===== */
+.stage-noimg .space.storm { box-shadow: 0 0 0 3px rgba(150, 70, 230, .85), 0 0 12px rgba(150, 70, 230, .8); filter: saturate(.4) brightness(.7); }
+.stage-noimg .space.storm-soon { box-shadow: 0 0 0 3px rgba(255, 170, 60, .9); animation: stormSoon 1s ease-in-out infinite; }
+.stage-noimg .space.storm-center { box-shadow: 0 0 0 4px #3fd46b, 0 0 20px 6px rgba(63, 212, 107, .7); }
+@keyframes stormSoon { 50% { box-shadow: 0 0 0 5px rgba(255, 120, 40, .4); } }
+.board-stage.royale .layer-weather-tint { box-shadow: inset 0 0 120px 30px rgba(110, 40, 170, .45); }
+.token.out { filter: grayscale(1) brightness(.6); opacity: .65; }
+.token.out::after { content: "💀"; position: absolute; left: 50%; top: -6px; transform: translateX(-50%); font-size: 16px; }
+.mode-box { padding: 8px 10px; border-radius: 12px; margin-bottom: 8px; border: 1px solid rgba(255, 255, 255, .12); background: rgba(255, 255, 255, .04); }
+.mode-box.royale { border-color: rgba(150, 70, 230, .6); background: linear-gradient(135deg, rgba(110, 40, 170, .18), rgba(0, 0, 0, .15)); }
+.mode-box.conquest { border-color: rgba(244, 194, 91, .5); background: linear-gradient(135deg, rgba(244, 194, 91, .10), rgba(0, 0, 0, .15)); }
+.mode-box .bad { color: #ff9b9e; font-weight: 800; } .mode-box .warn { color: #ffcf7a; font-weight: 800; } .mode-box .good { color: #8ff0bd; }
+/* ===== Conquista ===== */
+.conq-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+.conq-city { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: 10px; background: rgba(0, 0, 0, .25); border-left: 4px solid var(--oc); cursor: pointer; font-size: 12px; }
+.conq-gar { display: flex; gap: 2px; align-items: center; min-height: 24px; font-size: 11px; }
+.conq-gar img { width: 24px; height: 24px; object-fit: contain; }
+.conq-flag { position: absolute; transform: translate(-10%, -125%) scale(var(--ms, 1)); transform-origin: 10% 125%; z-index: 9; pointer-events: auto; cursor: help; }
+.cf-pole { position: absolute; left: 0; top: 0; width: 3px; height: 34px; background: #3b2b1d; border-radius: 2px; }
+.cf-cloth { position: absolute; left: 3px; top: 0; padding: 2px 6px; font-size: 13px; background: var(--fc); border-radius: 0 6px 6px 0; box-shadow: 0 2px 6px rgba(0, 0, 0, .5); animation: flagWave 2s ease-in-out infinite; transform-origin: 0 50%; }
+.conq-flag.neutral .cf-cloth { color: #fff; }
+.cf-gar { position: absolute; left: 6px; top: 22px; font-size: 10px; font-weight: 900; white-space: nowrap; background: rgba(0, 0, 0, .75); color: #fff; padding: 0 4px; border-radius: 6px; }
+@keyframes flagWave { 50% { transform: skewY(-6deg) scaleX(.94); } }
+.pk-card.pickable { cursor: pointer; } .pk-card.pickable.on { outline: 3px solid var(--gold); box-shadow: 0 0 14px rgba(244, 194, 91, .6); }
+
+.gar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.gar-card { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; padding: 8px; border-radius: 12px; cursor: pointer; background: rgba(255, 255, 255, .04); border: 2px solid rgba(255, 255, 255, .1); font-size: 12px; }
+.gar-card img { width: 56px; height: 56px; object-fit: contain; }
+.gar-card.on { border-color: var(--gold); box-shadow: 0 0 14px rgba(244, 194, 91, .55); background: rgba(244, 194, 91, .12); }
