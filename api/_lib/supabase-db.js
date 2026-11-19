@@ -218,6 +218,9 @@ export const supabaseDb = {
   async insertFeed(row) {
     check(await admin().from('global_feed').insert(row));
   },
+  async listFeedKinds(kinds, limit = 15) {
+    return check(await admin().from('global_feed').select('*').in('kind', kinds).order('id', { ascending: false }).limit(limit));
+  },
   async listFeed(sinceId = 0, limit = 20) {
     return check(await admin().from('global_feed').select('*').gt('id', sinceId).order('id', { ascending: false }).limit(limit));
   },

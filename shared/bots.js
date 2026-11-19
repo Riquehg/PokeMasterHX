@@ -8,12 +8,14 @@ import { GYMS, gymAt, ELITE_FOUR, ELITE_SPACE, CHAMPION_SPACE, BADGES_TO_LEAGUE,
 import { bestAttack } from './rules/types.js';
 import { maxHpOf, WILD_LEVELS, TEAM_SIZE } from './rules/monsters.js';
 import { distancesFrom } from './rules/movement.js';
+import { SPACE_LIST } from './data/board.js';
+const citySpaces = () => SPACE_LIST.filter(s => s.type === 'city').map(s => s.id);
 import { getPlayer, currentPlayer, canUse } from './rules/helpers.js';
 import { sideTeam, sideActive, sideIndexOf, bestMoveSlot, expectedDamage, CAPTURE_TARGET } from './rules/battle.js';
 import { monMoves } from './data/moves.js';
 import { statsOf } from './rules/monsters.js';
 
-const CITY_SPACES = [5, 20, 39, 60, 70, 91, 95, 107, 114, 122, 124];
+
 
 function hpRatio(m) {
   return m.hp / maxHpOf(m);

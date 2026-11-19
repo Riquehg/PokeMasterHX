@@ -1,5 +1,5 @@
 // Tela da partida: tabuleiro com zoom, painel de ações, equipe, jogadores, log/chat, batalha e fila de animações.
-import { getSpace } from '../../shared/data/board.js';
+import { getSpace, useStateMap } from '../../shared/data/board.js';
 import { GYMS, gymAt, ELITE_SPACE, CHAMPION_SPACE, ELITE_FOUR, BADGES_TO_LEAGUE } from '../../shared/data/trainers.js';
 import { ITEMS } from '../../shared/data/items.js';
 import { whoMustAct, score, AFK_SECONDS } from '../../shared/engine.js';
@@ -8,7 +8,7 @@ import { monSprite, typeLabel } from '../config.js';
 import { monCard, playerColor, avatarImg, speciesName } from './common.js';
 import { battleHtml, outcomeText, playBattleFx } from './battle.js';
 import { BoardView } from './board.js';
-import { anim, rollDice, turnBanner, eventCard, battleIntro, captureAnim, confetti, evolutionAnim, victoryFx } from './fx.js';
+import { anim, rollDice, turnBanner, eventCard, battleIntro, captureAnim, confetti, evolutionAnim, victoryFx, miniCapture } from './fx.js';
 const vicOf = (s, pid) => s?.players?.find(x => x.id === pid)?.cosmetic?.victory || null;
 import * as M from './modals.js';
 import { renderTrades } from './trade.js';
@@ -17,13 +17,16 @@ import { badgeUrl } from '../config.js';
 import { missionsHtml, companionHtml, openCompanionPicker } from './missions.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
 import { renderRaid } from './raid.js';
+import { WeatherLayer, weatherChipHtml } from './weather.js';
+import { WEATHERS } from '../../shared/rules/weather.js';
 
-const BATTLE_FX = new Set(['hit', 'heal', 'faint', 'switch', 'status', 'status_dmg', 'status_skip', 'status_cure', 'buff', 'debuff']);
+const BATTLE_FX = new Set(['hit', 'heal', 'faint', 'switch', 'status', 'status_dmg', 'status_skip', 'status_cure', 'buff', 'debuff', 'weather_dmg']);
 const SPEEDS = [[1, '🎬 Animações: normal'], [2, '⚡ Animações: rápidas'], [0, '⏭️ Animações: desligadas']];
 
 export function mountGame(root, session, opts = {}) {
   const { onExit } = opts;
   const ui = {
+    autoWatch: (() => { try { return !!localStorage.getItem('pmhx_autowatch'); } catch { return false; } })(),
     tab: 'log', mtab: 'team', battleSub: null, spectate: false, afkTimer: null, overShown: false,
     shown: session.state, queue: [], playing: false, listeners: new Set(), lastBattleSeen: session.state?.lastBattle?.fxSeq ?? 0
   };
@@ -31,7 +34,7 @@ export function mountGame(root, session, opts = {}) {
   root.innerHTML = `
     <div id="game" data-mtab="team">
       <header class="topbar">
-        <div class="row"><h1>Pokémon Master Trainer HEX</h1><span class="chip" id="g-mode"></span><span class="chip gold" id="g-turn"></span></div>
+        <div class="row"><h1>Pokémon Master Trainer HEX</h1><span class="chip" id="g-mode"></span><span class="chip gold" id="g-turn"></span><span id="g-weather"></span></div>
         <div class="stats" id="g-stats"></div>
         <div class="row tb-btns">
           <button class="btn sm" data-act="open-bag" title="Mochila">🎒<span class="lbl-txt"> Mochila</span></button>
@@ -124,6 +127,7 @@ export function mountGame(root, session, opts = {}) {
   }
 
   async function playFx(prev, next) {
+    useStateMap(next);
     if (!prev || next.fxSeq === prev.fxSeq || !anim.speed) return;
     const fxs = next.fx || [];
     const v = vid();
@@ -166,7 +170,11 @@ export function mountGame(root, session, opts = {}) {
             const escaped = fxs.slice(i + 1).some(x => x.k === 'battle_end' && x.result === 'escaped');
             closeModal('battle');
             await captureAnim(f, { escaped });
-          } else if (f.ok) toast(`🔴 ${nameOf(f.pid)} capturou ${speciesName(f.sp)}${f.shiny ? ' ✨' : ''}!`, 'good');
+          } else if (ui.spectate || f.raid) {
+            // assistindo: a mesma animação da Pokébola, com o nome de quem jogou
+            const escaped = fxs.slice(i + 1).some(x => x.k === 'battle_end' && x.result === 'escaped');
+            await captureAnim(f, { escaped, who: nameOf(f.pid), ballName: ITEMS[f.ball]?.name });
+          } else miniCapture(f, nameOf(f.pid), ITEMS[f.ball]?.name);
           break;
         case 'turn':
           await turnBanner({ player: next.players.find(x => x.id === f.pid), color: playerColor(next, f.pid), mine: f.pid === v && session.canAct(f.pid), turn: f.turn });
@@ -187,6 +195,11 @@ export function mountGame(root, session, opts = {}) {
               effects: f.rewards.map(t => ({ text: t, tone: 'good', icon: '🎁' })), trainer: f.companion ? { name: '', sprite: COMPANIONS[f.companion]?.sprite } : undefined }, { name: nameOf(f.pid), mine: true });
           } else toast(`🎯 ${nameOf(f.pid)} completou uma missão!`, 'info');
           break;
+        case 'weather': {
+          const W = WEATHERS[f.id];
+          toast(`${W.icon} O clima mudou: ${W.name}! ${W.desc}`, 'info');
+          break;
+        }
         case 'hotspot': {
           const nm = { chest: '🎁 Baú do Tesouro', raid: '🔥 Raid Relâmpago', mystery: '❔ Pokémon Misterioso' }[f.kind];
           toast(`${nm} apareceu em ${getSpace(f.space).name}! Pare lá em até ${f.rounds} rodadas.`, 'good');
@@ -222,6 +235,7 @@ export function mountGame(root, session, opts = {}) {
     root.querySelector('#game')?.classList.toggle('duel', session.state?.kind === 'duel');
     const s = S();
     if (!s) return;
+    useStateMap(s); // mapa da partida (Kanto ou Expedição)
     const p = me();
     const must = whoMustAct(s);
     const cur = s.players[s.current];
@@ -230,6 +244,8 @@ export function mountGame(root, session, opts = {}) {
     const mo = session.match?.options || {};
     root.querySelector('#g-mode').textContent = session.kind !== 'online' ? '📱 Offline' : mo.solo ? '🤖 Treino (salva na conta)' : `🌐 Sala ${session.match?.code || ''} · ${{ balanced: '⚖️ Balanceado', collection: '📦 Coleção', ranked: '🏆 Competitivo' }[mo.mode] || ''}`;
     root.querySelector('#g-turn').textContent = `Turno ${s.turn}${s.options.turnLimit ? '/' + s.options.turnLimit : ''}`;
+    const wc = root.querySelector('#g-weather');
+    if (wc) wc.innerHTML = s.kind === 'duel' ? '' : weatherChipHtml(s);
     root.querySelector('#g-speed').textContent = SPEEDS.find(x => x[0] === anim.speed)?.[1].split(' ')[0] || '🎬';
     root.querySelector('#g-stats').innerHTML = p ? `
       <span class="stat stat-name">${avatarImg(p, 'avatar sm', playerColor(s, p.id))} ${esc(p.name)}</span>
@@ -427,25 +443,34 @@ export function mountGame(root, session, opts = {}) {
       return;
     }
     const inIt = b.sides.some(x => x.pid === p?.id);
+    // "assistir sempre": abre sozinho cada batalha nova dos outros (até fechar)
+    const bKey = `${s.turn}:${b.sides[0].pid}:${b.kind}`;
+    if (!inIt && ui.autoWatch && ui.dismissedBattle !== bKey) ui.spectate = true;
+    ui.battleKey = bKey;
     if (inIt || ui.spectate) {
       mini.style.display = 'none';
       const html = battleHtml(s, p?.id, { sub: ui.battleSub }, !!p && session.canAct(p.id));
       const open = document.getElementById('battle');
       if (open) open.querySelector('.body').innerHTML = html;
       else {
-        const ov = openModal('battle', '⚔️ Batalha', html, { wide: true, closable: !inIt, onClose: () => { ui.spectate = false; render(); } });
+        const ov = openModal('battle', inIt ? '⚔️ Batalha' : `👀 Assistindo: ${nameOf(b.sides[0].pid)}`, html, { wide: true, closable: !inIt, onClose: () => { ui.spectate = false; ui.dismissedBattle = ui.battleKey; render(); } });
         ov.querySelector('.modal').classList.add('battle');
         bindActions(ov, battleHandlers);
       }
       const lg = document.getElementById('battle-log');
       if (lg) lg.scrollTop = lg.scrollHeight;
+      // clima também na arena
+      const arena = document.getElementById('arena');
+      if (arena && !arena.querySelector('.weather-canvas')) { ui.arenaWeather?.destroy(); ui.arenaWeather = new WeatherLayer(arena, { density: 0.7 }); }
+      ui.arenaWeather?.set(s.weather?.id || 'clear');
     } else {
       closeModal('battle');
       mini.style.display = '';
       const foe = b.sides[1];
       mini.innerHTML = `<b>⚔️ Batalha em andamento</b><div class="small muted">${esc(nameOf(b.sides[0].pid))} vs ${esc(foe.kind === 'player' ? nameOf(foe.pid) : foe.kind === 'wild' ? speciesName(foe.team[0].sp) + ' selvagem' : foe.name)}</div>
         <div class="tiny" style="margin-top:4px">${b.log.slice(-3).map(esc).join('<br>')}</div>
-        <button class="btn sm blue block" data-act="spectate" style="margin-top:6px">👀 Assistir a batalha</button>`;
+        <button class="btn sm blue block" data-act="spectate" style="margin-top:6px">👀 Assistir a batalha</button>
+        <label class="tiny row" style="gap:6px;margin-top:6px;cursor:pointer"><input type="checkbox" data-act="auto-watch" ${ui.autoWatch ? 'checked' : ''}> Abrir sempre as batalhas dos outros</label>`;
     }
   }
 
@@ -536,6 +561,7 @@ export function mountGame(root, session, opts = {}) {
     'open-help': () => M.openHelp(),
     'open-battle': () => render(),
     spectate: () => { ui.spectate = true; render(); },
+    'auto-watch': (d, el) => { ui.autoWatch = !ui.autoWatch; try { localStorage.setItem('pmhx_autowatch', ui.autoWatch ? '1' : ''); } catch { /* ok */ } if (ui.autoWatch) { ui.spectate = true; render(); } },
     'comp-open': () => { const p = me(); if (p) openCompanionPicker({ owned: p.companions || [], current: p.companion, onPick: id => act({ type: 'set_companion', id }) }); },
     'show-over': () => showOver(S()),
     trainer: d => M.openTrainer(viewSession(), d.pid),

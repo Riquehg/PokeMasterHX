@@ -22,7 +22,7 @@ export class LocalSession extends Emitter {
   }
 
   static create({ players, options }) {
-    const state = createMatch({ mode: 'local', seed: randomSeed(), now: Date.now(), players, options });
+    const state = createMatch({ mode: 'local', seed: randomSeed(), now: Date.now(), players, options, map: options?.map });
     const s = new LocalSession(state);
     s.save();
     return s;

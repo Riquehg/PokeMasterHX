@@ -196,7 +196,9 @@ export function xpReward(foe, isTrainer) {
 export function rollWild(rng, tier, opts = {}) {
   // Tier estável: a cor da casa define o tier (Rosa 1 · Verde 2 · Azul 3 · Vermelha 4 · Amarela 5)
   const pool = speciesByTier(tier);
-  let speciesId = rng.pick(pool).id;
+  // ambiente da casa e clima puxam alguns tipos (ex.: mar → Água, caverna → Pedra, chuva → Água)
+  const favor = opts.favorTypes?.length && rng.chance(opts.favorChance ?? 0.45) ? pool.filter(s => s.types.some(t => opts.favorTypes.includes(t))) : null;
+  let speciesId = rng.pick(favor?.length ? favor : pool).id;
 
   // Pokémon do Dia: 25% de chance de aparecer, mas só nas casas do tier dele
   const daily = opts.dailyPokemon && getSpecies(opts.dailyPokemon);

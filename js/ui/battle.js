@@ -240,6 +240,12 @@ export async function playBattleFx(fxList) {
         arena.appendChild(e); setTimeout(() => e.remove(), 950);
       }
       await wait(650);
+    } else if (f.k === 'weather_dmg') {
+      const s = sprite(f.uid);
+      const icon = { snow: '🌨️', sand: '🏜️' }[f.weather] || '☁️';
+      if (s) float(arena, s, `${icon} -${f.dmg}`, 'crit');
+      const box = arena.querySelector(`.hpbox[data-uid="${f.uid}"]`); if (box) setHp(box, f.hpAfter, f.maxHp);
+      await wait(550);
     } else if (f.k === 'status' || f.k === 'status_dmg' || f.k === 'status_skip' || f.k === 'status_cure') {
       const s = sprite(f.uid);
       const S = STATUS[f.status] || { icon: '✨', name: 'Curado', color: '#3fd46b' };

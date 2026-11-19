@@ -257,6 +257,11 @@ export async function mpWebhook(db, body, req) {
 
 // ------------------------------------------------------------------ feed global e avisos
 export async function feedOp(db, body) {
+  // mural do início: últimas capturas de lendários e shinies
+  if (body.kinds === 'captures') {
+    const rows = db.listFeedKinds ? await db.listFeedKinds(['shiny', 'legendary'], 15) : [];
+    return { captures: rows.map(r => ({ id: r.id, kind: r.kind, text: r.text, sp: r.data?.sp, shiny: !!r.data?.shiny, name: r.data?.name, avatar: r.data?.avatar, at: r.created_at })) };
+  }
   const since = Math.max(0, Number(body.since) || 0);
   const events = await db.listFeed(since, 20);
   return { events };

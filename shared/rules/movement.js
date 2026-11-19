@@ -1,6 +1,7 @@
 // Movimento no tabuleiro: destinos a exatamente N casas (sem voltar pelo mesmo caminho),
-// respeitando casas que exigem um tipo na equipe e a entrada da Liga (6 insígnias).
-import { SPACES, getSpace } from '../data/board.js';
+// respeitando casas que exigem uma habilidade (Surf, Cortar...) na equipe e a entrada da Liga (6 insígnias).
+import { SPACES, getSpace, GATES } from '../data/board.js';
+import { monMoves } from '../data/moves.js';
 import { BADGES_TO_LEAGUE, LEAGUE_GATE_SPACES } from '../data/trainers.js';
 import { getSpecies } from '../data/pokemon.js';
 
@@ -8,11 +9,23 @@ export function canEnter(player, spaceId) {
   const sp = getSpace(spaceId);
   if (!sp) return false;
   if (LEAGUE_GATE_SPACES.includes(sp.id) && player.badges.length < BADGES_TO_LEAGUE) return false;
-  if (sp.requiredType) {
-    const ok = player.team.some(m => m.hp > 0 && getSpecies(m.sp).types.includes(sp.requiredType));
-    if (!ok) return false;
-  }
+  if (sp.gate && !hasGate(player, sp.gate)) return false;
   return true;
+}
+
+/** Tem algum Pokémon de pé com o tipo da habilidade (ou um golpe desse tipo)? */
+export function hasGate(player, gateId) {
+  const g = GATES[gateId];
+  if (!g) return true;
+  return player.team.some(m => m.hp > 0 && (getSpecies(m.sp).types.some(t => g.types.includes(t)) || monMoves(m).some(mv => g.types.includes(mv.type))));
+}
+
+/** Quem da equipe abre o caminho (para mostrar "Lapras usou Surf!"). */
+export function gateUser(player, gateId) {
+  const g = GATES[gateId];
+  if (!g) return null;
+  return player.team.find(m => m.hp > 0 && getSpecies(m.sp).types.some(t => g.types.includes(t)))
+    || player.team.find(m => m.hp > 0 && monMoves(m).some(mv => g.types.includes(mv.type))) || null;
 }
 
 /** Todas as casas a exatamente `steps` passos. Se nenhuma existir, cai para o maior passo possível. */

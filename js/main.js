@@ -9,6 +9,7 @@ import { startNotifications } from './ui/notify.js';
 import { startSocial } from './ui/social.js';
 import { cupScreen } from './ui/tournament.js';
 import { initInstall } from './ui/install.js';
+import { showWall } from './ui/wall.js';
 import { installSpriteFallback } from './config.js';
 
 const app = document.getElementById('app');
@@ -37,6 +38,7 @@ function fresh() {
 async function go(screen, arg) {
   if (net.user) startSocial(ctx);
   document.body.classList.toggle('in-game', screen === 'online' || screen === 'local');
+  showWall(screen === 'hub' && !!net.user);
   const el = fresh();
   try {
     switch (screen) {

@@ -1,3 +1,4 @@
+import { MAP_CHOICES } from '../../shared/data/board.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
 import { openCompanionPicker } from './missions.js';
 // Telas fora da partida: login, hub do treinador, lobby online, sala de espera, partida local, coleção, ranking e admin.
@@ -140,7 +141,7 @@ export async function hubScreen(root, ctx) {
             <button class="btn sm" data-act="edit" ${profile ? '' : 'disabled'}>✏️</button>
             <button class="btn sm blue" data-act="dshop" ${profile ? '' : 'disabled'}><span class="diamonds">💎 ${profile?.diamonds || 0}</span> Loja</button>
             ${isStandalone() ? '' : '<button class="btn sm install-btn" data-act="install" title="Instalar o app no celular / PC">📲 App</button>'}
-            <span class="chip gold" title="Ouro da conta: ganho no fim de cada partida salva. Use no Mercado.">🪙 ${profile?.gold || 0}</span>
+            <span class="chip gold" title="Ouro da conta: ganho no fim de cada partida salva. Use no Mercado, no Centro de Treino (🏋️ na Coleção) ou leve para partidas do modo Coleção.">🪙 ${profile?.gold || 0}</span>
           </div>
         </div>
         <div class="daily"><img src="${monSprite(daily)}" alt="${esc(dsp?.name)}"><div><div class="tiny" style="color:var(--gold)">⭐ POKÉMON DO DIA</div><b>${esc(dsp?.name)}</b> ${typeChips(dsp?.types || [])}
@@ -210,27 +211,31 @@ export async function hubScreen(root, ctx) {
 }
 
 function soloModal(profile, ctx) {
-  const st = { bots: 2, turnLimit: 60, useTeam: false, starter: 'charmander', team: [] };
+  const st = { bots: 2, turnLimit: 60, useTeam: false, starter: 'charmander', team: [], map: 'kanto', bring: 0 };
   const body = () => `
     <div class="grid2">
       <div class="field"><label>Adversários (CPU)</label><select class="input" id="s-bots">${[1, 2, 3, 4, 5].map(n => `<option ${n === st.bots ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
       <div class="field"><label>Duração</label><select class="input" id="s-turns"><option value="30" ${st.turnLimit === 30 ? 'selected' : ''}>Rápida (30 turnos)</option><option value="60" ${st.turnLimit === 60 ? 'selected' : ''}>Normal (60 turnos)</option><option value="0" ${st.turnLimit === 0 ? 'selected' : ''}>Completa (até o Campeão)</option></select></div>
+      <div class="field"><label>Mapa</label><select class="input" id="s-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (st.map) ? 'selected' : ''} title="${esc(m.desc)}">${m.id === 'gen' ? '🧭' : '🗺️'} ${m.name}</option>`).join('')}</select></div>
     </div>
     <div class="tabs" style="margin:10px 0"><button class="btn sm ${!st.useTeam ? 'primary' : ''}" data-act="use-starter">🌱 Começar com inicial</button><button class="btn sm ${st.useTeam ? 'primary' : ''}" data-act="use-team">📦 Levar time da Coleção</button></div>
-    ${st.useTeam ? teamPicker(profile?.vault, st.team, 0) : starterPicker(st.starter)}
+    ${st.useTeam ? teamPicker(profile?.vault, st.team, 0) + `
+      <div class="bring-gold"><b>🪙 Levar ouro da conta</b> <span class="tiny muted">(você tem ${profile?.gold || 0}; o que sobrar volta no fim)</span>
+                <div class="row" style="gap:4px;margin-top:4px">${[0, 300, 600, 1000, 2000].map(v => `<button class="btn sm ${(st.bring) === v ? 'primary' : ''}" data-act="s-bring" data-v="${v}" ${v > (profile?.gold || 0) ? 'disabled' : ''}>${v ? v : 'Nada'}</button>`).join('')}</div></div>` : starterPicker(st.starter)}
     <button class="btn primary block" data-act="go" style="margin-top:10px">▶ Começar treino</button>`;
   const ov = openModal('solo', '🤖 Treino contra CPUs', body(), { wide: true });
-  const keep = () => { st.bots = Number(ov.querySelector('#s-bots').value); st.turnLimit = Number(ov.querySelector('#s-turns').value); };
+  const keep = () => { st.bots = Number(ov.querySelector('#s-bots').value); st.turnLimit = Number(ov.querySelector('#s-turns').value); st.map = ov.querySelector('#s-map').value; };
   const re = () => { keep(); setModalBody('solo', body()); };
   bindActions(ov, {
     'use-starter': () => { st.useTeam = false; re(); },
     'use-team': () => { st.useTeam = true; re(); },
     starter: d => { st.starter = d.id; re(); },
     pick: d => { togglePick(st.team, d.uid); re(); },
+    's-bring': d => { st.bring = Number(d.v); re(); },
     go: async () => {
       keep();
       try {
-        const { match } = await api('match', { op: 'solo', bots: st.bots, turnLimit: st.turnLimit, starter: st.starter, teamUids: st.useTeam ? st.team : [] });
+        const { match } = await api('match', { op: 'solo', bots: st.bots, turnLimit: st.turnLimit, map: st.map, bringGold: st.useTeam ? st.bring : 0, starter: st.starter, teamUids: st.useTeam ? st.team : [] });
         closeModal('solo');
         ctx.openOnline(match.id);
       } catch (e) { toast(e.message, 'bad'); }
@@ -249,7 +254,7 @@ function collectionModal(profile, onChange) {
         <button class="btn sm ${filter === 'shiny' ? 'primary' : ''}" data-act="f" data-f="shiny">✨ Shiny (${all.filter(m => m.shiny).length})</button>
         <button class="btn sm ${filter === 'fav' ? 'primary' : ''}" data-act="f" data-f="fav">⭐ Favoritos</button>
         <button class="btn sm ${filter === 'pot' ? 'primary' : ''}" data-act="f" data-f="pot">📈 Maior potencial</button></div>
-      <div class="pk-grid">${list.map(m => statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px"><button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar">✕</button></div>` })).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div>`;
+      <div class="pk-grid">${list.map(m => statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px"><button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="train" data-uid="${esc(m.uid)}" title="Centro de Treino: subir nível com ouro da conta">🏋️</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar">✕</button></div>` })).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div>`;
   };
   const ov = openModal('vault', `📦 Coleção (${(profile?.vault || []).length}/${cap()})`, body(), { wide: true });
   const op = async (o, uid) => {
@@ -259,6 +264,7 @@ function collectionModal(profile, onChange) {
   bindActions(ov, {
     f: d => { filter = d.f; setModalBody('vault', body()); },
     fav: d => op('favorite', d.uid),
+    train: d => trainModal(profile, d.uid, np => { profile = np; setModalBody('vault', body()); onChange(profile); }),
     nick: async d => {
       if (!profile?.stats?.nicknames) return toast('Apelidos são liberados na 💎 Loja de Diamantes → Conveniência.', 'info');
       const m = (profile.vault || []).find(x => x.uid === d.uid);
@@ -315,6 +321,7 @@ export async function lobbyScreen(root, ctx) {
         <div class="grid2">
           <div class="field"><label>Jogadores</label><select class="input" id="c-max">${[2, 3, 4, 5, 6, 8].map(n => `<option ${n === 4 ? 'selected' : ''}>${n}</option>`).join('')}</select><div class="tiny muted">8 só na Copa · Duelo é sempre 2</div></div>
           <div class="field"><label>Duração</label><select class="input" id="c-turns"><option value="30">Rápida (30 turnos)</option><option value="40">Competitiva (40 turnos)</option><option value="60" selected>Normal (60 turnos)</option><option value="0">Completa (até o Campeão)</option></select></div>
+          <div class="field"><label>Mapa</label><select class="input" id="c-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === ('kanto') ? 'selected' : ''} title="${esc(m.desc)}">${m.id === 'gen' ? '🧭' : '🗺️'} ${m.name}</option>`).join('')}</select></div>
         </div>
         <div class="field hidden" id="c-cap-f"><label>Nível máximo dos Pokémon levados</label><select class="input" id="c-cap"><option value="0">Sem limite</option><option value="15">15</option><option value="25">25</option><option value="35">35</option><option value="45">45</option></select></div>
         <div class="grid2">
@@ -347,7 +354,7 @@ export async function lobbyScreen(root, ctx) {
   };
   const go = async p => { try { const { match } = await p; ctx.openRoom(match.id); } catch (e) { toast(e.message, 'bad'); } };
   bindActions(root, {
-    create: () => go(api('match', { op: 'create', name: v('#c-name'), mode: v('#c-mode'), maxPlayers: Number(v('#c-max')), turnLimit: Number(v('#c-turns')), levelCap: Number(v('#c-cap')), pin: v('#c-pin'), isPublic: v('#c-pub') === '1' })),
+    create: () => go(api('match', { op: 'create', name: v('#c-name'), mode: v('#c-mode'), maxPlayers: Number(v('#c-max')), turnLimit: Number(v('#c-turns')), levelCap: Number(v('#c-cap')), map: v('#c-map'), pin: v('#c-pin'), isPublic: v('#c-pub') === '1' })),
     'join-code': () => go(api('match', { op: 'join', code: v('#j-code'), pin: v('#j-pin') })),
     join: d => go(api('match', { op: 'join', matchId: d.id, pin: d.pin ? prompt('PIN da sala:') || '' : '' })),
     refresh: load,
@@ -380,10 +387,11 @@ export async function roomScreen(root, ctx, matchId) {
       <div class="hub-grid">
         <div class="card col">
           <div class="spread"><h3>🏟️ ${esc(match.name)}</h3><span class="chip gold" style="font-size:14px">Código: ${esc(match.code)}</span></div>
-          <div class="row">${modeChip(mode, o.levelCap)}<span class="small muted">${o.maxPlayers} jogadores · ${o.turnLimit ? o.turnLimit + ' turnos' : 'até o Campeão'} ${match.hasPin ? '· 🔒 PIN' : ''}</span></div>
+          <div class="row">${modeChip(mode, o.levelCap)}<span class="small muted">${o.maxPlayers} jogadores · ${o.turnLimit ? o.turnLimit + ' turnos' : 'até o Campeão'} · ${o.map === 'gen' ? '🧭 Expedição' : '🗺️ Kanto'} ${match.hasPin ? '· 🔒 PIN' : ''}</span></div>
           <div class="tiny muted">${esc(MODE_INFO[mode]?.desc || '')}</div>
           ${isHost ? `<div class="grid2">
             <select class="input" id="o-mode">${Object.entries(MODE_INFO).map(([k, m]) => `<option value="${k}" ${k === mode ? 'selected' : ''}>${m.icon} ${m.name}</option>`).join('')}</select>
+            <select class="input" id="o-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (o.map || 'kanto') ? 'selected' : ''}>${m.id === 'gen' ? '🧭' : '🗺️'} ${m.name}</option>`).join('')}</select>
             <select class="input" id="o-turns">${[[30, 'Rápida (30)'], [40, 'Competitiva (40)'], [60, 'Normal (60)'], [0, 'Completa']].map(([v, l]) => `<option value="${v}" ${v === (o.turnLimit || 0) ? 'selected' : ''}>${l}</option>`).join('')}</select>
             ${TEAM_MODES.includes(mode) ? `<select class="input" id="o-cap">${[[0, 'Sem limite de nível'], [15, 'Nível máx 15'], [25, 'Nível máx 25'], [35, 'Nível máx 35'], [45, 'Nível máx 45'], [50, 'Nível máx 50']].map(([v, l]) => `<option value="${v}" ${v === (o.levelCap || 0) ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}
           </div>` : ''}
@@ -402,7 +410,10 @@ export async function roomScreen(root, ctx, matchId) {
           ${TEAM_MODES.includes(mode)
             ? mode === 'collection' ? `<h3>📦 Seu time (até 6 da Coleção)</h3>
               <p class="tiny muted">O resto da sua Coleção vai para o PC da partida (troque numa cidade). Regra das insígnias vale para todos: tier 3 precisa de 2, tier 4 de 3 e tier 5 (lendários) de 4 para lutar. Se nenhum do seu time obedecer sem insígnias, o inicial escolhido abaixo entra junto.</p>
-              ${teamPicker(profile?.vault, picks, o.levelCap || 0)}<h3 style="margin-top:8px">${picks.length ? 'Inicial (entra se precisar)' : 'ou um inicial'}</h3>${starterPicker(mine?.starter)}`
+              ${teamPicker(profile?.vault, picks, o.levelCap || 0)}
+              <div class="bring-gold"><b>🪙 Levar ouro da conta</b> <span class="tiny muted">(você tem ${profile?.gold || 0}; o que sobrar volta no fim)</span>
+                <div class="row" style="gap:4px;margin-top:4px">${[0, 300, 600, 1000, 2000].map(v => `<button class="btn sm ${(mine?.bringGold || 0) === v ? 'primary' : ''}" data-act="bring" data-v="${v}" ${v > (profile?.gold || 0) ? 'disabled' : ''}>${v ? v : 'Nada'}</button>`).join('')}</div></div>
+              <h3 style="margin-top:8px">${picks.length ? 'Inicial (entra se precisar)' : 'ou um inicial'}</h3>${starterPicker(mine?.starter)}`
               : `<h3>⚔️ Seu time de batalha (até 6)</h3>
               <p class="tiny muted">Duelos não têm tabuleiro nem insígnias: todos obedecem. Nível limitado a ${o.levelCap || 50}. Se não escolher, vão os 6 mais fortes da Coleção. Kit igual para todos: 2 Poções, 1 Super Poção e 1 Revive.</p>
               ${teamPicker(profile?.vault, picks, o.levelCap || 0)}`
@@ -419,7 +430,7 @@ export async function roomScreen(root, ctx, matchId) {
       const text = root.querySelector('#r-msg').value.trim();
       if (text) await op({ op: 'chat', text });
     });
-    const sendOpts = () => op({ op: 'options', mode: root.querySelector('#o-mode').value, turnLimit: Number(root.querySelector('#o-turns').value), levelCap: Number(root.querySelector('#o-cap')?.value || 0) });
+    const sendOpts = () => op({ op: 'options', mode: root.querySelector('#o-mode').value, map: root.querySelector('#o-map')?.value, turnLimit: Number(root.querySelector('#o-turns').value), levelCap: Number(root.querySelector('#o-cap')?.value || 0) });
     root.querySelectorAll('#o-mode, #o-turns, #o-cap').forEach(el => el.addEventListener('change', sendOpts));
   };
 
@@ -445,6 +456,7 @@ export async function roomScreen(root, ctx, matchId) {
       op({ op: 'update', teamUids: togglePick([...(mine?.teamUids || [])], d.uid) });
     },
     ready: () => op({ op: 'update', ready: !match.lobby.find(e => e.id === meId)?.ready }),
+    bring: d => op({ op: 'update', bringGold: Number(d.v) }),
     bot: () => op({ op: 'add_bot' }),
     kick: d => op({ op: 'remove', target: d.id }),
     start: () => op({ op: 'start' }),
@@ -587,7 +599,7 @@ export function localSetupScreen(root, ctx) {
     { name: 'Jogador 1', avatar: 1, starter: 'charmander', isBot: false },
     { name: 'CPU Gary', avatar: 4, starter: 'squirtle', isBot: true }
   ];
-  let turnLimit = 60;
+  let turnLimit = 60, mapId = 'kanto';
   let editing = 0;
   const render = () => {
     const e = players[editing];
@@ -600,6 +612,7 @@ export function localSetupScreen(root, ctx) {
               ${players.length > 1 ? `<button class="btn sm red" data-act="del" data-i="${i}">✕</button>` : ''}</div>`).join('')}</div>
           <div class="grid2"><button class="btn sm" data-act="add-human" ${players.length >= 6 ? 'disabled' : ''}>+ Humano</button><button class="btn sm" data-act="add-bot" ${players.length >= 6 ? 'disabled' : ''}>+ CPU</button></div>
           <div class="field"><label>Duração</label><select class="input" id="ls-turns"><option value="30" ${turnLimit === 30 ? 'selected' : ''}>Rápida (30 turnos)</option><option value="60" ${turnLimit === 60 ? 'selected' : ''}>Normal (60 turnos)</option><option value="0" ${turnLimit === 0 ? 'selected' : ''}>Completa (até o Campeão)</option></select></div>
+          <div class="field"><label>Mapa</label><select class="input" id="ls-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (mapId) ? 'selected' : ''} title="${esc(m.desc)}">${m.id === 'gen' ? '🧭' : '🗺️'} ${m.name}</option>`).join('')}</select></div>
           <button class="btn primary" data-act="start">▶ Começar</button>
           <button class="btn ghost" data-act="back">← Voltar</button>
         </div>
@@ -614,6 +627,7 @@ export function localSetupScreen(root, ctx) {
     root.querySelector('#ls-name').addEventListener('change', render);
     root.querySelector('#ls-bot').addEventListener('change', ev => { players[editing].isBot = ev.target.checked; render(); });
     root.querySelector('#ls-turns').addEventListener('change', ev => { turnLimit = Number(ev.target.value); });
+    root.querySelector('#ls-map').addEventListener('change', ev => { mapId = ev.target.value; });
   };
   bindActions(root, {
     edit: d => { editing = Number(d.i); render(); },
@@ -628,11 +642,40 @@ export function localSetupScreen(root, ctx) {
       const s = LocalSession.create({
         players: players.map((p, i) => ({ id: 'p' + (i + 1), name: p.name, avatar: p.avatar, starter: p.starter, isBot: p.isBot,
           cosmetic: !p.isBot && i === players.findIndex(q => !q.isBot) ? ctx.myCosmetic : null })),
-        options: { dailyPokemon: ctx.daily, turnLimit }
+        options: { dailyPokemon: ctx.daily, turnLimit, map: mapId }
       });
       ctx.openLocal(s);
     },
     back: () => ctx.go(net.user ? 'hub' : 'login')
   });
   render();
+}
+
+
+/** 🏋️ Centro de Treino: sobe níveis de um Pokémon da Coleção gastando ouro da conta (até o Nv. 50). */
+const TRAIN_MAX = 50;
+const trainCost = lvl => 15 * lvl + 20;
+function trainModal(profile, uid, onDone) {
+  const m = (profile.vault || []).find(x => x.uid === uid);
+  if (!m) return;
+  const sp = getSpecies(m.sp);
+  const costTo = n => { let c = 0; for (let l = m.lvl; l < Math.min(TRAIN_MAX, m.lvl + n); l++) c += trainCost(l); return c; };
+  const gold = profile.gold || 0;
+  const opts = [1, 3, 5, 10].filter(n => m.lvl + 1 <= TRAIN_MAX);
+  const evo = sp.evolvesTo && sp.evolutionLevel ? `<p class="small">✨ Evolui para <b>${esc(getSpecies(sp.evolvesTo).name)}</b> no Nv. ${sp.evolutionLevel}.</p>` : '';
+  const html = m.lvl >= TRAIN_MAX ? `<p>${esc(sp.name)} já está no Nv. ${m.lvl}. O Centro de Treino vai até o Nv. ${TRAIN_MAX} — daqui pra frente, só batalhando nas partidas!</p>`
+    : `<div class="row"><img src="${monSprite(m)}" style="width:80px;height:80px;object-fit:contain"><div><b>${esc(m.nick || sp.name)}</b> · Nv. ${m.lvl}<div class="small muted">Ouro da conta: 🪙 ${gold}</div></div></div>${evo}
+      <p class="small muted">Treinar não muda o potencial (IV) nem a natureza — só o nível. Vai até o Nv. ${TRAIN_MAX}.</p>
+      <div class="grid2">${opts.map(n => { const to = Math.min(TRAIN_MAX, m.lvl + n), c = costTo(n); return `<button class="btn ${c <= gold ? 'primary' : ''}" data-act="do-train" data-n="${n}" ${c > gold ? 'disabled' : ''}>+${to - m.lvl} nível${to - m.lvl > 1 ? 'is' : ''} → Nv. ${to}<br><span class="tiny">🪙 ${c}</span></button>`; }).join('')}</div>`;
+  const ov = openModal('train', '🏋️ Centro de Treino', html);
+  bindActions(ov, {
+    'do-train': async d => {
+      try {
+        const r = await api('profile', { op: 'train', uid, levels: Number(d.n) });
+        closeModal('train');
+        toast(r.evolved ? `✨ ${sp.name} evoluiu para ${getSpecies(r.evolved).name}! (−🪙${r.cost})` : `🏋️ Treino concluído! (−🪙${r.cost})`, 'good');
+        onDone({ ...r.profile, gold: r.gold });
+      } catch (e) { toast(e.message, 'bad'); }
+    }
+  });
 }

@@ -1,11 +1,11 @@
 // Lógica do backend, independente de infraestrutura.
 // Recebe um "db" (adaptador Supabase em produção, memória no servidor de desenvolvimento/testes).
-import { createMatch, applyAction, score, MAX_PLAYERS, fillTraits } from '../../shared/engine.js';
+import { createMatch, applyAction, score, MAX_PLAYERS, fillTraits, BRING_GOLD_OPTIONS } from '../../shared/engine.js';
 import { randomSeed } from '../../shared/rules/rng.js';
 import { ELO_TIERS } from '../../shared/data/elo.js';
 import { CUP_MAX_PLAYERS, DUEL_LEVEL_CAP } from '../../shared/data/cup.js';
 import { duelQueue, duelQueueStatus, duelQueueCancel, duelTeam, startCup, duelFinished } from './tournament.js';
-import { SPECIES, STARTERS } from '../../shared/data/pokemon.js';
+import { SPECIES, STARTERS, getSpecies } from '../../shared/data/pokemon.js';
 import { dailyPokemon } from '../../shared/daily.js';
 import { cleanNick } from '../../shared/data/cosmetics.js';
 import { equippedCosmetic, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment } from './shop.js';
@@ -99,9 +99,18 @@ export async function mutateProfile(db, id, fn) {
 
 /** Ouro da conta ganho ao fim de uma partida salva no servidor. */
 export function accountGoldReward(state, p) {
-  const base = Math.floor(Math.max(0, p.gold) / 10) + 40 * p.badges.length + (state.winner === p.id ? 150 : 0) + (p.champion ? 250 : 0);
+  // o ouro trazido da conta volta à parte (refundBrought); só o ouro ganho na partida vira recompensa
+  const earned = Math.max(0, p.gold - (p.broughtGold || 0));
+  const base = Math.floor(earned / 10) + 40 * p.badges.length + (state.winner === p.id ? 150 : 0) + (p.champion ? 250 : 0);
   return Math.min(1200, base);
 }
+
+/** Devolve o que sobrou do ouro trazido da conta (até o valor trazido). */
+export const refundBrought = p => Math.max(0, Math.min(p.gold, p.broughtGold || 0));
+
+/** Centro de Treino: custo em ouro da conta para subir 1 nível (cresce com o nível). */
+export const TRAIN_MAX_LEVEL = 50;
+export const trainCost = lvl => 15 * lvl + 20;
 
 async function withCosmetic(db, prof) {
   let cosmetic = null;
@@ -140,6 +149,34 @@ export async function profileOp(db, user, body) {
       st.companion = id;
       return { stats: st };
     }).then(x => withCosmetic(db, x)) };
+  }
+  if (body.op === 'train') {
+    // Centro de Treino: gasta ouro da conta para subir níveis de um Pokémon da Coleção (até o Nv. 50)
+    const levels = Math.max(1, Math.min(10, Number(body.levels) || 1));
+    const mon = (p.vault || []).find(m => m.uid === body.uid);
+    if (!mon) bad('Pokémon não encontrado na Coleção.');
+    if (mon.lvl >= TRAIN_MAX_LEVEL) bad(`O Centro de Treino vai até o Nv. ${TRAIN_MAX_LEVEL}. Daqui pra frente, só batalhando!`);
+    const target = Math.min(TRAIN_MAX_LEVEL, mon.lvl + levels);
+    let cost = 0;
+    for (let l = mon.lvl; l < target; l++) cost += trainCost(l);
+    const paid = await db.walletAdd(user.id, 0, -cost);
+    if (!paid) bad(`Ouro insuficiente: precisa de ${cost}.`);
+    let evolved = null;
+    const prof = await mutateProfile(db, user.id, cur => {
+      const vault = (cur.vault || []).map(m => {
+        if (m.uid !== body.uid) return m;
+        let sp = m.sp;
+        // evolui como numa batalha, se passar do nível de evolução
+        for (let k = 0; k < 2; k++) {
+          const S = getSpecies(sp);
+          if (S?.evolvesTo && S.evolutionLevel && target >= S.evolutionLevel) { sp = S.evolvesTo; evolved = sp; } else break;
+        }
+        return { ...m, lvl: target, sp };
+      });
+      const pokedex = evolved && !(cur.pokedex || []).includes(evolved) ? [...(cur.pokedex || []), evolved] : cur.pokedex;
+      return { vault, ...(pokedex !== cur.pokedex ? { pokedex } : {}) };
+    });
+    return { profile: await withCosmetic(db, prof), cost, evolved, gold: paid.gold };
   }
   if (body.op === 'nickname') {
     if (!p.stats?.nicknames) bad('Apelidos são liberados na Loja de Diamantes (Conveniência).');
@@ -296,6 +333,8 @@ function normalizeOptions(body, prev = {}) {
   if (body.turnLimit !== undefined) o.turnLimit = Math.max(0, Math.min(200, Number(body.turnLimit) || 0));
   o.turnLimit = o.turnLimit ?? 60;
   if (body.levelCap !== undefined) o.levelCap = Math.max(0, Math.min(60, Number(body.levelCap) || 0));
+  if (body.map !== undefined) o.map = body.map === 'gen' ? 'gen' : 'kanto'; // Kanto ou Expedição (mapa gerado)
+  o.map = o.map || 'kanto';
   o.levelCap = o.levelCap || 0;
   if (o.mode === 'ranked' && !o.turnLimit) o.turnLimit = 40; // competitivo sempre termina
   if ((o.mode === 'duel' || o.mode === 'cup') && !o.levelCap) o.levelCap = DUEL_LEVEL_CAP;
@@ -353,6 +392,14 @@ export async function matchOp(db, user, body) {
         const uids = [...new Set((Array.isArray(body.teamUids) ? body.teamUids : []).map(String))].slice(0, 6);
         if (uids.some(u => !owned.has(u))) bad('Algum Pokémon não está na sua Coleção.');
         me.teamUids = uids;
+      }
+      if (body.bringGold !== undefined) {
+        if (mode !== 'collection') bad('Só dá para levar ouro em partidas do modo Coleção.');
+        const v = Number(body.bringGold) || 0;
+        if (!BRING_GOLD_OPTIONS.includes(v)) bad('Valor inválido.');
+        const prof = await getOrCreateProfile(db, user);
+        if ((prof.gold || 0) < v) bad(`Você tem só ${prof.gold || 0} de ouro na conta.`);
+        me.bringGold = v;
       }
       if (body.ready !== undefined) me.ready = !!body.ready;
       return save(db, row, { lobby }, user.id);
@@ -420,6 +467,11 @@ async function startRoom(db, row, lobby, userId) {
       p.teamMons = e.teamUids.map(u => vault.find(v => v.uid === u)).filter(Boolean)
         .map(v => ({ ...v, lvl: options.levelCap ? Math.min(options.levelCap, v.lvl) : v.lvl }));
     }
+    if (mode === 'collection' && !e.isBot && e.bringGold > 0) {
+      // tira o ouro da conta agora; o que sobrar volta no fim da partida
+      const paid = db.walletAdd ? await db.walletAdd(e.id, 0, -e.bringGold).catch(() => null) : null;
+      if (paid) p.bringGold = e.bringGold;
+    }
     if (mode === 'collection' && !e.isBot) {
       // PC da partida = Coleção inteira (o que não está no time), com o mesmo limite de nível
       const team = new Set(e.teamUids || []);
@@ -437,7 +489,7 @@ async function startRoom(db, row, lobby, userId) {
     }
   }
   const state = createMatch({
-    id: row.id, mode: 'online', seed: randomSeed(), now: Date.now(), players,
+    id: row.id, mode: 'online', seed: randomSeed(), now: Date.now(), players, map: options.map,
     options: { dailyPokemon: await currentDaily(db), turnLimit: options.turnLimit || 0, trades: mode !== 'ranked' }
   });
   state.roomMode = mode;
@@ -449,7 +501,7 @@ async function startRoom(db, row, lobby, userId) {
 async function createRoom(db, user, body) {
   const profile = await getOrCreateProfile(db, user);
   const name = cleanName(body.name, `Sala de ${profile.trainer_name}`).slice(0, 30);
-  const options = normalizeOptions({ mode: body.mode, maxPlayers: body.maxPlayers, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap });
+  const options = normalizeOptions({ mode: body.mode, maxPlayers: body.maxPlayers, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap, map: body.map });
   if (options.mode === 'solo') options.mode = 'balanced';
   const pin = String(body.pin || '').replace(/\D/g, '').slice(0, 6);
   const row = await insertRoom(db, user, { name, options, isPublic: body.isPublic !== false, pin, lobby: [lobbyEntry(profile, body)] });
@@ -479,11 +531,15 @@ async function createSolo(db, user, body) {
   const profile = await getOrCreateProfile(db, user);
   const bots = Math.max(1, Math.min(5, Number(body.bots) || 1));
   const useCollection = Array.isArray(body.teamUids) && body.teamUids.length > 0;
-  const options = normalizeOptions({ mode: useCollection ? 'collection' : 'balanced', maxPlayers: bots + 1, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap || 0 });
+  const options = normalizeOptions({ mode: useCollection ? 'collection' : 'balanced', maxPlayers: bots + 1, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap || 0, map: body.map });
   const entry = lobbyEntry(profile, body);
   if (useCollection) {
     const owned = new Set((profile.vault || []).map(v => v.uid));
     entry.teamUids = [...new Set(body.teamUids.map(String))].filter(u => owned.has(u)).slice(0, 6);
+  }
+  if (useCollection && BRING_GOLD_OPTIONS.includes(Number(body.bringGold)) && Number(body.bringGold) > 0) {
+    if ((profile.gold || 0) < Number(body.bringGold)) bad(`Você tem só ${profile.gold || 0} de ouro na conta.`);
+    entry.bringGold = Number(body.bringGold);
   }
   const lobby = [entry];
   for (let i = 0; i < bots; i++) lobby.push(botEntry(i));
@@ -617,7 +673,7 @@ export async function recordResults(db, state, options = {}) {
       patch.rating = Math.max(100, (prof.rating ?? START_RATING) + (deltas[p.id] || 0));
     }
     await db.upsertProfile(p.id, patch);
-    const coins = accountGoldReward(state, p);
+    const coins = accountGoldReward(state, p) + refundBrought(p);
     if (coins > 0 && db.walletAdd) {
       try { await db.walletAdd(p.id, 0, coins); } catch (e) { console.error('[gold]', e.message); }
     }

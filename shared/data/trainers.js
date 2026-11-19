@@ -18,9 +18,24 @@ export const GYMS = [
     team: [['koffing', 25], ['muk', 27], ['weezing', 29]] }
 ];
 
-export const ELITE_SPACE = 114;
-export const CHAMPION_SPACE = 124;
+// Casas da Liga e dos ginásios mudam com o mapa ativo (ver shared/data/board.js → useMap).
+export let ELITE_SPACE = 114;
+export let CHAMPION_SPACE = 124;
 export const LEAGUE_GATE_SPACES = [107, 114, 124]; // exigem 6 insígnias
+const KANTO_CITY = Object.fromEntries(GYMS.map(g => [g.id, g.city]));
+
+/** Chamado por useMap(): coloca ginásios, Liga e Campeão nas casas do mapa. */
+export function setLeagueSpaces(map) {
+  ELITE_SPACE = map.elite;
+  CHAMPION_SPACE = map.champion;
+  LEAGUE_GATE_SPACES.length = 0;
+  LEAGUE_GATE_SPACES.push(...map.leagueGates);
+  for (const g of GYMS) {
+    g.space = map.gyms[g.id];
+    const sp = map.spaces.find(s => s.id === g.space);
+    g.city = map.id === 'kanto' ? KANTO_CITY[g.id] : sp?.name || g.city;
+  }
+}
 
 export const ELITE_FOUR = [
   { name: 'Lorelei', title: 'Elite dos Quatro', sprite: 'leaders/lorelei.png', team: [['dewgong', 30], ['cloyster', 31], ['lapras', 32]] },

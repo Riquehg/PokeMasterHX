@@ -161,6 +161,7 @@ export function createMemoryDb() {
       return [...payments.values()].filter(p => !userId || p.user_id === userId).sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, limit).map(copy);
     },
     async insertFeed(row) { feed.push({ id: feed.length + 1, created_at: new Date().toISOString(), data: {}, ...copy(row) }); },
+    async listFeedKinds(kinds, limit = 15) { return feed.filter(f => kinds.includes(f.kind)).slice(-limit).reverse().map(copy); },
     async listFeed(since = 0, limit = 20) { return feed.filter(f => f.id > since).slice(-limit).reverse().map(copy); },
     async getConfig(k) { return copy(config.get(k) ?? null); },
     async setConfig(k, v) { config.set(k, copy(v)); }

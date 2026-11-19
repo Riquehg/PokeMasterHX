@@ -9,7 +9,8 @@
 // =====================================================================================
 
 import { SPECIES, getSpecies, STARTERS } from './data/pokemon.js';
-import { SPACE_LIST, getSpace, START_SPACE } from './data/board.js';
+import { SPACE_LIST, getSpace, START_SPACE, useMap, useStateMap, BIOMES } from './data/board.js';
+import { tickWeather, weatherSpawn, weatherRare } from './rules/weather.js';
 import { ITEMS, getItem, shopFor, STARTING_ITEMS, STARTING_GOLD } from './data/items.js';
 import {
   GYMS, gymAt, ELITE_FOUR, CHAMPION, ELITE_SPACE, CHAMPION_SPACE, ROUTE_TRAINERS, ROCKET, BADGES_TO_LEAGUE, BADGE_REWARDS, ACE_TRAINERS
@@ -44,6 +45,9 @@ export const MAX_PLAYERS = 6;
  */
 export function createMatch(config) {
   const rng = createRng(config.seed);
+  // mapa: 'kanto' (padrão) ou 'gen' = Expedição, um mapa novo gerado pela semente da partida
+  const mapId = config.kind === 'duel' ? 'kanto' : config.map === 'gen' ? `gen:${(rng.state ^ 0x2545f491) >>> 0}` : String(config.map || 'kanto').startsWith('gen:') ? config.map : 'kanto';
+  useMap(mapId);
   const players = (config.players || []).map((p, i) => newPlayer(rng, { ...p, duel: config.kind === 'duel' }, i));
   if (players.length < 1) fail('A partida precisa de pelo menos 1 jogador.');
   if (players.length > MAX_PLAYERS) fail(`Máximo de ${MAX_PLAYERS} jogadores.`);
@@ -52,6 +56,8 @@ export function createMatch(config) {
     id: config.id || 'local',
     mode: config.mode || 'local',
     status: 'playing',
+    map: mapId,
+    weather: { id: 'clear', until: 3 },
     seed: rng.state,
     turn: 1,
     current: 0,
@@ -85,6 +91,8 @@ export function createMatch(config) {
 }
 
 export const MAX_BOX = 300;
+/** Quanto ouro da conta dá para levar numa partida com time da Coleção. */
+export const BRING_GOLD_OPTIONS = [0, 300, 600, 1000, 2000];
 
 function hashStr(str) {
   let h = 2166136261;
@@ -138,7 +146,8 @@ function newPlayer(rng, cfg, index) {
     pos: START_SPACE,
     lastCity: START_SPACE,
     visited: [START_SPACE],
-    gold: STARTING_GOLD,
+    gold: STARTING_GOLD + BRING_GOLD_OPTIONS.reduce((m, v) => (Number(cfg.bringGold) === v ? v : m), 0), // ouro trazido da conta (modo Coleção)
+    broughtGold: BRING_GOLD_OPTIONS.includes(Number(cfg.bringGold)) ? Number(cfg.bringGold) : 0,
     items: { ...STARTING_ITEMS },
     team: brought.length ? brought : [mon],
     companions: (Array.isArray(cfg.companions) ? cfg.companions : []).filter(id => COMPANIONS[id]),
@@ -183,6 +192,7 @@ function detectEvolutions(prev, next) {
 }
 
 export function applyAction(prevState, actorId, action, ctx = {}) {
+  useStateMap(prevState);
   const state = clone(prevState);
   const rng = createRng(state.seed);
   const now = Number(ctx.now) || 0;
@@ -206,6 +216,7 @@ export function applyAction(prevState, actorId, action, ctx = {}) {
 /** Quem precisa agir agora? Retorna lista de ids. Usado pela UI e pelos bots. */
 export function whoMustAct(state) {
   if (state.status !== 'playing') return [];
+  useStateMap(state);
   if (state.raid) return raidWaiting(state);
   if (state.pending?.kind === 'pvp_invite') return [state.pending.to];
   const b = state.battle;
@@ -351,6 +362,7 @@ function advanceTurn(state, now) {
       state.current = 0;
       state.turn += 1;
       tickHotspots(state);
+      tickWeather(state, fx, log);
     }
     const np = currentPlayer(state);
     if (np.skip > 0) {
@@ -691,7 +703,10 @@ function wildEncounter(state, rng, p, sp, tier, opts = {}) {
   let mon = opts.mon || (opts.fresh ? null : state.board[sp.id]);
   if (opts.mon) state.board[sp.id] = mon;
   if (!mon) {
-    mon = rollWild(rng, tier, { dailyPokemon: state.options.dailyPokemon, shinyCharm: !!p.items.shiny_charm });
+    // neblina: às vezes aparece um Pokémon de um tier acima
+    const rare = weatherRare(state) && rng.chance(weatherRare(state)) ? Math.min(4, tier + 1) : tier;
+    const favorTypes = [...(BIOMES[sp.biome]?.spawn || []), ...weatherSpawn(state)];
+    mon = rollWild(rng, rare, { dailyPokemon: state.options.dailyPokemon, shinyCharm: !!p.items.shiny_charm, favorTypes });
     state.board[sp.id] = mon;
   } else {
     log(state, `👀 O ${speciesName(mon.sp)} que já estava aqui continua à espreita (HP ${mon.hp}/${maxHpOf(mon)}).`);
@@ -1132,6 +1147,7 @@ setBattleEndHandler((state, rng, b, outcome) => {
 
 // ------------------------------------------------------------------ bots
 export function runBots(state, rng, now) {
+  useStateMap(state);
   for (let guard = 0; guard < 400; guard++) {
     if (state.status !== 'playing') break;
     const ids = whoMustAct(state);
@@ -1253,3 +1269,9 @@ export const _internals = {
     return st;
   }
 };
+
+// os auxiliares de teste também ativam o mapa da partida antes de rodar
+for (const k of Object.keys(_internals)) {
+  const f = _internals[k];
+  if (typeof f === 'function') _internals[k] = (st, ...a) => { useStateMap(st); return f(st, ...a); };
+}

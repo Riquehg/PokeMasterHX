@@ -180,11 +180,12 @@ function sparkle(box, n = 14) {
 const BALL_COLORS = { poke_ball: '#e33', great_ball: '#2f6fe0', ultra_ball: '#222', master_ball: '#8a3ed8', flame_ball: '#ff7a1a',
   aqua_ball: '#29a3e0', volt_ball: '#f0cf1a', shadow_ball: '#5b2b8a', mystic_ball: '#e05bb7', rainbow_ball: '#ff5f5f' };
 
-export async function captureAnim(f, { escaped }) {
+export async function captureAnim(f, { escaped, who = null, ballName = '' } = {}) {
   if (!anim.speed) return;
   const el = layer('dim');
   const name = getSpecies(f.sp).name;
   el.innerHTML = `<div class="cap-stage">
+      ${who ? `<div class="cap-who">👀 ${esc(who)} jogou ${esc(ballName || 'uma Pokébola')}!</div>` : ''}
       <img class="target ${f.shiny ? 'shiny' : ''}" src="${monSprite(f.sp, f.shiny)}" alt="${esc(name)}">
       <div class="pball throw" style="--ball:${BALL_COLORS[f.ball] || '#e33'}"></div>
       <div class="cap-dots"><i></i><i></i><i></i></div>
@@ -205,12 +206,13 @@ export async function captureAnim(f, { escaped }) {
   if (f.ok) {
     ball.classList.add('locked');
     sparkle(el.querySelector('.sparkles'), 18);
-    text.textContent = `🎉 ${name} foi capturado!`;
-    confetti(60);
+    text.textContent = who ? `🎉 ${who} capturou ${name}${f.shiny ? ' ✨' : ''}!` : `🎉 ${name} foi capturado!`;
+    confetti(who ? 30 : 60);
   } else {
     ball.classList.add('open');
     target.classList.remove('absorb'); target.classList.add('back');
     text.textContent = f.roll === 1 ? 'Falha crítica! Escapou!' : escaped ? `${name} escapou e fugiu!` : `Ahh! Quase! ${name} escapou!`;
+    if (who) text.textContent = `${name} escapou da Pokébola de ${who}!`;
   }
   el.querySelector('.cap-stage').appendChild(text);
   await clickOrTimeout(el, 1800);
@@ -280,4 +282,25 @@ export function victoryFx(kind, scale = 1) {
   }
   document.body.appendChild(box);
   setTimeout(() => box.remove(), 4800);
+}
+
+/** Captura de outro jogador sem parar o seu jogo: cartãozinho no canto com a Pokébola balançando. */
+export function miniCapture(f, who, ballName) {
+  if (!anim.speed) return;
+  const name = getSpecies(f.sp).name;
+  const box = document.createElement('div');
+  box.className = 'mini-cap';
+  box.innerHTML = `<img class="${f.shiny ? 'shiny' : ''}" src="${monSprite(f.sp, f.shiny)}" alt=""><div class="pball sm" style="--ball:${BALL_COLORS[f.ball] || '#e33'}"></div>
+    <div class="mc-txt"><b>${esc(who)}</b> jogou ${esc(ballName || 'uma Pokébola')} em ${esc(name)}${f.shiny ? ' ✨' : ''}...<span class="mc-res"></span></div>`;
+  document.body.appendChild(box);
+  const ball = box.querySelector('.pball');
+  let i = 0;
+  const shake = () => {
+    if (i++ < f.shakes) { ball.classList.remove('wiggle'); void ball.offsetWidth; ball.classList.add('wiggle'); setTimeout(shake, 650); return; }
+    box.querySelector('.mc-res').textContent = f.ok ? ' capturou! 🎉' : ' escapou!';
+    box.classList.add(f.ok ? 'ok' : 'fail');
+    if (f.ok) ball.classList.add('locked'); else ball.classList.add('open');
+    setTimeout(() => { box.classList.add('out'); setTimeout(() => box.remove(), 500); }, 1800);
+  };
+  setTimeout(shake, 500);
 }

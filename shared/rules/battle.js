@@ -9,6 +9,7 @@ import { getItem, ballBonusAgainst } from '../data/items.js';
 import { against, bestAttack, effectivenessLabel, TYPE_LABELS } from './types.js';
 import { monMoves, STAB } from '../data/moves.js';
 import { companionBonus, progressMission } from './missions.js';
+import { weatherMult, weatherInflict, weatherChip, weatherOf } from './weather.js';
 import { statsOf, maxHpOf, gainXp, xpReward, healMon } from './monsters.js';
 import {
   fail, getPlayer, log, fx, takeItem, giveMon, markSeen, healthyIndex, hasHealthy, speciesName, canUse, usableIndex, badgesNeeded
@@ -217,6 +218,7 @@ function tryInflict(state, rng, defSi, d, move, aSp) {
   let chance = INFLICT_CHANCE[tier] || 0.15;
   if (id === 'poison') chance += 0.1;
   if (companionBonus(state, 1 - defSi)?.inflict === move.type) chance += 0.1; // companheiro (ex.: Koga) aumenta a chance
+  chance *= weatherInflict(state, id); // clima (ex.: Tempestade dobra a paralisia)
   if (!rng.chance(chance)) return;
   side.status[d.uid] = { id, turns: id === 'sleep' ? rng.int(1, 3) : 0 };
   log(state, `${STATUS[id].icon} ${monLabel(state, side)} ficou ${STATUS[id].adj}!`, 'bad');
@@ -464,7 +466,8 @@ function attackDamage(state, rng, si, slot = 0) {
   const critMod = roll === 6 ? 1.5 : roll === 1 ? 0.5 : 1;
   const cb = companionBonus(state, si);
   const compMult = cb?.types?.includes(type) ? 1 + cb.dmg : 1; // bônus do companheiro (ex.: Misty em golpes de Água)
-  let dmg = mult === 0 ? 0 : Math.max(1, Math.round((atk * 0.7 + roll) * (move.power || 1) * stab * mult * critMod * compMult));
+  const wMult = weatherMult(state, type); // clima (ex.: Chuva +30% em Água)
+  let dmg = mult === 0 ? 0 : Math.max(1, Math.round((atk * 0.7 + roll) * (move.power || 1) * stab * mult * critMod * compMult * wMult));
   dmg = Math.min(dmg, d.hp);
   d.hp -= dmg;
   let drained = 0;
@@ -479,6 +482,8 @@ function attackDamage(state, rng, si, slot = 0) {
     else if (roll === 1) msg += ' (golpe fraco)';
     if (eff) msg += (roll === 6 ? ' ' : '. ') + eff;
     else if (roll !== 6) msg += '.';
+    if (wMult > 1) msg += ` ${weatherOf(state).icon} (clima +${Math.round((wMult - 1) * 100)}%)`;
+    else if (wMult < 1) msg += ` ${weatherOf(state).icon} (clima −${Math.round((1 - wMult) * 100)}%)`;
   }
   if (drained) msg += ` 💚 +${drained} HP`;
   // chance de causar condição (queimadura, veneno, paralisia, sono, congelamento)
@@ -573,6 +578,24 @@ function resolveRound(state, rng, choices) {
       mon.hp = Math.max(0, mon.hp - dmg);
       log(state, `${STATUS[st.id].icon} ${monLabel(state, b.sides[si])} sofreu ${dmg} de dano por estar ${STATUS[st.id].adj}.`, 'bad');
       fx(state, { k: 'status_dmg', side: si, uid: mon.uid, status: st.id, dmg, hpAfter: mon.hp, maxHp: maxHpOf(mon) });
+      if (mon.hp <= 0) {
+        awardKO(state, 1 - si, si);
+        if (handleFaint(state, rng, si)) return;
+      }
+    }
+  }
+
+  // 4) clima: Nevasca e Tempestade de areia tiram um pouco de HP de quem não é imune
+  if (!b.over && weatherOf(state).chip) {
+    for (let si = 0; si < 2; si++) {
+      const mon = sideActive(state, b.sides[si]);
+      if (!mon || mon.hp <= 0 || b.mustSwitch[si]) continue;
+      const dmg = Math.min(mon.hp, weatherChip(state, mon, maxHpOf(mon)));
+      if (!dmg) continue;
+      mon.hp -= dmg;
+      const W = weatherOf(state);
+      log(state, `${W.icon} ${monLabel(state, b.sides[si])} sofreu ${dmg} de dano por causa da ${W.name.toLowerCase()}.`, 'bad');
+      fx(state, { k: 'weather_dmg', side: si, uid: mon.uid, weather: state.weather.id, dmg, hpAfter: mon.hp, maxHp: maxHpOf(mon) });
       if (mon.hp <= 0) {
         awardKO(state, 1 - si, si);
         if (handleFaint(state, rng, si)) return;

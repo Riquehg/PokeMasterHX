@@ -1,15 +1,18 @@
 // Tabuleiro com zoom (roda do mouse / pinça / botões), arrastar para mover e animação dos peões.
-import { SPACE_LIST, getSpace } from '../../shared/data/board.js';
+import { SPACE_LIST, getSpace, useStateMap, GATES, BIOMES } from '../../shared/data/board.js';
+import { hasGate } from '../../shared/rules/movement.js';
+import { drawTerrain, roadsSvg } from './terrain.js';
+import { WeatherLayer } from './weather.js';
 import { gymAt, ELITE_SPACE, CHAMPION_SPACE, GYMS, BADGES_TO_LEAGUE } from '../../shared/data/trainers.js';
 import { distancesFrom } from '../../shared/rules/movement.js';
 import { badgeUrl, leaderUrl } from '../config.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
 import { maxHpOf } from '../../shared/rules/monsters.js';
 import { esc } from './dom.js';
-import { monSprite, avatarUrl, mapUrl } from '../config.js';
+import { monSprite, avatarUrl, CFG } from '../config.js';
 import { speciesName, playerColor } from './common.js';
+import { TYPE_LABELS as typeNames } from '../../shared/rules/types.js';
 
-const RATIO = 2618 / 1226; // proporção real da imagem do mapa (corrigida pelo tamanho natural quando carrega)
 const TIER_COLORS = { 1: '#f39ac2', 2: '#5fd36a', 3: '#4c8ff0', 4: '#ef5050', 5: '#f6d34c' };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -18,12 +21,15 @@ export class BoardView {
     this.vp = viewport;
     this.onMove = onMove;
     this.onToken = onToken;
-    this.ratio = RATIO;
+    this.ratio = 2;
+    this.map = null;
     this.scale = 1; this.x = 0; this.y = 0; this.min = 1; this.fitted = false;
     viewport.innerHTML = `
       <div class="board-stage stage-noimg" id="stage">
-        <div class="board-fallback"></div>
-        <img class="board-img" alt="" draggable="false">
+        <canvas class="board-terrain"></canvas>
+        <img class="board-img hidden" alt="" draggable="false">
+        <div class="layer-roads"></div>
+        <div class="layer-weather-tint"></div>
         <div class="layer-spaces"></div><div class="layer-badges"></div><div class="layer-hotspots"></div><div class="layer-wild"></div><div class="layer-tokens"></div>
       </div>
       <div class="zoom-ctrl">
@@ -33,16 +39,7 @@ export class BoardView {
       <div class="board-hint hidden" id="board-hint"></div>`;
     this.stage = viewport.querySelector('#stage');
     this.hint = viewport.querySelector('#board-hint');
-    const img = this.stage.querySelector('.board-img');
-    img.onload = () => {
-      if (img.naturalWidth > 200 && img.naturalHeight > 100) this.ratio = img.naturalWidth / img.naturalHeight;
-      this.stage.classList.remove('stage-noimg');
-      this.stage.querySelector('.board-fallback').remove();
-      this.layout();
-    };
-    img.dataset.fallback = '1'; // sem placeholder: se o mapa não carregar, ficam os pontos coloridos
-    img.onerror = () => img.remove();
-    img.src = mapUrl();
+    this.weather = new WeatherLayer(viewport, { tintHost: this.stage.querySelector('.layer-weather-tint') });
     this.bindGestures();
     this.ro = new ResizeObserver(() => this.layout());
     this.ro.observe(viewport);
@@ -55,7 +52,28 @@ export class BoardView {
     });
   }
 
-  destroy() { this.ro.disconnect(); }
+  destroy() { this.ro.disconnect(); this.weather?.destroy(); }
+
+  /** Desenha o mapa (terreno + rotas). Imagem de fundo opcional: sprites/board/bg_<mapa>.png (ex.: bg_kanto.png, bg_gen.png). */
+  setMap(map) {
+    if (this.map === map) return;
+    this.map = map;
+    this.ratio = map.ratio;
+    const small = Math.min(window.innerWidth, window.innerHeight) < 700;
+    const cv = this.stage.querySelector('.board-terrain');
+    cv.width = small ? 1700 : 2600;
+    cv.height = Math.round(cv.width / map.ratio);
+    drawTerrain(cv, map, SPACE_LIST);
+    this.stage.querySelector('.layer-roads').innerHTML = roadsSvg(map, SPACE_LIST);
+    const img = this.stage.querySelector('.board-img');
+    img.classList.add('hidden');
+    img.dataset.fallback = '1';
+    img.onload = () => img.classList.remove('hidden');
+    img.onerror = () => img.classList.add('hidden');
+    img.src = `${CFG.sprites}board/bg_${map.generated ? 'gen' : map.id}.png`;
+    this.fitted = false;
+    this.layout();
+  }
 
   // ------------------------------------------------ tamanho e câmera
   layout() {
@@ -194,6 +212,8 @@ export class BoardView {
   // ------------------------------------------------ desenho
   render(state, { viewerId, options = [], hint = '' }) {
     this.state = state;
+    this.setMap(useStateMap(state));
+    this.weather.set(state.kind === 'duel' ? 'clear' : state.weather?.id || 'clear');
     const me = state.players.find(p => p.id === viewerId);
     this.meSpace = me ? me.pos : null;
     const opts = new Set(options);
@@ -201,8 +221,10 @@ export class BoardView {
     for (const sp of SPACE_LIST) {
       const isOpt = opts.has(sp.id);
       const icon = sp.type === 'city' ? (gymAt(sp.id) ? '🏟' : sp.id === ELITE_SPACE || sp.id === CHAMPION_SPACE ? '👑' : '') : '';
-      const extra = sp.requiredType ? ` · exige tipo ${sp.requiredType}` : '';
-      spaces += `<div class="space t${sp.tier} ${sp.type} ${isOpt ? 'opt' : ''}" style="left:${sp.x}%;top:${sp.y}%" ${isOpt ? `data-to="${sp.id}"` : ''} title="${esc(sp.name)}${extra}">${icon}<span class="lbl">${esc(sp.name)}</span></div>`;
+      const g = sp.gate && GATES[sp.gate];
+      const locked = g && me && !hasGate(me, sp.gate);
+      const extra = `${BIOMES[sp.biome] ? ' · ' + BIOMES[sp.biome].name : ''}${g ? ` · ${g.icon} ${g.name}: precisa de Pokémon (ou golpe) ${g.types.map(t => typeNames[t] || t).join('/')} para ${g.desc}` : ''}`;
+      spaces += `<div class="space t${sp.tier} ${sp.type} ${isOpt ? 'opt' : ''} ${locked ? 'locked' : ''}" style="left:${sp.x}%;top:${sp.y}%" ${isOpt ? `data-to="${sp.id}"` : ''} title="${esc(sp.name)}${esc(extra)}">${icon}${g ? `<i class="gate-ic" title="${esc(g.name)}">${g.icon}</i>` : ''}<span class="lbl">${esc(sp.name)}</span></div>`;
     }
     this.stage.querySelector('.layer-spaces').innerHTML = spaces;
     this.stage.querySelector('.layer-badges').innerHTML = state.kind === 'duel' ? '' : badgeMarkers(state, me);
