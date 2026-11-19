@@ -668,10 +668,11 @@ table.score td, table.score th { padding: 6px; border-bottom: 1px solid var(--li
 .ev-icon img.ev-trainer { height: 120px; object-fit: contain; }
 @keyframes raidShake { 25% { transform: translateX(-6px) rotate(-1deg); } 75% { transform: translateX(6px) rotate(1deg); } }
 .intro.raid { background: radial-gradient(circle, rgba(255, 70, 20, .45), rgba(20, 0, 0, .9) 70%); }
-.intro.raid .grass img { width: min(60vw, 300px); filter: drop-shadow(0 0 22px #ff5a1f) drop-shadow(0 0 40px #ff2a00); animation: raidPulse 1s ease-in-out infinite; }
+.intro.raid .grass img { width: min(60vw, 300px); filter: none; border-radius: 50%; background: radial-gradient(circle, rgba(255, 110, 40, .65) 0%, rgba(255, 60, 0, .25) 45%, transparent 70%); animation: raidPulse 1s ease-in-out infinite; }
 .intro.raid .text { color: #ffd2b8; text-shadow: 0 0 12px #ff3a00; font-size: 1.4em; }
 @keyframes raidPulse { 50% { transform: scale(1.08); } }
-.mon-sprite.foe.raid-boss { width: 180px; height: 180px; right: 7%; top: 1%; filter: drop-shadow(0 0 18px #ff5a1f) drop-shadow(0 8px 6px rgba(0, 0, 0, .45)); animation: raidPulse 1.6s ease-in-out infinite; }
+.mon-sprite.foe.raid-boss { width: 180px; height: 180px; right: 7%; top: 1%; filter: none; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 110, 40, .55) 0%, rgba(255, 60, 0, .22) 42%, transparent 68%); animation: raidPulse 1.6s ease-in-out infinite; }
 @media (max-width: 640px) { .mon-sprite.foe.raid-boss { width: 130px; height: 130px; right: 3%; top: 4%; } }
 .locked-mon { position: relative; filter: grayscale(.85) brightness(.75); }
 .lock-tag { display: inline-block; font-size: 10px; font-weight: 800; padding: 1px 5px; border-radius: 6px; background: #5a1d1d; color: #ffd0d0; margin-left: 4px; }
@@ -981,9 +982,9 @@ body.in-game #social { bottom: 70px; }
 .tk-comp { position: absolute; left: 82%; bottom: 8%; width: 60%; height: auto; max-height: 80%; object-fit: contain; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .8)); pointer-events: none; z-index: 1; }
 /* ===== Raid em grupo ===== */
 .raid-modal .body { background: radial-gradient(ellipse at 50% 0%, rgba(255, 90, 31, .18), transparent 60%); }
-.raid-boss { display: flex; gap: 12px; align-items: center; padding: 8px; border-radius: 14px; background: rgba(0, 0, 0, .3); border: 2px solid #ff5a1f; box-shadow: 0 0 18px rgba(255, 90, 31, .35); }
-.raid-boss img { width: 110px; height: 110px; object-fit: contain; filter: drop-shadow(0 0 14px #ff5a1f); animation: raidPulse 1.6s ease-in-out infinite; }
-.raid-boss img.tired { animation: none; filter: grayscale(.3) drop-shadow(0 0 6px #ff5a1f); transform: rotate(-8deg); }
+.raid-boss-card { display: flex; gap: 12px; align-items: center; padding: 8px; border-radius: 14px; background: rgba(0, 0, 0, .3); border: 2px solid #ff5a1f; box-shadow: 0 0 18px rgba(255, 90, 31, .35); }
+.raid-boss-card img { width: 110px; height: 110px; object-fit: contain; border-radius: 50%; background: radial-gradient(circle, rgba(255, 110, 40, .55) 0%, rgba(255, 60, 0, .2) 42%, transparent 68%); animation: raidPulse 1.6s ease-in-out infinite; }
+.raid-boss-card img.tired { animation: none; filter: grayscale(.3); background: radial-gradient(circle, rgba(255, 110, 40, .25), transparent 65%); transform: rotate(-8deg); }
 .raid-hp { height: 14px; border-radius: 7px; background: #2a0d05; border: 1px solid #000; overflow: hidden; margin: 4px 0; }
 .raid-hp i { display: block; height: 100%; background: linear-gradient(90deg, #ff3a00, #ffb02e); transition: width .5s; }
 .raid-party { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin: 8px 0; }
@@ -1202,3 +1203,7 @@ body.in-game #social { bottom: 70px; }
   .zoom-ctrl { gap: 4px; right: 6px; top: 6px; }
   .zoom-ctrl button { width: 34px; height: 34px; font-size: 15px; border-radius: 9px; }
 }
+
+/* Raid: itens na luta em grupo */
+.raid-items { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: center; }
+.raid-items .btn img { width: 20px; height: 20px; object-fit: contain; vertical-align: middle; }

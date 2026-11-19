@@ -14,6 +14,8 @@ import { playerCompanionBonus, progressMission } from './missions.js';
 import { deliverCapture } from './battle.js';
 
 export const RAID_JOIN_TIMEOUT_TURNS = 1;
+/** Itens que dá para usar na luta da Raid em grupo (no lugar do golpe da rodada). */
+export const RAID_ITEM_KINDS = ['heal', 'boost'];
 export const RAID_GROUP_HP_PER_MEMBER = 0.8; // HP extra do chefe por participante
 
 const BALL_CATCH = { poke_ball: 0, great_ball: 0.04, ultra_ball: 0.08, master_ball: 1 };
@@ -90,6 +92,17 @@ export function raidAction(state, rng, p, a) {
   }
 
   if (r.stage === 'fight') {
+    if (a.op === 'item') {
+      // item no lugar do golpe: cura (Potion, Super Potion...) ou bônus de ataque (X Attack)
+      const it = ITEMS[a.item];
+      if (!it || !(p.items[a.item] > 0) || !RAID_ITEM_KINDS.includes(it.kind)) fail('Esse item não pode ser usado na Raid.');
+      const x = r.party.find(y => y.pid === p.id);
+      const m = find(p, x.uid);
+      if (it.kind === 'heal' && m.hp >= maxHpOf(m)) fail('Seu Pokémon está com o HP cheio.');
+      r.choices[p.id] = { item: a.item };
+      if (raidWaiting(state).length === 0) resolveRaidRound(state, rng);
+      return;
+    }
     const slot = Number(a.slot || 0);
     if (![0, 1].includes(slot)) fail('Golpe inválido.');
     r.choices[p.id] = slot;
@@ -158,8 +171,26 @@ function resolveRaidRound(state, rng) {
   r.round += 1;
   const members = alive(state, r).map(x => ({ x, p: getPlayer(state, x.pid), m: find(getPlayer(state, x.pid), x.uid) }));
   members.sort((a, b) => statsOf(b.m).spe - statsOf(a.m).spe);
+  // itens primeiro (como nas batalhas normais)
+  for (const { x, p, m } of members) {
+    const ch = r.choices[p.id];
+    if (!ch || typeof ch !== 'object') continue;
+    const it = ITEMS[ch.item];
+    if (!it || !(p.items[ch.item] > 0)) continue;
+    takeItem(p, ch.item);
+    if (it.kind === 'heal') {
+      const h = healMon(m, it.healPct || 0.4);
+      r.log.push(`🧪 ${p.name} usou ${it.name} em ${speciesName(m.sp)}: +${h} HP.`);
+      fx(state, { k: 'raid_heal', pid: p.id, amount: h, item: ch.item });
+    } else if (it.kind === 'boost') {
+      x.boost = (x.boost || 0) + (it.atk || 3);
+      r.log.push(`💪 ${p.name} usou ${it.name}: ${speciesName(m.sp)} ganhou +${it.atk || 3} de ataque na Raid.`);
+      fx(state, { k: 'raid_boost', pid: p.id, item: ch.item });
+    }
+  }
   for (const { x, p, m } of members) {
     if (boss.hp <= 0) break;
+    if (typeof r.choices[p.id] === 'object') continue; // usou item nesta rodada
     const move = monMoves(m)[r.choices[p.id] || 0];
     if (move.kind === 'heal') {
       const h = healMon(m, 0.4);
@@ -170,7 +201,7 @@ function resolveRaidRound(state, rng) {
     if (move.kind === 'buff') { x.stage = Math.min(2, (x.stage || 0) + 1); r.log.push(`🔺 ${speciesName(m.sp)} (${p.name}) ficou mais forte!`); continue; }
     if (move.kind === 'debuff') { r.bossStage = Math.max(-2, r.bossStage - 1); r.log.push(`🔻 ${speciesName(m.sp)} (${p.name}) intimidou o lendário!`); continue; }
     const st = x.stage || 0;
-    const atk = statsOf(m).atk * (st >= 0 ? 1 + 0.4 * st : 1);
+    const atk = (statsOf(m).atk + (x.boost || 0)) * (st >= 0 ? 1 + 0.4 * st : 1);
     const h = hit(rng, m, atk, move, boss, playerCompanionBonus(p));
     boss.hp = Math.max(0, boss.hp - h.dmg);
     x.dmg += h.dmg;

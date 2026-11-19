@@ -343,6 +343,11 @@ function raidBotAction(state, p) {
   if (r.stage === 'fight') {
     const x = r.party.find(y => y.pid === p.id);
     const mon = p.team.find(m => m.uid === x?.uid);
+    if (mon && mon.hp < maxHpOf(mon) * 0.35) {
+      const pot = ['hyper_potion', 'super_potion', 'potion'].find(id => p.items[id] > 0 && ITEMS[id]?.kind === 'heal');
+      if (pot) return { type: 'raid', op: 'item', item: pot };
+    }
+    if (r.round === 0 && p.items.x_attack > 0 && !(x.boost > 0)) return { type: 'raid', op: 'item', item: 'x_attack' };
     const moves = monMoves(mon);
     const bossTypes = getSpecies(r.boss.sp).types;
     const score = mv => {

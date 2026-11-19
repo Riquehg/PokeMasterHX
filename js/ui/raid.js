@@ -5,16 +5,28 @@ import { monMoves } from '../../shared/data/moves.js';
 import { maxHpOf } from '../../shared/rules/monsters.js';
 import { canUse } from '../../shared/rules/helpers.js';
 import { against, TYPE_COLORS } from '../../shared/rules/types.js';
-import { raidWaiting, raidBallChance } from '../../shared/rules/raid.js';
+import { raidWaiting, raidBallChance, RAID_ITEM_KINDS } from '../../shared/rules/raid.js';
 import { esc, openModal, closeModal, bindActions } from './dom.js';
 import { monSprite, itemUrl, typeLabel } from '../config.js';
 
 function bossBar(r) {
   const max = maxHpOf(r.boss);
   const pct = Math.max(0, (r.boss.hp / max) * 100);
-  return `<div class="raid-boss"><img src="${monSprite(r.boss)}" alt="" class="${r.stage === 'catch' ? 'tired' : ''}">
+  return `<div class="raid-boss-card"><img src="${monSprite(r.boss)}" alt="" class="${r.stage === 'catch' ? 'tired' : ''}">
     <div class="grow"><b>${esc(getSpecies(r.boss.sp).name)}${r.boss.shiny ? ' ✨' : ''}</b> <span class="tiny">Nv.${r.boss.lvl}</span>
       <div class="raid-hp"><i style="width:${pct.toFixed(1)}%"></i></div><div class="tiny">${Math.max(0, r.boss.hp)}/${max} HP${r.bossStage < 0 ? ` · ATQ ▼${-r.bossStage}` : ''}</div></div></div>`;
+}
+
+/** Itens da mochila que dá para usar na Raid (no lugar do golpe da rodada). */
+function raidItems(me, m, x) {
+  const list = Object.entries(me.items).filter(([id, n]) => n > 0 && RAID_ITEM_KINDS.includes(ITEMS[id]?.kind));
+  if (!list.length) return '<p class="tiny muted">Sem itens de cura ou X Attack na mochila.</p>';
+  const full = m.hp >= maxHpOf(m);
+  return `<div class="raid-items"><span class="tiny muted">🎒 Ou use um item (gasta a rodada):</span>${list.map(([id, n]) => {
+    const it = ITEMS[id];
+    const off = it.kind === 'heal' && full;
+    return `<button class="btn sm" data-act="raid-item" data-item="${id}" ${off ? 'disabled' : ''} title="${esc(it.desc || '')}"><img src="${itemUrl(id)}" alt=""> ${esc(it.name)} ×${n}</button>`;
+  }).join('')}${x?.boost ? `<span class="chip green">💪 +${x.boost} ATQ</span>` : ''}</div>`;
 }
 
 export function raidHtml(s, vid) {
@@ -48,7 +60,7 @@ export function raidHtml(s, vid) {
         const mult = dmg ? against(mv.type, bossTypes) : 1;
         return `<button class="btn move-btn" style="--tc:${TYPE_COLORS[mv.type]}" data-act="raid-attack" data-slot="${i}"><span class="mv-name">${esc(mv.name)}</span>
           <span class="mv-meta">${esc(typeLabel(mv.type))}${dmg ? ` · ${Math.round((mv.power || 1) * 100)}%` : ''}</span>${dmg ? `<span class="mv-tag ${mult >= 2 ? 'good' : mult < 1 ? 'bad' : ''}">${mult >= 2 ? 'Super efetivo' : mult < 1 ? 'Pouco efetivo' : 'Normal'}</span>` : `<span class="mv-tag sup">${esc(mv.desc)}</span>`}</button>`;
-      }).join('')}</div>`;
+      }).join('')}</div>${raidItems(me, m, x)}`;
     } else controls = `<p class="muted center"><span class="spinner"></span> ${x && m?.hp <= 0 ? 'Seu Pokémon desmaiou — torça pelo grupo!' : `Aguardando: ${waiting.map(name).map(esc).join(', ')}`}</p>`;
   } else if (r.stage === 'catch') {
     if (myTurn) {
@@ -77,6 +89,7 @@ export function renderRaid(s, vid, act) {
       'raid-join': d => act({ type: 'raid', op: 'join', uid: d.uid }),
       'raid-decline': () => act({ type: 'raid', op: 'decline' }),
       'raid-attack': d => act({ type: 'raid', op: 'attack', slot: Number(d.slot) }),
+      'raid-item': d => act({ type: 'raid', op: 'item', item: d.item }),
       'raid-catch': d => act({ type: 'raid', op: 'catch', ball: d.ball }),
       'raid-skip': () => act({ type: 'raid', op: 'skip' })
     });
