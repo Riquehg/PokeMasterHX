@@ -366,3 +366,39 @@ test('clima: muda nas rodadas, mexe no dano por tipo e Nevasca tira HP de quem n
   s.weather = { id: 'storm', until: 99 };
   assert.equal(W.weatherInflict(s, 'paralysis'), 2);
 });
+
+test('Raid em grupo: dá para usar Potion e X Attack no lugar do golpe', () => {
+  let s = game(91);
+  s.players.forEach((p, i) => { p.team = [createMon(createRng(10 + i), 'pidgey', 20, { starter: true })]; p.items.potion = 2; p.items.x_attack = 1; });
+  let g = null;
+  for (let seed = 1; seed < 40 && !g; seed++) {
+    const t = _internals.boardEvent(s, 'ash', eventSpace(4), 'raid', seed);
+    if (t.raid?.group) g = t;
+  }
+  let st = applyAction(g, 'ash', { type: 'raid', op: 'join', uid: g.players[0].team[0].uid }, { now: T0 }).state;
+  st = applyAction(st, 'gary', { type: 'raid', op: 'join', uid: g.players[1].team[0].uid }, { now: T0 }).state;
+  assert.equal(st.raid.stage, 'fight');
+  // HP cheio: Potion não pode
+  let r = applyAction(st, 'ash', { type: 'raid', op: 'item', item: 'potion' }, { now: T0 });
+  assert.match(r.error, /HP cheio/);
+  // X Attack (ash) + golpe (gary)
+  r = applyAction(st, 'ash', { type: 'raid', op: 'item', item: 'x_attack' }, { now: T0 });
+  assert.equal(r.error, undefined, r.error);
+  r = applyAction(r.state, 'gary', { type: 'raid', op: 'attack', slot: 0 }, { now: T0 });
+  st = r.state;
+  const ash = st.players.find(p => p.id === 'ash');
+  assert.equal(ash.items.x_attack || 0, 0);
+  if (st.raid?.stage === 'fight') {
+    assert.equal(st.raid.party.find(x => x.pid === 'ash').boost, 3);
+    // machucado: agora a Potion funciona
+    const mon = ash.team[0];
+    if (mon.hp > 0 && mon.hp < 999) {
+      mon.hp = 1;
+      r = applyAction(st, 'ash', { type: 'raid', op: 'item', item: 'potion' }, { now: T0 });
+      assert.equal(r.error, undefined, r.error);
+    }
+  }
+  // itens que não valem na Raid
+  r = applyAction(g, 'ash', { type: 'raid', op: 'item', item: 'ultra_ball' }, { now: T0 });
+  assert.ok(r.error);
+});
