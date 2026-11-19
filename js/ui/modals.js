@@ -248,7 +248,7 @@ export function openMon(session, act, index) {
         <div>Natureza: <b>${esc(natureLabel(mon.nature))}</b></div>
         <div>Potencial (IV): HP <b>${mon.iv?.hp ?? '?'}</b> · ATQ <b>${mon.iv?.atk ?? '?'}</b> · VEL <b>${mon.iv?.spe ?? '?'}</b> <span class="muted">(0 a 31 — cada Pokémon nasce com os seus)</span></div>
         <div>Golpes: o 1º é sempre o rápido do tipo; o 2º é a variação deste indivíduo. Outros ${esc(v.name)} podem vir com: ${possibleSecondMoves(mon.sp).map(m => esc(m.name)).join(', ')}.</div>
-        ${badgesNeeded(mon) ? `<div>${canUse(p, mon) ? '✅' : '🔒'} Obedece com ${badgesNeeded(mon)} insígnias (você tem ${p.badges.length})</div>` : ''}
+        ${badgesNeeded(mon) ? `<div>${canUse(p, mon) ? '✅' : '🔒'} Obedece com ${badgesNeeded(mon)} insígnia${badgesNeeded(mon) > 1 ? 's' : ''} (você tem ${p.badges.length})</div>` : ''}
         <div>Evolução: ${esc(evo)}</div>
       </div></div>
     <div class="divider"></div>
@@ -286,7 +286,11 @@ export function openHelp() {
       <p><b>Raridade:</b> shiny é raríssimo (1 em 450) e lendários só são capturados com 10+ na rolagem (e costumam fugir depois de escapar da bola).</p>
       <p><b>Cada Pokémon é único:</b> além da natureza, nasce com <b>potencial (IV)</b> de 0 a 31 em HP, Ataque e Velocidade (até ±8%) — veja as estrelas ★ no card — e com uma <b>variação de golpes</b>: o 2º golpe pode ser forte (140%, erra no 🎲1), pesado (170%, erra no 🎲1–2), de outro tipo (cobertura, ex.: Pikachu com Iron Tail) ou de suporte. Vale a pena capturar de novo atrás de um melhor!</p>
       <p><b>Natureza:</b> cada Pokémon nasce com uma das 25 naturezas dos jogos: +10% em um atributo (Ataque, HP ou Velocidade) e −10% em outro. 5 são neutras.</p>
-      <p><b>Obediência:</b> Pokémon obtidos de tier 3 só lutam com 2 insígnias, tier 4 com 3 e tier 5 (lendários) com 4. O inicial e os trazidos da Coleção sempre obedecem. Os que não obedecem aparecem com 🔒.</p>
+      <p><b>Obediência:</b> Pokémon de casas 🌸 Rosa e 🟢 Verde obedecem sempre. 🔵 Azul precisa de 1 insígnia, 🔴 Vermelho de 2 e 🟡 Amarelo (lendários) de 3. O inicial e os capturados na <b>🤝 Bola da Confiança</b> obedecem sempre. Os que não obedecem aparecem com 🔒.</p>
+      <p><b>🤝 Bola da Confiança:</b> raríssima (baús, eventos de casas altas, Raids e convites de viagem — não é vendida), com chance normal de captura. Quem for capturado nela confia em você e luta sem precisar de insígnias, até lendários — e continua assim na sua Coleção.</p>
+      <p><b>✨ Shiny:</b> além da cor rara, é mais forte: +15% de HP e Ataque e +10% de Velocidade.</p>
+      <p><b>👴 Ajuda do Professor:</b> a cada 4 rodadas, quem tem menos Pokémon (pelo menos 2 a menos que o líder) ganha um Pokémon da região, Great Balls e Potions. Se também estiver 2+ insígnias atrás, ganha uma <b>Insígnia de Incentivo</b> (uma vez por partida).</p>
+      <p><b>🗺️ Convite de viagem:</b> carta de evento que pede para visitar uma cidade onde você ainda não foi em até 6 rodadas. Chegando lá: ouro, Ultra Balls e Rare Candy (ou, com muita sorte, uma Bola da Confiança).</p>
       <p><b>Prêmios de insígnia:</b> 1ª kit de bolas e poções · 2ª ovo tier 2 · 3ª ovo tier 3 + Ultra Balls · 4ª ovo tier 4 + Rare Candy · 5ª kit de elite · 6ª ovo lendário + Master Ball.</p>
       <p><b>Equipe cheia:</b> com 6 Pokémon na equipe, novas capturas e ovos vão direto para o PC (abra o PC numa cidade para trocar).</p>
       <p><b>Captura:</b> jogue a Pokébola no selvagem. Precisa tirar no dado: Rosa 3+, Verde 4+, Azul 5+, Vermelho 6+, Lendário 7+ (shiny +1). Bônus: bola (+1 a +3), HP do selvagem abaixo de 50% (+1) ou 25% (+2), seu Pokémon 5+ níveis acima (+1). 🎲1 sempre falha e ele pode fugir. Derrotar (desmaiar) não captura!</p>

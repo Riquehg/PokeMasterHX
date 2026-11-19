@@ -7,6 +7,7 @@ export const ITEMS = {
   poke_ball:    { name: 'Poké Ball',    kind: 'ball', bonus: 0, price: 100,  minTier: 1, image: 'poke_ball.png',    desc: 'Pokébola padrão. Sem bônus.' },
   great_ball:   { name: 'Great Ball',   kind: 'ball', bonus: 1, price: 300,  minTier: 2, image: 'great_ball.png',   desc: '+1 na rolagem de captura.' },
   ultra_ball:   { name: 'Ultra Ball',   kind: 'ball', bonus: 2, price: 600,  minTier: 3, image: 'ultra_ball.png',   desc: '+2 na rolagem de captura.' },
+  trust_ball:   { name: 'Bola da Confiança', kind: 'ball', bonus: 0, trust: true, price: 0, minTier: 0, image: 'trust_ball.png', desc: 'Raríssima, com chance normal de captura. Quem for capturado nela confia em você e obedece sem precisar de insígnias — inclusive lendários.' },
   master_ball:  { name: 'Master Ball',  kind: 'ball', bonus: 99, price: 0,   minTier: 0, image: 'master_ball.png',  desc: 'Captura garantida. Só aparece em eventos raros.' },
   // Bolas temáticas do projeto original — agora com efeito real por tipo, e dão "aura" visual ao Pokémon capturado.
   flame_ball:   { name: 'Flame Ball',   kind: 'ball', bonus: 1, typeBonus: { types: ['fire', 'grass', 'bug', 'ice'], bonus: 3 },        price: 450, minTier: 3, aura: 'flame',   image: 'flame_ball.png',   desc: '+3 contra Fogo, Grama, Inseto e Gelo. +1 nos demais.' },

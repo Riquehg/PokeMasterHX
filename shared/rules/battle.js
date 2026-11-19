@@ -19,8 +19,8 @@ import {
 
 export const MAX_ROUNDS = 30;
 // Lendários (tier 5) são muito difíceis: precisa 10+ e fogem com facilidade depois de escapar da bola.
-export const CAPTURE_TARGET = { 1: 3, 2: 4, 3: 5, 4: 6, 5: 10 };
-export const WILD_FLEE_AFTER_FAIL = { 1: 0.1, 2: 0.15, 3: 0.2, 4: 0.3, 5: 0.6 };
+export const CAPTURE_TARGET = { 1: 3, 2: 4, 3: 5, 4: 6, 5: 11 }; // lendário: precisa 11+ (bola, HP baixo e condição ajudam)
+export const WILD_FLEE_AFTER_FAIL = { 1: 0.1, 2: 0.15, 3: 0.2, 4: 0.3, 5: 0.65 };
 
 // ---------------------------------------------------------------- lados
 export function sideTeam(state, side) {
@@ -671,6 +671,7 @@ export function deliverCapture(state, pid, mon, ballId) {
   const ball = getItem(ballId);
   if (ball && ball.aura) mon.aura = ball.aura;
   if (p.cosmetic?.aura) mon.aura = p.cosmetic.aura; // estilo de captura comprado na loja (só visual)
+  if (ballId && getItem(ballId)?.trust) mon.trust = true; // Bola da Confiança: obedece sem insígnias
   mon.ball = ballId;
   if (ballId) progressMission(state, pid, { k: 'capture', sp: mon.sp });
   const where = giveMon(p, mon);

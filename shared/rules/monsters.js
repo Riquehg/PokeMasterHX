@@ -5,7 +5,7 @@ import { MOVES, rollMoveIds } from '../data/moves.js';
 
 export const MAX_LEVEL = 60;
 export const TEAM_SIZE = 6;
-export const SHINY_STAT_BONUS = 0.1;
+export const SHINY_STAT_BONUS = 0.15; // shiny: +15% HP e Ataque, +10% Velocidade
 
 // Faixa de nível dos selvagens por tier de casa
 export const WILD_LEVELS = { 1: [3, 7], 2: [7, 13], 3: [12, 19], 4: [18, 26], 5: [26, 34] };
@@ -29,7 +29,7 @@ export function computeStats(speciesId, level, shiny = false, nature = null, iv 
   return {
     maxHp: Math.max(8, Math.round(sp.hp * (1 + 0.07 * (L - 1)) * s * natureMult(nature, 'hp') * ivMult(v.hp))),
     atk: Math.max(2, Math.round(sp.str * (1 + 0.06 * (L - 1)) * s * natureMult(nature, 'atk') * ivMult(v.atk))),
-    spe: Math.round(L * 10 * natureMult(nature, 'spe') * ivMult(v.spe))
+    spe: Math.round(L * 10 * (shiny ? 1.1 : 1) * natureMult(nature, 'spe') * ivMult(v.spe))
   };
 }
 

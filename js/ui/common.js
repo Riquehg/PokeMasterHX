@@ -23,14 +23,15 @@ export function monCard(mon, { index, lead = false, act = 'mon', extra = '', own
   const locked = owner && !canUse(owner, mon);
   const xpPct = v.lvl >= MAX_LEVEL ? 100 : Math.min(100, (mon.xp / xpToNext(v.lvl)) * 100);
   const cls = ['mon', v.hp <= 0 ? 'fainted' : '', v.shiny ? 'shiny' : '', lead ? 'lead' : '', mon.aura ? 'aura-' + mon.aura : '', locked ? 'locked-mon' : ''].join(' ');
-  return `<div class="${cls}" data-act="${act}" data-index="${index ?? ''}" data-uid="${esc(mon.uid)}" title="${esc(v.name)} — ${v.types.map(typeLabel).join('/')}${mon.nature ? ' · ' + esc(natureLabel(mon.nature)) : ''}${locked ? ` · 🔒 precisa de ${badgesNeeded(mon)} insígnias para lutar` : ''}">
+  return `<div class="${cls}" data-act="${act}" data-index="${index ?? ''}" data-uid="${esc(mon.uid)}" title="${esc(v.name)} — ${v.types.map(typeLabel).join('/')}${mon.nature ? ' · ' + esc(natureLabel(mon.nature)) : ''}${locked ? ` · 🔒 precisa de ${badgesNeeded(mon)} insígnia${badgesNeeded(mon) > 1 ? 's' : ''} para lutar` : ''}">
     <span class="lv">Nv.${v.lvl}</span>${v.shiny ? '<span style="position:absolute;top:3px;right:6px">✨</span>' : ''}
     <img src="${monSprite(mon)}" alt="${esc(v.name)}" loading="lazy">
     <div class="nm">${esc(v.name)}</div>
     ${hpBar(v.hp, v.maxHp)}
     <div class="xp"><i style="width:${xpPct}%"></i></div>
     <div class="tiny muted">${Math.max(0, v.hp)}/${v.maxHp} HP${ivPercent(mon) !== null ? ` · <span class="pk-stars-mini">${potentialStars(ivPercent(mon))}</span>` : ''}</div>
-    ${locked ? `<div class="lock-tag">🔒 ${badgesNeeded(mon)} insígnias</div>` : ''}
+    ${locked ? `<div class="lock-tag">🔒 ${badgesNeeded(mon)} insígnia${badgesNeeded(mon) > 1 ? 's' : ''}</div>` : ''}
+    ${mon.trust ? '<span class="trust-chip" title="Capturado na Bola da Confiança: obedece sem insígnias">🤝</span>' : ''}
     ${extra}
   </div>`;
 }
@@ -78,7 +79,7 @@ export function statCard(mon, { owner = null, act = '', index = '', extra = '', 
       <span class="pk-iv" title="Potencial (IV) de ${label}: ${iv ?? '?'} de ${IV_MAX}">${iv ?? '–'}</span></div>`;
   }).join('');
   return `<div class="${cls}" style="--tc:${typeColor(v.types[0])}" ${act ? `data-act="${act}" data-index="${index}" data-uid="${esc(mon.uid || '')}"` : ''}>
-    ${v.shiny ? '<span class="pk-ribbon">★ Shiny</span>' : ''}<span class="pk-tier t${sp.tier}">${TIER_TXT[sp.tier]}</span>
+    ${v.shiny ? '<span class="pk-ribbon">★ Shiny +15%</span>' : ''}<span class="pk-tier t${sp.tier}">${TIER_TXT[sp.tier]}</span>
     <div class="pk-art"><img src="${monSprite(mon)}" alt="${esc(v.name)}" loading="lazy"></div>
     <div class="pk-nature" title="${esc(natureLabel(mon.nature))}">❖ ${esc(mon.nature || 'Sem natureza')}</div>
     <div class="pk-name">${esc(v.name)}${mon.nick ? `<span class="pk-sp">${esc(v.species)}</span>` : ''}</div>
@@ -89,7 +90,8 @@ export function statCard(mon, { owner = null, act = '', index = '', extra = '', 
     <div class="pk-pot" title="Potencial total (média dos IVs)">${pot === null ? '<span class="muted">Potencial desconhecido</span>' : `<span class="pk-stars">${potentialStars(pot)}</span> ${potentialLabel(pot)} · ${pot}%`}</div>
     <div class="pk-xp"><i style="width:${xpPct.toFixed(0)}%"></i><span>${v.lvl >= MAX_LEVEL ? 'MÁX' : `${Math.floor(mon.xp || 0)}/${xpToNext(v.lvl)}`}</span></div>
     <div class="pk-moves">${monMoves(mon).map(m => moveBox(m)).join('')}</div>
-    ${locked ? `<div class="lock-tag">🔒 precisa de ${badgesNeeded(mon)} insígnias</div>` : ''}
+    ${locked ? `<div class="lock-tag">🔒 precisa de ${badgesNeeded(mon)} insígnia${badgesNeeded(mon) > 1 ? 's' : ''}</div>` : ''}
+    ${mon.trust ? '<div class="tiny"><span class="trust-chip" title="Capturado na Bola da Confiança: obedece sem insígnias">🤝 Confiança</span></div>' : ''}
     ${extra}
   </div>`;
 }

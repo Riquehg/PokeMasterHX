@@ -166,6 +166,29 @@ function switchList(team, active, player) {
 }
 
 // ------------------------------------------------ animações dentro da arena
+const DIE_FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+/** Dado 3D girando e parando no valor tirado (6 = crítico dourado, 1 = fraco vermelho). */
+async function rollBattleDie(arena, atk, f) {
+  const d = document.createElement('div');
+  d.className = 'bdie';
+  d.innerHTML = '<div class="bdie-cube"><span>⚄</span></div><div class="bdie-lbl"></div>';
+  if (atk) {
+    const r = atk.getBoundingClientRect(), a = arena.getBoundingClientRect();
+    d.style.left = (r.left - a.left + r.width * (atk.classList.contains('me') ? 0.75 : 0.1)) + 'px';
+    d.style.top = (r.top - a.top + r.height * 0.15) + 'px';
+  }
+  arena.appendChild(d);
+  const face = d.querySelector('span');
+  const steps = 7;
+  for (let i = 0; i < steps; i++) { face.textContent = DIE_FACES[(f.roll + i * 2 + 3) % 6]; await wait(55); }
+  face.textContent = DIE_FACES[f.roll - 1] || '⚄';
+  d.classList.add('landed', f.roll === 6 ? 'crit' : f.roll === 1 ? 'weak' : 'ok');
+  d.querySelector('.bdie-lbl').textContent = f.miss ? `${f.roll} · errou!` : f.roll === 6 ? '6 · crítico!' : f.roll === 1 ? '1 · fraco' : String(f.roll);
+  setTimeout(() => d.classList.add('out'), 700);
+  setTimeout(() => d.remove(), 1100);
+  await wait(220);
+}
+
 function float(arena, target, text, cls) {
   const r = target.getBoundingClientRect(), a = arena.getBoundingClientRect();
   const d = document.createElement('div');
@@ -216,12 +239,8 @@ export async function playBattleFx(fxList) {
       const atk = sprite(f.atkUid), def = sprite(f.defUid);
       if (atk) { const c = atk.classList.contains('me') ? 'lunge-me' : 'lunge-foe'; atk.classList.remove(c); void atk.offsetWidth; atk.classList.add(c); }
       if (f.move) moveBanner(arena, atk, f.move, f.type);
-      const chip = document.createElement('div');
-      chip.className = 'roll-chip';
-      chip.textContent = f.miss ? `🎲 ${f.roll} · errou!` : `🎲 ${f.roll}`;
-      if (atk) { const r = atk.getBoundingClientRect(), a = arena.getBoundingClientRect(); chip.style.left = (r.left - a.left + r.width * 0.4) + 'px'; chip.style.top = (r.top - a.top) + 'px'; }
-      arena.appendChild(chip); setTimeout(() => chip.remove(), 900);
-      await wait(260);
+      // 🎲 dado rolando ao lado de quem ataca, parando no resultado
+      await rollBattleDie(arena, atk, f);
       if (def) {
         if (f.dmg > 0) { def.classList.remove('hurt'); void def.offsetWidth; def.classList.add('hurt'); }
         const flash = document.createElement('div');

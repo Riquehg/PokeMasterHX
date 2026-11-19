@@ -244,6 +244,7 @@ function chooseDestination(state, p) {
       const g = gymAt(id);
       if (g && ownerOf(state, g.id) !== p.id && topLevels(p, 2) >= siegeLevel(state, g) - 2 && teamHealth(p) > 0.7) s += 35;
     }
+    if (p.quest?.space === id) s += 30; // convite de viagem
     s += (state.seed % 7 === id % 7) ? 0.5 : 0; // desempate leve
     if (s > bestScore) { bestScore = s; best = id; }
   }

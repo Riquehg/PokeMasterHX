@@ -93,6 +93,10 @@ export const EVENT_CARDS = [
     'Uma bolha rosa flutua até a equipe de {name}. Mew dá uma risadinha e todos se sentem renovados!',
     'Um brilho rosado envolve os Pokémon de {name}: feridas curadas e uma força nova.'
   ] },
+  { id: 'travel_invite', title: 'Convite de Viagem', icon: '🗺️', tone: 'good', weight: 9, minTier: 1, lore: [
+    'Um Pidgey traz uma carta com selo dourado: uma cidade quer receber {name} como convidado de honra!',
+    'O prefeito de uma cidade distante ouviu falar de {name} e mandou um convite com prêmio para quem chegar logo.'
+  ] },
   { id: 'ancient_egg', title: 'Ovo Ancestral', icon: '🥚', tone: 'good', weight: 12, tiers: [5], lore: [
     'Preso no âmbar há milênios, um ovo começa a pulsar nas mãos de {name}...',
     'Um fóssil se parte e revela um ovo intacto. Ele choca na hora!'

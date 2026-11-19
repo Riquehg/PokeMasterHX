@@ -221,7 +221,7 @@ export async function leaderboard(db) {
 
 // ------------------------------------------------------------------ Coleção
 function collectionEntry(mon, matchId) {
-  return { uid: mon.uid, sp: mon.sp, lvl: mon.lvl, shiny: !!mon.shiny, aura: mon.aura || null, nature: mon.nature || null, iv: mon.iv || null, moves: mon.moves || null, capTier: mon.capTier || null, nick: mon.nick || null, from: matchId, at: new Date().toISOString() };
+  return { uid: mon.uid, sp: mon.sp, lvl: mon.lvl, shiny: !!mon.shiny, aura: mon.aura || null, nature: mon.nature || null, iv: mon.iv || null, moves: mon.moves || null, capTier: mon.capTier || null, nick: mon.nick || null, trust: !!mon.trust || undefined, from: matchId, at: new Date().toISOString() };
 }
 
 /**
@@ -244,7 +244,7 @@ function collectionPatch(prof, p, state) {
       const e = collectionEntry(mon, state.id);
       if (idx.has(mon.uid)) {
         const old = vault[idx.get(mon.uid)];
-        vault[idx.get(mon.uid)] = { ...old, sp: e.sp, lvl: Math.max(old.lvl || 1, e.lvl), shiny: e.shiny, aura: e.aura || old.aura || null, nature: old.nature || e.nature || null, iv: old.iv || e.iv || null, moves: old.moves || e.moves || null, capTier: old.capTier || e.capTier || null, nick: old.nick || null };
+        vault[idx.get(mon.uid)] = { ...old, sp: e.sp, lvl: Math.max(old.lvl || 1, e.lvl), shiny: e.shiny, aura: e.aura || old.aura || null, nature: old.nature || e.nature || null, iv: old.iv || e.iv || null, moves: old.moves || e.moves || null, capTier: old.capTier || e.capTier || null, nick: old.nick || null, ...(old.trust || e.trust ? { trust: true } : {}) };
       } else {
         idx.set(mon.uid, vault.length);
         vault.push(e);

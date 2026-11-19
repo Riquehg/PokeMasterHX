@@ -198,6 +198,12 @@ export function mountGame(root, session, opts = {}) {
               effects: f.rewards.map(t => ({ text: t, tone: 'good', icon: '🎁' })), trainer: f.companion ? { name: '', sprite: COMPANIONS[f.companion]?.sprite } : undefined }, { name: nameOf(f.pid), mine: true });
           } else toast(`🎯 ${nameOf(f.pid)} completou uma missão!`, 'info');
           break;
+        case 'quest':
+          if (f.pid === v) toast(`🗺️ Convite: chegue a ${getSpace(f.space)?.name} em até ${f.rounds} rodadas! (veja na aba Metas)`, 'good');
+          break;
+        case 'quest_expired':
+          if (f.pid === v) toast(`⌛ O convite para ${getSpace(f.space)?.name} expirou.`, 'info');
+          break;
         case 'storm':
           toast(`🌀 A tempestade avançou! Área segura: ${f.ring} casa${f.ring === 1 ? '' : 's'} do centro.`, 'bad');
           break;
@@ -417,13 +423,22 @@ export function mountGame(root, session, opts = {}) {
     if (s.kind === 'duel') return;
     const viewer = p || s.players[s.current];
     const mp = root.querySelector('#g-modepanel');
-    if (mp) mp.innerHTML = modePanelHtml(s, viewer);
+    if (mp) mp.innerHTML = questHtml(s, viewer) + modePanelHtml(s, viewer);
     const list = badgeStatus(s, viewer);
     root.querySelector('#g-badge-count').textContent = `${viewer.badges.length}/${list.length}${viewer.badges.length >= list.length ? ' · Liga liberada!' : ''}`;
     root.querySelector('#g-badges').innerHTML = list.map(g => `<div class="badge-item ${g.owned ? 'owned' : 'missing'} ${g.next ? 'next' : ''}" data-act="goto-gym" data-space="${g.space}" title="${esc(g.leader)} · ${esc(typeLabel(g.type))}">
       <img src="${badgeUrl(g.id)}" alt=""><b>${esc(g.city.replace(' City', '').replace(' Island', ''))}</b>
       <span class="tiny">${g.owned ? '✔ conquistada' : g.dist !== null ? `${g.next ? '➜ ' : ''}${g.dist} casas` : '—'}</span></div>`).join('');
     renderMissions(s, viewer);
+  }
+
+  /** Convite de viagem pendente. */
+  function questHtml(s, viewer) {
+    const q = viewer?.quest;
+    if (!q) return '';
+    const left = Math.max(0, q.until - s.turn);
+    return `<div class="quest-box" data-act="goto-gym" data-space="${q.space}"><b>🗺️ Convite de viagem</b>
+      <div class="small">Chegue a <b>${esc(getSpace(q.space)?.name || '?')}</b> ${left ? `em até ${left} rodada${left > 1 ? 's' : ''}` : 'nesta rodada'} — prêmio: ouro, Ultra Balls e uma surpresa.</div></div>`;
   }
 
   /** Painel do modo: Battle Royale (vivos e tempestade) ou Conquista (cidades). */

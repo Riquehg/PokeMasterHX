@@ -105,10 +105,11 @@ export function clone(obj) {
 // ------------------------------------------------------------------ obediência por insígnias
 // Pokémon obtidos de tier alto só obedecem com insígnias suficientes (como nos jogos).
 // Iniciais e Pokémon trazidos da Coleção sempre obedecem.
-export const BADGES_TO_USE = { 3: 2, 4: 3, 5: 4 };
+// Insígnias para um Pokémon obedecer, pelo tier: Rosa e Verde nenhuma, Azul 1, Vermelho 2, Amarelo 3.
+export const BADGES_TO_USE = { 3: 1, 4: 2, 5: 3 };
 
 export function badgesNeeded(mon) {
-  if (!mon || mon.starter) return 0; // só o inicial é sempre obediente (Coleção também segue a regra das insígnias)
+  if (!mon || mon.starter || mon.trust) return 0; // inicial e quem foi capturado na Bola da Confiança obedecem sempre
   return BADGES_TO_USE[capTierOf(mon)] || 0;
 }
 

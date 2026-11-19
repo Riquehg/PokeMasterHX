@@ -257,7 +257,8 @@ export class BoardView {
     this.stage.querySelector('.layer-spaces').innerHTML = spaces;
     this.stage.querySelector('.layer-badges').innerHTML = state.kind === 'duel' || state.rules === 'royale' ? '' : state.rules === 'conquest' ? conquestMarkers(state) : badgeMarkers(state, me);
     this.stage.classList.toggle('royale', !!royale);
-    this.stage.querySelector('.layer-hotspots').innerHTML = hotspotMarkers(state);
+    const q = me?.quest && getSpace(me.quest.space);
+    this.stage.querySelector('.layer-hotspots').innerHTML = hotspotMarkers(state) + (q ? `<div class="quest-mark" style="left:${q.x}%;top:${q.y}%" title="Convite de viagem">🗺️</div>` : '');
 
     let wild = '';
     for (const [id, mon] of Object.entries(state.board || {})) {

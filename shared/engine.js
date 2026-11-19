@@ -11,6 +11,7 @@
 import { SPECIES, getSpecies, STARTERS } from './data/pokemon.js';
 import { SPACE_LIST, getSpace, START_SPACE, useMap, useStateMap, BIOMES } from './data/board.js';
 import { tickWeather, weatherSpawn, weatherRare } from './rules/weather.js';
+import { assistTick, giveTravelQuest, questVisit } from './rules/assist.js';
 import { ITEMS, getItem, shopFor, STARTING_ITEMS, STARTING_GOLD } from './data/items.js';
 import {
   GYMS, gymAt, ELITE_FOUR, CHAMPION, ELITE_SPACE, CHAMPION_SPACE, ROUTE_TRAINERS, ROCKET, BADGES_TO_LEAGUE, BADGE_REWARDS, ACE_TRAINERS
@@ -125,6 +126,7 @@ function newPlayer(rng, cfg, index) {
       mon.brought = true; // veio da Coleção (segue a regra das insígnias como qualquer outro)
       if (m.uid) mon.uid = String(m.uid);
       if (m.aura) mon.aura = m.aura;
+      if (m.trust) mon.trust = true; // capturado na Bola da Confiança
       if (m.nick) { const n = cleanNick(m.nick); if (n) mon.nick = n; } // apelido (Loja de Diamantes)
       return mon;
   };
@@ -378,6 +380,7 @@ function advanceTurn(state, now) {
       tickHotspots(state);
       tickWeather(state, fx, log);
       onRound(state);
+      assistTick(state); // Ajuda do Professor e prazos dos convites
       endByRules(state, false);
       if (state.status !== 'playing') return;
     }
@@ -527,6 +530,7 @@ function skipAfk(state, rng, actor, now) {
 function visitCity(state, p, sp) {
   p.lastCity = sp.id;
   if (rulesOf(state) === 'conquest') conquestVisit(state, p, sp);
+  questVisit(state, createRng((state.seed ^ (sp.id * 2654435761) ^ state.turn) >>> 0), p, sp);
   if (!p.visited.includes(sp.id)) p.visited.push(sp.id);
   const gym = gymAt(sp.id);
   let extra = ' Centro Pokémon e Loja disponíveis.';
@@ -769,11 +773,11 @@ const EVENT_ITEMS = {
   1: [['poke_ball', 5], ['potion', 4], ['bicycle', 2], ['escape_rope', 1], ['great_ball', 1]],
   2: [['poke_ball', 3], ['great_ball', 4], ['potion', 3], ['super_potion', 2], ['revive', 1], ['x_attack', 1]],
   3: [['great_ball', 3], ['ultra_ball', 3], ['super_potion', 3], ['revive', 2], ['evolution_stone', 1], ['flame_ball', 1], ['aqua_ball', 1]],
-  4: [['ultra_ball', 4], ['super_potion', 3], ['revive', 2], ['rare_candy', 2], ['evolution_stone', 1], ['shadow_ball', 1], ['mystic_ball', 1], ['master_ball', 0.05]],
-  5: [['ultra_ball', 4], ['rare_candy', 3], ['revive', 2], ['rainbow_ball', 1], ['master_ball', 0.1]]
+  4: [['ultra_ball', 4], ['super_potion', 3], ['revive', 2], ['rare_candy', 2], ['evolution_stone', 1], ['shadow_ball', 1], ['mystic_ball', 1], ['master_ball', 0.05], ['trust_ball', 0.06]],
+  5: [['ultra_ball', 4], ['rare_candy', 3], ['revive', 2], ['rainbow_ball', 1], ['master_ball', 0.1], ['trust_ball', 0.12]]
 };
 
-const LUCKY_ITEMS = [['rare_candy', 4], ['evolution_stone', 3], ['rainbow_ball', 2], ['master_ball', 0.15]];
+const LUCKY_ITEMS = [['rare_candy', 4], ['evolution_stone', 3], ['rainbow_ball', 2], ['master_ball', 0.15], ['trust_ball', 0.25]];
 
 function boardEvent(state, rng, p, sp, forceId = null) {
   const t = sp.tier;
@@ -785,6 +789,12 @@ function boardEvent(state, rng, p, sp, forceId = null) {
   let then = null; // ação depois de mostrar a carta (batalha)
 
   switch (card.id) {
+    case 'travel_invite': {
+      const txt = giveTravelQuest(state, rng, p);
+      if (txt) effects.push({ text: txt, tone: 'good', icon: '🗺️' });
+      else { const g = 60 * t; p.gold += g; effects.push({ text: `Você já conhece as cidades por perto. +${g} de ouro pela viagem.`, tone: 'good', icon: '🪙' }); }
+      break;
+    }
     case 'lost_bag': {
       const g = rng.int(40, 120) * t;
       p.gold += g;

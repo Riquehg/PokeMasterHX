@@ -18,7 +18,7 @@ export const RAID_JOIN_TIMEOUT_TURNS = 1;
 export const RAID_ITEM_KINDS = ['heal', 'boost'];
 export const RAID_GROUP_HP_PER_MEMBER = 0.8; // HP extra do chefe por participante
 
-const BALL_CATCH = { poke_ball: 0, great_ball: 0.04, ultra_ball: 0.08, master_ball: 1 };
+const BALL_CATCH = { poke_ball: 0, trust_ball: 0, great_ball: 0.04, ultra_ball: 0.08, master_ball: 1 };
 
 /** Chance de captura na Raid com uma bola. */
 export function raidBallChance(p, ballId) {
@@ -26,7 +26,7 @@ export function raidBallChance(p, ballId) {
   if (!it || it.kind !== 'ball') return 0;
   if (it.bonus >= 99) return 1;
   const extra = BALL_CATCH[ballId] ?? (it.typeBonus ? 0.1 : 0.05);
-  return Math.min(0.35, 0.06 + 0.02 * (p.badges?.length || 0) + extra);
+  return Math.min(0.28, 0.04 + 0.015 * (p.badges?.length || 0) + extra);
 }
 
 function find(p, uid) {
@@ -248,6 +248,8 @@ function raidWon(state, rng) {
     const p = getPlayer(state, x.pid);
     p.gold += g;
     addItem(p, 'rare_candy', 1);
+    // muito raro: uma Bola da Confiança de lembrança da Raid (5%)
+    if (rng.chance(0.05)) { addItem(p, 'trust_ball', 1); r.log.push(`🤝 ${p.name} encontrou uma Bola da Confiança no campo de batalha!`); log(state, `🤝 ${p.name} ganhou uma Bola da Confiança raríssima na Raid!`, 'shiny'); }
     p.stats.raids = (p.stats.raids || 0) + 1;
     progressMission(state, p.id, { k: 'raid_win' });
   }
