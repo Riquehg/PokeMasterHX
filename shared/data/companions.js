@@ -20,7 +20,7 @@ export const COMPANIONS = {
   karen:   { name: 'Karen',      sprite: 'companions/karen.png',   icon: '🌑', bonus: { types: ['dark'], dmg: 0.15 },                desc: '+15% de dano em golpes Sombrios' },
   valerie: { name: 'Valerie',    sprite: 'companions/valerie.png', icon: '🧚', bonus: { types: ['fairy'], dmg: 0.15 },               desc: '+15% de dano em golpes de Fada' },
   oak:     { name: 'Prof. Oak',  sprite: 'companions/oak.png',     icon: '🎓', bonus: { xp: 1.25 },                                  desc: '+25% de XP para a equipe' },
-  joy:     { name: 'Enfermeira Joy', sprite: 'companions/joy.png', icon: '💗', bonus: { potion: 1.5 },                               desc: 'Poções curam 50% a mais' },
+  joy:     { name: 'Joy', sprite: 'companions/joy.png', icon: '💗', bonus: { potion: 1.5 },                               desc: 'Poções curam 50% a mais' },
   rocket:  { name: 'Jessie & James', sprite: 'trainers/rocket.png', icon: '🚀', bonus: { gold: 1.2 },                                desc: '+20% de ouro nas vitórias' }
 };
 
