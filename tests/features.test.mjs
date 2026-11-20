@@ -265,6 +265,7 @@ test('companheiro: Misty aumenta o dano de golpes de Água', async () => {
     const s = game(3);
     const rng = createRng(4);
     s.players[0].companion = comp;
+    s.players[0].bond = { misty: 9 }; // laço alto: +12% (Nv.10 também ajudaria na batalha e mudaria o dado)
     s.players[0].team = [createMon(rng, 'squirtle', 20, { starter: true, nature: 'Hardy', iv: { hp: 15, atk: 15, spe: 15 }, moves: ['water_q', 'water_s'] })];
     startBattle(s, { kind: 'wild', pid: 'ash', foe: { kind: 'wild', mon: createMon(createRng(9), 'snorlax', 50, { nature: 'Hardy' }) } });
     submitChoice(s, createRng(77), 'ash', { move: 'attack', slot: 0 });
