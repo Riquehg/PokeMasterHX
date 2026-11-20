@@ -1,6 +1,6 @@
 // Tipos de partida: Clássico (padrão), ⚔️ Battle Royale e 🏰 Conquista.
 // Cada um funciona com as duas versões de time: Balanceada (inicial) e Coleção (time da conta).
-import { SPACE_LIST, SPACES, getSpace } from '../data/board.js';
+import { SPACE_LIST, SPACES, getSpace, CURRENT_MAP } from '../data/board.js';
 import { GYMS } from '../data/trainers.js';
 import { createRng } from './rng.js';
 import { getPlayer, log, fx, fail, hasUsable, blackout, addItem, speciesName, clone } from './helpers.js';
@@ -9,7 +9,7 @@ import { startBattle } from './battle.js';
 
 export const GAME_RULES = {
   classic:  { name: 'Clássico', icon: '🗺️', desc: 'Insígnias, Liga e Campeão. Vence quem derrotar o Campeão (ou tiver mais pontos no limite de turnos).' },
-  royale:   { name: 'Battle Royale', icon: '⚔️', desc: 'Uma tempestade fecha o mapa. Quem cai na casa de outro batalha. Time todo desmaiado = eliminado. Ganha o último de pé.' },
+  royale:   { name: 'Battle Royale', icon: '⚔️', desc: 'Joga na Arena Royale (mapa simétrico: todos começam na borda, à mesma distância do centro). Uma tempestade fecha o mapa. Quem cai na casa de outro batalha. Time todo desmaiado = eliminado. Ganha o último de pé.' },
   conquest: { name: 'Conquista', icon: '🏰', desc: 'Domine as cidades de ginásio e deixe Pokémon defendendo. Cidades rendem ouro e bônus. Ganha quem dominar mais.' }
 };
 export const RULE_IDS = Object.keys(GAME_RULES);
@@ -38,8 +38,15 @@ export function setupRules(state, rng) {
     const maxD = Math.max(...Object.values(dist).filter(d => d < 99));
     state.royale = { center, ring: maxD, max: maxD, step: Math.max(1, Math.ceil(maxD / STORM_ROUNDS)), placeNext: state.players.length };
     // espalha os jogadores pelas bordas do mapa
-    const far = SPACE_LIST.filter(s => !s.gate && (dist[s.id] ?? 0) >= maxD * 0.65).sort((a, b) => a.id - b.id);
-    const picks = spread(rng, far, state.players.length);
+    let picks;
+    if (CURRENT_MAP?.bases) {
+      // Arena Royale: bases espaçadas por igual (2 jogadores = lados opostos, 3 = triângulo, 6 = todas)
+      const B = CURRENT_MAP.bases, n = state.players.length, off = rng.int(0, B.length - 1);
+      picks = state.players.map((_, i) => getSpace(B[(off + Math.round((i * B.length) / n)) % B.length]));
+    } else {
+      const far = SPACE_LIST.filter(s => !s.gate && (dist[s.id] ?? 0) >= maxD * 0.65).sort((a, b) => a.id - b.id);
+      picks = spread(rng, far, state.players.length);
+    }
     state.players.forEach((p, i) => {
       p.pos = picks[i % picks.length].id;
       p.lastCity = p.pos;
@@ -70,6 +77,11 @@ export function onRound(state) {
 
 /** Substitui o "desmaio geral". No Battle Royale, perder PvP elimina; perder para selvagem/NPC volta para a cidade como sempre. */
 export function knockOut(state, p, pct = 0.1, cause = 'npc') {
+  // ☠️ Hardcore (qualquer tipo de partida): perdeu a equipe = fora da partida, perde tudo o que ganhou
+  if (state.options?.hardcore && !state.options.duel) {
+    p.hardcoreLost = true;
+    return eliminate(state, p, 'perdeu toda a equipe no HARDCORE');
+  }
   if (rulesOf(state) !== 'royale' || cause !== 'pvp') return blackout(state, p, pct);
   eliminate(state, p, 'perdeu o duelo');
 }

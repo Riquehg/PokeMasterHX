@@ -18,6 +18,9 @@ import { badgeUrl } from '../config.js';
 import { missionsHtml, companionHtml, openCompanionPicker } from './missions.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
 import { renderRaid } from './raid.js';
+import { toggleSocial } from './social.js';
+import { divInfo } from '../../shared/data/league.js';
+import { api } from '../api.js';
 import { WeatherLayer, weatherChipHtml } from './weather.js';
 import { WEATHERS } from '../../shared/rules/weather.js';
 import { GAME_RULES, stormAt, ownerOf, citiesOf, GARRISON_MAX, alivePlayers } from '../../shared/rules/modes.js';
@@ -41,6 +44,7 @@ export function mountGame(root, session, opts = {}) {
         <div class="row tb-btns">
           <button class="btn sm" data-act="open-bag" title="Mochila">🎒<span class="lbl-txt"> Mochila</span></button>
           <button class="btn sm" data-act="open-dex" title="Pokédex">📖<span class="lbl-txt"> Pokédex</span></button>
+          <button class="btn sm soc-tb" data-act="social" title="Chat global e treinadores online">💬<span class="lbl-txt"> <span data-soc-online>0</span> online</span><i data-soc-badge></i></button>
           <button class="btn sm" data-act="speed" id="g-speed" title="Velocidade das animações">🎬</button>
           <button class="btn sm" data-act="open-help" title="Regras">❔</button>
           <button class="btn sm red" data-act="exit" title="Sair">🚪<span class="lbl-txt"> Sair</span></button>
@@ -214,6 +218,13 @@ export function mountGame(root, session, opts = {}) {
           if (f.pid === v) await eventCard({ k: 'event', pid: f.pid, id: 'eliminated', title: 'Você foi eliminado!', icon: '💀', tone: 'bad', lore: `${f.why[0].toUpperCase() + f.why.slice(1)}. Você ficou em ${f.place}º lugar — dá para continuar assistindo.`, effects: [] }, { name: nameOf(f.pid), mine: true });
           else toast(`💀 ${nameOf(f.pid)} ${f.why} e foi eliminado (${f.place}º)!`, 'info');
           break;
+        case 'joined':
+          if (f.pid !== v) toast(`🙋 ${nameOf(f.pid)} entrou na partida!`, 'good');
+          break;
+        case 'kicked':
+          if (f.pid === v) toast('🚫 O anfitrião removeu você da partida.', 'bad');
+          else toast(`🚫 ${nameOf(f.pid)} foi removido da partida.`, 'info');
+          break;
         case 'city_taken': {
           const g = GYMS.find(x => x.id === f.city);
           toast(`🏰 ${nameOf(f.pid)} dominou ${g?.city}${f.from ? ` (tomada de ${nameOf(f.from)})` : ''}!`, f.pid === v ? 'good' : 'info');
@@ -273,7 +284,8 @@ export function mountGame(root, session, opts = {}) {
     root.querySelector('#g-mode').textContent = session.kind !== 'online' ? '📱 Offline' : mo.solo ? '🤖 Treino (salva na conta)' : `🌐 Sala ${session.match?.code || ''} · ${{ balanced: '⚖️ Balanceado', collection: '📦 Coleção', ranked: '🏆 Competitivo' }[mo.mode] || ''}`;
     root.querySelector('#g-turn').textContent = `Turno ${s.turn}${s.options.turnLimit ? '/' + s.options.turnLimit : ''}`;
     const mc = root.querySelector('#g-rules');
-    if (mc) mc.innerHTML = s.rules && s.rules !== 'classic' ? `<span class="chip ${s.rules === 'royale' ? 'red' : 'gold'}">${GAME_RULES[s.rules].icon} ${GAME_RULES[s.rules].name}${s.rules === 'royale' ? ` · 🌀 ${s.royale.ring}` : ''}</span>` : '';
+    if (mc) mc.innerHTML = (s.rules && s.rules !== 'classic' ? `<span class="chip ${s.rules === 'royale' ? 'red' : 'gold'}">${GAME_RULES[s.rules].icon} ${GAME_RULES[s.rules].name}${s.rules === 'royale' ? ` · 🌀 ${s.royale.ring}` : ''}</span>` : '')
+      + (s.options?.hardcore ? ' <span class="chip red" title="Hardcore: perdeu a equipe, está fora e perde tudo da partida">☠️ Hardcore</span>' : '');
     const wc = root.querySelector('#g-weather');
     if (wc) wc.innerHTML = s.kind === 'duel' ? '' : weatherChipHtml(s);
     root.querySelector('#g-speed').textContent = SPEEDS.find(x => x[0] === anim.speed)?.[1].split(' ')[0] || '🎬';
@@ -501,10 +513,17 @@ export function mountGame(root, session, opts = {}) {
     root.querySelector('#g-players').innerHTML = s.players.map((pl, i) => `
       <div class="list-item" data-act="trainer" data-pid="${esc(pl.id)}" style="cursor:pointer;${s.current === i ? 'border-color:' + playerColor(s, pl.id) : ''}">
         ${avatarImg(pl, 'avatar sm', playerColor(s, pl.id))}
-        <div class="grow"><b style="color:${playerColor(s, pl.id)}">${esc(pl.name)}</b>${pl.companion && COMPANIONS[pl.companion] ? ` <span class="chip" title="${esc(COMPANIONS[pl.companion].desc)}">${COMPANIONS[pl.companion].icon} ${esc(COMPANIONS[pl.companion].name)}</span>` : ''}${pl.isBot ? ' <span class="chip">CPU</span>' : ''}${pl.left ? ' <span class="chip red">saiu</span>' : ''}${pl.out ? ` <span class="chip red">💀 ${pl.place}º</span>` : ''}${s.rules === 'conquest' ? ` <span class="chip">🏰 ${citiesOf(s, pl.id)}</span>` : ''}${pl.cosmetic?.title ? `<div class="player-title">${esc(pl.cosmetic.title)}</div>` : ''}
+        <div class="grow"><b style="color:${playerColor(s, pl.id)}">${esc(pl.name)}</b>${pl.companion && COMPANIONS[pl.companion] ? ` <span class="chip" title="${esc(COMPANIONS[pl.companion].desc)}">${COMPANIONS[pl.companion].icon} ${esc(COMPANIONS[pl.companion].name)}</span>` : ''}${pl.isBot ? ' <span class="chip">CPU</span>' : ''}${pl.left ? ' <span class="chip red">saiu</span>' : ''}${pl.kicked ? ' <span class="chip red">🚫 removido</span>' : pl.out ? ` <span class="chip red">💀 ${s.rules === 'royale' ? pl.place + 'º' : 'fora'}</span>` : ''}${pl.lateJoin ? ' <span class="chip green" title="Entrou no meio da partida">🙋</span>' : ''}${s.rules === 'conquest' ? ` <span class="chip">🏰 ${citiesOf(s, pl.id)}</span>` : ''}${pl.cosmetic?.title ? `<div class="player-title">${esc(pl.cosmetic.title)}</div>` : ''}
           <div class="tiny muted">📍 ${esc(getSpace(pl.pos).name)} · 🪙 ${pl.gold} · 🎖️ ${pl.badges.length} · 📖 ${pl.caught.length}${pl.eliteStage ? ` · 👑 ${pl.eliteStage}/4` : ''}${pl.skip ? ' · ⏸️' : ''}</div></div>
         <div class="row" style="gap:2px">${pl.team.slice(0, 6).map(m => `<img src="${monSprite(m)}" alt="${esc(speciesName(m.sp))}" style="width:24px;height:24px;object-fit:contain;${m.hp <= 0 ? 'filter:grayscale(1);opacity:.5' : ''}">`).join('')}</div>
+        ${canKick(s, pl) ? `<button class="btn sm red kick-btn" data-act="kick" data-pid="${esc(pl.id)}" title="Remover da partida (o anfitrião não precisa esperar a CPU)">🚫</button>` : ''}
       </div>`).join('');
+  }
+
+  // anfitrião da sala online pode remover outros humanos no meio da partida
+  function canKick(s, pl) {
+    const m = session.match;
+    return session.kind === 'online' && m && !m.options?.solo && m.hostId === vid() && pl.id !== vid() && !String(pl.id).startsWith('cpu_') && !pl.kicked && s.status === 'playing';
   }
 
   function renderLog(s) {
@@ -613,9 +632,22 @@ export function mountGame(root, session, opts = {}) {
   }
 
   function renderGameOver(s) {
+    if (s.status === 'finished' && ui.overShown && !ui.leagueShown && s.leagueChanges?.[vid()] && document.getElementById('over')) {
+      ui.leagueShown = true; closeModal('over'); showOver(s); return; // o resultado da Liga chega logo depois do fim
+    }
     if (s.status !== 'finished' || ui.overShown) return;
     ui.overShown = true;
     showOver(s);
+  }
+
+  // 🏆 Liga: +PL / subiu ou caiu de divisão
+  function leagueLine(s) {
+    const lc = s.leagueChanges?.[session.viewerId()];
+    if (!lc) return '';
+    const d = divInfo(lc.div);
+    return `<div class="lg-me" style="--ec:${d.color};margin-top:8px"><span class="elo-big">${d.icon}</span><div><div class="small muted">Liga Ranqueada</div>
+      <b style="color:${d.color}">${esc(d.name)}</b> · ${lc.lp} PL <b class="lg-delta" style="color:${lc.delta >= 0 ? '#8ff0bd' : '#ff9b9e'}">${lc.delta >= 0 ? '+' : ''}${lc.delta} PL</b>
+      ${lc.change === 'up' ? '<div class="small" style="color:#8ff0bd">⬆️ Subiu de divisão!</div>' : lc.change === 'down' ? '<div class="small" style="color:#ff9b9e">⬇️ Caiu de divisão.</div>' : ''}</div></div>`;
   }
 
   function showOver(s) {
@@ -627,7 +659,7 @@ export function mountGame(root, session, opts = {}) {
       const ov = openModal('over', w?.id === vid ? '🏆 Vitória!' : '⚔️ Fim do duelo', `
         <div class="banner-win">${w ? avatarImg(w, 'avatar') : ''}<h2>${esc(w ? w.name : '—')} venceu o duelo!</h2>
         <p class="muted">${esc(s.log.filter(l => l.kind === 'win').slice(-1)[0]?.msg || '')}</p></div>
-        ${d !== undefined ? `<p class="center" style="font-size:18px">Seu Elo: <b style="color:${d >= 0 ? '#8ff0bd' : '#ff9b9e'}">${d >= 0 ? '+' : ''}${d}</b></p>` : ''}
+        ${d !== undefined ? `<p class="center" style="font-size:18px">Seu Elo: <b style="color:${d >= 0 ? '#8ff0bd' : '#ff9b9e'}">${d >= 0 ? '+' : ''}${d}</b></p>` : ''}${leagueLine(s)}
         <button class="btn primary block" data-act="exit" style="margin-top:10px">${esc(opts.backLabel || 'Voltar ao menu')}</button>`);
       bindActions(ov, { exit: () => { closeModal('over'); onExit(); } });
       return;
@@ -643,7 +675,8 @@ export function mountGame(root, session, opts = {}) {
       <p class="muted">${esc(s.log.filter(l => l.kind === 'win').slice(-1)[0]?.msg || '')}</p></div>
       <table class="score"><tr><th>Treinador</th>${extraTh}<th>Insígnias</th><th>Pokédex</th><th>Shinies</th><th>Pontos</th>${s.ratingChanges ? '<th>Rating</th>' : ''}</tr>
       ${ranked.map(p => { const d = s.ratingChanges?.[p.id]; return `<tr><td>${esc(p.name)}</td>${extraTd(p)}<td>${p.badges.length}</td><td>${p.caught.length}</td><td>${p.stats.shinies}</td><td><b>${score(p)}</b></td>${s.ratingChanges ? `<td style="color:${d >= 0 ? '#8ff0bd' : '#ff9b9e'}"><b>${d >= 0 ? '+' : ''}${d ?? 0}</b></td>` : ''}</tr>`; }).join('')}</table>
-      ${session.kind === 'online' ? '<p class="small muted">Seus Pokémon (equipe e PC), Pokédex e estatísticas foram salvos na sua conta — veja em 📦 Coleção.</p>' : '<p class="small muted">Modo offline: o progresso não vai para a conta.</p>'}
+      ${leagueLine(s)}
+      ${me()?.hardcoreLost ? '<p class="small" style="color:#ff9b9e">☠️ Hardcore: você caiu e perdeu tudo o que ganhou nesta partida.</p>' : session.kind === 'online' ? '<p class="small muted">Seus Pokémon (equipe e PC), Pokédex e estatísticas foram salvos na sua conta — veja em 📦 Coleção.</p>' : '<p class="small muted">Modo offline: o progresso não vai para a conta.</p>'}
       <button class="btn primary block" data-act="exit" style="margin-top:10px">Voltar ao menu</button>`);
     bindActions(ov, { exit: () => { closeModal('over'); onExit(); } });
   }
@@ -665,6 +698,21 @@ export function mountGame(root, session, opts = {}) {
     'open-bag': () => M.openBag(viewSession(), act),
     'open-dex': () => M.openDex(viewSession()),
     'open-help': () => M.openHelp(),
+    social: () => { if (!toggleSocial()) toast('Entre com sua conta para usar o chat global.', 'info'); },
+    kick: d => {
+      const pl = S().players.find(x => x.id === d.pid);
+      if (!pl) return;
+      const ov = openModal('kick', '🚫 Remover jogador', `<p>Remover <b>${esc(pl.name)}</b> da partida agora?</p>
+        <p class="small muted">Ele sai na hora (não precisa esperar a CPU). Se estiver numa batalha, a CPU só termina ela.${S().options.hardcore ? ' No Hardcore ele perde tudo o que ganhou.' : ''}</p>
+        <div class="grid2"><button class="btn" data-close="kick">Cancelar</button><button class="btn red" data-act="kick-ok">Remover</button></div>`);
+      bindActions(ov, {
+        'kick-ok': async () => {
+          closeModal('kick');
+          try { const { match } = await api('match', { op: 'kick', matchId: session.match.id, target: pl.id }); session.apply?.(match); if (!session.apply) session.refresh?.(); toast(`${pl.name} foi removido.`, 'good'); }
+          catch (e) { toast(e.message, 'bad'); }
+        }
+      });
+    },
     'open-battle': () => render(),
     spectate: () => { ui.spectate = true; render(); },
     'auto-watch': (d, el) => { ui.autoWatch = !ui.autoWatch; try { localStorage.setItem('pmhx_autowatch', ui.autoWatch ? '1' : ''); } catch { /* ok */ } if (ui.autoWatch) { ui.spectate = true; render(); } },

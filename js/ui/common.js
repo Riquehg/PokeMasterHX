@@ -3,7 +3,7 @@ import { getSpecies } from '../../shared/data/pokemon.js';
 import { monView, xpToNext, MAX_LEVEL, maxStats, ivPercent, IV_MAX } from '../../shared/rules/monsters.js';
 import { monMoves } from '../../shared/data/moves.js';
 import { NATURES } from '../../shared/data/natures.js';
-import { TYPE_COLORS } from '../../shared/rules/types.js';
+import { TYPE_COLORS, against } from '../../shared/rules/types.js';
 import { esc, hpClass } from './dom.js';
 import { canUse, badgesNeeded } from '../../shared/rules/helpers.js';
 import { natureLabel } from '../../shared/data/natures.js';
@@ -45,7 +45,7 @@ export function potentialStars(pct) {
   const n = pct >= 95 ? 5 : pct >= 80 ? 4 : pct >= 60 ? 3 : pct >= 40 ? 2 : pct >= 20 ? 1 : 0;
   return '★'.repeat(n) + '☆'.repeat(5 - n);
 }
-const potentialLabel = pct => (pct >= 95 ? 'Perfeito' : pct >= 80 ? 'Excelente' : pct >= 60 ? 'Muito bom' : pct >= 40 ? 'Bom' : pct >= 20 ? 'Comum' : 'Fraco');
+export const potentialLabel = pct => (pct >= 95 ? 'Perfeito' : pct >= 80 ? 'Excelente' : pct >= 60 ? 'Muito bom' : pct >= 40 ? 'Bom' : pct >= 20 ? 'Comum' : 'Fraco');
 
 function moveBox(m, foeTypes) {
   const pwr = m.kind === 'dmg' || m.kind === 'drain' ? `${Math.round((m.power || 1) * 100)} PWR` : 'SUPORTE';
@@ -108,4 +108,40 @@ export function playerColor(state, pid) {
 export function avatarImg(p, cls = 'avatar sm', color) {
   if (p?.cosmetic?.frame) cls += ' frame-' + p.cosmetic.frame;
   return `<img class="${cls}" src="${avatarUrl(p.avatar)}" alt="${esc(p.name)}" data-color="${color || '#3b2b1d'}" style="${color ? `border-color:${color}` : ''}">`;
+}
+
+// ------------------------------------------------ vantagem de tipo (batalha/raid)
+/** Melhor multiplicador dos golpes de dano de `atk` contra os tipos de `def`. */
+export function bestMult(atk, def) {
+  const dt = getSpecies(def.sp).types;
+  const mults = monMoves(atk).filter(m => m.kind === 'dmg' || m.kind === 'drain').map(m => against(m.type, dt));
+  return mults.length ? Math.max(...mults) : 1;
+}
+
+/** {mine, theirs, edge}: edge 1 = vantagem, -1 = desvantagem, 0 = neutro. */
+export function matchup(mine, foe) {
+  const a = bestMult(mine, foe), b = bestMult(foe, mine);
+  const edge = a >= 2 && b < 2 ? 1 : b >= 2 && a < 2 ? -1 : a > b ? 1 : b > a ? -1 : 0;
+  return { mine: a, theirs: b, edge };
+}
+
+/** Selo ▲/▼ mostrado nos nossos Pokémon (equipe, troca, Raid). */
+export function edgeBadge(mine, foe, big = false) {
+  if (!mine || !foe) return '';
+  const m = matchup(mine, foe);
+  if (!m.edge) return `<span class="edge eq ${big ? 'big' : ''}" title="Sem vantagem de tipo (seu melhor golpe x${m.mine} · dele x${m.theirs})">＝</span>`;
+  return m.edge > 0
+    ? `<span class="edge up ${big ? 'big' : ''}" title="Vantagem de tipo: seu melhor golpe x${m.mine} · o dele x${m.theirs}">▲</span>`
+    : `<span class="edge down ${big ? 'big' : ''}" title="Desvantagem de tipo: seu melhor golpe x${m.mine} · o dele x${m.theirs}">▼</span>`;
+}
+
+/** Ficha do Pokémon adversário selvagem/Raid: natureza, potencial (IV) e os golpes que ele usa. */
+export function foeIntelHtml(mon) {
+  const pot = ivPercent(mon);
+  const moves = monMoves(mon);
+  return `<div class="foe-intel">
+    <span class="fi-nat" title="${esc(natureLabel(mon.nature))}">❖ ${esc(natureLabel(mon.nature))}</span>
+    <span class="fi-pot" title="Potencial (IVs) HP ${mon.iv?.hp ?? '?'} · ATQ ${mon.iv?.atk ?? '?'} · VEL ${mon.iv?.spe ?? '?'} (de ${IV_MAX})">${pot === null ? '?' : `<b class="pk-stars">${potentialStars(pot)}</b> ${potentialLabel(pot)} ${pot}%`}</span>
+    <span class="fi-moves">${moves.map(m => `<span class="move-chip" style="--tc:${TYPE_COLORS[m.type]}"><b>${esc(m.name)}</b> <span class="tiny">${esc(typeLabel(m.type))}</span></span>`).join('')}</span>
+  </div>`;
 }

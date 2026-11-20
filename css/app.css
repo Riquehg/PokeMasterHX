@@ -1228,3 +1228,83 @@ body.in-game #social { bottom: 70px; }
 /* Convite de viagem */
 .quest-box { padding: 8px 10px; border-radius: 12px; margin-bottom: 8px; border: 1px solid rgba(255, 211, 77, .55); background: linear-gradient(135deg, rgba(255, 211, 77, .14), rgba(0, 0, 0, .15)); cursor: pointer; }
 .quest-mark { position: absolute; transform: translate(-50%, -150%) scale(var(--ms, 1)); transform-origin: 50% 150%; z-index: 10; font-size: 22px; filter: drop-shadow(0 0 6px #ffd34d); animation: hsBob 1.2s ease-in-out infinite; pointer-events: none; }
+
+/* ---------- vantagem de tipo + ficha do selvagem ---------- */
+.edge { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; font-size: 10px; font-weight: 900; margin-right: 4px; vertical-align: middle; color: #fff; flex: none; }
+.edge.big { width: 19px; height: 19px; font-size: 12px; }
+.edge.up { background: #22b35a; box-shadow: 0 0 0 2px #22b35a55; animation: edgePulse 1.6s ease-in-out infinite; }
+.edge.down { background: #e0453a; box-shadow: 0 0 0 2px #e0453a55; }
+.edge.eq { background: #8a8f99; }
+@keyframes edgePulse { 50% { box-shadow: 0 0 0 5px #22b35a22; } }
+.foe-intel { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; justify-content: center; margin: 8px 0 2px; padding: 7px 10px; border-radius: 12px; background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.12); font-size: 12px; }
+.foe-intel .fi-nat { font-weight: 800; color: #e9d7ff; }
+.foe-intel .fi-pot .pk-stars { color: #ffd34d; letter-spacing: 1px; }
+.foe-intel .fi-moves { display: flex; gap: 6px; }
+.foe-intel .move-chip { background: var(--tc); padding: 2px 8px; font-size: 11px; }
+.raid-modal .foe-intel { margin-top: 4px; }
+
+/* ---------- social compacto dentro da partida ---------- */
+body.in-game #social .soc-fab { display: none; }
+body.in-game #social { top: 54px; bottom: auto; left: auto; right: 8px; }
+body.in-game .soc-panel { height: min(520px, calc(100dvh - 80px)); }
+.soc-tb { position: relative; }
+.soc-tb [data-soc-badge] { position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 9px; background: #e0453a; color: #fff; font-size: 10px; font-style: normal; font-weight: 900; line-height: 16px; display: none; }
+.soc-tb [data-soc-badge].on { display: block; }
+.kick-btn { padding: 2px 7px !important; min-height: 0 !important; margin-left: 4px; }
+@media (max-width: 900px) {
+  #game[data-mtab="goals"] .right > [data-mtab="goals"] { display: block; }
+  body.in-game #social { top: 48px; right: 4px; left: 4px; }
+  body.in-game .soc-panel { width: auto; height: calc(100dvh - 60px); }
+  .mtabs { top: 44px; }
+  .mtabs .btn { font-size: 11px; padding: 7px 2px; }
+}
+
+/* ---------- animações de golpe por tipo ---------- */
+.fx-orb { position: absolute; z-index: 7; pointer-events: none; font-size: 30px; translate: -50% -50%; filter: drop-shadow(0 0 10px var(--tc)) drop-shadow(0 0 4px #fff);
+  animation: fxFly linear forwards; }
+.fx-orb.spray { font-size: 20px; }
+@keyframes fxFly { 0% { transform: translate(0, 0) scale(.5); opacity: 0; } 15% { opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(1.25) rotate(200deg); opacity: 1; } }
+.fx-beam { position: absolute; z-index: 7; height: 14px; margin-top: -7px; transform-origin: 0 50%; pointer-events: none; border-radius: 10px;
+  background: linear-gradient(90deg, transparent, var(--tc) 20%, #fff 50%, var(--tc) 80%); box-shadow: 0 0 18px var(--tc), 0 0 6px #fff; animation: fxBeam ease-out forwards; }
+.fx-beam.zap { height: 6px; margin-top: -3px; background: repeating-linear-gradient(90deg, #fff 0 10px, var(--tc) 10px 22px); filter: drop-shadow(0 0 8px var(--tc)); }
+@keyframes fxBeam { 0% { clip-path: inset(0 100% 0 0); opacity: .2; } 60% { clip-path: inset(0 0 0 0); opacity: 1; } 100% { clip-path: inset(0 0 0 100%); opacity: .5; } }
+.fx-ring { position: absolute; z-index: 7; width: 20px; height: 20px; translate: -50% -50%; border-radius: 50%; border: 4px solid var(--tc); box-shadow: 0 0 20px var(--tc), inset 0 0 14px var(--tc);
+  pointer-events: none; animation: fxRing ease-out forwards; }
+@keyframes fxRing { 0% { transform: scale(6); opacity: 0; } 30% { opacity: 1; } 100% { transform: scale(.4); opacity: 0; } }
+.fx-spark { position: absolute; z-index: 8; translate: -50% -50%; pointer-events: none; animation: fxSpark .65s ease-out forwards; }
+@keyframes fxSpark { 0% { transform: translate(0, 0) scale(.4); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(1.1) rotate(160deg); opacity: 0; } }
+.fx-wave { position: absolute; z-index: 6; width: 30px; height: 30px; translate: -50% -50%; border-radius: 50%; border: 3px solid var(--tc); pointer-events: none; animation: fxWave .55s ease-out forwards; }
+@keyframes fxWave { to { transform: scale(5); opacity: 0; } }
+.arena.punch { animation: arenaPunch .32s ease; }
+@keyframes arenaPunch { 30% { transform: scale(1.035); filter: brightness(1.25) saturate(1.3); } 100% { transform: none; } }
+.arena.quake { animation: arenaQuake .45s steps(6); }
+@keyframes arenaQuake { 20% { transform: translate(-6px, 2px); } 40% { transform: translate(5px, -3px); } 60% { transform: translate(-4px, 3px); } 80% { transform: translate(3px, -1px); } }
+.fx-ballpop { position: absolute; z-index: 7; width: 34px; height: 34px; translate: -50% -50%; border-radius: 50%; pointer-events: none;
+  background: linear-gradient(#e33 0 46%, #222 46% 54%, #fff 54%); box-shadow: 0 0 0 2px #222; animation: fxBallPop .65s ease-out forwards; }
+@keyframes fxBallPop { 0% { transform: translateY(-40px) scale(.6); } 45% { transform: translateY(0) scale(1); opacity: 1; } 70% { transform: scale(1.4); box-shadow: 0 0 40px 20px #fff; opacity: .9; } 100% { transform: scale(2); opacity: 0; box-shadow: 0 0 60px 30px #fff; } }
+@media (prefers-reduced-motion: reduce) { .fx-orb, .fx-beam, .fx-ring, .fx-spark, .fx-wave, .fx-ballpop { display: none; } .arena.punch, .arena.quake { animation: none; } }
+
+/* ---------- Liga ranqueada ---------- */
+.lg-me { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 14px; border: 2px solid var(--ec); background: color-mix(in srgb, var(--ec) 12%, transparent); margin-bottom: 10px; }
+.lg-bar { height: 10px; border-radius: 6px; background: rgba(255,255,255,.1); overflow: hidden; margin: 6px 0 3px; }
+.lg-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--ec), #fff); border-radius: 6px; transition: width .6s; }
+.lg-last { display: inline-flex; gap: 3px; margin-top: 4px; }
+.lg-last i { font-style: normal; font-size: 10px; font-weight: 900; width: 17px; height: 17px; border-radius: 4px; display: inline-grid; place-items: center; color: #fff; }
+.lg-last i.w { background: #22b35a; } .lg-last i.l { background: #e0453a; } .lg-last i.m { background: #8a8f99; }
+.lg-ladder { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+.lg-step { display: inline-flex; flex-direction: column; align-items: center; min-width: 38px; padding: 3px 4px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--ec) 60%, transparent); font-size: 16px; opacity: .55; }
+.lg-step small { font-size: 9px; font-weight: 800; color: var(--ec); }
+.lg-step.on { opacity: 1; background: color-mix(in srgb, var(--ec) 25%, transparent); box-shadow: 0 0 0 2px var(--ec); }
+.lg-table tr.me td { background: rgba(242, 179, 61, .15); }
+.lg-delta { font-weight: 900; }
+@media (max-width: 480px) {
+  .tb-btns { gap: 2px; }
+  .tb-btns .btn { padding: 3px 4px; font-size: 12px; min-width: 0; min-height: 30px; }
+  .tb-btns .soc-tb [data-soc-badge] { top: -3px; right: -3px; }
+  .stats .stat { padding: 2px 4px; }
+  .topbar .stats { gap: 2px; }
+}
+@media (max-width: 400px) {
+  .stats .stat { font-size: 11px; padding: 2px 3px; }
+  #g-turn { padding: 1px 5px; }
+}

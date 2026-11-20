@@ -3,7 +3,7 @@
 import { createMatch } from '../../shared/engine.js';
 import { randomSeed } from '../../shared/rules/rng.js';
 import { CUP_PRIZE, CUP_MIN_HUMANS_FOR_PRIZE, CUP_ELO_BONUS, DUEL_LEVEL_CAP, nextPow2 } from '../../shared/data/cup.js';
-import { bad, notFound, publicMatch, eloDeltas, START_RATING, mutateProfile } from './core.js';
+import { bad, notFound, publicMatch, eloDeltas, START_RATING, mutateProfile, leagueStats } from './core.js';
 
 const isCpu = id => String(id).startsWith('cpu_');
 
@@ -253,16 +253,28 @@ export async function duelFinished(db, row) {
   const humans = st.players.filter(p => !isCpu(p.id));
   if (row.options?.ranked && humans.length === 2) {
     const deltas = st.ratingChanges || await eloDeltas(db, st, humans);
+    const leagueChanges = {};
     for (const p of humans) {
+      let reward = 0;
       await mutateProfile(db, p.id, prof => {
-        const s = { ...(prof.stats || {}) };
+        let s = { ...(prof.stats || {}) };
+        // 🏆 Liga: vitória/derrota no duelo ranqueado
+        const lg = leagueStats(s, st.winner === p.id ? 1 : 2, 2);
+        s = lg.stats; reward = lg.reward;
+        leagueChanges[p.id] = { delta: lg.result.delta, change: lg.result.change, div: lg.result.to, lp: lg.result.league.lp };
         s.ranked = (s.ranked || 0) + 1;
         s.duels = (s.duels || 0) + 1;
         s.rankedWins = (s.rankedWins || 0) + (st.winner === p.id ? 1 : 0);
         s.duelWins = (s.duelWins || 0) + (st.winner === p.id ? 1 : 0);
         return { rating: Math.max(100, (prof.rating ?? START_RATING) + (deltas[p.id] || 0)), stats: s };
       });
+      if (reward && db.walletAdd) { try { await db.walletAdd(p.id, reward, 0); } catch { /* ok */ } }
     }
+    // mostra o resultado da Liga na tela do fim do duelo
+    try {
+      const cur = await db.getMatch(row.id);
+      if (cur?.state) await db.updateMatch(cur.id, cur.version, { state: { ...cur.state, leagueChanges }, version: cur.version + 1 });
+    } catch { /* só visual */ }
     if (st.winner && !isCpu(st.winner)) { try { await db.walletAdd(st.winner, 0, 60); } catch { /* ok */ } } // ouro da conta pela vitória
   }
   const cupId = row.options?.cupId;

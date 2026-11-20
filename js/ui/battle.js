@@ -4,15 +4,14 @@ import { ITEMS, ballBonusAgainst } from '../../shared/data/items.js';
 import { monView, maxHpOf } from '../../shared/rules/monsters.js';
 import { canUse, badgesNeeded } from '../../shared/rules/helpers.js';
 import { monMoves } from '../../shared/data/moves.js';
-import { STATUS } from '../../shared/rules/battle.js';
+import { STATUS, CAPTURE_TARGET } from '../../shared/rules/battle.js';
 import { bestAttack, against, effectivenessLabel, TYPE_COLORS } from '../../shared/rules/types.js';
 import { whoMustAct } from '../../shared/engine.js';
 import { esc, hpClass } from './dom.js';
 import { monSprite, itemUrl, leaderUrl, typeLabel } from '../config.js';
-import { typeChips } from './common.js';
+import { typeChips, edgeBadge, foeIntelHtml } from './common.js';
 import { wait } from './fx.js';
 
-const CAPTURE_TARGET = { 1: 3, 2: 4, 3: 5, 4: 6, 5: 7 };
 const KIND_TITLE = {
   wild: '🌿 Pokémon Selvagem', trainer: '⚔️ Treinador', rocket: '🦹 Equipe Rocket', gym: '🏟️ Batalha de Ginásio',
   elite: '👑 Elite dos Quatro', champion: '🏆 Campeão da Liga', pvp: '🤺 Batalha PvP', raid: '🔥 RAID Lendária', ace: '🎖️ Ás da Liga'
@@ -32,20 +31,22 @@ export function captureChance(state, ballId) {
   const hpBonus = wild.hp <= max * 0.25 ? 2 : wild.hp <= max * 0.5 ? 1 : 0;
   const lvlBonus = me && me.lvl >= wild.lvl + 5 ? 1 : 0;
   const target = CAPTURE_TARGET[sp.tier] + (wild.shiny ? 1 : 0);
-  const bonus = ballBonusAgainst(ballId, sp.types) + hpBonus + lvlBonus;
+  const st = b.sides[1].status?.[wild.uid];
+  const stBonus = st ? (st.id === 'sleep' || st.id === 'freeze' ? 2 : 1) : 0;
+  const bonus = ballBonusAgainst(ballId, sp.types) + hpBonus + lvlBonus + stBonus;
   let ok = 0;
   for (let r = 2; r <= 6; r++) if (r + bonus >= target) ok++;
   return ok / 6;
 }
 
-function hpBox(state, side, mon, cls) {
+function hpBox(state, side, mon, cls, vs = null) {
   const v = monView(mon);
   const owner = side.kind === 'player' ? state.players.find(p => p.id === side.pid)?.name : side.kind === 'wild' ? 'Selvagem' : side.name;
   const team = sideTeam(state, side);
   const r = Math.max(0, v.hp) / v.maxHp;
   return `<div class="hpbox ${cls}" data-uid="${esc(mon.uid)}">
     <div class="owner">${esc(owner || '')}</div>
-    <div class="nm"><span>${esc(v.name)}${v.shiny ? ' ✨' : ''}${mon.raid ? ' <span class="chip red">CHEFE</span>' : ''}</span><span class="lv">Nv.${v.lvl}</span></div>
+    <div class="nm"><span>${vs ? edgeBadge(mon, vs, true) : ''}${esc(v.name)}${v.shiny ? ' ✨' : ''}${mon.raid ? ' <span class="chip red">CHEFE</span>' : ''}</span><span class="lv">Nv.${v.lvl}</span></div>
     <div class="types">${typeChips(v.types)}${side.boost?.[mon.uid] ? ` <span class="chip green">ATQ +${side.boost[mon.uid]}</span>` : ''}${statusChip(side, mon)}${stageChip(side, mon)}</div>
     <div class="hp ${hpClass(r)}"><i style="width:${(r * 100).toFixed(1)}%"></i></div>
     <div class="hpnum"><b class="cur">${Math.max(0, v.hp)}</b> / ${v.maxHp}</div>
@@ -110,14 +111,14 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
       <img class="mon-sprite foe ${foeMon.shiny ? 'shiny' : ''} ${foeMon.raid ? 'raid-boss' : ''} ${foeMon.aura ? 'aura-' + esc(foeMon.aura) : ''}" data-uid="${esc(foeMon.uid)}" src="${monSprite(foeMon)}" alt="${esc(getSpecies(foeMon.sp).name)}">
       <img class="mon-sprite me ${myMon.shiny ? 'shiny' : ''} ${myMon.aura ? 'aura-' + esc(myMon.aura) : ''}" data-uid="${esc(myMon.uid)}" src="${monSprite(myMon)}" alt="${esc(getSpecies(myMon.sp).name)}">
       ${hpBox(state, foe, foeMon, 'foe')}
-      ${hpBox(state, me, myMon, 'me')}
+      ${hpBox(state, me, myMon, 'me', participant ? foeMon : null)}
     </div>`;
 
   let controls = '';
   if (ui.busy) controls = `<p class="muted center" style="margin-top:10px">⚔️ ...</p>`;
   else if (!participant) controls = spectatorHtml(state, b);
   else if (!myTurn) controls = `<p class="muted center" style="margin-top:10px"><span class="spinner"></span> ${b.kind === 'pvp' ? 'Aguardando o adversário escolher...' : 'Aguarde...'}</p>`;
-  else if (mustSwitch) controls = `<p class="center" style="margin-top:10px"><b>${esc(getSpecies(myMon.sp).name)} desmaiou!</b> Escolha quem entra:</p>${switchList(sideTeam(state, me), me.active, vp)}`;
+  else if (mustSwitch) controls = `<p class="center" style="margin-top:10px"><b>${esc(getSpecies(myMon.sp).name)} desmaiou!</b> Escolha quem entra:</p>${switchList(sideTeam(state, me), me.active, vp, foeMon)}`;
   else {
     const p = state.players.find(x => x.id === vid);
     const myTeam = sideTeam(state, me);
@@ -139,7 +140,7 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
         <button class="btn green" data-act="b-sub" data-sub="ball" ${b.kind === 'wild' && balls.length ? '' : 'disabled'} ${b.kind === 'raid' ? 'title="Na Raid, vença primeiro: a captura é automática no fim"' : ''}>🔴 Capturar</button>
         <button class="btn" data-act="b-flee" ${official ? 'disabled' : ''}>${b.kind === 'wild' ? '🏃 Fugir' : '🏳️ Desistir'}</button>
       </div>${b.kind === 'raid' ? '<p class="tiny muted center">🔥 Raid: pokébolas bloqueadas durante a luta. Vença o chefe e depois escolha a Pokébola para tentar capturar.</p>' : ''}`;
-    if (ui.sub === 'switch') controls += switchList(myTeam, me.active, p);
+    if (ui.sub === 'switch') controls += switchList(myTeam, me.active, p, foeMon);
     if (ui.sub === 'item') controls += `<div class="subpick">${items.map(([id, n]) => `<button class="btn sm pickbtn" data-act="b-item" data-item="${id}"><img src="${itemUrl(id)}" alt="${esc(ITEMS[id].name)}">${esc(ITEMS[id].name)} ×${n}</button>`).join('')}</div>`;
     if (ui.sub === 'ball') {
       controls += `<div class="subpick">${balls.map(([id, n]) => {
@@ -151,17 +152,18 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
 
   return `<div class="battle-head"><b>${state.kind === 'duel' ? '⚔️ Duelo' : KIND_TITLE[b.kind] || 'Batalha'}${foe.kind === 'npc' ? ` · ${esc(foe.title ? foe.title + ' ' : '')}${esc(foe.name)}` : ''}</b><span class="chip">Rodada ${b.round + 1}</span></div>
     ${arena}
+    ${(b.kind === 'wild' || b.kind === 'raid') && foe.kind === 'wild' ? foeIntelHtml(foeMon) : ''}
     <div class="matchup">${matchup}</div>
     ${controls}
     <div class="battle-log" id="battle-log">${b.log.slice(-14).map(l => `<p>${esc(l)}</p>`).join('')}</div>`;
 }
 
-function switchList(team, active, player) {
+function switchList(team, active, player, foe) {
   return `<div class="subpick">${team.map((m, i) => {
     const v = monView(m);
     const locked = player && !canUse(player, m);
     return `<button class="btn sm pickbtn ${locked ? 'locked-mon' : ''}" data-act="b-switch" data-index="${i}" ${m.hp <= 0 || i === active || locked ? 'disabled' : ''}>
-      <img src="${monSprite(m)}" alt="${esc(v.name)}">${esc(v.name)} Nv.${v.lvl} <span class="tiny muted">${Math.max(0, m.hp)}/${v.maxHp}</span>${locked ? `<span class="lock-tag">🔒 ${badgesNeeded(m)} insígnias</span>` : ''}</button>`;
+      <img src="${monSprite(m)}" alt="${esc(v.name)}">${foe ? edgeBadge(m, foe) : ''}${esc(v.name)} Nv.${v.lvl} <span class="tiny muted">${Math.max(0, m.hp)}/${v.maxHp}</span>${locked ? `<span class="lock-tag">🔒 ${badgesNeeded(m)} insígnias</span>` : ''}</button>`;
   }).join('')}</div>`;
 }
 
@@ -187,6 +189,89 @@ async function rollBattleDie(arena, atk, f) {
   setTimeout(() => d.classList.add('out'), 700);
   setTimeout(() => d.remove(), 1100);
   await wait(220);
+}
+
+// ------------------------------------------------ efeitos por tipo de golpe
+const TYPE_FX = {
+  fire: { ico: '🔥', shape: 'orb', burst: '🔥' }, water: { ico: '💧', shape: 'beam', burst: '💦' }, electric: { ico: '⚡', shape: 'zap', burst: '⚡' },
+  grass: { ico: '🍃', shape: 'spray', burst: '🍃' }, ice: { ico: '❄️', shape: 'spray', burst: '❄️' }, fighting: { ico: '👊', shape: 'melee', burst: '💥' },
+  poison: { ico: '☠️', shape: 'orb', burst: '🟣' }, ground: { ico: '🪨', shape: 'quake', burst: '🟤' }, flying: { ico: '🌪️', shape: 'spray', burst: '🪶' },
+  psychic: { ico: '🔮', shape: 'ring', burst: '✨' }, bug: { ico: '🐛', shape: 'spray', burst: '🟢' }, rock: { ico: '🪨', shape: 'orb', burst: '🪨' },
+  ghost: { ico: '👻', shape: 'ring', burst: '👻' }, dragon: { ico: '🐉', shape: 'beam', burst: '💜' }, dark: { ico: '🌑', shape: 'melee', burst: '🌑' },
+  steel: { ico: '⚙️', shape: 'melee', burst: '✴️' }, fairy: { ico: '🌸', shape: 'spray', burst: '💖' }, normal: { ico: '💫', shape: 'melee', burst: '💥' }
+};
+
+function center(arena, el) {
+  const r = el.getBoundingClientRect(), a = arena.getBoundingClientRect();
+  return { x: r.left - a.left + r.width / 2, y: r.top - a.top + r.height / 2 };
+}
+
+/** Golpe "viaja" do atacante ao alvo (bola, raio, faísca, rajada...) e explode em partículas. */
+async function moveProjectile(arena, atk, def, type, speed = 1) {
+  if (!atk || !def) return;
+  const T = TYPE_FX[type] || TYPE_FX.normal;
+  const color = TYPE_COLORS[type] || '#fff';
+  const A = center(arena, atk), B = center(arena, def);
+  const dur = Math.round(380 / speed);
+  if (T.shape === 'melee') return; // golpe físico: o avanço do Pokémon já é a animação
+  if (T.shape === 'quake') {
+    arena.classList.remove('quake'); void arena.offsetWidth; arena.classList.add('quake');
+    await wait(dur);
+    return;
+  }
+  if (T.shape === 'beam' || T.shape === 'zap') {
+    const beam = document.createElement('div');
+    beam.className = 'fx-beam ' + T.shape;
+    const dx = B.x - A.x, dy = B.y - A.y;
+    beam.style.cssText = `left:${A.x}px;top:${A.y}px;width:${Math.hypot(dx, dy)}px;--tc:${color};transform:rotate(${Math.atan2(dy, dx)}rad);animation-duration:${dur}ms`;
+    arena.appendChild(beam);
+    setTimeout(() => beam.remove(), dur + 120);
+    await wait(dur * 0.8);
+    return;
+  }
+  if (T.shape === 'ring') {
+    const ring = document.createElement('div');
+    ring.className = 'fx-ring';
+    ring.style.cssText = `left:${B.x}px;top:${B.y}px;--tc:${color};animation-duration:${dur + 200}ms`;
+    arena.appendChild(ring);
+    setTimeout(() => ring.remove(), dur + 300);
+    await wait(dur * 0.7);
+    return;
+  }
+  // orb / spray: 1 bola grande ou 5 partículas
+  const n = T.shape === 'spray' ? 5 : 1;
+  for (let i = 0; i < n; i++) {
+    const o = document.createElement('div');
+    o.className = 'fx-orb ' + T.shape;
+    o.textContent = T.ico;
+    const jitter = n > 1 ? (i - 2) * 14 : 0;
+    o.style.cssText = `left:${A.x}px;top:${A.y}px;--tc:${color};--dx:${B.x - A.x}px;--dy:${B.y - A.y + jitter}px;animation-duration:${dur}ms;animation-delay:${i * 45}ms`;
+    arena.appendChild(o);
+    setTimeout(() => o.remove(), dur + i * 45 + 80);
+  }
+  await wait(dur + (n - 1) * 45);
+}
+
+/** Explosão de partículas no alvo (mais forte em super efetivo / crítico). */
+function impactBurst(arena, def, type, strong) {
+  if (!def) return;
+  const T = TYPE_FX[type] || TYPE_FX.normal;
+  const C = center(arena, def);
+  const n = strong ? 10 : 6;
+  for (let i = 0; i < n; i++) {
+    const p = document.createElement('div');
+    p.className = 'fx-spark';
+    p.textContent = T.burst;
+    const ang = (i / n) * Math.PI * 2, dist = (strong ? 70 : 48) + (i % 3) * 10;
+    p.style.cssText = `left:${C.x}px;top:${C.y}px;--dx:${Math.cos(ang) * dist}px;--dy:${Math.sin(ang) * dist}px;font-size:${strong ? 22 : 16}px`;
+    arena.appendChild(p);
+    setTimeout(() => p.remove(), 700);
+  }
+  const wave = document.createElement('div');
+  wave.className = 'fx-wave';
+  wave.style.cssText = `left:${C.x}px;top:${C.y}px;--tc:${TYPE_COLORS[type] || '#fff'}`;
+  arena.appendChild(wave);
+  setTimeout(() => wave.remove(), 600);
 }
 
 function float(arena, target, text, cls) {
@@ -241,6 +326,9 @@ export async function playBattleFx(fxList) {
       if (f.move) moveBanner(arena, atk, f.move, f.type);
       // 🎲 dado rolando ao lado de quem ataca, parando no resultado
       await rollBattleDie(arena, atk, f);
+      if (!f.miss && f.mult !== 0) await moveProjectile(arena, atk, def, f.type);
+      if (def && f.dmg > 0) impactBurst(arena, def, f.type, f.crit || f.mult >= 2);
+      if (f.mult >= 2 || f.crit) { arena.classList.remove('punch'); void arena.offsetWidth; arena.classList.add('punch'); }
       if (def) {
         if (f.dmg > 0) { def.classList.remove('hurt'); void def.offsetWidth; def.classList.add('hurt'); }
         const flash = document.createElement('div');
@@ -290,7 +378,18 @@ export async function playBattleFx(fxList) {
       if (s) s.classList.add('faint');
       await wait(700);
     } else if (f.k === 'switch') {
-      await wait(150);
+      // entrada com a Pokébola abrindo (o sprite novo aparece no próximo desenho)
+      const side = f.side === 0 ? 'me' : f.side === 1 ? 'foe' : null;
+      const spot = side && arena.querySelector(`.platform.${side}`);
+      if (spot) {
+        const pop = document.createElement('div');
+        pop.className = 'fx-ballpop';
+        const C = center(arena, spot);
+        pop.style.cssText = `left:${C.x}px;top:${C.y - 30}px`;
+        arena.appendChild(pop);
+        setTimeout(() => pop.remove(), 700);
+      }
+      await wait(350);
     }
   }
 }

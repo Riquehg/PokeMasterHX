@@ -117,7 +117,7 @@ export function createMemoryDb() {
     },
     // Mesmas colunas que o Supabase devolve nas listas (sem state/version) — assim os testes pegam o uso errado
     async listOpenMatches() {
-      return [...matches.values()].filter(m => m.status === 'lobby' && m.is_public).map(brief);
+      return [...matches.values()].filter(m => (m.status === 'lobby' || (m.status === 'playing' && m.options?.lateJoin && !m.options?.solo)) && m.is_public).map(brief);
     },
     async myMatches(userId) {
       return [...matches.values()].filter(m => members.get(m.id)?.has(userId) && ['lobby', 'playing'].includes(m.status)).map(brief);

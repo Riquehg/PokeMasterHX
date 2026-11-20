@@ -1,8 +1,9 @@
 // Lógica do backend, independente de infraestrutura.
 // Recebe um "db" (adaptador Supabase em produção, memória no servidor de desenvolvimento/testes).
-import { createMatch, applyAction, score, MAX_PLAYERS, fillTraits, BRING_GOLD_OPTIONS } from '../../shared/engine.js';
+import { createMatch, applyAction, addLatePlayer, score, MAX_PLAYERS, fillTraits, BRING_GOLD_OPTIONS } from '../../shared/engine.js';
 import { randomSeed } from '../../shared/rules/rng.js';
 import { ELO_TIERS } from '../../shared/data/elo.js';
+import { ensureSeason, applyLeagueResult, leagueSort, seasonId, seasonName, divInfo, LEAGUE_DIVS } from '../../shared/data/league.js';
 import { CUP_MAX_PLAYERS, DUEL_LEVEL_CAP } from '../../shared/data/cup.js';
 import { duelQueue, duelQueueStatus, duelQueueCancel, duelTeam, startCup, duelFinished } from './tournament.js';
 import { SPECIES, STARTERS, getSpecies } from '../../shared/data/pokemon.js';
@@ -212,7 +213,15 @@ export async function leaderboard(db) {
     const people = ranked.filter(r => r.rating >= t.min && (max === null || r.rating < max));
     return { ...t, max, count: people.length, top: people.slice(0, 5).map(r => ({ name: r.name, avatar: r.avatar, rating: r.rating })) };
   });
+  // 🏆 Liga: tabela da temporada atual (quem tem liga de outra temporada aparece já "virado")
+  const season = seasonId();
+  const league = rows.filter(r => r.stats?.league).map(r => {
+    const L = ensureSeason(r.stats.league, season).league;
+    return { name: r.trainer_name, avatar: r.avatar, div: L.div, lp: L.lp, wins: L.wins, losses: L.losses, games: L.games, streak: L.streak, last: L.last || [], shield: L.shield || 0 };
+  }).sort(leagueSort);
+  const divisions = LEAGUE_DIVS.map(d => ({ ...d, players: league.filter(x => x.div === d.idx).slice(0, 30) })).filter(d => d.players.length);
   return {
+    league: { season, seasonName: seasonName(season), table: league.slice(0, 100), divisions, total: league.length },
     ranking: [...all].sort((a, b) => b.points - a.points).slice(0, 50),
     competitive: ranked.slice(0, 50),
     elos, rankedPlayers: ranked.length
@@ -230,7 +239,7 @@ function collectionEntry(mon, matchId) {
  */
 export async function syncCollection(db, state, pids) {
   for (const p of state.players) {
-    if (p.id.startsWith('cpu_') || p.left || (pids && !pids.includes(p.id))) continue; // quem saiu não recebe o que a CPU fizer
+    if (p.id.startsWith('cpu_') || p.left || p.hardcoreLost || (pids && !pids.includes(p.id))) continue; // quem saiu não recebe o que a CPU fizer; no Hardcore, quem caiu perde tudo
     await mutateProfile(db, p.id, prof => collectionPatch(prof, p, state));
   }
 }
@@ -303,7 +312,7 @@ export async function listRooms(db, user) {
   const mine = user ? await db.myMatches(user.id) : [];
   const brief = r => ({
     id: r.id, code: r.code, name: r.name, status: r.status, hasPin: !!r.has_pin,
-    mode: r.options?.mode || 'balanced', levelCap: r.options?.levelCap || 0, turnLimit: r.options?.turnLimit || 0, rules: r.options?.rules || 'classic', map: r.options?.map || 'kanto',
+    mode: r.options?.mode || 'balanced', levelCap: r.options?.levelCap || 0, turnLimit: r.options?.turnLimit || 0, rules: r.options?.rules || 'classic', map: r.options?.map || 'kanto', hardcore: !!r.options?.hardcore,
     players: (r.lobby || []).length, maxPlayers: r.options?.maxPlayers || 4,
     host: (r.lobby || []).find(e => e.id === r.host_id)?.name || '?', updatedAt: r.updated_at
   });
@@ -340,6 +349,14 @@ function normalizeOptions(body, prev = {}) {
   if (!['balanced', 'collection', 'solo'].includes(o.mode)) o.rules = 'classic';
   o.rules = o.rules || 'classic';
   o.levelCap = o.levelCap || 0;
+  // ☠️ Hardcore: vale em todos os modos de tabuleiro (não no duelo/copa)
+  if (body.hardcore !== undefined) o.hardcore = !!body.hardcore;
+  if (['duel', 'cup', 'duel_queue'].includes(o.mode)) o.hardcore = false;
+  o.hardcore = !!o.hardcore;
+  // entrar no meio da partida (online): ligado por padrão, menos no Battle Royale e no competitivo
+  if (body.lateJoin !== undefined) o.allowLate = !!body.lateJoin;
+  o.allowLate = o.allowLate !== false;
+  o.lateJoin = o.allowLate && o.rules !== 'royale' && !['ranked', 'duel', 'cup'].includes(o.mode);
   if (o.mode === 'ranked' && !o.turnLimit) o.turnLimit = 40; // competitivo sempre termina
   if ((o.mode === 'duel' || o.mode === 'cup') && !o.levelCap) o.levelCap = DUEL_LEVEL_CAP;
   if (o.mode === 'solo') o.maxPlayers = Math.max(2, o.maxPlayers);
@@ -369,6 +386,7 @@ export async function matchOp(db, user, body) {
   const isHost = row.host_id === user.id;
 
   if (op === 'leave') return leaveRoom(db, user, row);
+  if (op === 'kick') return kickPlayer(db, user, row, body);
   if (op === 'chat') {
     const text = String(body.text || '').replace(/[<>]/g, '').trim().slice(0, 200);
     if (!text) bad('Mensagem vazia.');
@@ -440,6 +458,31 @@ export async function matchOp(db, user, body) {
   }
 }
 
+async function playerCfg(db, e, options) {
+  const mode = options.mode;
+  const p = { id: e.id, name: e.name, avatar: e.avatar, isBot: e.isBot, starter: e.starter };
+  const prof = e.isBot ? null : await db.getProfile(e.id);
+  if (prof) { try { p.cosmetic = await equippedCosmetic(db, prof); } catch { /* sem cosmético */ } }
+  if (prof) { p.companions = prof.stats?.companions || []; p.companion = prof.stats?.companion || null; } // companheiros da conta
+  if (mode === 'collection' && !e.isBot && e.teamUids?.length) {
+    const vault = prof?.vault || [];
+    p.teamMons = e.teamUids.map(u => vault.find(v => v.uid === u)).filter(Boolean)
+      .map(v => ({ ...v, lvl: options.levelCap ? Math.min(options.levelCap, v.lvl) : v.lvl }));
+  }
+  if (mode === 'collection' && !e.isBot && e.bringGold > 0) {
+    // tira o ouro da conta agora; o que sobrar volta no fim da partida
+    const paid = db.walletAdd ? await db.walletAdd(e.id, 0, -e.bringGold).catch(() => null) : null;
+    if (paid) p.bringGold = e.bringGold;
+  }
+  if (mode === 'collection' && !e.isBot) {
+    // PC da partida = Coleção inteira (o que não está no time), com o mesmo limite de nível
+    const team = new Set(e.teamUids || []);
+    p.boxMons = (prof?.vault || []).filter(v => !team.has(v.uid))
+      .map(v => ({ ...v, lvl: options.levelCap ? Math.min(options.levelCap, v.lvl) : v.lvl }));
+  }
+  return p;
+}
+
 async function startRoom(db, row, lobby, userId) {
   const options = normalizeOptions({}, row.options || {});
   const mode = options.mode;
@@ -461,29 +504,7 @@ async function startRoom(db, row, lobby, userId) {
   const notReady = lobby.filter(e => !e.isBot && e.id !== row.host_id && !e.ready);
   if (notReady.length) bad(`Aguardando: ${notReady.map(e => e.name).join(', ')} marcar "Pronto".`);
   const players = [];
-  for (const e of lobby) {
-    const p = { id: e.id, name: e.name, avatar: e.avatar, isBot: e.isBot, starter: e.starter };
-    const prof = e.isBot ? null : await db.getProfile(e.id);
-    if (prof) { try { p.cosmetic = await equippedCosmetic(db, prof); } catch { /* sem cosmético */ } }
-    if (prof) { p.companions = prof.stats?.companions || []; p.companion = prof.stats?.companion || null; } // companheiros da conta
-    if (mode === 'collection' && !e.isBot && e.teamUids?.length) {
-      const vault = prof?.vault || [];
-      p.teamMons = e.teamUids.map(u => vault.find(v => v.uid === u)).filter(Boolean)
-        .map(v => ({ ...v, lvl: options.levelCap ? Math.min(options.levelCap, v.lvl) : v.lvl }));
-    }
-    if (mode === 'collection' && !e.isBot && e.bringGold > 0) {
-      // tira o ouro da conta agora; o que sobrar volta no fim da partida
-      const paid = db.walletAdd ? await db.walletAdd(e.id, 0, -e.bringGold).catch(() => null) : null;
-      if (paid) p.bringGold = e.bringGold;
-    }
-    if (mode === 'collection' && !e.isBot) {
-      // PC da partida = Coleção inteira (o que não está no time), com o mesmo limite de nível
-      const team = new Set(e.teamUids || []);
-      p.boxMons = (prof?.vault || []).filter(v => !team.has(v.uid))
-        .map(v => ({ ...v, lvl: options.levelCap ? Math.min(options.levelCap, v.lvl) : v.lvl }));
-    }
-    players.push(p);
-  }
+  for (const e of lobby) players.push(await playerCfg(db, e, options));
   // Coleção: CPUs ficam no nível médio das equipes humanas, para não serem atropeladas
   if (mode === 'collection') {
     const lv = players.filter(p => p.teamMons?.length).flatMap(p => p.teamMons.map(m => m.lvl));
@@ -494,7 +515,7 @@ async function startRoom(db, row, lobby, userId) {
   }
   const state = createMatch({
     id: row.id, mode: 'online', seed: randomSeed(), now: Date.now(), players, map: options.map, rules: options.rules,
-    options: { dailyPokemon: await currentDaily(db), turnLimit: options.turnLimit || 0, trades: mode !== 'ranked' }
+    options: { dailyPokemon: await currentDaily(db), turnLimit: options.turnLimit || 0, trades: mode !== 'ranked', hardcore: !!options.hardcore }
   });
   state.roomMode = mode;
   const res = await save(db, row, { status: state.status === 'finished' ? 'finished' : 'playing', state, options }, userId);
@@ -505,7 +526,7 @@ async function startRoom(db, row, lobby, userId) {
 async function createRoom(db, user, body) {
   const profile = await getOrCreateProfile(db, user);
   const name = cleanName(body.name, `Sala de ${profile.trainer_name}`).slice(0, 30);
-  const options = normalizeOptions({ mode: body.mode, maxPlayers: body.maxPlayers, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap, map: body.map, rules: body.rules });
+  const options = normalizeOptions({ mode: body.mode, maxPlayers: body.maxPlayers, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap, map: body.map, rules: body.rules, hardcore: !!body.hardcore });
   if (options.mode === 'solo') options.mode = 'balanced';
   const pin = String(body.pin || '').replace(/\D/g, '').slice(0, 6);
   const row = await insertRoom(db, user, { name, options, isPublic: body.isPublic !== false, pin, lobby: [lobbyEntry(profile, body)] });
@@ -535,7 +556,7 @@ async function createSolo(db, user, body) {
   const profile = await getOrCreateProfile(db, user);
   const bots = Math.max(1, Math.min(5, Number(body.bots) || 1));
   const useCollection = Array.isArray(body.teamUids) && body.teamUids.length > 0;
-  const options = normalizeOptions({ mode: useCollection ? 'collection' : 'balanced', maxPlayers: bots + 1, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap || 0, map: body.map, rules: body.rules });
+  const options = normalizeOptions({ mode: useCollection ? 'collection' : 'balanced', maxPlayers: bots + 1, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap || 0, map: body.map, rules: body.rules, hardcore: !!body.hardcore });
   const entry = lobbyEntry(profile, body);
   if (useCollection) {
     const owned = new Set((profile.vault || []).map(v => v.uid));
@@ -556,8 +577,9 @@ async function joinRoom(db, user, body) {
   if (!row) notFound('Sala não encontrada. Confira o código.');
   const members = await db.listMembers(row.id);
   if (members.includes(user.id)) return { match: publicMatch(row, user.id) }; // reconectar
-  if (row.status !== 'lobby') bad('A partida já começou.');
   if (row.options?.solo) forbidden('Esta é uma partida de treino privada.');
+  if (row.status === 'playing') return joinLate(db, user, row, body);
+  if (row.status !== 'lobby') bad('A partida já terminou.');
   if (row.has_pin) {
     const pin = await db.getSecret(row.id);
     if (String(body.pin || '') !== pin) forbidden('PIN incorreto.');
@@ -568,6 +590,60 @@ async function joinRoom(db, user, body) {
   lobby.push(lobbyEntry(profile, body));
   await db.addMember(row.id, user.id);
   return save(db, row, { lobby }, user.id);
+}
+
+/** Entrar numa partida já em andamento (se a sala permitir). */
+async function joinLate(db, user, row, body) {
+  const options = normalizeOptions({}, row.options || {});
+  if (!options.lateJoin || !row.state) bad('Esta partida não aceita entrar no meio (Battle Royale, competitivo ou desligado pelo anfitrião).');
+  if (row.has_pin) {
+    const pin = await db.getSecret(row.id);
+    if (String(body.pin || '') !== pin) forbidden('PIN incorreto.');
+  }
+  const profile = await getOrCreateProfile(db, user);
+  const e = lobbyEntry(profile, body);
+  if (options.mode === 'collection') {
+    const owned = new Map((profile.vault || []).map(v => [v.uid, v]));
+    let uids = [...new Set((Array.isArray(body.teamUids) ? body.teamUids : []).map(String))].filter(u => owned.has(u)).slice(0, 6);
+    if (!uids.length) uids = [...(profile.vault || [])].sort((a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0) || b.lvl - a.lvl).slice(0, 6).map(v => v.uid);
+    e.teamUids = uids;
+  }
+  const cfg = await playerCfg(db, e, options);
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const cur = attempt ? await db.getMatch(row.id) : row;
+    if (cur.status !== 'playing') bad('A partida já terminou.');
+    const { state, error } = addLatePlayer(cur.state, cfg, { maxPlayers: options.maxPlayers });
+    if (error) bad(error);
+    const lobby = [...(cur.lobby || []).filter(x => x.id !== user.id), { ...e, ready: true, late: true }];
+    const ok = await db.updateMatch(cur.id, cur.version, { state, lobby, version: cur.version + 1 });
+    if (!ok) continue;
+    await db.addMember(cur.id, user.id);
+    return { match: publicMatch({ ...cur, state, lobby, version: cur.version + 1 }, user.id) };
+  }
+  throw new HttpError(409, 'A partida mudou enquanto você entrava. Tente de novo.');
+}
+
+/** Anfitrião remove um jogador no meio da partida (sem esperar a CPU assumir). */
+async function kickPlayer(db, user, row, body) {
+  if (row.host_id !== user.id) forbidden('Só o anfitrião pode remover jogadores.');
+  const target = String(body.target || '');
+  if (!target || target === user.id) bad('Jogador inválido.');
+  if (row.status !== 'playing') bad('A partida não está em andamento.');
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const cur = attempt ? await db.getMatch(row.id) : row;
+    const tp = cur.state?.players.find(p => p.id === target);
+    if (!tp || target.startsWith('cpu_')) bad('Jogador inválido.');
+    const { state, error } = applyAction(cur.state, target, { type: 'kicked' }, { now: Date.now() });
+    if (error) bad(error);
+    const finished = state.status === 'finished';
+    const patch = { state, version: cur.version + 1, status: finished ? 'finished' : 'playing' };
+    const ok = await db.updateMatch(cur.id, cur.version, patch);
+    if (!ok) continue;
+    await db.removeMember(cur.id, target);
+    if (finished) await recordResults(db, state, cur.options || {});
+    return { match: publicMatch({ ...cur, ...patch }, user.id) };
+  }
+  throw new HttpError(409, 'Muitas jogadas ao mesmo tempo. Tente de novo.');
 }
 
 async function leaveRoom(db, user, row) {
@@ -637,9 +713,17 @@ export async function actionOp(db, user, body) {
       } catch (e) { console.error('[companion]', e.message); }
     }
     if (finished && row.options?.mode === 'duel') await duelFinished(db, { ...row, ...patch });
-    else if (finished) await recordResults(db, state, row.options || {});
+    else if (finished) {
+      await recordResults(db, state, row.options || {});
+      if (state.leagueChanges) {
+        try { // mostra +PL / subiu de divisão na tela de fim de jogo
+          const cur = await db.getMatch(row.id);
+          if (cur?.state) await db.updateMatch(cur.id, cur.version, { state: { ...cur.state, leagueChanges: state.leagueChanges }, version: cur.version + 1 });
+        } catch { /* só visual */ }
+      }
+    }
     else {
-      const ids = playersToSync(body.action, row.state, state);
+      const ids = state.options?.hardcore ? null : playersToSync(body.action, row.state, state); // Hardcore: só salva no fim (quem cair perde tudo)
       if (ids && ids.size) {
         const list = [...ids].map(id => (id === '__actor__' ? user.id : id));
         try { await syncCollection(db, state, list); } catch (e) { console.error('[sync]', e.message); }
@@ -656,6 +740,7 @@ export async function recordResults(db, state, options = {}) {
   const humans = state.players.filter(p => !p.id.startsWith('cpu_'));
   const ranked = options.mode === 'ranked' && humans.length >= 2;
   const deltas = ranked ? (state.ratingChanges || await eloDeltas(db, state, humans)) : {};
+  const places = ranked ? placements(state, humans) : {};
   for (const p of humans) {
     const prof = await db.getProfile(p.id);
     if (!prof) continue;
@@ -675,13 +760,38 @@ export async function recordResults(db, state, options = {}) {
       st.ranked = (st.ranked || 0) + 1;
       st.rankedWins = (st.rankedWins || 0) + (state.winner === p.id ? 1 : 0);
       patch.rating = Math.max(100, (prof.rating ?? START_RATING) + (deltas[p.id] || 0));
+      // 🏆 Liga: Pontos de Liga pela colocação (sobe/cai de divisão)
+      const lg = leagueStats(st, places[p.id], humans.length);
+      Object.assign(st, lg.stats);
+      (state.leagueChanges ||= {})[p.id] = { delta: lg.result.delta, change: lg.result.change, div: lg.result.to, lp: lg.result.league.lp };
+      if (lg.reward && db.walletAdd) { try { await db.walletAdd(p.id, lg.reward, 0); } catch (e) { console.error('[season]', e.message); } }
     }
     await db.upsertProfile(p.id, patch);
-    const coins = accountGoldReward(state, p) + refundBrought(p);
+    if (state.options?.hardcore) st.hardcore = (st.hardcore || 0) + (p.hardcoreLost ? 0 : 1);
+    // Hardcore: quem caiu não leva nada (nem o ouro trazido); quem sobreviveu ganha o dobro de ouro da conta
+    const coins = p.hardcoreLost ? 0 : (state.options?.hardcore ? Math.min(2400, accountGoldReward(state, p) * 2) : accountGoldReward(state, p)) + refundBrought(p);
     if (coins > 0 && db.walletAdd) {
       try { await db.walletAdd(p.id, 0, coins); } catch (e) { console.error('[gold]', e.message); }
     }
   }
+}
+
+/**
+ * Liga Ranqueada: aplica a colocação numa cópia de stats. Devolve { stats, reward (💎 da temporada anterior), result }.
+ * place 1 = vencedor; players = quantos humanos disputaram.
+ */
+export function leagueStats(stats, place, players, now = new Date()) {
+  const st = { ...(stats || {}) };
+  const { league, reward } = ensureSeason(st.league, seasonId(now));
+  const result = applyLeagueResult(league, { place, players });
+  st.league = result.league;
+  return { stats: st, reward, result };
+}
+
+/** Colocação final dos humanos (vencedor primeiro, depois pontos). */
+export function placements(state, humans) {
+  const order = [...humans].sort((a, b) => (b.id === state.winner) - (a.id === state.winner) || score(b) - score(a));
+  return Object.fromEntries(order.map((p, i) => [p.id, i + 1]));
 }
 
 /** Elo multijogador: cada par de jogadores é um "duelo" decidido pela colocação final. */

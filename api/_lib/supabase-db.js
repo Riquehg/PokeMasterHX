@@ -115,7 +115,8 @@ export const supabaseDb = {
   },
   async listOpenMatches() {
     return check(await admin().from('matches').select('id, code, name, host_id, status, has_pin, options, lobby, updated_at')
-      .eq('status', 'lobby').eq('is_public', true).order('updated_at', { ascending: false }).limit(30));
+      .in('status', ['lobby', 'playing']).eq('is_public', true).order('updated_at', { ascending: false }).limit(40))
+      .filter(r => r.status === 'lobby' || (r.options?.lateJoin && !r.options?.solo && Date.now() - new Date(r.updated_at).getTime() < 30 * 60 * 1000));
   },
   async myMatches(userId) {
     const ids = check(await admin().from('match_players').select('match_id').eq('user_id', userId)).map(r => r.match_id);

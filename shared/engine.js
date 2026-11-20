@@ -31,7 +31,7 @@ import { COMPANIONS } from './data/companions.js';
 import { startGroupRaid, startCatchStage, raidWaiting, raidAction, raidBallChance } from './rules/raid.js';
 import { sanitizeCosmetic, cleanNick } from './data/cosmetics.js';
 import { botAction } from './bots.js';
-import { RULE_IDS, setupRules, onRound, knockOut, rulesOf, royaleClash, royaleHealCheck, checkRoyaleEnd, royaleRank,
+import { RULE_IDS, setupRules, onRound, knockOut, rulesOf, royaleClash, royaleHealCheck, checkRoyaleEnd, royaleRank, alivePlayers,
   conquestGym, conquestBattleEnd, garrisonAction, conquestVisit, conquestRank, ownerOf } from './rules/modes.js';
 
 export const ENGINE_VERSION = 2;
@@ -49,7 +49,9 @@ export const MAX_PLAYERS = 6;
 export function createMatch(config) {
   const rng = createRng(config.seed);
   // mapa: 'kanto' (padrão) ou 'gen' = Expedição, um mapa novo gerado pela semente da partida
-  const mapId = config.kind === 'duel' ? 'kanto' : config.map === 'gen' ? `gen:${(rng.state ^ 0x2545f491) >>> 0}` : String(config.map || 'kanto').startsWith('gen:') ? config.map : 'kanto';
+  const rulesId = config.kind !== 'duel' && RULE_IDS.includes(config.rules) ? config.rules : 'classic';
+  // Battle Royale sempre na Arena Royale (mapa simétrico: todos começam à mesma distância do centro)
+  const mapId = config.kind === 'duel' ? 'kanto' : rulesId === 'royale' ? 'arena' : config.map === 'gen' ? `gen:${(rng.state ^ 0x2545f491) >>> 0}` : String(config.map || 'kanto').startsWith('gen:') ? config.map : 'kanto';
   useMap(mapId);
   const players = (config.players || []).map((p, i) => newPlayer(rng, { ...p, duel: config.kind === 'duel' }, i));
   if (players.length < 1) fail('A partida precisa de pelo menos 1 jogador.');
@@ -60,7 +62,7 @@ export function createMatch(config) {
     mode: config.mode || 'local',
     status: 'playing',
     map: mapId,
-    rules: config.kind !== 'duel' && RULE_IDS.includes(config.rules) ? config.rules : 'classic',
+    rules: rulesId,
     weather: { id: 'clear', until: 3 },
     seed: rng.state,
     turn: 1,
@@ -71,7 +73,8 @@ export function createMatch(config) {
     options: {
       dailyPokemon: config.options?.dailyPokemon && SPECIES[config.options.dailyPokemon] ? config.options.dailyPokemon : null,
       turnLimit: Number(config.options?.turnLimit) || 0,
-      trades: config.options?.trades !== false
+      trades: config.options?.trades !== false,
+      hardcore: config.kind !== 'duel' && !!config.options?.hardcore // perdeu a equipe = eliminado e perde tudo da partida
     },
     players,
     board: {},
@@ -88,11 +91,53 @@ export function createMatch(config) {
   setupRules(state, rng); // Battle Royale / Conquista
   for (const p of state.players) initMissions(state, p);
   log(state, `🏁 Partida iniciada com ${players.map(p => p.name).join(', ')}. Boa sorte, treinadores!`);
+  if (state.options.hardcore) log(state, '☠️ HARDCORE: quem tiver a equipe toda derrotada está fora da partida e perde tudo o que ganhou nela.', 'bad');
   if (state.options.dailyPokemon) log(state, `⭐ Pokémon do Dia: ${speciesName(state.options.dailyPokemon)} (aparece mais, XP em dobro e shiny 1/64).`);
   // Se o primeiro jogador for CPU, já joga
   const r = runBots(state, rng, config.now || 0);
   state.seed = rng.state;
   return r;
+}
+
+/**
+ * Entrar no meio da partida (online, menos Battle Royale/duelo/competitivo).
+ * O novato entra no fim da ordem, na cidade inicial, com o inicial no nível próximo da média da mesa
+ * e uma ajuda de ouro e itens para não ficar para trás.
+ */
+export function addLatePlayer(prevState, cfg, ctx = {}) {
+  useStateMap(prevState);
+  const state = clone(prevState);
+  const rng = createRng(state.seed);
+  state.fx = [];
+  try {
+    if (state.status !== 'playing') fail('A partida já terminou.');
+    if (state.kind === 'duel' || state.options.duel) fail('Não dá para entrar no meio de um duelo.');
+    if (rulesOf(state) === 'royale') fail('No Battle Royale não dá para entrar no meio da partida.');
+    if (state.players.some(p => p.id === String(cfg.id))) fail(state.players.find(p => p.id === String(cfg.id)).kicked ? 'Você foi removido desta partida.' : 'Você já está nesta partida.');
+    const active = state.players.filter(p => !p.out && !p.left).length;
+    if (active >= Math.min(MAX_PLAYERS, ctx.maxPlayers || MAX_PLAYERS) || state.players.length >= 10) fail('A partida está cheia.');
+    const p = newPlayer(rng, cfg, state.players.length);
+    const others = state.players.filter(x => !x.out);
+    const best = x => Math.max(1, ...x.team.map(m => m.lvl));
+    const avgLvl = others.length ? others.reduce((a, x) => a + best(x), 0) / others.length : 5;
+    const target = Math.max(5, Math.min(40, Math.round(avgLvl * 0.85)));
+    for (const m of p.team) if (m.starter && m.lvl < target) { while (m.lvl < target) levelUp(m); fullHeal(m); }
+    const avgGold = others.length ? others.reduce((a, x) => a + x.gold, 0) / others.length : 0;
+    p.gold += Math.round(Math.min(3000, avgGold * 0.5));
+    addItem(p, 'great_ball', 3);
+    addItem(p, 'potion', 2);
+    p.lateJoin = state.turn;
+    state.players.push(p);
+    initMissions(state, p);
+    fx(state, { k: 'joined', pid: p.id });
+    log(state, `🙋 ${p.name} entrou na partida no turno ${state.turn}! Começa em ${getSpace(p.pos).name} com o inicial no Nv. ${p.team[0].lvl} e uma ajuda de ouro.`, 'event');
+  } catch (e) {
+    if (e && e.isGameError) return { state: prevState, error: e.message };
+    throw e;
+  }
+  state.seed = rng.state;
+  state.fxSeq = (prevState.fxSeq || 0) + 1;
+  return { state };
 }
 
 export const MAX_BOX = 300;
@@ -250,6 +295,7 @@ function dispatch(state, rng, actorId, action, now) {
 
   // Ações permitidas a qualquer jogador a qualquer momento
   if (type === 'leave') return leave(state, rng, actor, now);
+  if (type === 'kicked') return kicked(state, actor);
   if (type === 'skip_afk') return skipAfk(state, rng, actor, now);
   if (type === 'chat') return; // chat não passa pelo motor
   if (type === 'trade_offer') return proposeTrade(state, rng, actor, action);
@@ -422,8 +468,18 @@ function checkTurnLimit(state) {
 const teamHpPct = p => p.team.reduce((a, m) => a + Math.max(0, m.hp), 0) / Math.max(1, p.team.reduce((a, m) => a + maxHpOf(m), 0));
 
 /** Verifica fim de partida pelos modos (Battle Royale). */
+/** Fim por eliminações fora do Battle Royale (Hardcore ou jogadores removidos). */
+function checkOutEnd(state) {
+  if (state.status !== 'playing' || rulesOf(state) === 'royale' || !state.players.some(p => p.out)) return null;
+  const alive = alivePlayers(state);
+  const humans = alive.filter(p => !p.left && (!p.isBot || p._afkTemp));
+  if (state.players.length > 1 && alive.length <= 1) return { winner: alive[0] || null, reason: alive[0] ? 'Último treinador de pé!' : 'Ninguém sobreviveu.' };
+  if (!humans.length) return { winner: [...alive].sort((a, b) => score(b) - score(a))[0] || null, reason: 'Não sobrou nenhum treinador humano.' };
+  return null;
+}
+
 function endByRules(state, advance = true) {
-  const end = checkRoyaleEnd(state);
+  const end = checkRoyaleEnd(state) || checkOutEnd(state);
   if (end && state.status === 'playing') {
     state.battle = null;
     state.raid = null;
@@ -499,10 +555,23 @@ function leave(state, rng, p, now) {
     state.battle = null;
     return;
   }
+  if (state.options.hardcore) p.hardcoreLost = true; // sair do Hardcore = desistir
   log(state, `🚪 ${p.name} saiu da partida. Uma CPU assumiu o lugar.`, 'bad');
   if (state.players.every(x => x.left || x.isBot) && state.mode === 'online') {
     finishMatch(state, [...state.players].sort((a, b) => score(b) - score(a))[0], 'Todos os humanos saíram.');
   }
+}
+
+/** Removido pelo anfitrião: sai da rodada na hora (sem esperar a CPU). Se estava numa batalha, a CPU termina só ela. */
+function kicked(state, p) {
+  if (p.out && p.left) return;
+  p.left = true;
+  p.isBot = true;
+  p.kicked = true;
+  if (state.options.hardcore) p.hardcoreLost = true;
+  if (!p.out) { p.out = true; p.place = alivePlayers(state).length + 1; }
+  fx(state, { k: 'kicked', pid: p.id });
+  log(state, `🚫 ${p.name} foi removido da partida pelo anfitrião.`, 'bad');
 }
 
 function skipAfk(state, rng, actor, now) {
@@ -863,7 +932,7 @@ function boardEvent(state, rng, p, sp, forceId = null) {
         effects.push({ text: 'Sua equipe não tem condições de lutar — o lendário desaparece na névoa', tone: 'neutral' });
         break;
       }
-      const boss = raidBoss(rng, t, card.id === 'legend_shrine');
+      const boss = raidBoss(rng, t, card.id === 'legend_shrine', !!p.items.shiny_charm);
       ev.mon = { sp: boss.sp, shiny: boss.shiny };
       const others = state.players.filter(x => !x.left && x.id !== p.id && hasUsable(x)).length;
       const group = card.id === 'raid' && others >= 1 && !state.options.duel && rng.chance(0.5);
@@ -992,11 +1061,12 @@ const RAID_POOL = {
 };
 export const RAID_HP_BONUS = 0.6; // chefe tem +60% de HP
 
-function raidBoss(rng, tier, shrine) {
+function raidBoss(rng, tier, shrine, charm = false) {
   const pool = RAID_POOL[tier] || RAID_POOL[4];
   const sp = rng.pick(pool.filter(id => SPECIES[id]));
   const lvl = WILD_LEVELS[tier][1] + (shrine ? 0 : 1);
-  const mon = createMon(rng, sp, lvl, { shiny: rng.chance(BASE_SHINY_RATE), capTier: 5 });
+  // lendário também pode vir shiny (1/450; Amuleto Shiny triplica)
+  const mon = createMon(rng, sp, lvl, { shiny: rng.chance(BASE_SHINY_RATE * (charm ? 3 : 1)), capTier: 5 });
   mon.bonusHp = Math.round(maxHpOf(mon) * RAID_HP_BONUS);
   mon.hp = maxHpOf(mon);
   mon.wild = true;

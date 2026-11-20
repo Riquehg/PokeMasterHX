@@ -54,9 +54,21 @@ function friendsHtml() {
     ${f.outgoing.length ? `<h4>📤 Pedidos enviados</h4>${f.outgoing.map(p => personRow(p, `<button class="btn sm" data-soc="remove" data-id="${p.id}">Cancelar</button>`)).join('')}` : ''}`;
 }
 
+/** Abre/fecha o painel (botão 💬 da barra de cima durante a partida). */
+export function toggleSocial(force) {
+  if (!st.started) return false;
+  st.open = force === undefined ? !st.open : !!force;
+  if (st.open) st.unread = 0;
+  draw();
+  return true;
+}
+
 function draw() {
   const r = ensureRoot();
   const badge = st.unread + st.friendReq;
+  // botão compacto dentro da partida (o flutuante some para não tapar o tabuleiro)
+  document.querySelectorAll('[data-soc-badge]').forEach(el => { el.textContent = badge ? String(badge) : ''; el.classList.toggle('on', !!badge); });
+  document.querySelectorAll('[data-soc-online]').forEach(el => { el.textContent = String(st.onlineCount || 0); });
   if (!st.open) {
     r.innerHTML = `<button class="soc-fab" data-soc="open" title="Chat global e amigos">💬 <span class="soc-count">${st.onlineCount} online</span>${badge ? `<span class="badge-dot">${badge}</span>` : ''}</button>`;
     return;

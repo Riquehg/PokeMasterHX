@@ -3,6 +3,7 @@
 // Como o motor é síncrono, trocar o mapa ativo no começo de cada chamada é seguro mesmo com várias partidas no servidor.
 import { KANTO } from './maps/kanto.js';
 import { generateMap } from './maps/generator.js';
+import { ARENA } from './maps/arena.js';
 import { setLeagueSpaces } from './trainers.js';
 
 /** Habilidades que liberam caminhos. Vale ter um Pokémon de pé com o tipo OU com um golpe desse tipo. */
@@ -47,6 +48,7 @@ export let CURRENT_MAP = null;
 /** Resolve o id do mapa salvo na partida. 'gen' (sem semente) usa a semente da partida. */
 export function mapFor(mapId, seed = 1) {
   if (!mapId || mapId === 'kanto') return KANTO;
+  if (mapId === 'arena') return ARENA;
   if (mapId === 'gen') return generateMap(seed);
   if (String(mapId).startsWith('gen:')) return generateMap(Number(String(mapId).slice(4)));
   return KANTO;

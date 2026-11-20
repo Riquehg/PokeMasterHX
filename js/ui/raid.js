@@ -8,13 +8,14 @@ import { against, TYPE_COLORS } from '../../shared/rules/types.js';
 import { raidWaiting, raidBallChance, RAID_ITEM_KINDS } from '../../shared/rules/raid.js';
 import { esc, openModal, closeModal, bindActions } from './dom.js';
 import { monSprite, itemUrl, typeLabel } from '../config.js';
+import { typeChips, edgeBadge, foeIntelHtml } from './common.js';
 
 function bossBar(r) {
   const max = maxHpOf(r.boss);
   const pct = Math.max(0, (r.boss.hp / max) * 100);
   return `<div class="raid-boss-card"><img src="${monSprite(r.boss)}" alt="" class="${r.stage === 'catch' ? 'tired' : ''}">
-    <div class="grow"><b>${esc(getSpecies(r.boss.sp).name)}${r.boss.shiny ? ' ✨' : ''}</b> <span class="tiny">Nv.${r.boss.lvl}</span>
-      <div class="raid-hp"><i style="width:${pct.toFixed(1)}%"></i></div><div class="tiny">${Math.max(0, r.boss.hp)}/${max} HP${r.bossStage < 0 ? ` · ATQ ▼${-r.bossStage}` : ''}</div></div></div>`;
+    <div class="grow"><b>${esc(getSpecies(r.boss.sp).name)}${r.boss.shiny ? ' ✨' : ''}</b> <span class="tiny">Nv.${r.boss.lvl}</span> ${typeChips(getSpecies(r.boss.sp).types)}
+      <div class="raid-hp"><i style="width:${pct.toFixed(1)}%"></i></div><div class="tiny">${Math.max(0, r.boss.hp)}/${max} HP${r.bossStage < 0 ? ` · ATQ ▼${-r.bossStage}` : ''}</div></div></div>${foeIntelHtml(r.boss)}`;
 }
 
 /** Itens da mochila que dá para usar na Raid (no lugar do golpe da rodada). */
@@ -39,14 +40,14 @@ export function raidHtml(s, vid) {
     const p = s.players.find(y => y.id === x.pid);
     const m = x.uid ? p?.team.find(t => t.uid === x.uid) : null;
     return `<div class="raid-member ${m && m.hp <= 0 ? 'ko' : ''} ${waiting.includes(x.pid) ? 'wait' : ''}">${m ? `<img src="${monSprite(m)}" alt="">` : ''}
-      <div><b>${esc(p?.name || '?')}</b>${m ? `<div class="tiny">${esc(getSpecies(m.sp).name)} ${Math.max(0, m.hp)}/${maxHpOf(m)}</div>` : ''}<div class="tiny muted">dano: ${x.dmg}</div></div></div>`;
+      <div><b>${esc(p?.name || '?')}</b>${m ? `<div class="tiny">${edgeBadge(m, r.boss)}${esc(getSpecies(m.sp).name)} ${Math.max(0, m.hp)}/${maxHpOf(m)}</div>` : ''}<div class="tiny muted">dano: ${x.dmg}</div></div></div>`;
   }).join('')}</div>` : '';
   let controls = '';
   if (r.stage === 'join') {
     if (myTurn) {
       const opts = me.team.filter(m => m.hp > 0 && canUse(me, m));
       controls = `<p class="small"><b>Escolha 1 Pokémon para entrar na Raid</b> (o HP do lendário cresce com o grupo):</p>
-        <div class="subpick">${opts.map(m => `<button class="btn sm pickbtn" data-act="raid-join" data-uid="${esc(m.uid)}"><img src="${monSprite(m)}" alt="">${esc(getSpecies(m.sp).name)} Nv.${m.lvl}
+        <div class="subpick">${opts.map(m => `<button class="btn sm pickbtn" data-act="raid-join" data-uid="${esc(m.uid)}"><img src="${monSprite(m)}" alt="">${edgeBadge(m, r.boss)}${esc(getSpecies(m.sp).name)} Nv.${m.lvl} ${typeChips(getSpecies(m.sp).types)}
           <span class="tiny">${monMoves(m).map(mv => esc(mv.name)).join(' / ')}</span></button>`).join('')}</div>
         <button class="btn ghost sm" data-act="raid-decline">Ficar de fora</button>`;
     } else controls = `<p class="muted center"><span class="spinner"></span> Aguardando: ${waiting.map(name).map(esc).join(', ') || '—'}</p>`;
