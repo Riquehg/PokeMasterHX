@@ -1,11 +1,12 @@
 // ⚽ Liga das Séries no servidor: inscrição (time de defesa), tabela, desafios e fechamento da temporada.
 // Os duelos usam createDuelMatch (o defensor vira uma CPU jogando com o time dele).
-import { SERIES, TOP_SERIE, SERIE_TEAM, SERIE_LEVEL_CAP, SERIE_DAILY, SERIE_SAME_FOE, SERIE_UP, SERIE_DOWN, SERIE_PRIZE,
-  newSerie, seasonId, seasonName, dayId, serieTable, clubById, clubTeam, clubsOf, applySerieDuel, zoneOf, serieInfo } from '../../shared/data/series.js';
+import { SERIES, TOP_SERIE, SERIE_TEAM, SERIE_LEVEL_CAP, SERIE_DAILY, SERIE_SAME_FOE, SERIE_UP, SERIE_DOWN, SERIE_PRIZE, SERIE_ITEMS, SERIE_SLOTS,
+  newSerie, cleanTeam, seasonId, seasonName, dayId, serieTable, botById, botTeam, applySerieDuel, zoneOf, serieInfo, trophyLabel } from '../../shared/data/series.js';
+import { ITEMS } from '../../shared/data/items.js';
 import { MYTHICAL, SPECIES } from '../../shared/data/pokemon.js';
 import { createMon } from '../../shared/rules/monsters.js';
 import { createRng, randomSeed } from '../../shared/rules/rng.js';
-import { bad, notFound, publicMatch, mutateProfile, getOrCreateProfile } from './core.js';
+import { bad, notFound, publicMatch, mutateProfile, getOrCreateProfile, addToBag } from './core.js';
 import { createDuelMatch } from './tournament.js';
 
 const CPU_PREFIX = 'cpu_s_';
@@ -15,6 +16,19 @@ const full = (db, m) => (m ? db.getMatch(m.id) : null);
 function teamFrom(vault, uids) {
   const out = uids.map(u => vault.find(v => v.uid === u)).filter(Boolean).slice(0, SERIE_TEAM);
   return out.map(v => ({ ...v, lvl: Math.min(SERIE_LEVEL_CAP, v.lvl), tf: undefined }));
+}
+
+/** Resultados reais contra os treinadores CPU nesta temporada (game_config 'serie_bots'). */
+async function botAdj(db, season) {
+  const cfg = await db.getConfig('serie_bots');
+  return cfg?.season === season ? cfg.adj || {} : {};
+}
+async function addBotAdj(db, season, botId, d) {
+  const cfg = (await db.getConfig('serie_bots')) || {};
+  const adj = cfg.season === season ? { ...(cfg.adj || {}) } : {};
+  const cur = adj[botId] || { pts: 0, dv: 0, dd: 0 };
+  adj[botId] = { pts: cur.pts + (d.pts || 0), dv: cur.dv + (d.dv || 0), dd: cur.dd + (d.dd || 0) };
+  await db.setConfig('serie_bots', { season, adj });
 }
 
 // ---------------------------------------------------------------- temporada
@@ -28,13 +42,15 @@ async function closeSeason(db, season, now = new Date()) {
   if (hist.closed[season]) return hist.closed[season];
   const rows = await db.listProfiles(2000);
   const humans = rows.filter(r => r.stats?.serie?.season === season && (r.stats.serie.defense || []).length);
-  const result = { moves: {}, podium: [], at: now.toISOString() };
+  const result = { moves: {}, podium: [], champions: {}, at: now.toISOString() };
   hist.closed[season] = result; // marca antes de pagar (evita pagar duas vezes)
+  const adj = await botAdj(db, season);
   for (let div = 0; div <= TOP_SERIE; div++) {
     const list = humans.filter(r => (r.stats.serie.div | 0) === div).map(r => ({ id: r.id, name: r.trainer_name, ...r.stats.serie }));
-    const table = serieTable(div, list, season, now); // temporada já acabou: clubes com o mês inteiro
+    const table = serieTable(div, list, season, now, adj); // temporada já acabou: CPU com o mês inteiro
+    result.champions[div] = table.slice(0, 2).map(r => r.name); // quem ganhou (pode ser CPU — aparece como treinador)
     for (const row of table) {
-      if (row.club) continue;
+      if (row.bot) continue;
       const z = zoneOf(row.pos, table.length, div);
       result.moves[row.id] = z === 'up' ? div + 1 : z === 'down' ? div - 1 : div;
       if (row.pos <= 3) result.podium.push({ id: row.id, name: row.name, div, pos: row.pos, prize: SERIE_PRIZE[div][row.pos - 1], mythical: div === TOP_SERIE && row.pos === 1 });
@@ -43,6 +59,19 @@ async function closeSeason(db, season, now = new Date()) {
   await db.setConfig('serie_history', hist);
   for (const p of result.podium) {
     try { if (db.walletAdd) await db.walletAdd(p.id, p.prize, 0); } catch (e) { console.error('[serie prize]', e.message); }
+    if (p.pos <= 2) { // 🏆 troféu + item especial da série
+      p.items = SERIE_ITEMS[p.div][p.pos - 1];
+      const trophy = { season, seasonName: seasonName(season), div: p.div, pos: p.pos, at: now.toISOString() };
+      try {
+        await mutateProfile(db, p.id, prof => {
+          const st = { ...(prof.stats || {}) };
+          if ((st.trophies || []).some(t => t.season === season && t.div === p.div)) return null;
+          st.trophies = [trophy, ...(st.trophies || [])].slice(0, 120);
+          st.bag = addToBag(st.bag, p.items);
+          return { stats: st };
+        });
+      } catch (e) { console.error('[serie trophy]', e.message); }
+    }
     if (p.mythical) {
       const rng = createRng(randomSeed());
       const sp = rng.pick(MYTHICAL.filter(id => SPECIES[id]));
@@ -52,7 +81,7 @@ async function closeSeason(db, season, now = new Date()) {
       p.prizeMon = sp;
     }
     if (db.insertFeed) {
-      try { await db.insertFeed({ kind: 'champion', text: `⚽ ${p.name} terminou em ${p.pos}º na ${SERIES[p.div].name} (${seasonName(season)})${p.mythical ? ' e ganhou um Pokémon Mítico!' : '!'}`, data: { name: p.name } }); } catch { /* ok */ }
+      try { await db.insertFeed({ kind: 'champion', text: `⚽ ${p.name} terminou em ${p.pos}º na ${SERIES[p.div].name} (${seasonName(season)})${p.pos <= 2 ? ` e levou o troféu de ${p.pos === 1 ? 'campeão' : 'vice'}` : ''}${p.mythical ? ' + um Pokémon Mítico!' : '!'}`, data: { name: p.name } }); } catch { /* ok */ }
     }
   }
   await db.setConfig('serie_history', hist);
@@ -82,10 +111,18 @@ export async function serieOp(db, user, body) {
   if (prof.stats?.serie?.season !== serie.season) await saveSerie(db, user.id, serie);
   const vault = prof.vault || [];
 
+  if (body.op === 'serie_team') { // ⚽ nome e escudo do time
+    const team = cleanTeam(body.team, `${prof.trainer_name} FC`);
+    const rows = await db.listProfiles(2000);
+    if (rows.some(r => r.id !== user.id && r.stats?.serie?.team?.name?.toLowerCase() === team.name.toLowerCase())) bad('Já existe um time com esse nome. Escolha outro.');
+    serie = { ...serie, team };
+    await saveSerie(db, user.id, serie);
+    return serieView(db, user.id, serie, vault, now);
+  }
   if (body.op === 'serie_defense') {
     const uids = [...new Set((body.uids || []).map(String))].filter(u => vault.some(v => v.uid === u)).slice(0, SERIE_TEAM);
-    if (!uids.length) bad(`Escolha até ${SERIE_TEAM} Pokémon da Coleção para defender.`);
-    serie = { ...serie, defense: uids };
+    if (uids.length < Math.min(SERIE_TEAM, vault.length) || !uids.length) bad(`O time de defesa precisa ter ${SERIE_TEAM} Pokémon da Coleção.`);
+    serie = { ...serie, defense: uids, team: serie.team || cleanTeam(null, `${prof.trainer_name} FC`) };
     await saveSerie(db, user.id, serie);
     return serieView(db, user.id, serie, vault, now);
   }
@@ -101,12 +138,14 @@ async function serieView(db, userId, serie, vault, now) {
     const s = r.stats?.serie;
     if (!s || s.season !== season || (s.div | 0) !== serie.div || !(s.defense || []).length) continue;
     const def = teamFrom(r.vault || [], s.defense);
-    humans.push({ id: r.id, name: r.trainer_name, avatar: r.avatar, pts: s.pts | 0, j: s.j | 0, v: s.v | 0, d: s.d | 0, sp: s.sp | 0, dv: s.dv | 0, dd: s.dd | 0,
+    humans.push({ id: r.id, name: r.trainer_name, avatar: r.avatar, club: s.team || cleanTeam(null, `${r.trainer_name} FC`), trophies: (r.stats?.trophies || []).length, pts: s.pts | 0, j: s.j | 0, v: s.v | 0, d: s.d | 0, sp: s.sp | 0, dv: s.dv | 0, dd: s.dd | 0,
       defense: def.map(m => ({ sp: m.sp, lvl: m.lvl, shiny: !!m.shiny })), me: r.id === userId });
   }
-  const table = serieTable(serie.div, humans, season, now).map(r => ({
-    ...r, zone: zoneOf(r.pos, humans.length + clubsOf(serie.div).length, serie.div),
-    defense: r.club ? clubTeam(clubById(r.id)).map(m => ({ sp: m.sp, lvl: m.lvl })) : r.defense
+  const raw = serieTable(serie.div, humans, season, now, await botAdj(db, season));
+  // os treinadores CPU aparecem como qualquer treinador (sem marcação)
+  const table = raw.map(({ bot, ...r }) => ({
+    ...r, zone: zoneOf(r.pos, raw.length, serie.div), trophies: r.trophies || (bot ? fakeTrophies(r.id, serie.div) : 0),
+    defense: bot ? botTeam(botById(r.id)).map(m => ({ sp: m.sp, lvl: m.lvl })) : r.defense
   }));
   const today = dayId(now);
   const used = serie.day === today ? serie.dayCount : 0;
@@ -117,9 +156,10 @@ async function serieView(db, userId, serie, vault, now) {
     serie: { ...serie, info: serieInfo(serie.div), seasonName: seasonName(season), left: Math.max(0, SERIE_DAILY - used), foesToday: foes,
       defenseMons: teamFrom(vault, serie.defense || []).map(m => ({ uid: m.uid, sp: m.sp, lvl: m.lvl, shiny: !!m.shiny })) },
     table,
-    rules: { team: SERIE_TEAM, cap: SERIE_LEVEL_CAP, daily: SERIE_DAILY, up: SERIE_UP, down: SERIE_DOWN, prize: SERIE_PRIZE[serie.div] },
+    trophies: (await db.getProfile(userId))?.stats?.trophies || [],
+    rules: { slots: SERIE_SLOTS, items: SERIE_ITEMS[serie.div].map(it => Object.entries(it).map(([id, q]) => `${q}x ${ITEMS[id]?.name || id}`).join(' + ')), team: SERIE_TEAM, cap: SERIE_LEVEL_CAP, daily: SERIE_DAILY, up: SERIE_UP, down: SERIE_DOWN, prize: SERIE_PRIZE[serie.div] },
     series: SERIES,
-    last: lastSeason ? { season: lastSeason, seasonName: seasonName(lastSeason), podium: hist[lastSeason].podium || [] } : null
+    last: lastSeason ? { season: lastSeason, seasonName: seasonName(lastSeason), champions: hist[lastSeason].champions || {} } : null
   };
 }
 
@@ -128,7 +168,7 @@ async function challenge(db, user, prof, serie, body, now) {
   const mine = await db.myMatches(user.id);
   const live = await full(db, mine.find(m => m.options?.serie && m.status === 'playing'));
   if (live) return { match: publicMatch(live, user.id) };
-  if (!(serie.defense || []).length) bad('Inscreva primeiro o seu time de defesa (3 Pokémon).');
+  if (!(serie.defense || []).length) bad(`Inscreva primeiro o seu time de defesa (${SERIE_TEAM} Pokémon).`);
   const today = dayId(now);
   if (serie.day !== today) serie = { ...serie, day: today, dayCount: 0, foesToday: [] };
   if (serie.dayCount >= SERIE_DAILY) bad(`Você já fez os ${SERIE_DAILY} ataques de hoje. Volte amanhã — sua defesa continua jogando por você.`);
@@ -141,26 +181,26 @@ async function challenge(db, user, prof, serie, body, now) {
   let uids = (body.teamUids || []).map(String);
   if (!uids.length) uids = serie.defense;
   const myTeam = teamFrom(vault, uids);
-  if (!myTeam.length) bad('Escolha seu time de ataque.');
+  if (myTeam.length < Math.min(SERIE_TEAM, vault.length) || !myTeam.length) bad(`O time de ataque precisa ter ${SERIE_TEAM} Pokémon.`);
 
-  // adversário: clube CPU ou treinador da mesma série
+  // adversário: treinador CPU ou treinador da mesma série
   let foe;
-  const club = clubById(target);
-  if (club) {
-    if (club.div !== serie.div) bad('Esse clube é de outra série.');
-    foe = { id: `${CPU_PREFIX}${club.id}`, name: club.name, avatar: 7, isBot: true, teamMons: clubTeam(club), ref: club.id };
+  const bot = botById(target);
+  if (bot) {
+    if (bot.div !== serie.div) bad('Esse treinador não está na sua série nesta temporada.');
+    foe = { id: `${CPU_PREFIX}${bot.id}`, name: `${bot.club.name} (${bot.name})`, avatar: bot.avatar, cosmetic: bot.skin ? { skin: bot.skin } : null, isBot: true, teamMons: botTeam(bot), ref: bot.id };
   } else {
     const other = await db.getProfile(target);
     const os = other?.stats?.serie;
     if (!other || os?.season !== serie.season || (os.div | 0) !== serie.div) bad('Esse treinador não está na sua série nesta temporada.');
     const team = teamFrom(other.vault || [], os.defense || []);
     if (!team.length) bad('Esse treinador está sem time de defesa.');
-    foe = { id: `${CPU_PREFIX}${other.id.slice(0, 12)}`, name: `${other.trainer_name} (defesa)`, avatar: other.avatar || 1, isBot: true, teamMons: team, ref: other.id };
+    foe = { id: `${CPU_PREFIX}${other.id.slice(0, 12)}`, name: `${os.team?.name || other.trainer_name + ' FC'} (${other.trainer_name})`, avatar: other.avatar || 1, isBot: true, teamMons: team, ref: other.id };
   }
   // gasta o ataque ao começar (sair no meio não devolve)
   serie = { ...serie, dayCount: serie.dayCount + 1, foesToday: [...(serie.foesToday || []), target] };
   await saveSerie(db, user.id, serie);
-  const me = { id: user.id, name: prof.trainer_name, avatar: prof.avatar || 1, teamMons: myTeam };
+  const me = { id: user.id, name: serie.team?.name || prof.trainer_name, avatar: prof.avatar || 1, teamMons: myTeam };
   const row = await createDuelMatch(db, {
     name: `⚽ ${serieInfo(serie.div).name}: ${me.name} x ${foe.name}`, a: me, b: foe, hostId: user.id,
     options: { mode: 'duel', serie: { season: serie.season, div: serie.div, attacker: user.id, defender: foe.ref } }
@@ -185,10 +225,12 @@ export async function serieFinished(db, row) {
     if (!s || s.season !== o.season) return null;
     const r = applySerieDuel({ ...newSerie(s.season, s.div), ...s }, null, { win, kos, lost });
     result = { win, kos, lost, sp: r.sp, pts: win ? 3 : 0 };
-    const log = [{ at: Date.now(), kind: 'atk', foe: foe.name, win, kos, lost }, ...(s.log || [])].slice(0, 20);
+    const log = [{ at: Date.now(), kind: 'atk', foe: foe.name.replace(/^cpu_s_/, ''), win, kos, lost }, ...(s.log || [])].slice(0, 20);
     return { stats: { ...(prof.stats || {}), serie: { ...r.att, log } } };
   });
-  if (!clubById(o.defender)) {
+  if (botById(o.defender)) {
+    try { await addBotAdj(db, o.season, o.defender, win ? { dd: 1 } : { pts: 1, dv: 1 }); } catch (e) { console.error('[serie bot]', e.message); }
+  } else {
     await mutateProfile(db, o.defender, prof => {
       const s = prof.stats?.serie;
       if (!s || s.season !== o.season) return null;
@@ -201,6 +243,13 @@ export async function serieFinished(db, row) {
     const cur = await db.getMatch(row.id);
     if (cur?.state && result) await db.updateMatch(cur.id, cur.version, { state: { ...cur.state, serieResult: result }, version: cur.version + 1 });
   } catch { /* só visual */ }
+}
+
+/** Os CPU também "têm" troféus (para não destoar dos treinadores). */
+function fakeTrophies(id, div) {
+  let h = 0;
+  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return h % 7 === 0 ? 1 + (h % 3) + (div >> 1) : 0;
 }
 
 export { notFound, closeSeason, ensureSerie };

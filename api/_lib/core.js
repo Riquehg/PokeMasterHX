@@ -465,7 +465,7 @@ export async function matchOp(db, user, body) {
   if (op === 'create') return createRoom(db, user, body);
   if (op === 'solo') return createSolo(db, user, body);
   if (op === 'join') return joinRoom(db, user, body);
-  if (op === 'serie_get' || op === 'serie_defense' || op === 'serie_challenge') return serieOp(db, user, body);
+  if (op === 'serie_get' || op === 'serie_defense' || op === 'serie_challenge' || op === 'serie_team') return serieOp(db, user, body);
   if (op === 'duel_queue') return duelQueue(db, user, body, await getOrCreateProfile(db, user));
   if (op === 'duel_status') return duelQueueStatus(db, user);
   if (op === 'duel_cancel') return duelQueueCancel(db, user);
@@ -918,7 +918,8 @@ export async function recordResults(db, state, options = {}) {
       const base = { ...(cur.stats || {}) };
       const merged = { ...base, ...fresh, companions: base.companions || fresh.companions, companion: base.companion ?? fresh.companion,
         shinyDex: base.shinyDex || fresh.shinyDex, shinySeen: base.shinySeen || fresh.shinySeen, overflow: base.overflow || fresh.overflow,
-        vaultBonus: base.vaultBonus || fresh.vaultBonus, nicknames: base.nicknames || fresh.nicknames, bag: addToBag(base.bag, keep) };
+        vaultBonus: base.vaultBonus || fresh.vaultBonus, nicknames: base.nicknames || fresh.nicknames, bag: addToBag(base.bag, keep),
+        serie: base.serie ?? fresh.serie, trophies: base.trophies ?? fresh.trophies };
       return { ...patch, stats: merged, points: calcPoints(cur.pokedex || [], merged) };
     });
     // Hardcore: quem caiu não leva nada (nem o ouro trazido); quem sobreviveu ganha o dobro de ouro da conta

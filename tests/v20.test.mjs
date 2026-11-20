@@ -10,7 +10,7 @@ import { whoMustAct } from '../shared/engine.js';
 import { SPECIES, MYTHICAL } from '../shared/data/pokemon.js';
 import { rollWild, hatchEgg } from '../shared/rules/monsters.js';
 import { createRng } from '../shared/rules/rng.js';
-import { serieTable, clubsOf, applySerieDuel, newSerie, zoneOf } from '../shared/data/series.js';
+import { serieTable, botsOf, botTeam, applySerieDuel, newSerie, zoneOf, SERIE_SLOTS, cleanTeam } from '../shared/data/series.js';
 
 const legendSpaces = m => m.spaces.filter(s => s.type === 'pokemon' && s.tier === 5).map(s => s.id);
 
@@ -85,10 +85,25 @@ test('Míticos: categoria própria, raros nas casas Amarelas e nunca em ovos', (
   assert.ok(MYTHICAL.length >= 15);
 });
 
-test('Séries: tabela com clubes, zonas de acesso/rebaixamento e pontos do duelo', () => {
-  const t = serieTable(1, [{ id: 'u1', name: 'Ana', pts: 999, j: 5, v: 5, d: 0, sp: 9 }], '2026-11', new Date('2026-11-20T12:00:00Z'));
-  assert.equal(t.length, 7);
+test('Séries: 20 vagas com treinadores CPU (nome, time e escudo próprios), que saem conforme entram jogadores', () => {
+  for (let d = 0; d < 4; d++) {
+    const bots = botsOf(d);
+    assert.equal(bots.length, 20);
+    assert.equal(new Set(bots.map(b => b.name)).size, 20);
+    for (const b of bots) { assert.ok(b.club.name && b.club.crest); assert.equal(botTeam(b).length, 6); for (const m of botTeam(b)) assert.ok(SPECIES[m.sp], m.sp); }
+  }
+  assert.notEqual(botsOf(0)[0].club.name, botsOf(3)[0].club.name);
+  const now = new Date('2026-11-20T12:00:00Z');
+  const t = serieTable(1, [{ id: 'u1', name: 'Ana', pts: 999, j: 5, v: 5, d: 0, sp: 9 }], '2026-11', now);
+  assert.equal(t.length, SERIE_SLOTS);
   assert.equal(t[0].id, 'u1');
+  const many = Array.from({ length: 15 }, (_, i) => ({ id: 'h' + i, name: 'H' + i, pts: 0, j: 0, v: 0, d: 0, sp: 0 }));
+  const t2 = serieTable(1, many, '2026-11', now);
+  assert.equal(t2.filter(r => r.bot).length, 5, 'sobram só 5 CPU (os mais fortes)');
+  const full = serieTable(1, many, '2026-11', now, {}).filter(r => r.bot).map(r => r.pts);
+  const all = serieTable(1, [], '2026-11', now).map(r => r.pts);
+  assert.deepEqual(full, all.slice(0, 5));
+  assert.equal(cleanTeam({ name: '  <b>Trovão</b> FC  ', crest: '🔥', color: 'xx' }).name, 'bTrovão/b FC');
   assert.equal(zoneOf(1, 7, 1), 'up');
   assert.equal(zoneOf(7, 7, 1), 'down');
   assert.equal(zoneOf(7, 7, 0), null, 'Série D não cai');
@@ -105,7 +120,7 @@ async function users(n) {
   for (let i = 0; i < n; i++) {
     const u = await db.verifyToken(`dev:s${i}@kanto.com`);
     await profileOp(db, u, { op: 'update', trainerName: `S${i}`, avatar: 1 });
-    for (const sp of ['charizard', 'blastoise', 'venusaur']) await adminOp(db, admin, { op: 'grant_mon', userId: u.id, species: sp, level: 60 });
+    for (const sp of ['charizard', 'blastoise', 'venusaur', 'pikachu', 'gengar', 'snorlax']) await adminOp(db, admin, { op: 'grant_mon', userId: u.id, species: sp, level: 60 });
     out.push(u);
   }
   return { db, admin, us: out };
@@ -130,11 +145,16 @@ test('Séries: inscrição, desafio contra a defesa de outro treinador (offline)
   await assert.rejects(matchOp(db, a, { op: 'serie_challenge', target: b.id }), /time de defesa/);
   const g = await matchOp(db, a, { op: 'serie_defense', uids: va.map(m => m.uid) });
   assert.equal(g.serie.div, 0);
-  assert.equal(g.serie.defense.length, 3);
+  assert.equal(g.serie.defense.length, 6);
+  await assert.rejects(matchOp(db, b, { op: 'serie_defense', uids: vb.slice(0, 3).map(m => m.uid) }), /precisa ter 6/);
   await matchOp(db, b, { op: 'serie_defense', uids: vb.map(m => m.uid) });
   const view = await matchOp(db, a, { op: 'serie_get' });
-  assert.equal(view.table.length, 8, '2 treinadores + 6 clubes');
+  assert.equal(view.table.length, 20, '2 treinadores + 18 CPU');
+  assert.ok(view.table.every(r => r.bot === undefined), 'CPU não são marcados');
   assert.ok(view.table.find(r => r.id === b.id).defense.every(m => m.lvl === 50));
+  const t = await matchOp(db, a, { op: 'serie_team', team: { name: 'Trovão FC', crest: '⚡', color: '#e04848' } });
+  assert.equal(t.table.find(r => r.me).club.name, 'Trovão FC');
+  await assert.rejects(matchOp(db, b, { op: 'serie_team', team: { name: 'trovão fc' } }), /Já existe/);
 
   const c = await matchOp(db, a, { op: 'serie_challenge', target: b.id });
   assert.equal(c.match.state.kind, 'duel');
@@ -150,18 +170,21 @@ test('Séries: inscrição, desafio contra a defesa de outro treinador (offline)
   assert.ok((await db.getMatch(c.match.id)).state.serieResult);
 
   await assert.rejects(matchOp(db, a, { op: 'serie_challenge', target: b.id }), /já enfrentou/);
-  const club = clubsOf(0)[0];
-  const cc = await matchOp(db, a, { op: 'serie_challenge', target: club.id });
+  const bot = botsOf(0)[0];
+  const cc = await matchOp(db, a, { op: 'serie_challenge', target: bot.id });
   assert.equal(cc.match.state.players[1].team[0].lvl, 32);
-  await playOut(db, cc.match.id, a);
-  for (const cl of clubsOf(0).slice(1, 4)) await playOut(db, (await matchOp(db, a, { op: 'serie_challenge', target: cl.id })).match.id, a);
-  await assert.rejects(matchOp(db, a, { op: 'serie_challenge', target: clubsOf(0)[5].id }), /ataques de hoje/);
+  assert.ok(cc.match.state.players[1].name.includes(bot.club.name));
+  const res = await playOut(db, cc.match.id, a);
+  const adj = (await db.getConfig('serie_bots')).adj[bot.id];
+  assert.equal(adj.pts, res.state.winner === a.id ? 0 : 1, 'resultado real conta para o CPU');
+  for (const cl of botsOf(0).slice(1, 4)) await playOut(db, (await matchOp(db, a, { op: 'serie_challenge', target: cl.id })).match.id, a);
+  await assert.rejects(matchOp(db, a, { op: 'serie_challenge', target: botsOf(0)[5].id }), /ataques de hoje/);
 });
 
 test('Séries: virada da temporada sobe os primeiros, paga o pódio e o campeão da Série A ganha um Mítico', async () => {
   const { db, us: [a, b] } = await users(2);
   for (const u of [a, b]) await matchOp(db, u, { op: 'serie_defense', uids: (await db.getProfile(u.id)).vault.map(m => m.uid) });
-  // A campeã da Série A em outubro, B última da Série D
+  // A campeã da Série A em outubro, B última da Série B
   const set = async (u, s) => { const p = await db.getProfile(u.id); await db.updateProfileIf(u.id, p.rev || 0, { stats: { ...p.stats, serie: { ...p.stats.serie, ...s } } }); };
   await set(a, { season: '2026-10', div: 3, pts: 9999, v: 99 });
   await set(b, { season: '2026-10', div: 2, pts: 0 });
@@ -172,6 +195,11 @@ test('Séries: virada da temporada sobe os primeiros, paga o pódio e o campeão
   assert.equal(g.serie.prev.season, '2026-10');
   const pa = await db.getProfile(a.id);
   assert.equal((pa.diamonds || 0) - before, 30);
+  assert.equal(pa.stats.trophies[0].pos, 1);
+  assert.equal(pa.stats.trophies[0].div, 3);
+  assert.equal(pa.stats.bag.master_ball, 1);
+  assert.equal(pa.stats.bag.shiny_charm, 1);
+  assert.equal(pa.stats.bag.tm, 3);
   assert.equal(pa.vault.length, va + 1);
   assert.ok(SPECIES[pa.vault.at(-1).sp].mythical);
   const gb = await matchOp(db, b, { op: 'serie_get' });
@@ -180,4 +208,5 @@ test('Séries: virada da temporada sobe os primeiros, paga o pódio e o campeão
   const again = await closeSeason(db, '2026-10');
   assert.equal(again.podium[0].id, a.id);
   assert.equal(((await db.getProfile(a.id)).diamonds || 0) - before, 30);
+  assert.equal((await db.getProfile(a.id)).stats.trophies.length, 1);
 });

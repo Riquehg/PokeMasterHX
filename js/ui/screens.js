@@ -5,7 +5,7 @@ import { ensureSeason, divInfo, LEAGUE_DIVS, TOP_DIV, LP_PER_DIV } from '../../s
 const HARDCORE_TXT = 'Hardcore: se toda a sua equipe for derrotada você sai da partida e perde tudo o que ganhou nela (capturas, níveis e ouro). Quem sobrevive ganha o dobro de ouro da conta.';
 import { MAP_CHOICES, mapChoiceName, BUILTIN_MAPS, setCustomMaps } from '../../shared/data/board.js';
 import { openMapEditor, templateMap } from './mapeditor.js';
-import { openSeries } from './series.js';
+import { openSeries, openTrophies } from './series.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
 import { openCompanionPicker } from './missions.js';
 // Telas fora da partida: login, hub do treinador, lobby online, sala de espera, partida local, coleção, ranking e admin.
@@ -180,6 +180,7 @@ export async function hubScreen(root, ctx) {
         <button class="acct-tile" data-act="companions" ${profile ? '' : 'disabled'}><span>🤝</span><b>Companheiros</b><small>${(profile?.stats?.companions || []).length}/${Object.keys(COMPANIONS).length}${profile?.stats?.companion && COMPANIONS[profile.stats.companion] ? ` · ${esc(COMPANIONS[profile.stats.companion].name)}${bondLevel(profile?.stats?.companionBond?.[profile.stats.companion] || 0) >= 10 ? ' ❤️' : ''}` : ''}</small></button>
         <button class="acct-tile" data-act="abag" ${profile ? '' : 'disabled'}><span>🎒</span><b>Mochila</b><small>${Object.values(profile?.stats?.bag || {}).reduce((a, b) => a + b, 0)} itens · levar e vender</small></button>
         <button class="acct-tile" data-act="market" ${profile ? '' : 'disabled'}><span>🏪</span><b>Mercado</b><small>Pokémon e itens</small></button>
+        <button class="acct-tile" data-act="trophies" ${profile ? '' : 'disabled'}><span>🏆</span><b>Sala de Troféus</b><small>${(profile?.stats?.trophies || []).length} troféus da Liga das Séries</small></button>
         <button class="acct-tile" data-act="ranking"><span>🏆</span><b>Ranking</b><small>Liga, Elos e pontos</small></button>
         <button class="acct-tile" data-act="dshop" ${profile ? '' : 'disabled'}><span>💎</span><b>Loja de cosméticos</b><small>${profile?.diamonds || 0} 💎 · só visual</small></button>
         <button class="acct-tile donate" data-act="donate" ${profile ? '' : 'disabled'}><span>💖</span><b>Apoiar o projeto</b><small>Doe e ganhe 💎 de agradecimento</small></button>
@@ -203,6 +204,7 @@ export async function hubScreen(root, ctx) {
     dex: () => openDex(null, profile?.pokedex || [], profile?.pokedex_seen || [], { shinyCaught: profile?.stats?.shinyDex || [], shinySeen: profile?.stats?.shinySeen || [], vault: profile?.vault || [] }),
     duel: () => openDuelQueue(ctx, profile),
     series: () => openSeries(ctx, profile),
+    trophies: () => openTrophies(profile),
     install: () => promptInstall(),
     cup: async () => {
       try {
