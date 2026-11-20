@@ -88,7 +88,7 @@ export function openBag(session, act) {
         <div>${canUse ? `<button class="btn sm primary" data-act="use" data-item="${id}">Usar</button>` : it.kind === 'ball' ? '<span class="tiny muted">em batalha</span>' : it.kind === 'boost' ? '<span class="tiny muted">em batalha</span>' : '<span class="tiny muted">passivo</span>'}</div></div>`;
     }).join('');
     const target = pending ? `<div class="divider"></div><b>Usar ${esc(ITEMS[pending].name)} em:</b>
-      <div class="team" style="grid-template-columns:repeat(6,1fr);margin-top:6px">${p.team.map((m, i) => monCard(m, { index: i, act: 'target' })).join('')}</div>` : '';
+      <div class="team bag-target">${p.team.map((m, i) => monCard(m, { index: i, act: 'target' })).join('')}</div>` : '';
     return `<p class="small muted">Itens fora de batalha só podem ser usados na sua vez.</p><div class="col">${list || '<p class="muted">Mochila vazia.</p>'}</div>${target}`;
   };
   const ov = openModal('bag', '🎒 Mochila', render(), { wide: true });

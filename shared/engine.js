@@ -728,7 +728,10 @@ function pcAction(state, p, a) {
   }
   if (a.op === 'release') {
     if (!p.box[bi]) fail('Seleção inválida.');
+    // Pokémon que veio da Coleção não é solto aqui (voltaria no fim e daria ouro infinito); solte pela Coleção no menu
+    if (p.box[bi].brought) fail('Esse Pokémon é da sua Coleção. Para soltar, use a 📦 Coleção no menu inicial.');
     const [m] = p.box.splice(bi, 1);
+    (p.releasedUids ||= []).push(m.uid); // sai também da Coleção (se já tinha sido salvo)
     p.gold += 20 * m.lvl;
     log(state, `🌲 ${p.name} soltou ${speciesName(m.sp)} na natureza (+${20 * m.lvl} de ouro do Professor).`);
     return;

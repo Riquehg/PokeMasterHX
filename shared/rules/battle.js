@@ -19,8 +19,9 @@ import {
 } from './helpers.js';
 
 export const MAX_ROUNDS = 30;
-// Lendários (tier 5) são muito difíceis: precisa 10+ e fogem com facilidade depois de escapar da bola.
-export const CAPTURE_TARGET = { 1: 3, 2: 4, 3: 5, 4: 6, 5: 11 }; // lendário: precisa 11+ (bola, HP baixo e condição ajudam)
+// Lendários (tier 5) são difíceis: precisa 8+ (com Ultra Ball e HP cheio ≈ 17%; com HP baixo e condição passa de 50%)
+// e fogem com facilidade depois de escapar da bola. (Era 11 — ficava 0% com HP cheio.)
+export const CAPTURE_TARGET = { 1: 3, 2: 4, 3: 5, 4: 6, 5: 8 };
 export const WILD_FLEE_AFTER_FAIL = { 1: 0.1, 2: 0.15, 3: 0.2, 4: 0.3, 5: 0.65 };
 
 // ---------------------------------------------------------------- lados

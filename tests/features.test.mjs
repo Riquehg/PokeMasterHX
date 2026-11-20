@@ -413,7 +413,7 @@ test('shiny é mais forte (+15% HP e Ataque, +10% Velocidade); lendário mais di
   const { raidBallChance } = await import('../shared/rules/raid.js');
   const n = computeStats('charizard', 40, false), s = computeStats('charizard', 40, true);
   assert.ok(s.maxHp > n.maxHp * 1.12 && s.atk > n.atk * 1.12 && s.spe > n.spe * 1.05);
-  assert.equal(CAPTURE_TARGET[5], 11);
+  assert.equal(CAPTURE_TARGET[5], 8);
   assert.ok(raidBallChance({ badges: ['a', 'b', 'c', 'd', 'e', 'f'] }, 'ultra_ball') <= 0.28);
   assert.ok(raidBallChance({ badges: [] }, 'poke_ball') > 0);
 });

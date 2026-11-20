@@ -189,9 +189,28 @@ export async function profileOp(db, user, body) {
     });
     return { profile: await withCosmetic(db, prof) };
   }
+  if (body.op === 'restore') { // recuperar um Pokémon que saiu por falta de espaço
+    return { profile: await withCosmetic(db, await mutateProfile(db, user.id, prof => {
+      const st = { ...(prof.stats || {}) };
+      const list = st.overflow || [];
+      const m = list.find(x => x.uid === body.uid);
+      if (!m) bad('Esse Pokémon não está mais na lista.');
+      if ((prof.vault || []).length >= collectionMax(prof)) bad(`Sua Coleção está cheia (${collectionMax(prof)}). Solte alguns Pokémon antes de recuperar.`);
+      const { outAt, why, ...mon } = m;
+      st.overflow = list.filter(x => x.uid !== body.uid);
+      return { vault: [...(prof.vault || []), mon], stats: st };
+    })) };
+  }
   if (body.op === 'release') {
     // Soltar um Pokémon da Coleção (não afeta partidas em andamento)
-    return { profile: await withCosmetic(db, await mutateProfile(db, user.id, prof => ({ vault: (prof.vault || []).filter(m => m.uid !== body.uid) }))) };
+    // vai para a lista de recuperação (dá para desfazer se soltou sem querer)
+    return { profile: await withCosmetic(db, await mutateProfile(db, user.id, prof => {
+      const m = (prof.vault || []).find(x => x.uid === body.uid);
+      if (!m) return null;
+      const st = { ...(prof.stats || {}) };
+      st.overflow = [{ ...m, outAt: new Date().toISOString(), why: 'solto' }, ...(st.overflow || [])].slice(0, OVERFLOW_MAX);
+      return { vault: (prof.vault || []).filter(x => x.uid !== body.uid), stats: st };
+    })) };
   }
   if (body.op === 'favorite') {
     return { profile: await withCosmetic(db, await mutateProfile(db, user.id, prof => ({ vault: (prof.vault || []).map(m => (m.uid === body.uid ? { ...m, fav: !m.fav } : m)) }))) };
@@ -245,12 +264,24 @@ export async function syncCollection(db, state, pids) {
   }
 }
 
+/** Hardcore: tira da Coleção os Pokémon que entraram por ESTA partida (capturas dela). */
+export async function purgeMatchCaptures(db, pid, matchId) {
+  await mutateProfile(db, pid, prof => {
+    const vault = prof.vault || [];
+    const keep = vault.filter(m => m.from !== matchId);
+    return keep.length === vault.length ? null : { vault: keep };
+  });
+}
+
 function collectionPatch(prof, p, state) {
   {
     const away = new Set(p.tradedAway || []);
-    const vault = [...(prof.vault || [])].filter(m => !away.has(m.uid)); // trocados na partida saem da Coleção
+    const released = new Set(p.releasedUids || []);
+    const vault = [...(prof.vault || [])].filter(m => !away.has(m.uid) && !(released.has(m.uid) && m.from === state.id)); // trocados (e soltos na partida) saem da Coleção
     const idx = new Map(vault.map((m, i) => [m.uid, i]));
-    for (const mon of [...p.team, ...p.box]) {
+    // Conquista: quem está defendendo cidades também é seu
+    const garrison = state.conquest ? Object.entries(state.conquest.garrison || {}).filter(([g]) => state.conquest.owners?.[g] === p.id).flatMap(([, l]) => l) : [];
+    for (const mon of [...p.team, ...p.box, ...garrison]) {
       const e = collectionEntry(mon, state.id);
       if (idx.has(mon.uid)) {
         const old = vault[idx.get(mon.uid)];
@@ -260,13 +291,17 @@ function collectionPatch(prof, p, state) {
         vault.push(e);
       }
     }
-    // Limite: remove primeiro os mais fracos que não são shiny nem favoritos
+    // Limite: só "comuns" saem (nunca shiny, favorito, lendário, tier 4+, Confiança ou com apelido),
+    // e quem sai vai para a lista "Saíram por falta de espaço" (dá para recuperar depois).
     const cap = collectionMax(prof);
+    let overflow = null;
     if (vault.length > cap) {
-      const keep = new Set([...p.team, ...p.box].map(m => m.uid));
-      const removable = vault.filter(m => !m.shiny && !m.fav && !keep.has(m.uid)).sort((a, b) => a.lvl - b.lvl);
-      const drop = new Set(removable.slice(0, vault.length - cap).map(m => m.uid));
+      const keep = new Set([...p.team, ...p.box, ...garrison].map(m => m.uid));
+      const removable = vault.filter(m => isExpendable(m) && !keep.has(m.uid)).sort((a, b) => a.lvl - b.lvl);
+      const dropped = removable.slice(0, vault.length - cap);
+      const drop = new Set(dropped.map(m => m.uid));
       for (let i = vault.length - 1; i >= 0; i--) if (drop.has(vault[i].uid)) vault.splice(i, 1);
+      if (dropped.length) overflow = [...dropped.map(m => ({ ...m, outAt: new Date().toISOString() })), ...((prof.stats || {}).overflow || [])].slice(0, OVERFLOW_MAX);
     }
     const pokedex = [...new Set([...(prof.pokedex || []), ...p.caught])];
     const seen = [...new Set([...(prof.pokedex_seen || []), ...(p.seen || []), ...p.caught])];
@@ -274,9 +309,16 @@ function collectionPatch(prof, p, state) {
     const st = prof.stats || {};
     const shinyDex = [...new Set([...(st.shinyDex || []), ...(p.shinyCaught || [])])];
     const shinySeen = [...new Set([...(st.shinySeen || []), ...(p.shinySeen || []), ...shinyDex])];
-    const changed = shinyDex.length !== (st.shinyDex || []).length || shinySeen.length !== (st.shinySeen || []).length;
-    return { vault, pokedex, pokedex_seen: seen, points: calcPoints(pokedex, st), ...(changed ? { stats: { ...st, shinyDex, shinySeen } } : {}) };
+    const changed = overflow || shinyDex.length !== (st.shinyDex || []).length || shinySeen.length !== (st.shinySeen || []).length;
+    return { vault, pokedex, pokedex_seen: seen, points: calcPoints(pokedex, st), ...(changed ? { stats: { ...st, shinyDex, shinySeen, ...(overflow ? { overflow } : {}) } } : {}) };
   }
+}
+
+/** Pokémon "comum" que pode sair sozinho quando a Coleção lota. */
+export const OVERFLOW_MAX = 40;
+export function isExpendable(m) {
+  const sp = SPECIES[m.sp];
+  return !m.shiny && !m.fav && !m.trust && !m.nick && !(sp?.legendary) && (sp?.tier || 1) <= 3;
 }
 
 function calcPoints(pokedex, st) {
@@ -292,7 +334,7 @@ function playersToSync(action, prev, next) {
     if (f.k === 'battle_end') (f.pids || []).forEach(id => ids.add(id));
     if (f.k === 'trade_done' && f.ok) { ids.add(f.from); ids.add(f.to); }
   }
-  if (['pc', 'use_item', 'leave', 'reorder'].includes(action?.type)) ids.add('__actor__');
+  if (['pc', 'use_item', 'leave', 'reorder', 'release'].includes(action?.type)) ids.add('__actor__');
   return ids;
 }
 
@@ -644,6 +686,7 @@ async function kickPlayer(db, user, row, body) {
     const ok = await db.updateMatch(cur.id, cur.version, patch);
     if (!ok) continue;
     await db.removeMember(cur.id, target);
+    if (state.options?.hardcore) { try { await purgeMatchCaptures(db, target, state.id); } catch (e) { console.error('[hardcore]', e.message); } }
     if (finished) await recordResults(db, state, cur.options || {});
     return { match: publicMatch({ ...cur, ...patch }, user.id) };
   }
@@ -727,10 +770,18 @@ export async function actionOp(db, user, body) {
       }
     }
     else {
-      const ids = state.options?.hardcore ? null : playersToSync(body.action, row.state, state); // Hardcore: só salva no fim (quem cair perde tudo)
+      const ids = playersToSync(body.action, row.state, state);
       if (ids && ids.size) {
         const list = [...ids].map(id => (id === '__actor__' ? user.id : id));
         try { await syncCollection(db, state, list); } catch (e) { console.error('[sync]', e.message); }
+      }
+      // ☠️ Hardcore: quem acabou de cair perde as capturas desta partida (o que já era da Coleção continua)
+      if (state.options?.hardcore) {
+        for (const pl of state.players) {
+          if (pl.hardcoreLost && !row.state.players.find(x => x.id === pl.id)?.hardcoreLost && !pl.id.startsWith('cpu_')) {
+            try { await purgeMatchCaptures(db, pl.id, state.id); } catch (e) { console.error('[hardcore]', e.message); }
+          }
+        }
       }
     }
     return { match: publicMatch({ ...row, ...patch }, user.id) };
@@ -741,6 +792,9 @@ export async function actionOp(db, user, body) {
 /** Fim de partida online: Coleção + Pokédex + estatísticas + pontos + rating (competitivo). */
 export async function recordResults(db, state, options = {}) {
   await syncCollection(db, state, null);
+  if (state.options?.hardcore) {
+    for (const p of state.players) if (p.hardcoreLost && !p.id.startsWith('cpu_')) { try { await purgeMatchCaptures(db, p.id, state.id); } catch (e) { console.error('[hardcore]', e.message); } }
+  }
   const humans = state.players.filter(p => !p.id.startsWith('cpu_'));
   const ranked = options.mode === 'ranked' && humans.length >= 2;
   const deltas = ranked ? (state.ratingChanges || await eloDeltas(db, state, humans)) : {};
@@ -780,8 +834,16 @@ export async function recordResults(db, state, options = {}) {
       (state.leagueChanges ||= {})[p.id] = { delta: lg.result.delta, change: lg.result.change, div: lg.result.to, lp: lg.result.league.lp };
       if (lg.reward && db.walletAdd) { try { await db.walletAdd(p.id, lg.reward, 0); } catch (e) { console.error('[season]', e.message); } }
     }
-    await db.upsertProfile(p.id, patch);
     if (state.options?.hardcore) st.hardcore = (st.hardcore || 0) + (p.hardcoreLost ? 0 : 1);
+    // grava só os campos de estatística em cima do perfil MAIS NOVO (não apaga o que outra parte acabou de salvar)
+    const fresh = { ...st };
+    await mutateProfile(db, p.id, cur => {
+      const base = { ...(cur.stats || {}) };
+      const merged = { ...base, ...fresh, companions: base.companions || fresh.companions, companion: base.companion ?? fresh.companion,
+        shinyDex: base.shinyDex || fresh.shinyDex, shinySeen: base.shinySeen || fresh.shinySeen, overflow: base.overflow || fresh.overflow,
+        vaultBonus: base.vaultBonus || fresh.vaultBonus, nicknames: base.nicknames || fresh.nicknames };
+      return { ...patch, stats: merged, points: calcPoints(cur.pokedex || [], merged) };
+    });
     // Hardcore: quem caiu não leva nada (nem o ouro trazido); quem sobreviveu ganha o dobro de ouro da conta
     const coins = p.hardcoreLost ? 0 : (state.options?.hardcore ? Math.min(2400, accountGoldReward(state, p) * 2) : accountGoldReward(state, p)) + refundBrought(p);
     if (coins > 0 && db.walletAdd) {
@@ -848,7 +910,7 @@ export async function adminOp(db, user, body) {
       const ok = await mutateProfile(db, body.userId, prof => {
         const vault = [...(prof.vault || [])];
         vault.unshift({ uid: 'adm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), sp: body.species, lvl: Math.max(1, Math.min(60, Number(body.level) || 5)), shiny: !!body.shiny, aura: null, from: 'admin', at: new Date().toISOString() });
-        return { vault: vault.slice(0, collectionMax(prof)) };
+        return { vault }; // presente do admin nunca apaga nada (pode passar do limite)
       });
       if (!ok) notFound('Usuário não encontrado.');
       return { ok: true };

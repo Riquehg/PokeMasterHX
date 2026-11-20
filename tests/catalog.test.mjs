@@ -87,7 +87,7 @@ test('raridade: shiny raríssimo e lendário difícil de capturar', () => {
   let sh = 0;
   for (let i = 0; i < 20000; i++) if (rollWild(rng, 1).shiny) sh++;
   assert.ok(sh > 20 && sh < 80, `shinies em 20000: ${sh}`);
-  assert.ok(CAPTURE_TARGET[5] >= 10);
+  assert.ok(CAPTURE_TARGET[5] >= 8 && CAPTURE_TARGET[5] > CAPTURE_TARGET[4] + 1);
   assert.ok(WILD_FLEE_AFTER_FAIL[5] >= 0.5);
   assert.ok(raidCatchChance({ badges: [1, 2, 3, 4, 5, 6] }) <= 0.2);
   assert.equal(ITEMS.master_ball.price, 0, 'Master Ball não vende em loja');
