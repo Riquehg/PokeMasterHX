@@ -203,6 +203,9 @@ function newPlayer(rng, cfg, index) {
     team: brought.length ? brought : [mon],
     companions: (Array.isArray(cfg.companions) ? cfg.companions : []).filter(id => COMPANIONS[id]),
     companion: COMPANIONS[cfg.companion] ? cfg.companion : null,
+    // 💞 nível de laço de cada companheiro (vem da conta; 1 a 10)
+    bond: Object.fromEntries(Object.entries(cfg.companionBond && typeof cfg.companionBond === 'object' ? cfg.companionBond : {})
+      .filter(([id]) => COMPANIONS[id]).map(([id, l]) => [id, Math.max(1, Math.min(10, Number(l) || 1))])),
     box: cfgBox,
     badges: [],
     eliteStage: 0,

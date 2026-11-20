@@ -1,6 +1,6 @@
 // Missões e companheiros dentro da partida.
 import { MISSION_TEMPLATES, MISSION_TYPES, ACTIVE_MISSIONS, MAX_MISSIONS_PER_MATCH } from '../data/missions.js';
-import { COMPANIONS, COMPANION_BY_TYPE, getCompanion } from '../data/companions.js';
+import { COMPANIONS, COMPANION_BY_TYPE, getCompanion, scaledBonus } from '../data/companions.js';
 import { getSpecies } from '../data/pokemon.js';
 import { ITEMS } from '../data/items.js';
 import { createRng } from './rng.js';
@@ -95,9 +95,12 @@ export function companionBonus(state, si) {
   const side = state.battle?.sides[si];
   if (!side || side.kind !== 'player') return null;
   const p = getPlayer(state, side.pid);
-  return getCompanion(p?.companion)?.bonus || null;
+  return playerCompanionBonus(p);
 }
 
+/** Nível de laço do companheiro que está com o jogador (1 a 10; vem da conta no início da partida). */
+export const companionLevel = p => Math.max(1, Math.min(10, Number(p?.bond?.[p?.companion]) || 1));
+
 export function playerCompanionBonus(p) {
-  return getCompanion(p?.companion)?.bonus || null;
+  return p?.companion ? scaledBonus(p.companion, companionLevel(p)) : null;
 }

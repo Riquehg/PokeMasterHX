@@ -9,6 +9,7 @@ import { duelQueue, duelQueueStatus, duelQueueCancel, duelTeam, startCup, duelFi
 import { SPECIES, STARTERS, getSpecies } from '../../shared/data/pokemon.js';
 import { dailyPokemon } from '../../shared/daily.js';
 import { cleanNick } from '../../shared/data/cosmetics.js';
+import { bondLevel, bondGain, BOND_MAX, COMPANIONS } from '../../shared/data/companions.js';
 import { equippedCosmetic, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment } from './shop.js';
 
 export class HttpError extends Error {
@@ -463,7 +464,10 @@ async function playerCfg(db, e, options) {
   const p = { id: e.id, name: e.name, avatar: e.avatar, isBot: e.isBot, starter: e.starter };
   const prof = e.isBot ? null : await db.getProfile(e.id);
   if (prof) { try { p.cosmetic = await equippedCosmetic(db, prof); } catch { /* sem cosmético */ } }
-  if (prof) { p.companions = prof.stats?.companions || []; p.companion = prof.stats?.companion || null; } // companheiros da conta
+  if (prof) { // companheiros da conta + nível de laço de cada um
+    p.companions = prof.stats?.companions || []; p.companion = prof.stats?.companion || null;
+    p.companionBond = Object.fromEntries(Object.entries(prof.stats?.companionBond || {}).map(([id, pts]) => [id, bondLevel(pts)]));
+  }
   if (mode === 'collection' && !e.isBot && e.teamUids?.length) {
     const vault = prof?.vault || [];
     p.teamMons = e.teamUids.map(u => vault.find(v => v.uid === u)).filter(Boolean)
@@ -715,10 +719,10 @@ export async function actionOp(db, user, body) {
     if (finished && row.options?.mode === 'duel') await duelFinished(db, { ...row, ...patch });
     else if (finished) {
       await recordResults(db, state, row.options || {});
-      if (state.leagueChanges) {
-        try { // mostra +PL / subiu de divisão na tela de fim de jogo
+      if (state.leagueChanges || state.bondChanges) {
+        try { // mostra +PL / subiu de divisão / laço do companheiro na tela de fim de jogo
           const cur = await db.getMatch(row.id);
-          if (cur?.state) await db.updateMatch(cur.id, cur.version, { state: { ...cur.state, leagueChanges: state.leagueChanges }, version: cur.version + 1 });
+          if (cur?.state) await db.updateMatch(cur.id, cur.version, { state: { ...cur.state, leagueChanges: state.leagueChanges || null, bondChanges: state.bondChanges || null }, version: cur.version + 1 });
         } catch { /* só visual */ }
       }
     }
@@ -752,6 +756,16 @@ export async function recordResults(db, state, options = {}) {
     st.shinies = (st.shinies || 0) + p.stats.shinies;
     st.pvpWins = (st.pvpWins || 0) + p.stats.pvpWins;
     st.bestScore = Math.max(st.bestScore || 0, score(p));
+    // 💞 Laço: o companheiro que terminou a partida com você ganha pontos
+    if (p.companion && COMPANIONS[p.companion] && !p.hardcoreLost) {
+      const bond = { ...(st.companionBond || {}) };
+      const before = bond[p.companion] || 0;
+      const gain = bondGain({ won: state.winner === p.id, badges: p.badges.length, captures: p.stats.captures, battlesWon: p.stats.wins, missions: p.missionsDone || 0, turns: state.turn });
+      bond[p.companion] = Math.min(5000, before + gain);
+      st.companionBond = bond;
+      const lb = bondLevel(before), la = bondLevel(bond[p.companion]);
+      (state.bondChanges ||= {})[p.id] = { comp: p.companion, gain, lvl: la, up: la > lb, intimate: la >= BOND_MAX && lb < BOND_MAX, points: bond[p.companion] };
+    }
     const patch = { stats: st, points: calcPoints(prof.pokedex || [], st) };
     if (p.champion && db.insertFeed) {
       try { await db.insertFeed({ kind: 'champion', text: `👑 ${p.name} venceu a Liga e se tornou Campeão!`, data: { name: p.name, avatar: p.avatar } }); } catch { /* ok */ }

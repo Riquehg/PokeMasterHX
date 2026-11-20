@@ -8,7 +8,8 @@ import { getSpecies } from '../data/pokemon.js';
 import { getItem, ballBonusAgainst } from '../data/items.js';
 import { against, bestAttack, effectivenessLabel, TYPE_LABELS } from './types.js';
 import { monMoves, STAB } from '../data/moves.js';
-import { companionBonus, progressMission } from './missions.js';
+import { companionBonus, progressMission, companionLevel } from './missions.js';
+import { getCompanion, isIntimate, ASSIST_CHANCE, ASSIST_MAX } from '../data/companions.js';
 import { weatherMult, weatherInflict, weatherChip, weatherOf } from './weather.js';
 import { conquestMult } from './modeBonus.js';
 import { GYMS } from '../data/trainers.js';
@@ -219,7 +220,7 @@ function tryInflict(state, rng, defSi, d, move, aSp) {
   const tier = move.id?.slice(-1) || 's';
   let chance = INFLICT_CHANCE[tier] || 0.15;
   if (id === 'poison') chance += 0.1;
-  if (companionBonus(state, 1 - defSi)?.inflict === move.type) chance += 0.1; // companheiro (ex.: Koga) aumenta a chance
+  { const cb = companionBonus(state, 1 - defSi); if (cb?.inflict === move.type) chance += cb.inflictChance || 0.04; } // companheiro (ex.: Koga) aumenta a chance
   chance *= weatherInflict(state, id); // clima (ex.: Tempestade dobra a paralisia)
   if (!rng.chance(chance)) return;
   side.status[d.uid] = { id, turns: id === 'sleep' ? rng.int(1, 3) : 0 };
@@ -529,6 +530,74 @@ function awardKO(state, winnerSi, loserSi) {
   msgs.forEach(m => log(state, m, 'good'));
 }
 
+/**
+ * ❤️ Companheiro íntimo (laço Nv. 10): chance por rodada de entrar com o Pokémon dele e usar um golpe especial.
+ * Não vale em duelos/Copa nem no Competitivo. Devolve true se a batalha acabou.
+ */
+function companionAssist(state, rng, si) {
+  const b = state.battle;
+  if (b.over || state.options?.duel || state.roomMode === 'ranked') return false;
+  const side = b.sides[si];
+  if (side.kind !== 'player' || b.mustSwitch[si]) return false;
+  const p = getPlayer(state, side.pid);
+  const c = getCompanion(p?.companion);
+  if (!c?.assist || !isIntimate(companionLevel(p))) return false;
+  side.assists ||= 0;
+  if (side.assists >= ASSIST_MAX || !rng.chance(ASSIST_CHANCE)) return false;
+  const me = sideActive(state, side), foeSide = b.sides[1 - si], foe = sideActive(state, foeSide);
+  if (!me || me.hp <= 0 || !foe || foe.hp <= 0) return false;
+  side.assists += 1;
+  const A = c.assist;
+  const base = { k: 'assist', side: si, pid: p.id, comp: p.companion, sp: c.mon, move: A.move, type: A.type, kind: A.kind };
+  if (A.kind === 'heal') {
+    if (me.hp >= maxHpOf(me)) { side.assists -= 1; return false; } // não gasta se estiver de HP cheio
+    const healed = healMon(me, 0.25);
+    fx(state, { ...base, uid: me.uid, amount: healed, hpAfter: me.hp, maxHp: maxHpOf(me) });
+    log(state, `❤️ ${c.name} entrou com ${speciesName(c.mon)} e usou ${A.move}: ${speciesName(me.sp)} recuperou ${healed} HP!`, 'good');
+    return false;
+  }
+  if (A.kind === 'buff') {
+    side.stage ||= {};
+    const st = side.stage[me.uid] || 0;
+    side.stage[me.uid] = Math.min(2, st + 1);
+    fx(state, { ...base, uid: me.uid, stage: side.stage[me.uid] });
+    log(state, `❤️ ${c.name} entrou com ${speciesName(c.mon)} e usou ${A.move}: o Ataque de ${speciesName(me.sp)} subiu!`, 'good');
+    return false;
+  }
+  if (A.kind === 'debuff') {
+    foeSide.stage ||= {};
+    const st = foeSide.stage[foe.uid] || 0;
+    foeSide.stage[foe.uid] = Math.max(-2, st - 1);
+    fx(state, { ...base, uid: foe.uid, stage: foeSide.stage[foe.uid] });
+    log(state, `❤️ ${c.name} entrou com ${speciesName(c.mon)} e usou ${A.move}: o Ataque de ${speciesName(foe.sp)} caiu!`, 'good');
+    return false;
+  }
+  if (A.kind === 'status') {
+    const id = TYPE_STATUS[A.type];
+    foeSide.status ||= {};
+    if (id && !foeSide.status[foe.uid] && !IMMUNE[id].some(t => getSpecies(foe.sp).types.includes(t))) {
+      foeSide.status[foe.uid] = { id, turns: id === 'sleep' ? rng.int(1, 3) : 0 };
+      fx(state, { ...base, uid: foe.uid, status: id });
+      log(state, `❤️ ${c.name} entrou com ${speciesName(c.mon)} e usou ${A.move}: ${speciesName(foe.sp)} ficou ${STATUS[id].adj}!`, 'good');
+      return false;
+    }
+    // já tem condição (ou é imune): vira um golpe de dano
+  }
+  // dano: 12% do HP máximo do alvo × efetividade (mín. 0,5×), sem nocautear direto se for lendário/chefe
+  const mult = Math.max(0.5, against(A.type, getSpecies(foe.sp).types) || 0.5);
+  let dmg = Math.max(1, Math.round(maxHpOf(foe) * 0.12 * mult));
+  if (foe.raid) dmg = Math.min(dmg, foe.hp - 1 > 0 ? foe.hp - 1 : 1);
+  dmg = Math.min(dmg, foe.hp);
+  foe.hp -= dmg;
+  fx(state, { ...base, kind: 'dmg', uid: foe.uid, dmg, mult, hpAfter: foe.hp, maxHp: maxHpOf(foe) });
+  log(state, `❤️ ${c.name} entrou com ${speciesName(c.mon)} e usou ${A.move}: ${dmg} de dano em ${speciesName(foe.sp)}!`, 'good');
+  if (foe.hp <= 0) {
+    awardKO(state, si, 1 - si);
+    if (handleFaint(state, rng, 1 - si)) return true;
+  }
+  return false;
+}
+
 function resolveRound(state, rng, choices) {
   const b = state.battle;
   b.round += 1;
@@ -550,6 +619,11 @@ function resolveRound(state, rng, choices) {
       if (r === 'fled') return endBattle(state, rng, { result: 'fled', by: si });
       if (r === 'surrender') return endBattle(state, rng, { result: 'win', winner: 1 - si, surrender: true });
     }
+  }
+
+  // 1b) ❤️ companheiro íntimo pode entrar na batalha
+  for (let si = 0; si < 2; si++) {
+    if (companionAssist(state, rng, si)) return;
   }
 
   // 2) ataques, por velocidade (nível; empate: lado 0)

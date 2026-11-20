@@ -301,6 +301,7 @@ export class BoardView {
       ${fr ? '<div class="halo"></div><div class="halo h2"></div>' : ''}${sparks}
       <div class="pin ${fr ? 'frame-' + fr : ''} ${c.card ? 'tcard-' + esc(c.card) : ''}"><img src="${avatarUrl(pl.avatar)}" alt="${esc(pl.name)}" data-color="${playerColor(state, pl.id)}" draggable="false"></div>
       ${pl.companion && COMPANIONS[pl.companion] ? `<img class="tk-comp" src="${leaderUrl(COMPANIONS[pl.companion].sprite)}" alt="" title="${esc(COMPANIONS[pl.companion].name)}" draggable="false">` : ''}
+      ${pl.companion && (pl.bond?.[pl.companion] || 0) >= 10 ? `<span class="tk-heart" title="${esc(COMPANIONS[pl.companion]?.name || '')} é íntimo de ${esc(pl.name)}">❤️</span>` : ''}
       <span class="name">${pl.id === viewerId ? 'Você' : esc(pl.name.split(' ')[0])}</span>
       ${c.title ? `<span class="ttitle">★ ${esc(c.title)}</span>` : ''}</div>`;
   }

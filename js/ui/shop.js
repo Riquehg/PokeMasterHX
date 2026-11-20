@@ -1,4 +1,4 @@
-// Loja de Diamantes: cosméticos (só visual) e compra de diamantes por Pix.
+// Loja de Diamantes: cosméticos (só visual) e 💖 doações por Pix (o apoiador ganha diamantes de agradecimento).
 import { esc, toast, openModal, setModalBody, bindActions } from './dom.js';
 import { api } from '../api.js';
 import { monSprite, avatarUrl } from '../config.js';
@@ -20,28 +20,32 @@ function preview(item, avatar) {
   return `<div class="cos-title">“${esc(item.value)}”</div>`;
 }
 
-export async function openShop(profile, onChange, onClose) {
-  let tab = 'cosmetics', data = null, pix = null, timer = null;
-  openModal('dshop', '💎 Loja de Diamantes', '<span class="spinner"></span>', { wide: true, onClose: () => { clearInterval(timer); onClose?.(); } });
+export async function openShop(profile, onChange, onClose, startTab = 'cosmetics') {
+  let tab = startTab, data = null, pix = null, timer = null;
+  openModal('dshop', startTab === 'buy' ? '💖 Apoie o projeto' : '💎 Loja de Diamantes', '<span class="spinner"></span>', { wide: true, onClose: () => { clearInterval(timer); onClose?.(); } });
   const ov = document.getElementById('dshop');
 
   const body = () => {
     const me = data.me;
     const tabs = `<div class="spread" style="margin-bottom:10px"><div class="tabs" style="flex:1">
         <button class="btn sm ${tab === 'cosmetics' ? 'primary' : ''}" data-act="tab" data-t="cosmetics">🎨 Cosméticos</button>
-        <button class="btn sm ${tab === 'buy' ? 'primary' : ''}" data-act="tab" data-t="buy">💎 Comprar diamantes</button>
-        <button class="btn sm ${tab === 'history' ? 'primary' : ''}" data-act="tab" data-t="history">🧾 Compras</button></div>
+        <button class="btn sm ${tab === 'buy' ? 'primary' : ''}" data-act="tab" data-t="buy">💖 Doar (ganhe 💎)</button>
+        <button class="btn sm ${tab === 'history' ? 'primary' : ''}" data-act="tab" data-t="history">🧾 Minhas doações</button></div>
       <span class="chip gold" style="font-size:15px;margin-left:8px">💎 ${me.diamonds}</span></div>`;
     if (pix) return tabs + pixView();
     if (tab === 'buy') {
-      return tabs + (data.pixEnabled ? `<p class="small muted">Pague com Pix: os diamantes entram na conta assim que o pagamento é confirmado (normalmente em segundos).</p>
-        <div class="pkg-grid">${data.packages.map(p => `<div class="pkg">
-          <div class="pkg-gem">💎</div><div class="pkg-n">${p.diamonds}${p.bonus ? ` <span class="chip green">+${p.bonus} bônus</span>` : ''}</div>
-          <div class="small muted">${esc(p.name)}</div><button class="btn primary block" data-act="pix" data-id="${esc(p.id)}">${money(p.price)}</button></div>`).join('')}</div>`
-        : '<p class="muted">As compras com Pix ainda não foram ativadas pelo administrador.</p>');
+      return tabs + (data.pixEnabled ? `<div class="donate-intro"><span>💖</span><div><b>Apoie o Pokémon Master Trainer HEX!</b>
+          <p class="small">O jogo é mantido por fãs. Cada doação ajuda a pagar servidor, sprites e novidades. Como agradecimento, você recebe <b>💎 diamantes</b> para usar nos cosméticos (só visual — ninguém fica mais forte por doar).</p></div></div>
+        <div class="pkg-grid">${data.packages.map(p => `<div class="pkg donate">
+          <div class="pkg-gem">💖</div><div class="small muted">${esc(p.name)}</div>
+          <div class="pkg-n">Doe ${money(p.price)}</div>
+          <div class="small">Agradecimento: <b>💎 ${p.diamonds + (p.bonus || 0)}</b>${p.bonus ? ` <span class="chip green">+${p.bonus} extra</span>` : ''}</div>
+          <button class="btn primary block" data-act="pix" data-id="${esc(p.id)}">💖 Doar com Pix</button></div>`).join('')}</div>
+        <p class="tiny muted">A doação é feita por Pix (Mercado Pago) e os diamantes entram na conta assim que o pagamento é confirmado.</p>`
+        : '<p class="muted">As doações por Pix ainda não foram ativadas pelo administrador.</p>');
     }
     if (tab === 'history') {
-      return tabs + `<table class="score"><tr><th>Data</th><th>Diamantes</th><th>Valor</th><th>Status</th></tr>${(data.purchases || []).map(p => `<tr><td>${new Date(p.at).toLocaleString('pt-BR')}</td><td>${p.diamonds}</td><td>${money(p.amount)}</td><td>${{ credited: '✅ creditado', pending: '⏳ aguardando', rejected: '❌ recusado', cancelled: '❌ cancelado', expired: '⌛ expirado', approved: '✅ aprovado' }[p.status] || p.status}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Nenhuma compra ainda.</td></tr>'}</table>`;
+      return tabs + `<table class="score"><tr><th>Data</th><th>💎 recebidos</th><th>Doação</th><th>Status</th></tr>${(data.purchases || []).map(p => `<tr><td>${new Date(p.at).toLocaleString('pt-BR')}</td><td>${p.diamonds}</td><td>${money(p.amount)}</td><td>${{ credited: '✅ creditado', pending: '⏳ aguardando', rejected: '❌ recusado', cancelled: '❌ cancelado', expired: '⌛ expirado', approved: '✅ aprovado' }[p.status] || p.status}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Nenhuma doação ainda. Obrigado por jogar! 💖</td></tr>'}</table>`;
     }
     const groups = Object.entries(SHOP_KINDS).map(([kind, label]) => {
       const items = data.items.filter(i => i.kind === kind);
@@ -60,13 +64,13 @@ export async function openShop(profile, onChange, onClose) {
   };
 
   const pixView = () => `<div class="pix">
-      <h3>Pague ${money(pix.amount)} com Pix</h3>
-      <p class="small">Você vai receber <b>💎 ${pix.diamonds}</b>.</p>
+      <h3>💖 Doação de ${money(pix.amount)} por Pix</h3>
+      <p class="small">Obrigado pelo apoio! Como agradecimento você recebe <b>💎 ${pix.diamonds}</b>.</p>
       ${pix.qrBase64 ? `<img class="pix-qr" src="data:image/png;base64,${pix.qrBase64}" alt="QR Code Pix">` : ''}
       ${pix.qrCode ? `<div class="row"><input class="input grow" readonly value="${esc(pix.qrCode)}" id="pix-code"><button class="btn sm" data-act="copy">📋 Copiar</button></div>` : ''}
       ${pix.ticketUrl ? `<a class="btn sm" href="${esc(pix.ticketUrl)}" target="_blank" rel="noopener">Abrir no Mercado Pago</a>` : ''}
-      <p class="small muted"><span class="spinner"></span> Aguardando a confirmação do pagamento... pode deixar esta janela aberta.</p>
-      ${pix.dev ? `<button class="btn green" data-act="dev-approve">🧪 Simular pagamento aprovado (modo dev)</button>` : ''}
+      <p class="small muted"><span class="spinner"></span> Aguardando a confirmação da doação... pode deixar esta janela aberta.</p>
+      ${pix.dev ? `<button class="btn green" data-act="dev-approve">🧪 Simular doação aprovada (modo dev)</button>` : ''}
       <button class="btn ghost" data-act="cancel-pix">Voltar</button></div>`;
 
   const render = () => setModalBody('dshop', body());
@@ -80,12 +84,12 @@ export async function openShop(profile, onChange, onClose) {
         const r = await api('shop', { op: 'pix_status', paymentId: pix.paymentId });
         if (r.status === 'credited') {
           clearInterval(timer);
-          toast(`💎 ${pix.diamonds} diamantes creditados!`, 'good');
+          toast(`💖 Obrigado pela doação! 💎 ${pix.diamonds} de agradecimento na sua conta.`, 'good');
           confetti(100);
           pix = null; tab = 'cosmetics';
           await load();
         } else if (['rejected', 'cancelled', 'expired'].includes(r.status)) {
-          clearInterval(timer); toast('Pagamento não concluído.', 'bad'); pix = null; render();
+          clearInterval(timer); toast('A doação não foi concluída.', 'bad'); pix = null; render();
         }
       } catch { /* tenta de novo */ }
     }, 4000);

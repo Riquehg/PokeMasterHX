@@ -82,10 +82,10 @@ export const DEFAULT_SHOP = {
     { id: 'svc_nickname', kind: 'service', value: 'nickname', name: 'Apelidos para Pokémon', price: 80, active: true, desc: 'Dê apelidos aos Pokémon da sua Coleção (aparecem nas partidas). Compra única.' }
   ],
   packages: [
-    { id: 'p100', name: 'Punhado de Diamantes', diamonds: 100, bonus: 0, price: 4.9, active: true },
-    { id: 'p300', name: 'Saco de Diamantes', diamonds: 300, bonus: 30, price: 12.9, active: true },
-    { id: 'p700', name: 'Baú de Diamantes', diamonds: 700, bonus: 100, price: 24.9, active: true },
-    { id: 'p1500', name: 'Tesouro de Diamantes', diamonds: 1500, bonus: 300, price: 49.9, active: true }
+    { id: 'p100', name: 'Apoio Treinador', diamonds: 100, bonus: 0, price: 4.9, active: true },
+    { id: 'p300', name: 'Apoio Líder de Ginásio', diamonds: 300, bonus: 30, price: 12.9, active: true },
+    { id: 'p700', name: 'Apoio Elite dos Quatro', diamonds: 700, bonus: 100, price: 24.9, active: true },
+    { id: 'p1500', name: 'Apoio Campeão', diamonds: 1500, bonus: 300, price: 49.9, active: true }
   ]
 };
 

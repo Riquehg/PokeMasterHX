@@ -123,7 +123,7 @@ export async function shopOp(db, user, body, req) {
       const cosmetics = { owned: [...mine.owned, item.id], equipped: { ...mine.equipped, [item.kind]: item.id } };
       const p = await db.upsertProfile(user.id, { cosmetics });
       await refreshCosmeticInMatches(db, user.id, p);
-      return { me: view(p), message: `${item.name} comprado e equipado!` };
+      return { me: view(p), message: `${item.name} liberado e equipado!` };
     }
 
     case 'equip': {
@@ -153,7 +153,7 @@ export async function shopOp(db, user, body, req) {
         headers: { 'X-Idempotency-Key': pay.id },
         body: {
           transaction_amount: pkg.price,
-          description: `${total} diamantes — Pokémon Master Trainer HEX`,
+          description: `Doação ao Pokémon Master Trainer HEX (agradecimento: ${total} diamantes)`,
           payment_method_id: 'pix',
           payer: { email: user.email },
           external_reference: pay.id,

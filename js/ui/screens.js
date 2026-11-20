@@ -1,4 +1,6 @@
 import { GAME_RULES } from '../../shared/rules/modes.js';
+import { vfAttrs, vfBar, vfBind } from './vaultfilter.js';
+import { bondLevel } from '../../shared/data/companions.js';
 import { ensureSeason, divInfo, LEAGUE_DIVS, TOP_DIV, LP_PER_DIV } from '../../shared/data/league.js';
 const HARDCORE_TXT = 'Hardcore: se toda a sua equipe for derrotada você sai da partida e perde tudo o que ganhou nela (capturas, níveis e ouro). Quem sobrevive ganha o dobro de ouro da conta.';
 import { MAP_CHOICES } from '../../shared/data/board.js';
@@ -100,13 +102,15 @@ function sortCollection(vault) {
 function teamPicker(vault, selected, levelCap, act = 'pick') {
   const list = sortCollection(vault);
   if (!list.length) return '<p class="small muted">Sua Coleção está vazia. Jogue um Treino contra CPUs ou uma partida online — tudo que você capturar vem para cá.</p>';
+  setTimeout(() => vfBind(document), 0); // liga a busca depois de desenhar
   return `<p class="small">Escolhidos: <b>${selected.length}/6</b> ${selected.length ? '' : '<span class="muted">(sem escolher = começa com o inicial)</span>'}</p>
-    <div class="pick-grid" style="max-height:300px;overflow:auto">${list.map(m => {
+    <div class="vf-scope">${vfBar('team', { compact: true })}
+    <div class="pick-grid" style="max-height:300px;overflow:auto">${list.map((m, i) => {
       const on = selected.includes(m.uid);
       const lv = levelCap ? Math.min(levelCap, m.lvl) : m.lvl;
-      return `<div class="pick ${on ? 'on' : ''}" data-act="${act}" data-uid="${esc(m.uid)}" title="${esc(getSpecies(m.sp)?.name)}">
-        <img src="${monSprite(m)}" alt="${esc(getSpecies(m.sp)?.name)}">${esc(getSpecies(m.sp)?.name)}${m.shiny ? ' ✨' : ''}<br>Nv.${lv}${levelCap && m.lvl > levelCap ? ` <span class="muted">(${m.lvl})</span>` : ''}${on ? ` <b>#${selected.indexOf(m.uid) + 1}</b>` : ''}${BADGES_TO_USE[getSpecies(m.sp)?.tier] ? `<br><span class="lock-tag">🔒 ${BADGES_TO_USE[getSpecies(m.sp).tier]} insígnias</span>` : ''}</div>`;
-    }).join('')}</div>`;
+      return `<div class="pick ${on ? 'on' : ''}" ${vfAttrs(m, i)} data-act="${act}" data-uid="${esc(m.uid)}" title="${esc(getSpecies(m.sp)?.name)}">
+        <img src="${monSprite(m)}" alt="${esc(getSpecies(m.sp)?.name)}">${esc(getSpecies(m.sp)?.name)}${m.shiny ? ' ✨' : ''}<br>Nv.${lv}${levelCap && m.lvl > levelCap ? ` <span class="muted">(${m.lvl})</span>` : ''}${on ? ` <b>#${selected.indexOf(m.uid) + 1}</b>` : ''}${BADGES_TO_USE[getSpecies(m.sp)?.tier] && !m.trust ? `<br><span class="lock-tag">🔒 ${BADGES_TO_USE[getSpecies(m.sp).tier]} insígnias</span>` : ''}</div>`;
+    }).join('')}</div></div>`;
 }
 
 function togglePick(selected, uid) {
@@ -132,56 +136,51 @@ export async function hubScreen(root, ctx) {
   const render = () => `<div class="screen"><div class="panel-wide">${LOGO}
     ${profileError ? `<div class="card" style="border-color:var(--red);margin-bottom:12px"><b style="color:#ff9b9e">⚠️ Problema no servidor</b>
       <p class="small">${esc(profileError)}</p><p class="small muted">Abra <a href="/api/health" target="_blank" style="color:var(--gold)">/api/health</a> para ver o diagnóstico. Enquanto isso, o modo offline funciona.</p></div>` : ''}
-    <div class="hub-grid">
-      <div class="col">
+    <div class="hub2">
+      <div class="hub-top">
         <div class="trainer ${profile?.cosmetic?.card ? 'tcard-' + esc(profile.cosmetic.card) : ''}">
           <img class="avatar ${profile?.cosmetic?.frame ? 'frame-' + esc(profile.cosmetic.frame) : ''}" src="${avatarUrl(profile?.avatar)}" alt="avatar">
           <div class="grow"><h3 style="color:var(--gold)">${esc(profile?.trainer_name || 'Treinador')}</h3>
             ${profile?.cosmetic?.title ? `<div class="player-title">“${esc(profile.cosmetic.title)}”</div>` : ''}
-            <div class="small">⭐ ${profile?.points || 0} pts · ${eloOf(profile?.rating ?? 1000).icon} ${eloOf(profile?.rating ?? 1000).name} (${profile?.rating ?? 1000}) · 📖 ${(profile?.pokedex || []).length} · 📦 ${(profile?.vault || []).length}</div>
-            <div class="tiny muted">${esc(net.user?.email || '')}</div></div>
+            <div class="small">⭐ ${profile?.points || 0} pts · ${eloOf(profile?.rating ?? 1000).icon} ${eloOf(profile?.rating ?? 1000).name} (${profile?.rating ?? 1000}) · 📖 ${(profile?.pokedex || []).length} · 📦 ${(profile?.vault || []).length}</div></div>
           <div class="col" style="gap:6px;align-items:flex-end">
-            <button class="btn sm" data-act="edit" ${profile ? '' : 'disabled'}>✏️</button>
-            <button class="btn sm blue" data-act="dshop" ${profile ? '' : 'disabled'}><span class="diamonds">💎 ${profile?.diamonds || 0}</span> Loja</button>
-            ${isStandalone() ? '' : '<button class="btn sm install-btn" data-act="install" title="Instalar o app no celular / PC">📲 App</button>'}
+            <button class="btn sm" data-act="edit" ${profile ? '' : 'disabled'} title="Editar nome e avatar">✏️</button>
             <span class="chip gold" title="Ouro da conta: ganho no fim de cada partida salva. Use no Mercado, no Centro de Treino (🏋️ na Coleção) ou leve para partidas do modo Coleção.">🪙 ${profile?.gold || 0}</span>
+            <span class="chip" title="Diamantes"><span class="diamonds">💎 ${profile?.diamonds || 0}</span></span>
           </div>
         </div>
         <div class="daily"><img src="${monSprite(daily)}" alt="${esc(dsp?.name)}"><div><div class="tiny" style="color:var(--gold)">⭐ POKÉMON DO DIA</div><b>${esc(dsp?.name)}</b> ${typeChips(dsp?.types || [])}
           <div class="tiny muted">Aparece mais, dá XP em dobro e tem chance de shiny 1/64.</div></div></div>
-        <div class="card col">
-          <h3>🌐 Online</h3>
-          <button class="btn blue" data-act="online" ${profile ? '' : 'disabled'}>Salas online (criar / entrar)</button>
-          <div class="tiny muted">${Object.values(MODE_INFO).map(m => `${m.icon} <b>${m.name}</b>: ${m.desc}`).join('<br>')}</div>
-          ${mine.length ? `<div class="small muted">Minhas partidas:</div>${mine.map(m => `<button class="btn sm" data-act="resume-online" data-id="${m.id}">▶ ${esc(m.name)} · ${m.status === 'playing' ? 'em jogo' : 'no lobby'} · ${m.players} jog.</button>`).join('')}` : ''}
-        </div>
-        <div class="card col tourney-card">
-          <h3>⚔️ Torneio & 🏟️ Copa</h3>
-          <button class="btn red" data-act="duel" ${profile ? '' : 'disabled'}>⚔️ Torneio — duelo ranqueado (fila)</button>
-          <button class="btn gold-btn" data-act="cup" ${profile ? '' : 'disabled'}>🏟️ Criar uma Copa (até 8, chaveamento)</button>
-          <div class="tiny muted">Só batalhas, com o seu time da Coleção (Nv. máx 50, todos obedecem). Valem <b>Elo</b>. Na Copa, o campeão ganha 💎 (com 4+ treinadores humanos). Copas abertas aparecem em "Salas online".</div>
-        </div>
       </div>
-      <div class="col">
-        <div class="card col">
-          <h3>🤖 Treino contra CPUs</h3>
-          <button class="btn green" data-act="solo" ${profile ? '' : 'disabled'}>✨ Novo treino (salva na sua conta)</button>
-          <div class="tiny muted">Roda no servidor: tudo que você capturar e evoluir vai para a sua Coleção e Pokédex.</div>
-          <div class="divider"></div>
-          ${localSave ? `<button class="btn sm" data-act="resume-local">▶ Continuar partida offline</button>` : ''}
-          <button class="btn sm" data-act="new-local">📱 Modo offline (mesmo aparelho, não salva na conta)</button>
-        </div>
-        <div class="card col">
-          <h3>📦 Minha coleção</h3>
-          <div class="grid2"><button class="btn purple" data-act="vault" ${profile ? '' : 'disabled'}>📦 Coleção (${(profile?.vault || []).length})</button><button class="btn" data-act="dex">📖 Pokédex (${(profile?.pokedex || []).length})</button></div>
-          <button class="btn block" data-act="companions" ${profile ? '' : 'disabled'} style="margin-top:6px">🤝 Companheiros (${(profile?.stats?.companions || []).length}/${Object.keys(COMPANIONS).length})${profile?.stats?.companion && COMPANIONS[profile.stats.companion] ? ` · com ${esc(COMPANIONS[profile.stats.companion].name)}` : ''}</button>
-          <button class="btn gold-btn" data-act="market" ${profile ? '' : 'disabled'}>🏪 Mercado Global (comprar, vender, trocar)</button>
-          <button class="btn" data-act="ranking">🏆 Ranking</button>
-          ${isStandalone() ? '' : '<button class="btn install-btn" data-act="install">📲 Instalar o app no celular / PC</button>'}
-          ${profile?.is_admin ? `<button class="btn red" data-act="admin">🛡️ Painel do admin</button>` : ''}
-        </div>
-        <button class="btn ghost" data-act="logout">Sair da conta</button>
+
+      ${mine.length || localSave ? `<div class="hub-continue"><b>▶ Continuar</b>
+        ${mine.map(m => `<button class="btn sm green" data-act="resume-online" data-id="${m.id}">${esc(m.name)} · ${m.status === 'playing' ? 'em jogo' : 'no lobby'} · ${m.players} jog.</button>`).join('')}
+        ${localSave ? '<button class="btn sm" data-act="resume-local">📱 Partida offline</button>' : ''}</div>` : ''}
+
+      <h2 class="hub-h">🎮 Jogar</h2>
+      <div class="mode-tiles">
+        <button class="mode-tile t-green" data-act="solo" ${profile ? '' : 'disabled'}><span class="mt-ic">🤖</span><b>Treino contra CPUs</b><small>Salva na conta: capturas e níveis vão para a Coleção. O jeito de farmar.</small></button>
+        <button class="mode-tile t-blue" data-act="online" ${profile ? '' : 'disabled'}><span class="mt-ic">🌐</span><b>Online</b><small>Crie ou entre em salas: Balanceado, Coleção, Competitivo (Liga), Battle Royale, Conquista.</small></button>
+        <button class="mode-tile t-red" data-act="duel" ${profile ? '' : 'disabled'}><span class="mt-ic">⚔️</span><b>Torneio</b><small>Fila de duelo ranqueado 1x1 com o time da Coleção. Vale Elo e Liga.</small></button>
+        <button class="mode-tile t-gold" data-act="cup" ${profile ? '' : 'disabled'}><span class="mt-ic">🏟️</span><b>Copa</b><small>Chaveamento de até 8 treinadores. O campeão ganha 💎.</small></button>
+        <button class="mode-tile t-gray" data-act="new-local"><span class="mt-ic">📱</span><b>Offline</b><small>Mesmo aparelho, com amigos e/ou CPUs. Não salva na conta.</small></button>
       </div>
+      <details class="hub-info"><summary>ℹ️ Como funcionam os modos de sala</summary>
+        <div class="tiny muted">${Object.values(MODE_INFO).map(m => `${m.icon} <b>${m.name}</b>: ${m.desc}`).join('<br>')}<br>Todo modo de tabuleiro aceita Clássico, ⚔️ Battle Royale e 🏰 Conquista, e a opção ☠️ Hardcore.</div></details>
+
+      <h2 class="hub-h">🎒 Minha conta</h2>
+      <div class="acct-tiles">
+        <button class="acct-tile" data-act="vault" ${profile ? '' : 'disabled'}><span>📦</span><b>Coleção</b><small>${(profile?.vault || []).length} Pokémon</small></button>
+        <button class="acct-tile" data-act="dex"><span>📖</span><b>Pokédex</b><small>${(profile?.pokedex || []).length} capturados</small></button>
+        <button class="acct-tile" data-act="companions" ${profile ? '' : 'disabled'}><span>🤝</span><b>Companheiros</b><small>${(profile?.stats?.companions || []).length}/${Object.keys(COMPANIONS).length}${profile?.stats?.companion && COMPANIONS[profile.stats.companion] ? ` · ${esc(COMPANIONS[profile.stats.companion].name)}${bondLevel(profile?.stats?.companionBond?.[profile.stats.companion] || 0) >= 10 ? ' ❤️' : ''}` : ''}</small></button>
+        <button class="acct-tile" data-act="market" ${profile ? '' : 'disabled'}><span>🏪</span><b>Mercado</b><small>Comprar, vender, trocar</small></button>
+        <button class="acct-tile" data-act="ranking"><span>🏆</span><b>Ranking</b><small>Liga, Elos e pontos</small></button>
+        <button class="acct-tile" data-act="dshop" ${profile ? '' : 'disabled'}><span>💎</span><b>Loja de cosméticos</b><small>${profile?.diamonds || 0} 💎 · só visual</small></button>
+        <button class="acct-tile donate" data-act="donate" ${profile ? '' : 'disabled'}><span>💖</span><b>Apoiar o projeto</b><small>Doe e ganhe 💎 de agradecimento</small></button>
+        ${isStandalone() ? '' : '<button class="acct-tile install-btn" data-act="install"><span>📲</span><b>Instalar app</b><small>Celular ou PC</small></button>'}
+        ${profile?.is_admin ? '<button class="acct-tile admin" data-act="admin"><span>🛡️</span><b>Admin</b><small>Painel</small></button>' : ''}
+      </div>
+      <button class="btn ghost hub-logout" data-act="logout">Sair da conta</button>
     </div></div></div>`;
 
   root.innerHTML = render();
@@ -193,7 +192,7 @@ export async function hubScreen(root, ctx) {
     'new-local': () => ctx.go('local-setup'),
     solo: () => soloModal(profile, ctx),
     vault: () => collectionModal(profile, rerender),
-    companions: () => openCompanionPicker({ owned: profile?.stats?.companions || [], current: profile?.stats?.companion || null,
+    companions: () => openCompanionPicker({ owned: profile?.stats?.companions || [], current: profile?.stats?.companion || null, bond: profile?.stats?.companionBond || {},
       onPick: async id => { try { profile = (await api('profile', { op: 'companion', id })).profile; toast(id ? `🤝 ${COMPANIONS[id].name} vai com você nas próximas partidas!` : 'Sem companheiro.', 'good'); rerender(profile); } catch (e) { toast(e.message, 'bad'); } } }),
     dex: () => openDex(null, profile?.pokedex || [], profile?.pokedex_seen || [], { shinyCaught: profile?.stats?.shinyDex || [], shinySeen: profile?.stats?.shinySeen || [], vault: profile?.vault || [] }),
     duel: () => openDuelQueue(ctx, profile),
@@ -208,6 +207,7 @@ export async function hubScreen(root, ctx) {
     market: () => openMarket(profile, () => ctx.go('hub')),
     admin: () => adminModal(),
     dshop: () => openDiamondShop(profile, null, () => ctx.go('hub')),
+    donate: () => openDiamondShop(profile, null, () => ctx.go('hub'), 'buy'),
     logout: async () => { await signOut(); ctx.go('login'); },
     edit: () => editProfile(profile, async p => rerender(p))
   });
@@ -249,33 +249,33 @@ function soloModal(profile, ctx) {
 }
 
 function collectionModal(profile, onChange) {
-  let filter = 'all';
   const cap = () => 300 + (profile?.stats?.vaultBonus ? 50 : 0);
   const body = () => {
-    const all = sortCollection(profile?.vault);
-    const list = filter === 'shiny' ? all.filter(m => m.shiny) : filter === 'fav' ? all.filter(m => m.fav) : filter === 'pot' ? [...all].sort((a, b) => (ivPercent(b) ?? 0) - (ivPercent(a) ?? 0)) : all;
+    const vault = profile?.vault || [];
+    const all = sortCollection(vault);
+    const recent = new Map(vault.map((m, i) => [m.uid, i]));
+    const n = k => all.filter(m => k(m)).length;
     return `<p class="small muted">Tudo que você captura em partidas salvas na conta (Treino contra CPUs e Online) fica aqui, com o nível atualizado. Use no modo <b>📦 Coleção</b> para levar seu time. Limite: ${cap()} (os mais fracos saem primeiro; ⭐ favoritos e shinies nunca saem).${profile?.stats?.vaultBonus ? '' : ' Dá para ampliar para 350 na 💎 Loja.'}</p>
-      <div class="row" style="margin:8px 0"><button class="btn sm ${filter === 'all' ? 'primary' : ''}" data-act="f" data-f="all">Todos (${all.length})</button>
-        <button class="btn sm ${filter === 'shiny' ? 'primary' : ''}" data-act="f" data-f="shiny">✨ Shiny (${all.filter(m => m.shiny).length})</button>
-        <button class="btn sm ${filter === 'fav' ? 'primary' : ''}" data-act="f" data-f="fav">⭐ Favoritos</button>
-        <button class="btn sm ${filter === 'pot' ? 'primary' : ''}" data-act="f" data-f="pot">📈 Maior potencial</button></div>
-      <div class="pk-grid">${list.map(m => statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px"><button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="train" data-uid="${esc(m.uid)}" title="Centro de Treino: subir nível com ouro da conta">🏋️</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar">✕</button></div>` })).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div>`;
+      <div class="vf-sum tiny muted">🌟 ${n(m => getSpecies(m.sp)?.legendary)} lendários · ✨ ${n(m => m.shiny)} shinies · ⭐ ${n(m => m.fav)} favoritos · 🤝 ${n(m => m.trust)} da Confiança</div>
+      <div class="vf-scope">${vfBar('vault')}
+      <div class="pk-grid">${all.map(m => `<div class="vf-cell" ${vfAttrs(m, recent.get(m.uid) || 0)}>${statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px"><button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="train" data-uid="${esc(m.uid)}" title="Centro de Treino: subir nível com ouro da conta">🏋️</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar">✕</button></div>` })}</div>`).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div></div>`;
   };
   const ov = openModal('vault', `📦 Coleção (${(profile?.vault || []).length}/${cap()})`, body(), { wide: true });
+  const redraw = () => { setModalBody('vault', body()); vfBind(document.getElementById('vault')); };
+  vfBind(ov);
   const op = async (o, uid) => {
-    try { profile = (await api('profile', { op: o, uid })).profile; setModalBody('vault', body()); onChange(profile); }
+    try { profile = (await api('profile', { op: o, uid })).profile; redraw(); onChange(profile); }
     catch (e) { toast(e.message, 'bad'); }
   };
   bindActions(ov, {
-    f: d => { filter = d.f; setModalBody('vault', body()); },
     fav: d => op('favorite', d.uid),
-    train: d => trainModal(profile, d.uid, np => { profile = np; setModalBody('vault', body()); onChange(profile); }),
+    train: d => trainModal(profile, d.uid, np => { profile = np; redraw(); onChange(profile); }),
     nick: async d => {
       if (!profile?.stats?.nicknames) return toast('Apelidos são liberados na 💎 Loja de Diamantes → Conveniência.', 'info');
       const m = (profile.vault || []).find(x => x.uid === d.uid);
       const nick = prompt(`Apelido para ${getSpecies(m.sp).name} (até 12 letras; vazio tira o apelido):`, m.nick || '');
       if (nick === null) return;
-      try { profile = (await api('profile', { op: 'nickname', uid: d.uid, nick })).profile; setModalBody('vault', body()); onChange(profile); toast(nick.trim() ? `✏️ Agora é ${nick.trim().slice(0, 12)}!` : 'Apelido removido.', 'good'); }
+      try { profile = (await api('profile', { op: 'nickname', uid: d.uid, nick })).profile; redraw(); onChange(profile); toast(nick.trim() ? `✏️ Agora é ${nick.trim().slice(0, 12)}!` : 'Apelido removido.', 'good'); }
       catch (e) { toast(e.message, 'bad'); }
     },
     rel: d => { if (confirm('Soltar este Pokémon da sua Coleção? Não dá para desfazer.')) op('release', d.uid); }
@@ -528,7 +528,7 @@ async function adminModal() {
   openModal('admin', '🛡️ Painel do administrador', '<span class="spinner"></span>', { wide: true });
   const ov = document.getElementById('admin');
   const money = v => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  const TABS = [['avisos', '📢 Avisos'], ['loja', '💎 Loja'], ['pacotes', '💰 Pacotes Pix'], ['vendas', '🧾 Vendas'], ['jogo', '⭐ Pokémon do Dia'], ['usuarios', '👥 Usuários']];
+  const TABS = [['avisos', '📢 Avisos'], ['loja', '💎 Loja'], ['pacotes', '💖 Doações (Pix)'], ['vendas', '🧾 Doações recebidas'], ['jogo', '⭐ Pokémon do Dia'], ['usuarios', '👥 Usuários']];
 
   const body = () => {
     const tabs = `<div class="row" style="margin-bottom:10px">${TABS.map(([k, l]) => `<button class="btn sm ${tab === k ? 'primary' : ''}" data-act="tab" data-t="${k}">${l}</button>`).join('')}</div>`;
@@ -555,7 +555,7 @@ async function adminModal() {
         <div class="row" style="margin-top:8px"><button class="btn" data-act="add-item">+ Novo item</button><button class="btn primary" data-act="save-shop">💾 Salvar loja</button></div>`;
     }
     if (tab === 'pacotes') {
-      return tabs + `<p class="small muted">Pacotes de diamantes vendidos por Pix (Mercado Pago). O preço é cobrado exatamente como está aqui. ${data.pixReady ? '' : '<b style="color:#ff9b9e">Falta configurar MP_ACCESS_TOKEN na Vercel — veja o README.</b>'}</p>
+      return tabs + `<p class="small muted">Opções de doação por Pix (Mercado Pago): valor da doação e diamantes de agradecimento. O valor é cobrado exatamente como está aqui. ${data.pixReady ? '' : '<b style="color:#ff9b9e">Falta configurar MP_ACCESS_TOKEN na Vercel — veja o README.</b>'}</p>
         <div class="col">${data.shop.packages.map((p, i) => `<div class="shop-item" style="grid-template-columns:repeat(5,1fr) auto;gap:6px">
           <input class="input" data-f="packages.${i}.name" value="${esc(p.name)}" placeholder="Nome">
           <input class="input" data-f="packages.${i}.diamonds" type="number" min="1" value="${p.diamonds}" title="Diamantes">
@@ -564,7 +564,7 @@ async function adminModal() {
           <label class="small"><input type="checkbox" data-f="packages.${i}.active" ${p.active ? 'checked' : ''}> ativo</label>
           <button class="btn sm red" data-act="del-pkg" data-i="${i}">✕</button></div>`).join('')}</div>
         <p class="tiny muted">Colunas: nome · diamantes · bônus · preço (R$) · ativo</p>
-        <div class="row"><button class="btn" data-act="add-pkg">+ Novo pacote</button><button class="btn primary" data-act="save-shop">💾 Salvar pacotes</button></div>`;
+        <div class="row"><button class="btn" data-act="add-pkg">+ Nova opção de doação</button><button class="btn primary" data-act="save-shop">💾 Salvar doações</button></div>`;
     }
     if (tab === 'vendas') {
       const paid = data.payments.filter(p => p.status === 'credited');

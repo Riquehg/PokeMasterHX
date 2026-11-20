@@ -10,6 +10,7 @@ import { whoMustAct } from '../../shared/engine.js';
 import { esc, hpClass } from './dom.js';
 import { monSprite, itemUrl, leaderUrl, typeLabel } from '../config.js';
 import { typeChips, edgeBadge, foeIntelHtml } from './common.js';
+import { COMPANIONS } from '../../shared/data/companions.js';
 import { wait } from './fx.js';
 
 const KIND_TITLE = {
@@ -108,6 +109,7 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
   const arena = `<div class="arena t${tier} ${official ? 'official' : ''} ${arenaSkin && !official ? 'arena-' + esc(arenaSkin) : ''}" id="arena">
       ${foe.kind === 'npc' && foe.sprite ? `<img class="foe-trainer" src="${leaderUrl(foe.sprite)}" alt="${esc(foe.name)}">` : ''}
       <div class="platform foe"></div><div class="platform me"></div>
+      ${foeMon.aura ? `<div class="aura-fx foe aura-${esc(foeMon.aura)}"></div>` : ''}${myMon.aura ? `<div class="aura-fx me aura-${esc(myMon.aura)}"></div>` : ''}
       <img class="mon-sprite foe ${foeMon.shiny ? 'shiny' : ''} ${foeMon.raid ? 'raid-boss' : ''} ${foeMon.aura ? 'aura-' + esc(foeMon.aura) : ''}" data-uid="${esc(foeMon.uid)}" src="${monSprite(foeMon)}" alt="${esc(getSpecies(foeMon.sp).name)}">
       <img class="mon-sprite me ${myMon.shiny ? 'shiny' : ''} ${myMon.aura ? 'aura-' + esc(myMon.aura) : ''}" data-uid="${esc(myMon.uid)}" src="${monSprite(myMon)}" alt="${esc(getSpecies(myMon.sp).name)}">
       ${hpBox(state, foe, foeMon, 'foe')}
@@ -320,7 +322,40 @@ export async function playBattleFx(fxList) {
     if (!arena.isConnected) return;
     const sprite = uid => arena.querySelector(`.mon-sprite[data-uid="${uid}"]`);
     const box = uid => arena.querySelector(`.hpbox[data-uid="${uid}"]`);
-    if (f.k === 'hit') {
+    const box2 = box;
+    if (f.k === 'assist') {
+      // ❤️ companheiro íntimo entra na arena com o Pokémon dele e usa o golpe especial
+      const c = COMPANIONS[f.comp];
+      const mine = arena.querySelector('.mon-sprite.me');
+      const sideCls = mine && f.side === 0 ? 'me' : (f.side === 0 ? 'me' : 'foe');
+      const box = document.createElement('div');
+      box.className = `assist-cut ${sideCls}`;
+      box.style.setProperty('--tc', TYPE_COLORS[f.type] || '#ff9ccf');
+      box.innerHTML = `<img class="as-trainer" src="${leaderUrl(c?.sprite || '')}" alt=""><img class="as-mon" src="${monSprite({ sp: f.sp })}" alt="">
+        <div class="as-banner"><span>❤️ ${esc(c?.name || '')}</span><b>${esc(f.move)}!</b></div>`;
+      arena.appendChild(box);
+      await wait(900);
+      const target = sprite(f.uid);
+      const asMon = box.querySelector('.as-mon');
+      if (f.kind === 'dmg') {
+        await moveProjectile(arena, asMon, target, f.type === 'normal' || TYPE_FX[f.type]?.shape === 'melee' ? 'psychic' : f.type);
+        if (target) { target.classList.remove('hurt'); void target.offsetWidth; target.classList.add('hurt'); impactBurst(arena, target, f.type, true); float(arena, target, `-${f.dmg}`, 'crit'); }
+        arena.classList.remove('punch'); void arena.offsetWidth; arena.classList.add('punch');
+        setHp(box2(f.uid), f.hpAfter, f.maxHp);
+      } else if (f.kind === 'heal') {
+        if (target) { float(arena, target, `+${f.amount}`, 'heal'); target.classList.remove('buffed'); void target.offsetWidth; target.classList.add('buffed'); }
+        setHp(box2(f.uid), f.hpAfter, f.maxHp);
+      } else if (f.kind === 'buff' || f.kind === 'debuff') {
+        if (target) { target.classList.remove('buffed', 'debuffed'); void target.offsetWidth; target.classList.add(f.kind === 'buff' ? 'buffed' : 'debuffed'); float(arena, target, f.kind === 'buff' ? 'ATQ ▲' : 'ATQ ▼', f.kind === 'buff' ? 'heal' : 'crit'); }
+      } else if (f.kind === 'status' && target) {
+        const S = STATUS[f.status] || { icon: '✨', name: '' };
+        float(arena, target, `${S.icon} ${S.name}!`, 'crit');
+      }
+      await wait(700);
+      box.classList.add('out');
+      setTimeout(() => box.remove(), 450);
+      await wait(300);
+    } else if (f.k === 'hit') {
       const atk = sprite(f.atkUid), def = sprite(f.defUid);
       if (atk) { const c = atk.classList.contains('me') ? 'lunge-me' : 'lunge-foe'; atk.classList.remove(c); void atk.offsetWidth; atk.classList.add(c); }
       if (f.move) moveBanner(arena, atk, f.move, f.type);
