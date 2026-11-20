@@ -265,7 +265,7 @@ export class BoardView {
       const sp = getSpace(id);
       if (!sp) continue;
       wild += `<div class="wild ${mon.shiny ? 'shiny' : ''}" style="left:${sp.x}%;top:${sp.y}%;--tc:${TIER_COLORS[sp.tier]}" title="${esc(speciesName(mon.sp))} Nv.${mon.lvl} — ${mon.hp}/${maxHpOf(mon)} HP">
-        <div class="disc"></div><img src="${monSprite(mon)}" alt="${esc(speciesName(mon.sp))}" draggable="false"><span class="tag">${mon.shiny ? '✨' : ''}Nv.${mon.lvl}</span></div>`;
+        <div class="w-shadow"></div><div class="disc"></div><img src="${monSprite(mon)}" alt="${esc(speciesName(mon.sp))}" draggable="false"><span class="tag">${mon.shiny ? '✨' : ''}Nv.${mon.lvl}</span></div>`;
     }
     this.stage.querySelector('.layer-wild').innerHTML = wild;
 
@@ -299,7 +299,8 @@ export class BoardView {
     const sparks = au ? `<div class="sparks">${'<i></i>'.repeat(7)}</div>` : '';
     return `<div class="${cls}" data-pid="${esc(pl.id)}" style="left:${sp.x}%;top:${sp.y}%;margin-left:calc(${off}px * var(--ms, 1));--pc:${playerColor(state, pl.id)}" title="${esc(pl.name)}${c.title ? ' — ' + esc(c.title) : ''}">
       ${fr ? '<div class="halo"></div><div class="halo h2"></div>' : ''}${sparks}
-      <div class="pin ${fr ? 'frame-' + fr : ''} ${c.card ? 'tcard-' + esc(c.card) : ''}"><img src="${avatarUrl(pl.avatar)}" alt="${esc(pl.name)}" data-color="${playerColor(state, pl.id)}" draggable="false"></div>
+      <div class="tk-shadow"></div><div class="base ${c.card ? 'tcard-' + esc(c.card) : ''}"></div>
+      <div class="pin ${fr ? 'frame-' + fr : ''}"><img src="${avatarUrl(pl.avatar, c.skin)}" alt="${esc(pl.name)}" data-color="${playerColor(state, pl.id)}" draggable="false"></div>
       ${pl.companion && COMPANIONS[pl.companion] ? `<img class="tk-comp" src="${leaderUrl(COMPANIONS[pl.companion].sprite)}" alt="" title="${esc(COMPANIONS[pl.companion].name)}" draggable="false">` : ''}
       ${pl.companion && (pl.bond?.[pl.companion] || 0) >= 10 ? `<span class="tk-heart" title="${esc(COMPANIONS[pl.companion]?.name || '')} é íntimo de ${esc(pl.name)}">❤️</span>` : ''}
       <span class="name">${pl.id === viewerId ? 'Você' : esc(pl.name.split(' ')[0])}</span>

@@ -65,7 +65,8 @@ export async function equippedCosmetic(db, profile) {
     dice: find(equipped.dice)?.value,
     arena: find(equipped.arena)?.value,
     card: find(equipped.card)?.value,
-    victory: find(equipped.victory)?.value
+    victory: find(equipped.victory)?.value,
+    skin: find(equipped.skin)?.value
   });
 }
 

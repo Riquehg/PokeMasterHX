@@ -95,6 +95,8 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 - **Coleção com filtros:** busca por nome/apelido, tipo, tier, categoria (lendários, shinies, favoritos, Confiança) e ordem (nível, potencial, Pokédex, nome, mais recentes). A busca também aparece na escolha do time das salas.
 - **Menu inicial reorganizado:** cartão do treinador + Pokémon do Dia no topo, "▶ Continuar", blocos grandes de **🎮 Jogar** (Treino, Online, Torneio, Copa, Offline) e **🎒 Minha conta**. O e-mail não aparece mais no cartão.
 - **💖 Doações:** a compra de diamantes virou "Apoiar o projeto": o jogador doa por Pix e recebe 💎 de agradecimento (mesmos pacotes, textos novos; o admin edita em "Doações").
+- **v17 — Skins de treinador:** 22 personagens exclusivos na Loja de Diamantes (arquivos em `sprites/skins/<nome>.png`, lista em `SKIN_PRESETS` em `shared/data/cosmetics.js`). A skin vira o avatar, o peão do tabuleiro e aparece na abertura das batalhas e na ficha do treinador. 6 dados novos: Neon, Sakura, Sombrio, Prismático, Master Ball e Trovão.
+- **Peões em pé:** treinadores e Pokémon selvagens agora são "miniaturas" — o sprite sem fundo, em pé sobre uma base redonda (cor do jogador ou do tier), com sombra no chão, contorno na cor do jogador e um balanço leve. Moldura e aura viram um anel de energia em volta da base; o cartão comprado colore a base.
 - **Balanceamento:** testado com simulações de partidas só com CPUs (`npm run sim`): todas terminam, ~75% de vitória nos ginásios quando a equipe está no nível, campeão entre os turnos 60 e 100 no modo completo (por isso as salas têm os modos Rápida e Normal).
 
 ## 3. Publicar (passo a passo, só pelo navegador)

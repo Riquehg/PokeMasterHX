@@ -72,7 +72,7 @@ export async function turnBanner({ player, color, mine, turn }) {
   const el = document.createElement('div');
   el.className = 'turn-swipe' + (mine ? ' me' : '');
   el.style.setProperty('--pc', color);
-  el.innerHTML = `<img src="${avatarUrl(player.avatar)}" alt="${esc(player.name)}" data-color="${color}">
+  el.innerHTML = `<img src="${avatarUrl(player.avatar, player.cosmetic?.skin)}" alt="${esc(player.name)}" data-color="${color}">
     <div><div class="t1">Turno ${turn}</div><div class="t2">${mine ? 'Sua vez!' : 'Vez de ' + esc(player.name)}</div></div>`;
   document.body.appendChild(el);
   el.style.animationDuration = `${1.5 / anim.speed}s`;
@@ -152,9 +152,9 @@ export async function battleIntro(f, { me, foePlayer }) {
     await wait(2100);
   } else {
     const foeName = foePlayer ? foePlayer.name : `${f.foe.title ? f.foe.title + ' ' : ''}${f.foe.name}`;
-    const foeImg = foePlayer ? avatarUrl(foePlayer.avatar) : (f.foe.sprite ? leaderUrl(f.foe.sprite) : monSprite(f.foe.sp));
+    const foeImg = foePlayer ? avatarUrl(foePlayer.avatar, foePlayer.cosmetic?.skin) : (f.foe.sprite ? leaderUrl(f.foe.sprite) : monSprite(f.foe.sp));
     el.innerHTML = `<div class="vs-screen">
-      <div class="side l"><img src="${avatarUrl(me.avatar)}" alt="${esc(me.name)}"><div class="nm">${esc(me.name)}</div></div>
+      <div class="side l"><img src="${avatarUrl(me.avatar, me.cosmetic?.skin)}" alt="${esc(me.name)}"><div class="nm">${esc(me.name)}</div></div>
       <div class="vs">VS</div>
       <div class="side r"><img src="${foeImg}" alt="${esc(foeName)}"><div class="nm">${esc(foeName)}</div></div></div>`;
     await wait(1900);

@@ -11,6 +11,7 @@ const money = v => Number(v).toLocaleString('pt-BR', { style: 'currency', curren
 
 function preview(item, avatar) {
   if (item.kind === 'ball_style') return `<div class="cos-prev mon aura-${esc(item.value)}" style="min-height:0;cursor:default"><img src="${monSprite('pikachu')}" alt="Pikachu"></div>`;
+  if (item.kind === 'skin') return `<div class="cos-skin"><img src="${avatarUrl(avatar, item.value)}" alt="${esc(item.name)}"></div>`;
   if (item.kind === 'frame') return `<img class="avatar frame-${esc(item.value)}" src="${avatarUrl(avatar)}" alt="moldura">`;
   if (item.kind === 'dice') return `<div class="cos-dice dice-${esc(item.value)}"><div class="face f5"><i></i><i></i><i></i><i></i><i></i></div></div>`;
   if (item.kind === 'arena') return `<div class="cos-arena arena arena-${esc(item.value)}"><img src="${monSprite('pikachu')}" alt=""></div>`;

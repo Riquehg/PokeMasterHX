@@ -82,7 +82,10 @@ export function installSpriteFallback() {
     if (m && !m[2].includes('_')) rememberFormat(m[1] === 's', Number(m[3])); // nomes comuns definem o formato padrão // este formato funcionou: usa direto daqui pra frente
   }, true);
 }
-export const avatarUrl = n => `${CFG.sprites}player_${String(Math.max(1, Math.min(8, Number(n) || 1))).padStart(2, '0')}.png`;
+/** Avatar do treinador. Com skin (Loja de Diamantes) usa sprites/skins/<skin>.png. */
+export const avatarUrl = (n, skin) => (skin && /^[a-z0-9-]+$/.test(skin) ? `${CFG.sprites}skins/${skin}.png` : `${CFG.sprites}player_${String(Math.max(1, Math.min(8, Number(n) || 1))).padStart(2, '0')}.png`);
+/** Avatar de um jogador/perfil (respeita a skin equipada). */
+export const trainerUrl = p => avatarUrl(p?.avatar, p?.cosmetic?.skin);
 export const itemUrl = id => `${CFG.sprites}items/${ITEMS[id]?.image || id + '.png'}`;
 // Sprite de treinador/líder: aceita "pasta/arquivo.png" (ex.: "leaders/Lt. Surge.png") ou só o arquivo (vai para leaders/)
 export const leaderUrl = file => {

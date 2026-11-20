@@ -14,7 +14,18 @@ export const FRAME_PRESETS = {
 };
 
 // Dados: visual do dado na rolagem (todos veem o seu dado)
-export const DICE_PRESETS = { gold: 'Dourado', crystal: 'Cristal', fire: 'Fogo', ice: 'Gelo', galaxy: 'Galáxia', pokeball: 'Pokébola' };
+export const DICE_PRESETS = { gold: 'Dourado', crystal: 'Cristal', fire: 'Fogo', ice: 'Gelo', galaxy: 'Galáxia', pokeball: 'Pokébola',
+  neon: 'Neon', sakura: 'Sakura', shadow: 'Sombrio', rainbow: 'Prismático', masterball: 'Master Ball', thunder: 'Trovão' };
+
+// Skins de treinador: o seu personagem (avatar, peão no tabuleiro, abertura das batalhas). Arquivos em sprites/skins/<id>.png
+export const SKIN_PRESETS = {
+  'red-masters': 'Red (Masters)', 'red-masters3': 'Red Campeão', 'ash-alola': 'Ash de Alola', 'cynthia-masters': 'Cynthia',
+  'leon': 'Leon', 'giovanni-gen3': 'Giovanni', 'brendan-masters2': 'Brendan', 'calem-masters': 'Calem', 'acerola-masters': 'Acerola',
+  'zinnia': 'Zinnia', 'elaine': 'Elaine', 'adaman': 'Adaman', 'turo': 'Professor Turo', 'yancy': 'Yancy',
+  'pokekid': 'Pokémon Kid', 'pokekidf-gen8': 'Pokémon Kid (Galar)', 'pokemoncenterlady': 'Enfermeira do Centro', 'pokemonranger-gen6': 'Pokémon Ranger',
+  'psychic-lgpe': 'Médium Psíquica', 'youngcouple': 'Jovem Casal', 'youngcouple-gen3rs': 'Jovem Casal (Hoenn)', 'youngcouple-gen6': 'Jovem Casal (Kalos)'
+};
+const SKIN_PRICE = { 'red-masters3': 300, 'cynthia-masters': 300, 'leon': 300, 'giovanni-gen3': 280, 'red-masters': 250, 'ash-alola': 250, 'zinnia': 220, 'turo': 220 };
 
 // Cenários: fundo da arena nas batalhas que você começa (todos que assistem veem)
 export const ARENA_PRESETS = { beach: 'Praia', cave: 'Caverna', snow: 'Neve', volcano: 'Vulcão', league: 'Salão da Liga', night: 'Floresta à noite' };
@@ -37,14 +48,16 @@ export const SHOP_KINDS = {
   arena: 'Cenário de batalha',
   card: 'Cartão de treinador',
   victory: 'Efeito de vitória',
-  service: 'Conveniência'
+  service: 'Conveniência',
+  skin: 'Skin de treinador'
 };
 /** Tipos que se equipam (um por vez). "service" é compra única. */
-export const EQUIP_KINDS = ['ball_style', 'frame', 'title', 'dice', 'arena', 'card', 'victory'];
-export const PRESETS_BY_KIND = { ball_style: AURA_PRESETS, frame: FRAME_PRESETS, dice: DICE_PRESETS, arena: ARENA_PRESETS, card: CARD_PRESETS, victory: VICTORY_PRESETS, service: SERVICE_PRESETS };
+export const EQUIP_KINDS = ['skin', 'ball_style', 'frame', 'title', 'dice', 'arena', 'card', 'victory'];
+export const PRESETS_BY_KIND = { skin: SKIN_PRESETS, ball_style: AURA_PRESETS, frame: FRAME_PRESETS, dice: DICE_PRESETS, arena: ARENA_PRESETS, card: CARD_PRESETS, victory: VICTORY_PRESETS, service: SERVICE_PRESETS };
 
 export const DEFAULT_SHOP = {
   items: [
+    ...Object.entries(SKIN_PRESETS).map(([v, name]) => ({ id: 'skin_' + v, kind: 'skin', value: v, name, price: SKIN_PRICE[v] || 180, active: true, desc: 'Personagem exclusivo: vira o seu avatar, o peão do tabuleiro e aparece na abertura das batalhas.' })),
     { id: 'style_galaxy', kind: 'ball_style', value: 'galaxy', name: 'Captura Galáxia', price: 120, active: true, desc: 'Todo Pokémon que você capturar ganha brilho de galáxia.' },
     { id: 'style_gold', kind: 'ball_style', value: 'gold', name: 'Captura Dourada', price: 150, active: true, desc: 'Seus Pokémon capturados brilham em ouro.' },
     { id: 'style_sakura', kind: 'ball_style', value: 'sakura', name: 'Captura Sakura', price: 100, active: true, desc: 'Pétalas de cerejeira nas suas capturas.' },
@@ -60,6 +73,12 @@ export const DEFAULT_SHOP = {
     { id: 'dice_ice', kind: 'dice', value: 'ice', name: 'Dado de Gelo', price: 90, active: true, desc: 'Dado congelado.' },
     { id: 'dice_galaxy', kind: 'dice', value: 'galaxy', name: 'Dado Galáxia', price: 120, active: true, desc: 'Um pedaço do espaço no seu dado.' },
     { id: 'dice_pokeball', kind: 'dice', value: 'pokeball', name: 'Dado Pokébola', price: 100, active: true, desc: 'Vermelho e branco, com o botão no meio.' },
+    { id: 'dice_neon', kind: 'dice', value: 'neon', name: 'Dado Neon', price: 90, active: true, desc: 'Contorno neon verde e azul que pisca.' },
+    { id: 'dice_sakura', kind: 'dice', value: 'sakura', name: 'Dado Sakura', price: 90, active: true, desc: 'Rosa com pétalas de cerejeira.' },
+    { id: 'dice_shadow', kind: 'dice', value: 'shadow', name: 'Dado Sombrio', price: 100, active: true, desc: 'Escuro, com pontos roxos brilhando.' },
+    { id: 'dice_rainbow', kind: 'dice', value: 'rainbow', name: 'Dado Prismático', price: 140, active: true, desc: 'Todas as cores girando.' },
+    { id: 'dice_masterball', kind: 'dice', value: 'masterball', name: 'Dado Master Ball', price: 160, active: true, desc: 'Roxo com o "M" das Master Balls.' },
+    { id: 'dice_thunder', kind: 'dice', value: 'thunder', name: 'Dado Trovão', price: 110, active: true, desc: 'Amarelo elétrico com raios.' },
     { id: 'arena_beach', kind: 'arena', value: 'beach', name: 'Cenário: Praia', price: 80, active: true, desc: 'Suas batalhas acontecem na praia.' },
     { id: 'arena_cave', kind: 'arena', value: 'cave', name: 'Cenário: Caverna', price: 80, active: true, desc: 'Batalhas numa caverna de cristais.' },
     { id: 'arena_snow', kind: 'arena', value: 'snow', name: 'Cenário: Neve', price: 80, active: true, desc: 'Batalhas na montanha nevada.' },
@@ -100,6 +119,7 @@ export function sanitizeCosmetic(c) {
   if (c.arena && ARENA_PRESETS[c.arena]) out.arena = c.arena;
   if (c.card && CARD_PRESETS[c.card]) out.card = c.card;
   if (c.victory && VICTORY_PRESETS[c.victory]) out.victory = c.victory;
+  if (c.skin && SKIN_PRESETS[c.skin]) out.skin = c.skin;
   return Object.keys(out).length ? out : null;
 }
 
