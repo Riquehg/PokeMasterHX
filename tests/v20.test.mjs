@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mapFor, useMap, validateCustomMap, isMapId, SPACE_LIST } from '../shared/data/board.js';
 import { createMatch } from '../shared/engine.js';
 import { createMemoryDb } from '../api/_lib/memory-db.js';
-import { profileOp, adminOp, matchOp, actionOp, configInfo } from '../api/_lib/core.js';
+import { profileOp, adminOp, matchOp, actionOp, configInfo, listRooms } from '../api/_lib/core.js';
 import { closeSeason } from '../api/_lib/series.js';
 import { whoMustAct } from '../shared/engine.js';
 import { SPECIES, MYTHICAL } from '../shared/data/pokemon.js';
@@ -246,4 +246,30 @@ test('Séries: a tabela mostra a skin de treinador comprada na loja', async () =
   assert.equal(v.table.find(r => r.me).skin, 'leon');
   const c = await matchOp(db, a, { op: 'serie_challenge', target: botsOf(0)[0].id });
   assert.equal(c.match.state.players[0].cosmetic.skin, 'leon');
+});
+
+test('salas no limbo: sala nova fecha a antiga, lobby parado some/encerra, último humano sair encerra a partida', async () => {
+  const { db, us: [a, b] } = await users(2);
+  const r1 = await matchOp(db, a, { op: 'create', name: 'Sala 1' });
+  const r2 = await matchOp(db, a, { op: 'create', name: 'Sala 2' });
+  assert.equal((await db.getMatch(r1.match.id)).status, 'abandoned', 'criar outra sala fecha a antiga');
+  let list = await listRooms(db, b);
+  assert.ok(list.rooms.some(r => r.id === r2.match.id));
+  const realNow = Date.now;
+  try {
+    Date.now = () => realNow() + 20 * 60000; // 20 min sem ninguém na sala
+    list = await listRooms(db, b);
+    assert.ok(!list.rooms.some(r => r.id === r2.match.id), 'some da lista');
+    assert.equal((await db.getMatch(r2.match.id)).status, 'lobby', 'ainda não encerrou');
+    Date.now = () => realNow() + 3 * 3600000;
+    await listRooms(db, b);
+    assert.equal((await db.getMatch(r2.match.id)).status, 'abandoned', 'encerrou depois de 2 h');
+  } finally { Date.now = realNow; }
+  // partida com CPU: o único humano sai → encerra
+  const s = await matchOp(db, b, { op: 'create', name: 'Com CPU' });
+  await matchOp(db, b, { op: 'add_bot', matchId: s.match.id });
+  await matchOp(db, b, { op: 'start', matchId: s.match.id });
+  await matchOp(db, b, { op: 'leave', matchId: s.match.id });
+  assert.ok(['abandoned', 'finished'].includes((await db.getMatch(s.match.id)).status), 'não fica em andamento');
+  assert.ok(!(await listRooms(db, b)).mine.some(r => r.id === s.match.id));
 });
