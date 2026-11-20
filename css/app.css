@@ -1389,20 +1389,29 @@ body.in-game .soc-panel { height: min(520px, calc(100dvh - 80px)); }
   50% { filter: drop-shadow(0 0 7px #4dc3ff) drop-shadow(0 0 3px #fff); } 75% { filter: drop-shadow(0 0 7px #ff6ec7) drop-shadow(0 0 3px #fff); } 100% { filter: drop-shadow(0 0 7px #ff4d4d) drop-shadow(0 0 3px #fff); } }
 
 /* batalha: anel de energia no chão + partículas atrás do Pokémon */
-.aura-fx { position: absolute; z-index: 1; pointer-events: none; }
-.aura-fx.me { left: 10%; bottom: 7%; width: 190px; height: 190px; }
-.aura-fx.foe { right: 13%; top: 6%; width: 150px; height: 150px; }
-.aura-fx::before { content: ''; position: absolute; left: 10%; right: 10%; bottom: 2%; height: 26%; border-radius: 50%;
-  background: radial-gradient(ellipse, var(--a1), color-mix(in srgb, var(--a2) 60%, transparent) 45%, transparent 70%); filter: blur(2px); animation: auraGlow 1.8s ease-in-out infinite; }
-.aura-fx::after { content: ''; position: absolute; inset: 0; border-radius: 50%; mix-blend-mode: screen; opacity: .9;
+/* aura em volta do Pokémon: halo redondo ATRÁS do sprite (nada de caixa por cima) */
+.aura-fx { position: absolute; z-index: 0; pointer-events: none; border-radius: 50%;
+  background: radial-gradient(circle at 50% 55%, color-mix(in srgb, var(--a1) 55%, transparent) 0%, color-mix(in srgb, var(--a2) 25%, transparent) 38%, transparent 66%) !important;
+  box-shadow: none !important; border: 0 !important; animation: auraBreath 2.4s ease-in-out infinite; }
+.aura-fx.me { left: calc(10% - 30px); bottom: calc(7% - 30px); width: 250px; height: 250px; }
+.aura-fx.foe { right: calc(13% - 25px); top: calc(6% - 25px); width: 200px; height: 200px; }
+@keyframes auraBreath { 50% { transform: scale(1.08); opacity: .8; } }
+.aura-fx::before { /* anel de energia girando em volta */
+  content: ''; position: absolute; inset: 8%; border-radius: 50%;
+  background: conic-gradient(from var(--ang, 0deg), transparent 0 10%, var(--a1) 18%, transparent 30% 45%, var(--a2) 55%, transparent 65% 78%, var(--a3) 88%, transparent 96%);
+  -webkit-mask: radial-gradient(circle, transparent 58%, #000 61%, #000 66%, transparent 70%); mask: radial-gradient(circle, transparent 58%, #000 61%, #000 66%, transparent 70%);
+  filter: blur(1px) drop-shadow(0 0 6px var(--a1)); animation: auraHue 3.2s linear infinite; }
+.aura-fx::after { /* partículas só na borda do círculo (o centro fica livre para o Pokémon) */
+  content: ''; position: absolute; inset: 0; border-radius: 50%; mix-blend-mode: screen; opacity: .95;
   background-image: radial-gradient(circle, var(--a1) 0 2.5px, transparent 3.5px), radial-gradient(circle, var(--a2) 0 2px, transparent 3px), radial-gradient(circle, var(--a3) 0 1.5px, transparent 2.5px);
   background-size: 44px 52px, 31px 41px, 57px 47px; animation: auraRise 2.6s linear infinite;
-  -webkit-mask: radial-gradient(circle, #000 35%, transparent 70%); mask: radial-gradient(circle, #000 35%, transparent 70%); }
-.aura-fx.aura-rainbow::before { background: conic-gradient(from var(--ang, 0deg), #ff4d4d, #ffe14d, #5dff8a, #4dc3ff, #9b6bff, #ff6ec7, #ff4d4d); -webkit-mask: radial-gradient(ellipse, #000 40%, transparent 70%); mask: radial-gradient(ellipse, #000 40%, transparent 70%); animation: auraHue 2s linear infinite; }
+  -webkit-mask: radial-gradient(circle, transparent 38%, #000 52%, #000 62%, transparent 72%); mask: radial-gradient(circle, transparent 38%, #000 52%, #000 62%, transparent 72%); }
+.aura-fx.aura-rainbow::before { background: conic-gradient(from var(--ang, 0deg), #ff4d4d, #ffb84d, #ffe14d, #5dff8a, #4dc3ff, #9b6bff, #ff6ec7, #ff4d4d); filter: blur(1px) drop-shadow(0 0 8px #fff); }
+.aura-fx.aura-rainbow { background: radial-gradient(circle at 50% 55%, rgba(255,255,255,.28) 0%, rgba(140,200,255,.18) 35%, transparent 66%) !important; }
 .mon-sprite[class*="aura-"] { filter: drop-shadow(0 0 10px var(--a1)) drop-shadow(0 0 22px color-mix(in srgb, var(--a2) 70%, transparent)) drop-shadow(0 8px 6px rgba(0, 0, 0, .45)) !important; }
 .mon-sprite.aura-rainbow { animation: prismSprite 2.4s linear infinite, idleFoe 2.4s ease-in-out infinite !important; }
 .mon-sprite.me.aura-rainbow { animation: prismSprite 2.4s linear infinite, idleMe 2.6s ease-in-out infinite !important; }
-@media (max-width: 640px) { .aura-fx.me { width: 128px; height: 128px; left: 4%; } .aura-fx.foe { width: 104px; height: 104px; right: 8%; } }
+@media (max-width: 640px) { .aura-fx.me { width: 170px; height: 170px; left: calc(4% - 21px); bottom: calc(7% - 21px); } .aura-fx.foe { width: 140px; height: 140px; right: calc(8% - 18px); top: calc(6% - 18px); } }
 @media (prefers-reduced-motion: reduce) { .mon[class*="aura-"], .pk-card[class*="aura-"], .aura-fx::after, .aura-fx::before { animation: none !important; } }
 
 /* ---------- 🔎 filtros da Coleção ---------- */
