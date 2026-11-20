@@ -211,7 +211,7 @@ export async function captureAnim(f, { escaped, who = null, ballName = '' } = {}
   } else {
     ball.classList.add('open');
     target.classList.remove('absorb'); target.classList.add('back');
-    text.textContent = f.roll === 1 ? 'Falha crítica! Escapou!' : escaped ? `${name} escapou e fugiu!` : `Ahh! Quase! ${name} escapou!`;
+    text.textContent = f.repelled ? `⚡ ${name} repeliu a bola! Enfraqueça abaixo de 50%.` : f.roll === 1 ? 'Falha crítica! Escapou!' : escaped ? `${name} escapou e fugiu!` : `Ahh! Quase! ${name} escapou!`;
     if (who) text.textContent = `${name} escapou da Pokébola de ${who}!`;
   }
   el.querySelector('.cap-stage').appendChild(text);

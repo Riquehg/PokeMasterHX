@@ -43,9 +43,8 @@ test('admin dar Pokémon não apaga os mais novos da Coleção', async () => {
   assert.ok(prof.vault.some(m => m.uid === 'v299'));
 });
 
-test('lendário: dá para capturar com HP cheio usando Ultra Ball (alvo 8)', () => {
+test('tier 5 segue no alvo 8 na tabela (a captura lendária usa regra própria — ver v20)', () => {
   assert.equal(CAPTURE_TARGET[5], 8);
-  assert.ok(6 + 2 >= CAPTURE_TARGET[5]);
 });
 
 test('Hardcore: capturas salvam durante a partida; quem cai perde só as da partida', async () => {

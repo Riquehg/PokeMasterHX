@@ -24,6 +24,47 @@ export const MAX_ROUNDS = 30;
 export const CAPTURE_TARGET = { 1: 3, 2: 4, 3: 5, 4: 6, 5: 8 };
 export const WILD_FLEE_AFTER_FAIL = { 1: 0.1, 2: 0.15, 3: 0.2, 4: 0.3, 5: 0.65 };
 
+/**
+ * ⚡ Captura LENDÁRIA (lendários e míticos selvagens): bem mais difícil que a normal.
+ *  - Acima de 50% do HP ele repele a bola (bola perdida, sem rolagem).
+ *  - Rola 2 dados (2d6) e precisa de 14+ (Mítico 15+, shiny +1). 🎲🎲 1+1 sempre falha.
+ *  - Bônus limitados: bola no máximo +2, HP baixo (≤50% +1, ≤25% +2), condição +1 — teto +5. Nível não ajuda.
+ *  - Ultra Ball + HP ≤25%: ~17% · + sono/paralisia: ~28%. Cada erro: 65% de chance de ele fugir. Master Ball continua garantida.
+ */
+export const LEGEND_CAPTURE = { target: 14, mythical: 1, ballMax: 2, bonusMax: 5, minHpRatio: 0.5 };
+
+/** Contas da captura (mesmas no motor, na interface e na CPU). */
+export function captureMath(wild, mine, ballId, status) {
+  const sp = getSpecies(wild.sp);
+  const max = maxHpOf(wild);
+  const hpBonus = wild.hp <= max * 0.25 ? 2 : wild.hp <= max * 0.5 ? 1 : 0;
+  const bBonus = ballBonusAgainst(ballId, sp.types);
+  if (sp.legendary || sp.tier >= 5) {
+    const blocked = wild.hp > max * LEGEND_CAPTURE.minHpRatio;
+    const ball = Math.min(LEGEND_CAPTURE.ballMax, bBonus);
+    const stB = status ? 1 : 0;
+    const bonus = Math.min(LEGEND_CAPTURE.bonusMax, ball + hpBonus + stB);
+    const target = LEGEND_CAPTURE.target + (sp.mythical ? LEGEND_CAPTURE.mythical : 0) + (wild.shiny ? 1 : 0);
+    return { legendary: true, blocked, dice: 2, bonus, target, ball, hpBonus, stBonus: stB, lvlBonus: 0 };
+  }
+  const lvlBonus = mine && mine.lvl >= wild.lvl + 5 ? 1 : 0;
+  const stBonus = status ? (status.id === 'sleep' || status.id === 'freeze' ? 2 : 1) : 0; // condição ajuda a capturar (como nos jogos)
+  const target = CAPTURE_TARGET[sp.tier] + (wild.shiny ? 1 : 0);
+  return { legendary: false, blocked: false, dice: 1, bonus: bBonus + hpBonus + lvlBonus + stBonus, target, ball: bBonus, hpBonus, stBonus, lvlBonus };
+}
+
+/** Chance (0..1) de capturar com essas contas. */
+export function captureProb(m) {
+  if (m.blocked) return 0;
+  let ok = 0;
+  if (m.dice === 2) {
+    for (let a = 1; a <= 6; a++) for (let b = 1; b <= 6; b++) if (!(a === 1 && b === 1) && a + b + m.bonus >= m.target) ok++;
+    return ok / 36;
+  }
+  for (let r = 2; r <= 6; r++) if (r + m.bonus >= m.target) ok++;
+  return ok / 6;
+}
+
 // ---------------------------------------------------------------- lados
 export function sideTeam(state, side) {
   return side.kind === 'player' ? getPlayer(state, side.pid).team : side.team;
@@ -406,31 +447,33 @@ function tryCapture(state, rng, si, ballId) {
   }
 
   const mine = sideActive(state, side);
-  const max = maxHpOf(wild);
-  const hpBonus = wild.hp <= max * 0.25 ? 2 : wild.hp <= max * 0.5 ? 1 : 0;
-  const lvlBonus = mine && mine.lvl >= wild.lvl + 5 ? 1 : 0;
-  const bBonus = ballBonusAgainst(ballId, sp.types);
-  const target = CAPTURE_TARGET[sp.tier] + (wild.shiny ? 1 : 0);
-  const roll = rng.d6();
   const st = statusOf(b, 1 - si, wild);
-  const stBonus = st ? (st.id === 'sleep' || st.id === 'freeze' ? 2 : 1) : 0; // condição ajuda a capturar (como nos jogos)
-  const total = roll + bBonus + hpBonus + lvlBonus + stBonus;
-  const ok = roll !== 1 && total >= target;
-
-  const parts = [`🎲 ${roll}`];
-  if (bBonus) parts.push(`bola +${bBonus}`);
-  if (hpBonus) parts.push(`HP baixo +${hpBonus}`);
-  if (lvlBonus) parts.push(`nível +${lvlBonus}`);
-  if (stBonus) parts.push(`${STATUS[st.id].adj} +${stBonus}`);
-  const detail = `${parts.join(' · ')} = ${total} (precisa ${target}+)`;
-  const shakes = ok ? 3 : roll === 1 ? 0 : Math.max(0, Math.min(2, 3 + (total - target)));
-  fx(state, { k: 'capture', pid: player.id, roll, total, target, ok, ball: ballId, sp: wild.sp, shiny: !!wild.shiny, shakes });
+  const m = captureMath(wild, mine, ballId, st);
+  if (m.blocked) { // ⚡ lendário forte demais: repele a bola
+    fx(state, { k: 'capture', pid: player.id, roll: 1, total: 0, target: m.target, ok: false, ball: ballId, sp: wild.sp, shiny: !!wild.shiny, shakes: 0, repelled: true });
+    log(state, `⚡ ${speciesName(wild.sp)} repeliu a ${ball.name}! Lendários só podem ser capturados com o HP abaixo de 50%.`, 'bad');
+    return null;
+  }
+  const roll = rng.d6();
+  const roll2 = m.dice === 2 ? rng.d6() : 0;
+  const total = roll + roll2 + m.bonus;
+  const ok = (m.dice === 2 ? !(roll === 1 && roll2 === 1) : roll !== 1) && total >= m.target;
+  const parts = [m.dice === 2 ? `🎲 ${roll}+${roll2}` : `🎲 ${roll}`];
+  if (m.ball) parts.push(`bola +${m.ball}`);
+  if (m.hpBonus) parts.push(`HP baixo +${m.hpBonus}`);
+  if (m.lvlBonus) parts.push(`nível +${m.lvlBonus}`);
+  if (m.stBonus) parts.push(`${STATUS[st.id].adj} +${m.stBonus}`);
+  const capped = m.legendary && m.ball + m.hpBonus + m.stBonus > m.bonus ? ` (teto lendário +${m.bonus})` : '';
+  const crit = m.dice === 2 ? roll === 1 && roll2 === 1 : roll === 1;
+  const detail = `${parts.join(' · ')}${capped} = ${total} (precisa ${m.target}+${m.legendary ? ', captura lendária' : ''})`;
+  const shakes = ok ? 3 : crit ? 0 : Math.max(0, Math.min(2, 3 + (total - m.target)));
+  fx(state, { k: 'capture', pid: player.id, roll: crit ? 1 : roll, total, target: m.target, ok, ball: ballId, sp: wild.sp, shiny: !!wild.shiny, shakes, legendary: m.legendary });
 
   if (ok) {
     log(state, `🔴 ${player.name} jogou uma ${ball.name}... ${detail}. Capturou!`, 'good');
     return 'captured';
   }
-  log(state, `🔴 ${player.name} jogou uma ${ball.name}... ${detail}. ${roll === 1 ? 'Falha crítica!' : 'Escapou da bola!'}`, 'bad');
+  log(state, `🔴 ${player.name} jogou uma ${ball.name}... ${detail}. ${crit ? 'Falha crítica!' : 'Escapou da bola!'}`, 'bad');
   if (rng.chance(WILD_FLEE_AFTER_FAIL[sp.tier])) return 'escaped';
   return null;
 }

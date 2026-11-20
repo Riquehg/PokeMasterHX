@@ -210,3 +210,29 @@ test('Séries: virada da temporada sobe os primeiros, paga o pódio e o campeão
   assert.equal(((await db.getProfile(a.id)).diamonds || 0) - before, 30);
   assert.equal((await db.getProfile(a.id)).stats.trophies.length, 1);
 });
+
+test('captura lendária: repele acima de 50%, 2 dados com teto de bônus, Mítico mais difícil; comuns iguais', async () => {
+  const { captureMath, captureProb, startBattle, submitChoice } = await import('../shared/rules/battle.js');
+  const { createMon } = await import('../shared/rules/monsters.js');
+  const { maxHpOf } = await import('../shared/rules/monsters.js');
+  const leg = createMon(createRng(1), 'zapdos', 40);
+  const me = createMon(createRng(2), 'pikachu', 60);
+  assert.equal(captureProb(captureMath(leg, me, 'rainbow_ball', null)), 0, 'HP cheio: repele');
+  leg.hp = Math.floor(maxHpOf(leg) * 0.2);
+  const ultra = captureProb(captureMath(leg, me, 'ultra_ball', null));
+  const best = captureProb(captureMath(leg, me, 'rainbow_ball', { id: 'sleep' }));
+  assert.ok(Math.abs(ultra - 6 / 36) < 1e-9, `Ultra + HP baixo ≈ 17% (${ultra})`);
+  assert.ok(best <= 10 / 36 + 1e-9, `teto ≈ 28% (${best})`);
+  const mew = createMon(createRng(3), 'mew', 40); mew.hp = Math.floor(maxHpOf(mew) * 0.2);
+  assert.ok(captureProb(captureMath(mew, me, 'ultra_ball', null)) < ultra, 'Mítico mais difícil');
+  const pid = createMon(createRng(4), 'pidgey', 5);
+  assert.ok(captureProb(captureMath(pid, me, 'poke_ball', null)) >= 4 / 6, 'comuns continuam fáceis');
+  // no motor: bola repelida com HP cheio, sem fugir
+  const s = createMatch({ seed: 4, mode: 'local', now: 0, players: [{ id: 'a', name: 'A' }] });
+  me.trust = true; s.players[0].team = [me]; s.players[0].items.ultra_ball = 3;
+  const wild = createMon(createRng(5), 'raikou', 40); wild.wild = true;
+  startBattle(s, { kind: 'wild', pid: 'a', foe: { kind: 'wild', mon: wild } });
+  submitChoice(s, createRng(6), 'a', { move: 'ball', item: 'ultra_ball' });
+  assert.ok(s.log.some(l => /repeliu/.test(l.msg)));
+  assert.equal(s.players[0].items.ultra_ball, 2);
+});

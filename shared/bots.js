@@ -11,7 +11,7 @@ import { distancesFrom } from './rules/movement.js';
 import { SPACE_LIST } from './data/board.js';
 const citySpaces = () => SPACE_LIST.filter(s => s.type === 'city').map(s => s.id);
 import { getPlayer, currentPlayer, canUse } from './rules/helpers.js';
-import { sideTeam, sideActive, sideIndexOf, bestMoveSlot, expectedDamage, CAPTURE_TARGET } from './rules/battle.js';
+import { sideTeam, sideActive, sideIndexOf, bestMoveSlot, expectedDamage, CAPTURE_TARGET, captureMath, captureProb } from './rules/battle.js';
 import { monMoves } from './data/moves.js';
 import { statsOf } from './rules/monsters.js';
 import { rulesOf, stormAt, ownerOf, GARRISON_MAX } from './rules/modes.js';
@@ -139,10 +139,9 @@ function battleAction(state, p) {
       // chance real: precisa tirar (alvo - bônus) no d6, e 1 sempre falha
       const max = maxHpOf(foe);
       const hpB = foe.hp <= max * 0.25 ? 2 : foe.hp <= max * 0.5 ? 1 : 0;
-      const need = CAPTURE_TARGET[sp.tier] + (foe.shiny ? 1 : 0) - ballBonusAgainst(ball, sp.types) - hpB - (me.lvl >= foe.lvl + 5 ? 1 : 0);
-      const odds = ball === 'master_ball' ? 1 : Math.max(0, Math.min(5, 7 - Math.max(2, need))) / 6;
+      const odds = ball === 'master_ball' ? 1 : captureProb(captureMath(foe, me, ball, b.sides[1 - si]?.status?.[foe.uid]));
       const finishing = myHit >= foe.hp; // não derruba o que quer capturar
-      if (odds >= 0.66 || (odds >= 0.34 && (hpB >= 1 || me.hp < foeHit * 1.5)) || (odds > 0 && sp.tier >= 5 && hpB >= 2) || finishing && odds > 0) {
+      if (odds >= 0.66 || (odds >= 0.34 && (hpB >= 1 || me.hp < foeHit * 1.5)) || (odds > 0 && sp.tier >= 5 && hpB >= 2 && odds >= 0.15) || finishing && odds > 0) {
         return { type: 'battle', move: 'ball', item: ball };
       }
       // enfraquece com o golpe mais fraco para não nocautear

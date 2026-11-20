@@ -4,7 +4,7 @@ import { ITEMS, ballBonusAgainst } from '../../shared/data/items.js';
 import { monView, maxHpOf } from '../../shared/rules/monsters.js';
 import { canUse, badgesNeeded } from '../../shared/rules/helpers.js';
 import { monMoves } from '../../shared/data/moves.js';
-import { STATUS, CAPTURE_TARGET } from '../../shared/rules/battle.js';
+import { STATUS, CAPTURE_TARGET, captureMath, captureProb, LEGEND_CAPTURE } from '../../shared/rules/battle.js';
 import { bestAttack, against, effectivenessLabel, TYPE_COLORS } from '../../shared/rules/types.js';
 import { whoMustAct } from '../../shared/engine.js';
 import { esc, hpClass } from './dom.js';
@@ -27,18 +27,8 @@ export function captureChance(state, ballId) {
   const b = state.battle;
   const wild = b.sides[1].team[0];
   const me = sideTeam(state, b.sides[0])[b.sides[0].active];
-  const sp = getSpecies(wild.sp);
   if (ITEMS[ballId]?.bonus >= 99) return 1;
-  const max = maxHpOf(wild);
-  const hpBonus = wild.hp <= max * 0.25 ? 2 : wild.hp <= max * 0.5 ? 1 : 0;
-  const lvlBonus = me && me.lvl >= wild.lvl + 5 ? 1 : 0;
-  const target = CAPTURE_TARGET[sp.tier] + (wild.shiny ? 1 : 0);
-  const st = b.sides[1].status?.[wild.uid];
-  const stBonus = st ? (st.id === 'sleep' || st.id === 'freeze' ? 2 : 1) : 0;
-  const bonus = ballBonusAgainst(ballId, sp.types) + hpBonus + lvlBonus + stBonus;
-  let ok = 0;
-  for (let r = 2; r <= 6; r++) if (r + bonus >= target) ok++;
-  return ok / 6;
+  return captureProb(captureMath(wild, me, ballId, b.sides[1].status?.[wild.uid]));
 }
 
 function hpBox(state, side, mon, cls, vs = null) {
@@ -156,7 +146,7 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
       controls += `<div class="subpick">${balls.map(([id, n]) => {
         const c = Math.round(captureChance(state, id) * 100);
         return `<button class="btn sm pickbtn" data-act="b-ball" data-item="${id}"><img src="${itemUrl(id)}" alt="${esc(ITEMS[id].name)}"><span class="pb-nm">${esc(ITEMS[id].name)} ×${n}</span><span class="chip ${c >= 60 ? 'green' : c >= 34 ? 'gold' : 'red'}">${c}%</span></button>`;
-      }).join('')}</div><p class="tiny muted">Dica: HP abaixo de 50% dá +1 e abaixo de 25% dá +2; sono/congelado +2 e outras condições +1. 🎲1 sempre falha e cada erro pode fazê-lo fugir.${getSpecies(foeMon.sp)?.legendary || getSpecies(foeMon.sp)?.tier === 5 ? ` <b>${getSpecies(foeMon.sp)?.mythical ? 'Mítico' : 'Lendário'}:</b> enfraqueça bem antes de jogar a bola.` : ''}</p>`;
+      }).join('')}</div><p class="tiny muted">Dica: HP abaixo de 50% dá +1 e abaixo de 25% dá +2; sono/congelado +2 e outras condições +1. 🎲1 sempre falha e cada erro pode fazê-lo fugir.${getSpecies(foeMon.sp)?.legendary || getSpecies(foeMon.sp)?.tier === 5 ? `<br>⚡ <b>Captura ${getSpecies(foeMon.sp)?.mythical ? 'mítica' : 'lendária'}:</b> com o HP acima de 50% ele repele a bola. Abaixo disso rola 2 dados e precisa de ${LEGEND_CAPTURE.target + (getSpecies(foeMon.sp)?.mythical ? 1 : 0)}+ (bola conta no máximo +2, HP baixo até +2, condição +1 — teto +5). 🎲🎲 1+1 sempre falha e ele foge fácil. Só a Master Ball é garantida.` : ''}</p>`;
     }
   }
 
