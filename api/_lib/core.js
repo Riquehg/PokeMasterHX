@@ -1,10 +1,12 @@
 // Lógica do backend, independente de infraestrutura.
 // Recebe um "db" (adaptador Supabase em produção, memória no servidor de desenvolvimento/testes).
 import { createMatch, applyAction, addLatePlayer, score, MAX_PLAYERS, fillTraits, BRING_GOLD_OPTIONS } from '../../shared/engine.js';
+import { isMapId, validateCustomMap } from '../../shared/data/board.js';
 import { randomSeed } from '../../shared/rules/rng.js';
 import { ELO_TIERS } from '../../shared/data/elo.js';
 import { ensureSeason, applyLeagueResult, leagueSort, seasonId, seasonName, divInfo, LEAGUE_DIVS } from '../../shared/data/league.js';
 import { CUP_MAX_PLAYERS, DUEL_LEVEL_CAP } from '../../shared/data/cup.js';
+import { serieOp } from './series.js';
 import { duelQueue, duelQueueStatus, duelQueueCancel, duelTeam, startCup, duelFinished } from './tournament.js';
 import { SPECIES, STARTERS, getSpecies } from '../../shared/data/pokemon.js';
 import { dailyPokemon } from '../../shared/daily.js';
@@ -382,9 +384,24 @@ async function currentDaily(db) {
 }
 
 export async function configInfo(db) {
-  let announcement = null;
+  let announcement = null, maps = [];
   try { announcement = await getAnnouncement(db); } catch { /* sem aviso */ }
-  return { dailyPokemon: await currentDaily(db), announcement };
+  try { maps = (await customMaps(db)).filter(m => m.published); } catch { /* sem mapas */ }
+  return { dailyPokemon: await currentDaily(db), announcement, maps };
+}
+
+// ------------------------------------------------------------------ 🛠️ mapas do painel admin (game_config 'custom_maps')
+export async function customMaps(db) {
+  const cfg = await db.getConfig('custom_maps');
+  return Array.isArray(cfg?.maps) ? cfg.maps : [];
+}
+/** Dados do mapa para a partida (só publicado; sem ele a sala cai para Kanto). */
+async function mapDataFor(db, mapId) {
+  if (!String(mapId || '').startsWith('custom:')) return null;
+  const m = (await customMaps(db)).find(x => x.id === mapId && x.published);
+  if (!m) return null;
+  const { published, updatedAt, by, ...data } = m;
+  return data;
 }
 
 export async function listRooms(db, user) {
@@ -422,7 +439,7 @@ function normalizeOptions(body, prev = {}) {
   if (body.turnLimit !== undefined) o.turnLimit = Math.max(0, Math.min(200, Number(body.turnLimit) || 0));
   o.turnLimit = o.turnLimit ?? 60;
   if (body.levelCap !== undefined) o.levelCap = Math.max(0, Math.min(60, Number(body.levelCap) || 0));
-  if (body.map !== undefined) o.map = body.map === 'gen' ? 'gen' : 'kanto'; // Kanto ou Expedição (mapa gerado)
+  if (body.map !== undefined) o.map = isMapId(String(body.map)) && !String(body.map).startsWith('gen:') ? String(body.map) : 'kanto'; // Kanto, Expedição, temas ou mapa do painel
   o.map = o.map || 'kanto';
   // tipo de partida: Clássico, Battle Royale ou Conquista (funciona no Balanceado e no Coleção)
   if (body.rules !== undefined) o.rules = ['royale', 'conquest'].includes(body.rules) ? body.rules : 'classic';
@@ -448,6 +465,7 @@ export async function matchOp(db, user, body) {
   if (op === 'create') return createRoom(db, user, body);
   if (op === 'solo') return createSolo(db, user, body);
   if (op === 'join') return joinRoom(db, user, body);
+  if (op === 'serie_get' || op === 'serie_defense' || op === 'serie_challenge') return serieOp(db, user, body);
   if (op === 'duel_queue') return duelQueue(db, user, body, await getOrCreateProfile(db, user));
   if (op === 'duel_status') return duelQueueStatus(db, user);
   if (op === 'duel_cancel') return duelQueueCancel(db, user);
@@ -615,7 +633,7 @@ async function startRoom(db, row, lobby, userId) {
     }
   }
   const state = createMatch({
-    id: row.id, mode: 'online', seed: randomSeed(), now: Date.now(), players, map: options.map, rules: options.rules,
+    id: row.id, mode: 'online', seed: randomSeed(), now: Date.now(), players, map: options.map, mapData: await mapDataFor(db, options.map), rules: options.rules,
     options: { dailyPokemon: await currentDaily(db), turnLimit: options.turnLimit || 0, trades: mode !== 'ranked', hardcore: !!options.hardcore }
   });
   state.roomMode = mode;
@@ -959,6 +977,22 @@ export async function adminOp(db, user, body) {
       if (body.species && !SPECIES[body.species]) bad('Espécie inválida.');
       await db.setConfig('daily_pokemon', body.species ? { species: body.species, date: body.date || null } : null);
       return { ok: true, dailyPokemon: await currentDaily(db) };
+    }
+    case 'list_maps': return { maps: await customMaps(db) };
+    case 'save_map': { // 🛠️ editor de mapas: valida, guarda e (opcional) publica para todas as salas
+      let map;
+      try { map = validateCustomMap({ ...(body.map || {}), id: body.map?.id || body.id }); } catch (e) { bad(e.message); }
+      const list = await customMaps(db);
+      const old = list.find(m => m.id === map.id);
+      if (!old && list.length >= 20) bad('Máximo de 20 mapas. Apague algum antes.');
+      const row = { ...map, rev: (old?.rev || 0) + 1, published: !!body.published, updatedAt: new Date().toISOString(), by: me.trainer_name };
+      await db.setConfig('custom_maps', { maps: [...list.filter(m => m.id !== map.id), row] });
+      return { ok: true, map: row, maps: await customMaps(db) };
+    }
+    case 'delete_map': {
+      const list = await customMaps(db);
+      await db.setConfig('custom_maps', { maps: list.filter(m => m.id !== body.id) });
+      return { ok: true, maps: await customMaps(db) };
     }
     case 'list_users': {
       const rows = await db.listProfiles(200);

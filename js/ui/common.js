@@ -68,7 +68,7 @@ export function statCard(mon, { owner = null, act = '', index = '', extra = '', 
   const locked = owner && !canUse(owner, mon);
   const hp = mon.hp === undefined ? v.maxHp : Math.max(0, v.hp);
   const xpPct = v.lvl >= MAX_LEVEL ? 100 : Math.min(100, ((mon.xp || 0) / xpToNext(v.lvl)) * 100);
-  const cls = ['pk-card', v.shiny ? 'shiny' : '', sp.legendary ? 'legend' : '', hp <= 0 && mon.hp !== undefined ? 'fainted' : '', lead ? 'lead' : '', locked ? 'locked' : '', mon.aura ? 'aura-' + mon.aura : ''].join(' ');
+  const cls = ['pk-card', v.shiny ? 'shiny' : '', sp.legendary ? 'legend' : '', sp.mythical ? 'mythic' : '', sp.ultra ? 'ultra' : '', hp <= 0 && mon.hp !== undefined ? 'fainted' : '', lead ? 'lead' : '', locked ? 'locked' : '', mon.aura ? 'aura-' + mon.aura : ''].join(' ');
   const rows = STAT_ROWS.map(([k, key, label]) => {
     const val = v[key];
     const pct = Math.max(4, Math.min(100, (val / max[key]) * 100));
@@ -79,7 +79,7 @@ export function statCard(mon, { owner = null, act = '', index = '', extra = '', 
       <span class="pk-iv" title="Potencial (IV) de ${label}: ${iv ?? '?'} de ${IV_MAX}">${iv ?? '–'}</span></div>`;
   }).join('');
   return `<div class="${cls}" style="--tc:${typeColor(v.types[0])}" ${act ? `data-act="${act}" data-index="${index}" data-uid="${esc(mon.uid || '')}"` : ''}>
-    ${v.shiny ? '<span class="pk-ribbon">★ Shiny +15%</span>' : ''}<span class="pk-tier t${sp.tier}">${TIER_TXT[sp.tier]}</span>
+    ${v.shiny ? '<span class="pk-ribbon">★ Shiny +15%</span>' : ''}<span class="pk-tier t${sp.tier}">${TIER_TXT[sp.tier]}</span>${sp.mythical ? '<span class="pk-cat mythic" title="Mítico: não aparece solto, só em aparições raras, Raids e prêmios">🌟 Mítico</span>' : sp.ultra ? '<span class="pk-cat ultra">🌀 Ultra</span>' : ''}
     <div class="pk-art"><img src="${monSprite(mon)}" alt="${esc(v.name)}" loading="lazy"></div>
     <div class="pk-nature" title="${esc(natureLabel(mon.nature))}">❖ ${esc(mon.nature || 'Sem natureza')}</div>
     <div class="pk-name">${esc(v.name)}${mon.nick ? `<span class="pk-sp">${esc(v.species)}</span>` : ''}</div>

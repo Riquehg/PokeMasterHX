@@ -819,6 +819,25 @@ export const SPECIES_LIST = RAW.map(([dex, id, name, types, tier, hp, str, evolv
 });
 export const TOTAL_SPECIES = SPECIES_LIST.length;
 
+// 🌟 Categorias especiais (todas continuam "lendárias" nas regras: tier Amarelo, obediência, captura, Coleção protegida).
+//  - Míticos: os de evento nos jogos. NÃO aparecem nas casas Amarelas normais (só numa aparição mítica rara),
+//    nem em ovos; vêm de Raids, eventos raros e prêmios.
+//  - Ultracriaturas: as Ultra Beasts de Alola (só o rótulo muda).
+export const MYTHICAL = ['mew', 'celebi', 'jirachi', 'deoxys', 'phione', 'manaphy', 'darkrai', 'shaymin', 'arceus', 'victini', 'keldeo', 'meloetta',
+  'genesect', 'diancie', 'hoopa', 'volcanion', 'magearna', 'marshadow', 'zeraora', 'meltan', 'melmetal'];
+export const ULTRA_BEASTS = ['nihilego', 'buzzwole', 'pheromosa', 'xurkitree', 'celesteela', 'kartana', 'guzzlord', 'poipole', 'naganadel', 'stakataka', 'blacephalon'];
+for (const id of MYTHICAL) if (SPECIES[id]) { SPECIES[id].mythical = true; SPECIES[id].legendary = true; }
+for (const id of ULTRA_BEASTS) if (SPECIES[id]) SPECIES[id].ultra = true;
+/** 'mythical' | 'ultra' | 'legendary' | null */
+export const categoryOf = sp => (sp?.mythical ? 'mythical' : sp?.ultra ? 'ultra' : sp?.legendary ? 'legendary' : null);
+export const CATEGORY_INFO = {
+  legendary: { name: 'Lendário', icon: '⚡', chip: 'gold' },
+  mythical: { name: 'Mítico', icon: '🌟', chip: 'mythic' },
+  ultra: { name: 'Ultracriatura', icon: '🌀', chip: 'ultra' }
+};
+/** Chance de uma casa Amarela trazer um Mítico em vez de um Lendário comum. */
+export const MYTHICAL_WILD_CHANCE = 0.04;
+
 // Quem evolui para quem (para saber o "estágio")
 for (const s of SPECIES_LIST) if (s.evolvesTo && SPECIES[s.evolvesTo]) SPECIES[s.evolvesTo].evolvesFrom = s.id;
 

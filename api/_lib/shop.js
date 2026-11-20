@@ -281,7 +281,7 @@ export async function publishCaptures(db, state, fxList) {
     const what = `${species.name}${shiny ? ' ✨SHINY✨' : ''}`;
     await db.insertFeed({
       kind: shiny ? 'shiny' : 'legendary',
-      text: `${p.name} ${f.via === 'egg' ? 'chocou' : 'capturou'} ${species.tier >= 5 ? 'o lendário ' : ''}${what}!`,
+      text: `${p.name} ${f.via === 'egg' ? 'chocou' : 'capturou'} ${species.mythical ? 'o MÍTICO ' : species.ultra ? 'a Ultracriatura ' : species.tier >= 5 ? 'o lendário ' : ''}${what}!`,
       data: { sp, shiny, name: p.name, avatar: p.avatar }
     });
   }

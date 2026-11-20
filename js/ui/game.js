@@ -633,7 +633,7 @@ export function mountGame(root, session, opts = {}) {
   }
 
   function renderGameOver(s) {
-    if (s.status === 'finished' && ui.overShown && !ui.leagueShown && (s.leagueChanges?.[vid()] || s.bondChanges?.[vid()] || s.bagChanges?.[vid()]) && document.getElementById('over')) {
+    if (s.status === 'finished' && ui.overShown && !ui.leagueShown && (s.leagueChanges?.[vid()] || s.bondChanges?.[vid()] || s.bagChanges?.[vid()] || s.serieResult) && document.getElementById('over')) {
       ui.leagueShown = true; closeModal('over'); showOver(s); return; // o resultado da Liga chega logo depois do fim
     }
     if (s.status !== 'finished' || ui.overShown) return;
@@ -649,6 +649,15 @@ export function mountGame(root, session, opts = {}) {
     return `<div class="lg-me" style="--ec:${d.color};margin-top:8px"><span class="elo-big">${d.icon}</span><div><div class="small muted">Liga Ranqueada</div>
       <b style="color:${d.color}">${esc(d.name)}</b> · ${lc.lp} PL <b class="lg-delta" style="color:${lc.delta >= 0 ? '#8ff0bd' : '#ff9b9e'}">${lc.delta >= 0 ? '+' : ''}${lc.delta} PL</b>
       ${lc.change === 'up' ? '<div class="small" style="color:#8ff0bd">⬆️ Subiu de divisão!</div>' : lc.change === 'down' ? '<div class="small" style="color:#ff9b9e">⬇️ Caiu de divisão.</div>' : ''}</div></div>`;
+  }
+
+  // ⚽ Liga das Séries: pontos do ataque
+  function serieLine(s) {
+    const r = s.serieResult;
+    if (!r) return '';
+    return `<div class="lg-me" style="--ec:#4ad07a;margin-top:8px"><span class="elo-big">⚽</span><div><div class="small muted">Liga das Séries</div>
+      <b>${r.win ? `+${r.pts} pontos` : 'Sem pontos (a defesa segurou)'}</b> · saldo <b style="color:${r.sp >= 0 ? '#8ff0bd' : '#ff9b9e'}">${r.sp >= 0 ? '+' : ''}${r.sp}</b>
+      <div class="tiny muted">Derrubou ${r.kos} · perdeu ${r.lost}</div></div></div>`;
   }
 
   // 💞 laço do companheiro no fim da partida
@@ -676,7 +685,7 @@ export function mountGame(root, session, opts = {}) {
       const ov = openModal('over', w?.id === vid ? '🏆 Vitória!' : '⚔️ Fim do duelo', `
         <div class="banner-win">${w ? avatarImg(w, 'avatar') : ''}<h2>${esc(w ? w.name : '—')} venceu o duelo!</h2>
         <p class="muted">${esc(s.log.filter(l => l.kind === 'win').slice(-1)[0]?.msg || '')}</p></div>
-        ${d !== undefined ? `<p class="center" style="font-size:18px">Seu Elo: <b style="color:${d >= 0 ? '#8ff0bd' : '#ff9b9e'}">${d >= 0 ? '+' : ''}${d}</b></p>` : ''}${leagueLine(s)}${bondLine(s)}
+        ${d !== undefined ? `<p class="center" style="font-size:18px">Seu Elo: <b style="color:${d >= 0 ? '#8ff0bd' : '#ff9b9e'}">${d >= 0 ? '+' : ''}${d}</b></p>` : ''}${leagueLine(s)}${serieLine(s)}${bondLine(s)}
         <button class="btn primary block" data-act="exit" style="margin-top:10px">${esc(opts.backLabel || 'Voltar ao menu')}</button>`);
       bindActions(ov, { exit: () => { closeModal('over'); onExit(); } });
       return;

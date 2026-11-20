@@ -71,7 +71,8 @@ export class BoardView {
     img.dataset.fallback = '1';
     img.onload = () => img.classList.remove('hidden');
     img.onerror = () => img.classList.add('hidden');
-    img.src = `${CFG.sprites}board/bg_${map.generated ? 'gen' : map.id}.png`;
+    const bg = map.bg || (map.theme && map.theme !== 'expedicao' ? `theme_${map.theme}` : map.generated ? 'gen' : String(map.id).replace(/[^a-z0-9_-]/gi, '_'));
+    img.src = `${CFG.sprites}board/bg_${bg}.png`;
     this.fitted = false;
     this.layout();
   }

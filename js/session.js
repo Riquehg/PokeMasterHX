@@ -4,6 +4,7 @@
 import { createMatch, applyAction, whoMustAct } from '../shared/engine.js';
 import { randomSeed } from '../shared/rules/rng.js';
 import { api, watchMatch } from './api.js';
+import { CUSTOM_MAPS } from '../shared/data/board.js';
 
 const LOCAL_KEY = 'pmhx_local_v2';
 
@@ -22,7 +23,8 @@ export class LocalSession extends Emitter {
   }
 
   static create({ players, options }) {
-    const state = createMatch({ mode: 'local', seed: randomSeed(), now: Date.now(), players, options, map: options?.map, rules: options?.rules });
+    const mapData = String(options?.map || '').startsWith('custom:') ? CUSTOM_MAPS[options.map] || null : null;
+    const state = createMatch({ mode: 'local', seed: randomSeed(), now: Date.now(), players, options, map: options?.map, mapData, rules: options?.rules });
     const s = new LocalSession(state);
     s.save();
     return s;

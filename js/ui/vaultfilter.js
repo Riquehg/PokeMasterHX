@@ -13,7 +13,7 @@ const state = new Map(); // lembra o filtro por lista enquanto a página estiver
 export function vfAttrs(m, idx = 0) {
   const sp = getSpecies(m.sp) || { name: m.sp, types: [], tier: 1, dex: 0 };
   return `data-vf-item data-name="${esc(norm(`${sp.name} ${m.nick || ''} ${m.sp}`))}" data-types="${sp.types.join(' ')}" data-tier="${sp.legendary ? 5 : sp.tier}"
-    data-legend="${sp.legendary ? 1 : 0}" data-shiny="${m.shiny ? 1 : 0}" data-fav="${m.fav ? 1 : 0}" data-trust="${m.trust ? 1 : 0}"
+    data-legend="${sp.legendary && !sp.mythical ? 1 : 0}" data-myth="${sp.mythical ? 1 : 0}" data-ultra="${sp.ultra ? 1 : 0}" data-shiny="${m.shiny ? 1 : 0}" data-fav="${m.fav ? 1 : 0}" data-trust="${m.trust ? 1 : 0}"
     data-lvl="${m.lvl || 1}" data-pot="${ivPercent(m) ?? 0}" data-dex="${sp.dex || 0}" data-recent="${idx}" data-sname="${esc(norm(m.nick || sp.name))}"`;
 }
 
@@ -25,7 +25,7 @@ export function vfBar(key, { compact = false } = {}) {
     <input class="input" data-vf="q" placeholder="🔎 Buscar por nome ou apelido" value="${esc(f.q || '')}" autocomplete="off">
     <select class="input" data-vf="type">${opt('', 'Todos os tipos', f.type)}${TYPES.map(t => opt(t, TYPE_LABELS[t], f.type)).join('')}</select>
     <select class="input" data-vf="tier">${opt('', 'Todos os tiers', f.tier)}${TIERS.map(([v, l]) => opt(v, l, f.tier)).join('')}</select>
-    <select class="input" data-vf="cat">${opt('', 'Tudo', f.cat)}${opt('legend', '🌟 Lendários', f.cat)}${opt('shiny', '✨ Shinies', f.cat)}${opt('fav', '⭐ Favoritos', f.cat)}${opt('trust', '🤝 Confiança', f.cat)}</select>
+    <select class="input" data-vf="cat">${opt('', 'Tudo', f.cat)}${opt('legend', '⚡ Lendários', f.cat)}${opt('myth', '🌟 Míticos', f.cat)}${opt('ultra', '🌀 Ultracriaturas', f.cat)}${opt('shiny', '✨ Shinies', f.cat)}${opt('fav', '⭐ Favoritos', f.cat)}${opt('trust', '🤝 Confiança', f.cat)}</select>
     ${compact ? '' : `<select class="input" data-vf="sort">${opt('', 'Ordem: padrão', f.sort)}${opt('lvl', 'Maior nível', f.sort)}${opt('pot', 'Maior potencial', f.sort)}${opt('dex', 'Nº da Pokédex', f.sort)}${opt('name', 'Nome (A–Z)', f.sort)}${opt('recent', 'Mais recentes', f.sort)}</select>`}
     <span class="vf-count tiny muted"></span>
   </div>`;

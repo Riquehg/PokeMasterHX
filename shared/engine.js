@@ -9,7 +9,7 @@
 // =====================================================================================
 
 import { SPECIES, getSpecies, STARTERS } from './data/pokemon.js';
-import { SPACE_LIST, getSpace, START_SPACE, useMap, useStateMap, BIOMES } from './data/board.js';
+import { SPACE_LIST, getSpace, START_SPACE, useMap, useStateMap, BIOMES, isMapId } from './data/board.js';
 import { tickWeather, weatherSpawn, weatherRare } from './rules/weather.js';
 import { assistTick, giveTravelQuest, questVisit } from './rules/assist.js';
 import { ITEMS, getItem, shopFor, STARTING_ITEMS, STARTING_GOLD, cleanBring } from './data/items.js';
@@ -52,8 +52,12 @@ export function createMatch(config) {
   // mapa: 'kanto' (padrão) ou 'gen' = Expedição, um mapa novo gerado pela semente da partida
   const rulesId = config.kind !== 'duel' && RULE_IDS.includes(config.rules) ? config.rules : 'classic';
   // Battle Royale sempre na Arena Royale (mapa simétrico: todos começam à mesma distância do centro)
-  const mapId = config.kind === 'duel' ? 'kanto' : rulesId === 'royale' ? 'arena' : config.map === 'gen' ? `gen:${(rng.state ^ 0x2545f491) >>> 0}` : String(config.map || 'kanto').startsWith('gen:') ? config.map : 'kanto';
-  useMap(mapId);
+  const want = String(config.map || 'kanto');
+  const customOk = want.startsWith('custom:') && config.mapData && Array.isArray(config.mapData.spaces);
+  const mapId = config.kind === 'duel' ? 'kanto' : rulesId === 'royale' ? 'arena' : want === 'gen' ? `gen:${(rng.state ^ 0x2545f491) >>> 0}`
+    : want.startsWith('gen:') || (want.startsWith('theme:') && isMapId(want)) || customOk ? want : 'kanto';
+  const mapData = mapId.startsWith('custom:') ? config.mapData : null;
+  useMap(mapId, 1, mapData);
   const players = (config.players || []).map((p, i) => newPlayer(rng, { ...p, duel: config.kind === 'duel' }, i));
   if (players.length < 1) fail('A partida precisa de pelo menos 1 jogador.');
   if (players.length > MAX_PLAYERS) fail(`Máximo de ${MAX_PLAYERS} jogadores.`);
@@ -63,6 +67,7 @@ export function createMatch(config) {
     mode: config.mode || 'local',
     status: 'playing',
     map: mapId,
+    ...(mapData ? { mapData } : {}),
     rules: rulesId,
     weather: { id: 'clear', until: 3 },
     seed: rng.state,

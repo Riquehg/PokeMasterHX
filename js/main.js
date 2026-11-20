@@ -11,6 +11,7 @@ import { cupScreen } from './ui/tournament.js';
 import { initInstall } from './ui/install.js';
 import { showWall } from './ui/wall.js';
 import { installSpriteFallback } from './config.js';
+import { setCustomMaps } from '../shared/data/board.js';
 
 const app = document.getElementById('app');
 let cleanup = null;
@@ -84,6 +85,7 @@ async function go(screen, arg) {
   app.innerHTML = '<div class="screen"><span class="spinner"></span></div>';
   await initNet();
   if (net.config?.dailyPokemon) ctx.daily = net.config.dailyPokemon;
+  if (net.config?.maps) setCustomMaps(net.config.maps);
   startNotifications(net.config);
   go(net.user ? 'hub' : 'login');
 })();

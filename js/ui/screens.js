@@ -3,7 +3,9 @@ import { vfAttrs, vfBar, vfBind } from './vaultfilter.js';
 import { bondLevel } from '../../shared/data/companions.js';
 import { ensureSeason, divInfo, LEAGUE_DIVS, TOP_DIV, LP_PER_DIV } from '../../shared/data/league.js';
 const HARDCORE_TXT = 'Hardcore: se toda a sua equipe for derrotada você sai da partida e perde tudo o que ganhou nela (capturas, níveis e ouro). Quem sobrevive ganha o dobro de ouro da conta.';
-import { MAP_CHOICES } from '../../shared/data/board.js';
+import { MAP_CHOICES, mapChoiceName, BUILTIN_MAPS, setCustomMaps } from '../../shared/data/board.js';
+import { openMapEditor, templateMap } from './mapeditor.js';
+import { openSeries } from './series.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
 import { openCompanionPicker } from './missions.js';
 // Telas fora da partida: login, hub do treinador, lobby online, sala de espera, partida local, coleção, ranking e admin.
@@ -164,6 +166,7 @@ export async function hubScreen(root, ctx) {
         <button class="mode-tile t-green" data-act="solo" ${profile ? '' : 'disabled'}><span class="mt-ic">🤖</span><b>Treino contra CPUs</b><small>Salva na conta: capturas e níveis vão para a Coleção. O jeito de farmar.</small></button>
         <button class="mode-tile t-blue" data-act="online" ${profile ? '' : 'disabled'}><span class="mt-ic">🌐</span><b>Online</b><small>Crie ou entre em salas: Balanceado, Coleção, Competitivo (Liga), Battle Royale, Conquista.</small></button>
         <button class="mode-tile t-red" data-act="duel" ${profile ? '' : 'disabled'}><span class="mt-ic">⚔️</span><b>Torneio</b><small>Fila de duelo ranqueado 1x1 com o time da Coleção. Vale Elo e Liga.</small></button>
+ <button class="mode-tile t-green" data-act="series" ${profile ? '' : 'disabled'}><span class="mt-ic">⚽</span><b>Liga das Séries</b><small>Série D → A no estilo Brasileirão. Seu time de defesa joga por você offline.${profile?.stats?.serie?.season ? ` · ${['🟤 D', '⚪ C', '🟡 B', '🏆 A'][profile.stats.serie.div | 0]} · ${profile.stats.serie.pts | 0} pts` : ''}</small></button>
         <button class="mode-tile t-gold" data-act="cup" ${profile ? '' : 'disabled'}><span class="mt-ic">🏟️</span><b>Copa</b><small>Chaveamento de até 8 treinadores. O campeão ganha 💎.</small></button>
         <button class="mode-tile t-gray" data-act="new-local"><span class="mt-ic">📱</span><b>Offline</b><small>Mesmo aparelho, com amigos e/ou CPUs. Não salva na conta.</small></button>
       </div>
@@ -199,6 +202,7 @@ export async function hubScreen(root, ctx) {
       onPick: async id => { try { profile = (await api('profile', { op: 'companion', id })).profile; toast(id ? `🤝 ${COMPANIONS[id].name} vai com você nas próximas partidas!` : 'Sem companheiro.', 'good'); rerender(profile); } catch (e) { toast(e.message, 'bad'); } } }),
     dex: () => openDex(null, profile?.pokedex || [], profile?.pokedex_seen || [], { shinyCaught: profile?.stats?.shinyDex || [], shinySeen: profile?.stats?.shinySeen || [], vault: profile?.vault || [] }),
     duel: () => openDuelQueue(ctx, profile),
+    series: () => openSeries(ctx, profile),
     install: () => promptInstall(),
     cup: async () => {
       try {
@@ -224,7 +228,7 @@ function soloModal(profile, ctx) {
       <div class="field"><label>Adversários (CPU)</label><select class="input" id="s-bots">${[1, 2, 3, 4, 5].map(n => `<option ${n === st.bots ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
       <div class="field"><label>Duração</label><select class="input" id="s-turns"><option value="30" ${st.turnLimit === 30 ? 'selected' : ''}>Rápida (30 turnos)</option><option value="60" ${st.turnLimit === 60 ? 'selected' : ''}>Normal (60 turnos)</option><option value="0" ${st.turnLimit === 0 ? 'selected' : ''}>Completa (até o Campeão)</option></select></div>
 <div class="field"><label>Tipo de partida</label><select class="input" id="s-rules">${Object.entries(GAME_RULES).map(([k, g]) => `<option value="${k}" ${k === (st.rules) ? 'selected' : ''} title="${esc(g.desc)}">${g.icon} ${g.name}</option>`).join('')}</select></div>
-      <div class="field"><label>Mapa</label><select class="input" id="s-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (st.map) ? 'selected' : ''} title="${esc(m.desc)}">${m.id === 'gen' ? '🧭' : '🗺️'} ${m.name}</option>`).join('')}</select></div>
+      <div class="field"><label>Mapa</label><select class="input" id="s-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (st.map) ? 'selected' : ''} title="${esc(m.desc)}">${m.icon || '🗺️'} ${esc(m.name)}</option>`).join('')}</select></div>
       <div class="field"><label>Dificuldade</label><select class="input" id="s-hc"><option value="0" ${!st.hardcore ? 'selected' : ''}>Normal</option><option value="1" ${st.hardcore ? 'selected' : ''}>☠️ Hardcore</option></select><div class="tiny muted">${HARDCORE_TXT}</div></div>
     </div>
     <div class="tabs" style="margin:10px 0"><button class="btn sm ${!st.useTeam ? 'primary' : ''}" data-act="use-starter">🌱 Começar com inicial</button><button class="btn sm ${st.useTeam ? 'primary' : ''}" data-act="use-team">📦 Levar time da Coleção</button></div>
@@ -266,7 +270,7 @@ function collectionModal(profile, onChange) {
         <p class="tiny muted">Pokémon que você soltou ou que saíram sozinhos quando a Coleção lotou (só saem os comuns, tier até Azul). Ficam aqui por um tempo (últimos ${40}).</p>
         <div class="pk-grid">${profile.stats.overflow.map(m => statCard(m, { extra: `<div class="tiny muted">${m.why === 'solto' ? 'Solto por você' : 'Coleção cheia'} · ${new Date(m.outAt).toLocaleDateString('pt-BR')}</div><button class="btn sm green" data-act="restore" data-uid="${esc(m.uid)}">↩️ Recuperar</button>` })).join('')}</div></details>` : ''}
       ${(profile?.vault || []).length > cap() ? `<p class="small" style="color:#ffb35c">⚠️ Sua Coleção passou do limite (${(profile.vault || []).length}/${cap()}). Nada some sozinho além dos comuns; solte alguns para liberar espaço.</p>` : ''}
-      <div class="vf-sum tiny muted">🌟 ${n(m => getSpecies(m.sp)?.legendary)} lendários · ✨ ${n(m => m.shiny)} shinies · ⭐ ${n(m => m.fav)} favoritos · 🤝 ${n(m => m.trust)} da Confiança</div>
+      <div class="vf-sum tiny muted">⚡ ${n(m => getSpecies(m.sp)?.legendary && !getSpecies(m.sp)?.mythical)} lendários · 🌟 ${n(m => getSpecies(m.sp)?.mythical)} míticos · ✨ ${n(m => m.shiny)} shinies · ⭐ ${n(m => m.fav)} favoritos · 🤝 ${n(m => m.trust)} da Confiança</div>
       <div class="vf-scope">${vfBar('vault')}
       <div class="pk-grid">${all.map(m => `<div class="vf-cell" ${vfAttrs(m, recent.get(m.uid) || 0)}>${statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px"><button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="train" data-uid="${esc(m.uid)}" title="Centro de Treino: subir nível com ouro da conta">🏋️</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar">✕</button></div>` })}</div>`).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div></div>`;
   };
@@ -356,7 +360,7 @@ export async function lobbyScreen(root, ctx) {
           <div class="field"><label>Jogadores</label><select class="input" id="c-max">${[2, 3, 4, 5, 6, 8].map(n => `<option ${n === 4 ? 'selected' : ''}>${n}</option>`).join('')}</select><div class="tiny muted">8 só na Copa · Duelo é sempre 2</div></div>
           <div class="field"><label>Duração</label><select class="input" id="c-turns"><option value="30">Rápida (30 turnos)</option><option value="40">Competitiva (40 turnos)</option><option value="60" selected>Normal (60 turnos)</option><option value="0">Completa (até o Campeão)</option></select></div>
 <div class="field"><label>Tipo de partida</label><select class="input" id="c-rules">${Object.entries(GAME_RULES).map(([k, g]) => `<option value="${k}" ${k === ('classic') ? 'selected' : ''} title="${esc(g.desc)}">${g.icon} ${g.name}</option>`).join('')}</select></div>
-          <div class="field"><label>Mapa</label><select class="input" id="c-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === ('kanto') ? 'selected' : ''} title="${esc(m.desc)}">${m.id === 'gen' ? '🧭' : '🗺️'} ${m.name}</option>`).join('')}</select></div>
+          <div class="field"><label>Mapa</label><select class="input" id="c-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === ('kanto') ? 'selected' : ''} title="${esc(m.desc)}">${m.icon || '🗺️'} ${esc(m.name)}</option>`).join('')}</select></div>
         </div>
         <div class="field"><label>Dificuldade</label><select class="input" id="c-hc"><option value="0">Normal</option><option value="1">☠️ Hardcore — perdeu a equipe, está fora e perde tudo</option></select></div>
         <div class="field hidden" id="c-cap-f"><label>Nível máximo dos Pokémon levados</label><select class="input" id="c-cap"><option value="0">Sem limite</option><option value="15">15</option><option value="25">25</option><option value="35">35</option><option value="45">45</option></select></div>
@@ -429,12 +433,12 @@ export async function roomScreen(root, ctx, matchId) {
       <div class="hub-grid">
         <div class="card col">
           <div class="spread"><h3>🏟️ ${esc(match.name)}</h3><span class="chip gold" style="font-size:14px">Código: ${esc(match.code)}</span></div>
-          <div class="row">${modeChip(mode, o.levelCap)}${o.hardcore ? '<span class="chip red">☠️ Hardcore</span>' : ''}<span class="small muted">${o.maxPlayers} jogadores · ${o.turnLimit ? o.turnLimit + ' turnos' : 'até o Campeão'} · ${o.rules === 'royale' ? '⚔️ Arena Royale' : o.map === 'gen' ? '🧭 Expedição' : '🗺️ Kanto'} · ${GAME_RULES[o.rules || 'classic'].icon} ${GAME_RULES[o.rules || 'classic'].name} ${match.hasPin ? '· 🔒 PIN' : ''}</span></div>
+          <div class="row">${modeChip(mode, o.levelCap)}${o.hardcore ? '<span class="chip red">☠️ Hardcore</span>' : ''}<span class="small muted">${o.maxPlayers} jogadores · ${o.turnLimit ? o.turnLimit + ' turnos' : 'até o Campeão'} · ${o.rules === 'royale' ? '⚔️ Arena Royale' : mapChoiceName(o.map || 'kanto')} · ${GAME_RULES[o.rules || 'classic'].icon} ${GAME_RULES[o.rules || 'classic'].name} ${match.hasPin ? '· 🔒 PIN' : ''}</span></div>
           <div class="tiny muted">${esc(MODE_INFO[mode]?.desc || '')}${o.rules && o.rules !== 'classic' ? ' · ' + esc(GAME_RULES[o.rules].desc) : ''}</div>
           ${isHost ? `<div class="grid2">
             <select class="input" id="o-mode">${Object.entries(MODE_INFO).map(([k, m]) => `<option value="${k}" ${k === mode ? 'selected' : ''}>${m.icon} ${m.name}</option>`).join('')}</select>
             ${['balanced', 'collection'].includes(mode) ? `<select class="input" id="o-rules">${Object.entries(GAME_RULES).map(([k, g]) => `<option value="${k}" ${k === (o.rules || 'classic') ? 'selected' : ''}>${g.icon} ${g.name}</option>`).join('')}</select>` : ''}
-            <select class="input" id="o-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (o.map || 'kanto') ? 'selected' : ''}>${m.id === 'gen' ? '🧭' : '🗺️'} ${m.name}</option>`).join('')}</select>
+            <select class="input" id="o-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (o.map || 'kanto') ? 'selected' : ''}>${m.icon || '🗺️'} ${esc(m.name)}</option>`).join('')}</select>
             <select class="input" id="o-turns">${[[30, 'Rápida (30)'], [40, 'Competitiva (40)'], [60, 'Normal (60)'], [0, 'Completa']].map(([v, l]) => `<option value="${v}" ${v === (o.turnLimit || 0) ? 'selected' : ''}>${l}</option>`).join('')}</select>
             <select class="input" id="o-hc" title="${esc(HARDCORE_TXT)}"><option value="0" ${!o.hardcore ? 'selected' : ''}>Dificuldade normal</option><option value="1" ${o.hardcore ? 'selected' : ''}>☠️ Hardcore</option></select>
             ${o.rules !== 'royale' && !['ranked', 'duel', 'cup'].includes(mode) ? `<select class="input" id="o-late"><option value="1" ${o.allowLate !== false ? 'selected' : ''}>🙋 Pode entrar no meio</option><option value="0" ${o.allowLate === false ? 'selected' : ''}>🔒 Sem entrar no meio</option></select>` : ''}
@@ -541,7 +545,7 @@ async function adminModal() {
   openModal('admin', '🛡️ Painel do administrador', '<span class="spinner"></span>', { wide: true });
   const ov = document.getElementById('admin');
   const money = v => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  const TABS = [['avisos', '📢 Avisos'], ['loja', '💎 Loja'], ['pacotes', '💖 Doações (Pix)'], ['vendas', '🧾 Doações recebidas'], ['jogo', '⭐ Pokémon do Dia'], ['usuarios', '👥 Usuários']];
+  const TABS = [['avisos', '📢 Avisos'], ['loja', '💎 Loja'], ['pacotes', '💖 Doações (Pix)'], ['vendas', '🧾 Doações recebidas'], ['jogo', '⭐ Pokémon do Dia'], ['mapas', '🗺️ Mapas'], ['usuarios', '👥 Usuários']];
 
   const body = () => {
     const tabs = `<div class="row" style="margin-bottom:10px">${TABS.map(([k, l]) => `<button class="btn sm ${tab === k ? 'primary' : ''}" data-act="tab" data-t="${k}">${l}</button>`).join('')}</div>`;
@@ -593,6 +597,21 @@ async function adminModal() {
           <button class="btn primary" data-act="daily">Definir</button></div>
           <p class="tiny muted">Vale para as próximas partidas iniciadas: aparece mais, XP em dobro e shiny 1/64.</p></div>`;
     }
+    if (tab === 'mapas') {
+      const maps = data.maps || [];
+      return tabs + `<div class="card col"><h3>🗺️ Mapas personalizados</h3>
+        <p class="small muted">Monte mapas novos para o modo normal. Publicado = aparece para todos na escolha de mapa (Treino, salas online e offline). Só ${2} casas de Pokémon podem ser Amarelas (lendárias).</p>
+        <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn primary" data-act="map-new" data-from="blank">➕ Mapa em branco</button>
+          <select class="input" id="a-mapfrom">${BUILTIN_MAPS.map(m => `<option value="${m.id === 'gen' ? 'gen:' + (Date.now() % 100000) : m.id}">${m.icon} ${esc(m.name)}</option>`).join('')}</select>
+          <button class="btn" data-act="map-new" data-from="copy">📋 Começar de uma cópia</button></div>
+        <table class="score" style="margin-top:8px"><tr><th>Mapa</th><th>Casas</th><th>Status</th><th>Atualizado</th><th></th></tr>
+        ${maps.map(m => `<tr><td><b>${esc(m.name)}</b><div class="tiny muted">${esc(m.id)} · v${m.rev || 1}</div></td><td>${m.spaces.length}</td>
+          <td>${m.published ? '<span class="chip green">publicado</span>' : '<span class="chip">rascunho</span>'}</td><td class="tiny">${m.updatedAt ? new Date(m.updatedAt).toLocaleString('pt-BR') : ''}</td>
+          <td class="row" style="gap:4px"><button class="btn sm" data-act="map-edit" data-id="${esc(m.id)}">✏️ Editar</button>
+            <button class="btn sm" data-act="map-pub" data-id="${esc(m.id)}" data-v="${m.published ? '0' : '1'}">${m.published ? 'Despublicar' : '🚀 Publicar'}</button>
+            <button class="btn sm red" data-act="map-del" data-id="${esc(m.id)}">✕</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">Nenhum mapa ainda.</td></tr>'}</table>
+        <p class="tiny muted">Fundo opcional: suba <code>board/bg_custom_&lt;código&gt;.png</code> no Storage (ex.: bg_custom_ilhas2.png).</p></div>`;
+    }
     return tabs + `<div class="card col"><h3>🎁 Dar presente</h3>
         <div class="row"><select class="input grow" id="a-user">${users.map(u => `<option value="${u.id}">${esc(u.name)} (💎${u.diamonds})</option>`).join('')}</select></div>
         <div class="row"><input class="input" id="a-dm" type="number" value="100" style="width:110px"><button class="btn blue" data-act="give-dm">💎 Dar diamantes</button><span class="tiny muted">(use número negativo para remover)</span></div>
@@ -621,8 +640,10 @@ async function adminModal() {
     const [u, d] = await Promise.all([api('admin', { op: 'list_users' }), api('admin', { op: 'get_admin_data' })]);
     users = u.users; data = d;
     try { data.pixReady = (await api('shop', { op: 'catalog' })).pixEnabled; } catch { data.pixReady = false; }
+    try { data.maps = (await api('admin', { op: 'list_maps' })).maps; } catch { data.maps = []; }
     render();
   };
+  const mapsSaved = maps => { data.maps = maps || data.maps; setCustomMaps((data.maps || []).filter(m => m.published)); if (tab === 'mapas') render(); };
   const run = async (fn, ok) => { try { await fn(); if (ok) toast(ok, 'good'); await load(); } catch (e) { toast(e.message, 'bad'); } };
 
   bindActions(ov, {
@@ -640,7 +661,11 @@ async function adminModal() {
     'give-dm': () => run(() => api('admin', { op: 'give_diamonds', userId: ov.querySelector('#a-user').value, amount: Number(ov.querySelector('#a-dm').value) }), 'Diamantes enviados!'),
     'grant-item': () => run(() => api('admin', { op: 'grant_item', userId: ov.querySelector('#a-user').value, item: ov.querySelector('#a-item').value, qty: ov.querySelector('#a-iq').value }), 'Enviado para a Mochila!'),
     grant: () => run(() => api('admin', { op: 'grant_mon', userId: ov.querySelector('#a-user').value, species: ov.querySelector('#a-sp').value, level: ov.querySelector('#a-lv').value, shiny: ov.querySelector('#a-shiny').checked }), 'Enviado para a Coleção!'),
-    toggle: d => run(() => api('admin', { op: 'set_admin', userId: d.id, value: d.v === '1' }))
+    toggle: d => run(() => api('admin', { op: 'set_admin', userId: d.id, value: d.v === '1' })),
+    'map-new': d => openMapEditor(templateMap(d.from === 'blank' ? 'blank' : ov.querySelector('#a-mapfrom').value), mapsSaved),
+    'map-edit': d => { const m = (data.maps || []).find(x => x.id === d.id); if (m) openMapEditor({ ...structuredClone(m), id: m.id.replace(/^custom:/, '') }, mapsSaved); },
+    'map-pub': d => { const m = (data.maps || []).find(x => x.id === d.id); if (m) run(async () => { const r = await api('admin', { op: 'save_map', map: { ...m, id: m.id.replace(/^custom:/, '') }, published: d.v === '1' }); mapsSaved(r.maps); }, d.v === '1' ? 'Mapa publicado!' : 'Mapa virou rascunho.'); },
+    'map-del': d => { if (confirm('Apagar este mapa? Partidas já começadas nele continuam funcionando.')) run(async () => { const r = await api('admin', { op: 'delete_map', id: d.id }); mapsSaved(r.maps); }, 'Mapa apagado.'); }
   });
   try { await load(); } catch (e) { setModalBody('admin', `<p class="muted">${esc(e.message)}</p>`); }
 }
@@ -664,7 +689,7 @@ export function localSetupScreen(root, ctx) {
           <div class="grid2"><button class="btn sm" data-act="add-human" ${players.length >= 6 ? 'disabled' : ''}>+ Humano</button><button class="btn sm" data-act="add-bot" ${players.length >= 6 ? 'disabled' : ''}>+ CPU</button></div>
           <div class="field"><label>Duração</label><select class="input" id="ls-turns"><option value="30" ${turnLimit === 30 ? 'selected' : ''}>Rápida (30 turnos)</option><option value="60" ${turnLimit === 60 ? 'selected' : ''}>Normal (60 turnos)</option><option value="0" ${turnLimit === 0 ? 'selected' : ''}>Completa (até o Campeão)</option></select></div>
 <div class="field"><label>Tipo de partida</label><select class="input" id="ls-rules">${Object.entries(GAME_RULES).map(([k, g]) => `<option value="${k}" ${k === (rulesId) ? 'selected' : ''} title="${esc(g.desc)}">${g.icon} ${g.name}</option>`).join('')}</select></div>
-          <div class="field"><label>Mapa</label><select class="input" id="ls-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (mapId) ? 'selected' : ''} title="${esc(m.desc)}">${m.id === 'gen' ? '🧭' : '🗺️'} ${m.name}</option>`).join('')}</select></div>
+          <div class="field"><label>Mapa</label><select class="input" id="ls-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (mapId) ? 'selected' : ''} title="${esc(m.desc)}">${m.icon || '🗺️'} ${esc(m.name)}</option>`).join('')}</select></div>
           <div class="field"><label>Dificuldade</label><select class="input" id="ls-hc" title="${esc(HARDCORE_TXT)}"><option value="0" ${!hardcore ? 'selected' : ''}>Normal</option><option value="1" ${hardcore ? 'selected' : ''}>☠️ Hardcore</option></select></div>
           <button class="btn primary" data-act="start">▶ Começar</button>
           <button class="btn ghost" data-act="back">← Voltar</button>

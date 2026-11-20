@@ -1,5 +1,5 @@
 // Criação de instâncias de Pokémon, status, XP e evolução.
-import { getSpecies, speciesByTier } from '../data/pokemon.js';
+import { getSpecies, speciesByTier, MYTHICAL_WILD_CHANCE } from '../data/pokemon.js';
 import { NATURE_NAMES, natureMult } from '../data/natures.js';
 import { MOVES, rollMoveIds } from '../data/moves.js';
 
@@ -227,7 +227,10 @@ export function xpReward(foe, isTrainer) {
 /** Sorteia um selvagem para uma casa de tier `tier`. */
 export function rollWild(rng, tier, opts = {}) {
   // Tier estável: a cor da casa define o tier (Rosa 1 · Verde 2 · Azul 3 · Vermelha 4 · Amarela 5)
-  const pool = speciesByTier(tier);
+  // 🌟 Míticos não aparecem soltos: só numa aparição mítica rara (4%) nas casas Amarelas
+  const all = speciesByTier(tier);
+  const myth = all.filter(s => s.mythical);
+  const pool = tier === 5 && myth.length && rng.chance(MYTHICAL_WILD_CHANCE) ? myth : all.filter(s => !s.mythical);
   // ambiente da casa e clima puxam alguns tipos (ex.: mar → Água, caverna → Pedra, chuva → Água)
   const favor = opts.favorTypes?.length && rng.chance(opts.favorChance ?? 0.45) ? pool.filter(s => s.types.some(t => opts.favorTypes.includes(t))) : null;
   let speciesId = rng.pick(favor?.length ? favor : pool).id;
@@ -250,7 +253,7 @@ export function rollWild(rng, tier, opts = {}) {
 
 /** Ovo: choca um Pokémon básico (primeiro estágio) do tier pedido. */
 export function hatchEgg(rng, tier, opts = {}) {
-  const pool = speciesByTier(tier);
+  const pool = speciesByTier(tier).filter(s => !s.mythical); // ovo nunca choca Mítico
   const basics = pool.filter(s => !s.evolvesFrom || getSpecies(s.evolvesFrom)?.tier !== tier);
   const sp = rng.pick(basics.length ? basics : pool);
   const lvl = opts.level || { 1: 5, 2: 12, 3: 18, 4: 25, 5: 30 }[tier];

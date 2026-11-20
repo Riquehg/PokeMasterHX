@@ -28,6 +28,24 @@ const SECRET_KINDS = ['surf', 'cut', 'smash', 'flash', 'climb', 'burn', 'fly', '
 const TOWN_TIERS = [1, 2, 2, 3, 3, 4, 4, 5];
 const GYM_IDS = ['boulder', 'cascade', 'thunder', 'rainbow', 'volcano', 'soul'];
 
+/** Temas de mapa gerado: ambientes das rotas, áreas escondidas e nomes. 'expedicao' = semente nova a cada partida. */
+export const MAP_THEMES = {
+  expedicao: { name: 'Expedição', desc: 'Um mapa novo a cada partida, com áreas escondidas para explorar.' },
+  arquipelago: { name: 'Arquipélago Coral', seed: 4242, desc: 'Ilhas ligadas por praias e mar aberto: muito Surf, Pokémon de Água e Voadores.',
+    first: 'coast', biomes: ['coast', 'sea', 'jungle', 'coast', 'forest', 'sea', 'grass'], secrets: ['surf', 'surf', 'fly', 'cut', 'surf', 'flash', 'climb', 'surf', 'smash', 'fly'],
+    towns: ['Porto Coral', 'Ilha Concha', 'Recife Azul', 'Vila Maré', 'Baía Dourada', 'Ilha Farol', 'Porto Safira', 'Atol Celeste', 'Praia Lunar', 'Ilha Palmeira'] },
+  vulcanica: { name: 'Terras de Fogo', seed: 1717, desc: 'Desertos, vulcões e cânions: Fogo, Pedra, Terra e Dragão.',
+    first: 'desert', biomes: ['volcano', 'desert', 'mountain', 'cave', 'volcano', 'desert'], secrets: ['burn', 'smash', 'climb', 'flash', 'burn', 'smash', 'climb', 'fly', 'flash', 'burn'],
+    towns: ['Vila Cinza', 'Cidade Brasa', 'Oásis Rubro', 'Monte Magma', 'Cânion Seco', 'Forja Antiga', 'Cidade Areia', 'Pico Âmbar', 'Vale Fumegante', 'Dunas Altas'] },
+  glacial: { name: 'Picos Gelados', seed: 9090, desc: 'Montanhas nevadas e cavernas escuras: Gelo, Pedra, Fantasma e Psíquico.',
+    first: 'snow', biomes: ['snow', 'mountain', 'cave', 'darkcave', 'snow', 'coast'], secrets: ['climb', 'flash', 'surf', 'smash', 'climb', 'flash', 'fly', 'smash', 'surf', 'climb'],
+    towns: ['Vila Geada', 'Cidade Neblina', 'Pico Branco', 'Lago Cristal', 'Cidade Lunar', 'Gruta Azul', 'Vale do Eco', 'Forte Nevado', 'Aldeia Aurora', 'Monte Silêncio'] },
+  floresta: { name: 'Mata Profunda', seed: 3131, desc: 'Florestas e selvas fechadas: Planta, Inseto, Veneno e muito Cortar.',
+    first: 'forest', biomes: ['forest', 'jungle', 'grass', 'forest', 'coast', 'jungle'], secrets: ['cut', 'burn', 'cut', 'fly', 'surf', 'cut', 'flash', 'burn', 'smash', 'cut'],
+    towns: ['Vila Musgo', 'Vale Esmeralda', 'Cidade Raiz', 'Recanto do Vento', 'Clareira Sol', 'Vale das Flores', 'Aldeia Cipó', 'Bosque Antigo', 'Cidade Orvalho', 'Lagoa Serena'] }
+};
+export const THEME_IDS = Object.keys(MAP_THEMES).filter(k => k !== 'expedicao');
+
 const cache = new Map();
 
 // ---------- geometria (só + − × ÷)
@@ -48,24 +66,31 @@ function segDist2(p, a, b) {
 }
 
 /** Mapa gerado pela semente (guardado em memória). */
-export function generateMap(seed) {
+export function generateMap(seed, themeId = 'expedicao') {
   seed = Number(seed) >>> 0;
-  if (cache.has(seed)) return cache.get(seed);
+  const theme = MAP_THEMES[themeId] ? themeId : 'expedicao';
+  const key = `${theme}:${seed}`;
+  if (cache.has(key)) return cache.get(key);
   // tenta variações da mesma semente até achar um mapa sem rotas cruzadas e com tamanho bom
   let map = null;
   for (let k = 0; k < 16; k++) {
-    const m = build((seed + k * 977) >>> 0);
+    const m = build((seed + k * 977) >>> 0, theme);
     if (!map || score(m) > score(map)) map = m;
     if (m.crossings === 0 && m.spaces.length >= 84) break;
   }
-  map.id = `gen:${seed}`;
+  map.id = theme === 'expedicao' ? `gen:${seed}` : `theme:${theme}`;
   map.seed = seed;
+  map.theme = theme;
+  map.name = MAP_THEMES[theme].name;
+  map.desc = MAP_THEMES[theme].desc;
   if (cache.size > 20) cache.delete(cache.keys().next().value);
-  cache.set(seed, map);
+  cache.set(key, map);
   return map;
 }
 
-function build(seed) {
+function build(seed, themeId = 'expedicao') {
+  const T = MAP_THEMES[themeId] || MAP_THEMES.expedicao;
+  const ROUTE_BIOMES_T = T.biomes || ROUTE_BIOMES;
   const rng = createRng(seed ^ 0x5bd1e995);
   const spaces = [];
   const edges = []; // [A, B] em coordenadas do palco
@@ -94,7 +119,7 @@ function build(seed) {
   };
 
   // ---------- 1) cidades do caminho principal (zigue-zague da esquerda para a direita)
-  const names = shuffle(rng, TOWN_NAMES);
+  const names = shuffle(rng, T.towns || TOWN_NAMES);
   const towns = [];
   let lastY = 50;
   for (let i = 0; i < 8; i++) {
@@ -113,7 +138,7 @@ function build(seed) {
 
   // ---------- 2) rotas entre as cidades
   const routes = []; // { a, b, list:[spaces], biome, tier }
-  const biomes = shuffle(rng, ROUTE_BIOMES.filter(b => b !== 'grass'));
+  const biomes = T.biomes ? shuffle(rng, T.biomes) : shuffle(rng, ROUTE_BIOMES.filter(b => b !== 'grass'));
   const curve = (a, b, n, bend) => {
     const ax = a.x * RATIO, ay = a.y, bx = b.x * RATIO, by = b.y;
     const mx = (ax + bx) / 2, my = (ay + by) / 2;
@@ -149,7 +174,7 @@ function build(seed) {
   for (let i = 0; i < 7; i++) {
     const a = towns[i], b = towns[i + 1];
     const tier = i === 0 ? 1 : TOWN_TIERS[i + 1] === 5 ? 4 : TOWN_TIERS[i + 1];
-    const biome = i === 0 ? 'grass' : biomes[(i - 1) % biomes.length];
+    const biome = i === 0 ? (T.first || 'grass') : biomes[(i - 1) % biomes.length];
     const n = rng.int(5, 7);
     let bend = (rng.chance(0.5) ? 1 : -1) * rng.int(5, 14);
     for (const tryB of [bend, -bend, bend / 2, -bend / 2, 0]) { if (fits(curve(a, b, n, tryB), a, b)) { bend = tryB; break; } }
@@ -158,13 +183,13 @@ function build(seed) {
     // caminho alternativo (às vezes exige habilidade e tem tier maior)
     if (i > 0 && rng.chance(0.6)) {
       const gated = rng.chance(0.4);
-      const kind = gated ? rng.pick(['cut', 'smash', 'surf', 'climb']) : null;
+      const kind = gated ? rng.pick(T.secrets ? T.secrets.filter(k => k !== 'fly' && k !== 'flash' && k !== 'burn').concat(['cut', 'smash', 'surf', 'climb']).slice(0, 6) : ['cut', 'smash', 'surf', 'climb']) : null;
       const n2 = n + rng.int(0, 2);
       const sign = bend === 0 ? (rng.chance(0.5) ? 1 : -1) : -Math.sign(bend);
       let pts = null;
       for (const mag of [16, 20, 24, 13, 28]) { const c = curve(a, b, n2, sign * mag); if (fits(c, a, b)) { pts = c; break; } }
       if (pts) {
-        const alt = makeRoute(a, b, n2, 0, gated ? SECRET[kind].biome : rng.pick(ROUTE_BIOMES), Math.min(5, tier + (gated ? 1 : 0)), routeNo, kind, pts);
+        const alt = makeRoute(a, b, n2, 0, gated ? SECRET[kind].biome : rng.pick(ROUTE_BIOMES_T), Math.min(5, tier + (gated ? 1 : 0)), routeNo, kind, pts);
         if (gated) alt[0].name = rng.pick(SECRET[kind].names);
         routes.push({ a, b, list: alt, biome: alt[0].biome, tier, alt: true });
       }
@@ -186,7 +211,7 @@ function build(seed) {
 
   // ---------- 4) áreas escondidas (becos sem saída com habilidade e Pokémon melhores)
   const candidates = routes.filter(r => !r.alt).flatMap(r => r.list.slice(1, -1));
-  const secrets = shuffle(rng, SECRET_KINDS).slice(0, 8);
+  const secrets = shuffle(rng, T.secrets || SECRET_KINDS).slice(0, 8);
   let made = 0;
   for (const kind of secrets) {
     const base = pickFree(rng, candidates, spaces);

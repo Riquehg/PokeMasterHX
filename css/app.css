@@ -1597,3 +1597,52 @@ body.in-game .soc-panel { height: min(520px, calc(100dvh - 80px)); }
 @keyframes morph { 0% { filter: brightness(1); transform: scale(1); } 35% { filter: brightness(3) saturate(0) drop-shadow(0 0 14px #c9a7ff); transform: scale(.75, 1.25); } 70% { filter: brightness(2) drop-shadow(0 0 10px #c9a7ff); transform: scale(1.15, .9); } 100% { filter: none; transform: none; } }
 .tm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; margin: 6px 0 8px; max-height: 340px; overflow: auto; }
 .tm-opt.on { outline: 2px solid var(--gold); }
+
+/* 🛠️ editor de mapas (admin) */
+.me-modal { max-width: min(1400px, 98vw) !important; width: 98vw; }
+.me-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 8px; align-items: start; }
+@media (max-width: 760px) { .me-wrap { grid-template-columns: minmax(0, 1fr); } }
+.me-stage { position: relative; width: 100%; border-radius: 10px; overflow: clip; border: 1px solid rgba(255,255,255,.15); background: #1d5d99; touch-action: none; }
+.me-stage > canvas, .me-stage > .me-roads, .me-stage > .me-roads > svg, .me-stage > .me-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.me-roads { pointer-events: none; }
+.me-svg { cursor: crosshair; }
+.me-svg .me-sp { cursor: pointer; }
+.me-side { padding: 10px; max-height: 70vh; overflow: auto; }
+.me-tier { background: var(--tc) !important; color: #2a1d10 !important; min-width: 30px; }
+.me-tier.on { outline: 2px solid #fff; }
+.input.sm { padding: 4px 6px; font-size: 12px; width: auto; }
+
+/* 🌟 Míticos e 🌀 Ultracriaturas */
+.pk-card.mythic { border-color: #ff7ad9; box-shadow: 0 0 0 2px #120d08, 0 0 22px rgba(255, 122, 217, .6); }
+.pk-card.ultra { border-color: #6fe3ff; box-shadow: 0 0 0 2px #120d08, 0 0 20px rgba(111, 227, 255, .5); }
+.pk-cat { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 99px; margin-left: 4px; }
+.pk-cat.mythic, .chip.mythic { background: linear-gradient(90deg, #ff7ad9, #a77bff); color: #1b0b1f; }
+.pk-cat.ultra, .chip.ultra { background: linear-gradient(90deg, #6fe3ff, #3a7bff); color: #08142a; }
+
+/* ⚽ Liga das Séries */
+.se-head { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; background: linear-gradient(90deg, color-mix(in srgb, var(--sc) 30%, transparent), rgba(0,0,0,.25)); border: 1px solid color-mix(in srgb, var(--sc) 60%, transparent); }
+.se-badge { font-size: 34px; line-height: 1; }
+.se-title { font-family: Cinzel, serif; font-size: 18px; color: var(--sc); }
+.se-left { display: flex; flex-direction: column; align-items: center; padding: 4px 10px; border-radius: 10px; background: rgba(0,0,0,.3); }
+.se-left b { font-size: 22px; color: var(--gold); }
+.se-cta { margin-top: 8px; padding: 10px; border-radius: 10px; background: rgba(74, 208, 122, .12); border: 1px dashed #4ad07a; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.se-table-wrap { overflow-x: auto; }
+.se-table { min-width: 560px; }
+.se-table td, .se-table th { white-space: nowrap; padding: 4px 6px; }
+.se-table tr.me td { background: rgba(255, 210, 90, .12); }
+.se-table tr.z-up td:first-child { box-shadow: inset 4px 0 0 #4ad07a; }
+.se-table tr.z-down td:first-child { box-shadow: inset 4px 0 0 #ef5050; }
+.se-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.se-name .avatar.xs { width: 20px; height: 20px; vertical-align: middle; }
+.se-mini { width: 28px; height: 28px; object-fit: contain; image-rendering: pixelated; }
+.se-def { min-width: 90px; }
+.se-defmon { display: flex; flex-direction: column; align-items: center; padding: 4px 8px; border-radius: 10px; background: rgba(0,0,0,.25); }
+.se-defmon .se-mini { width: 48px; height: 48px; }
+.se-legend .z { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; }
+.se-legend .z.up { background: #4ad07a; } .se-legend .z.down { background: #ef5050; }
+@media (max-width: 600px) {
+  .se-table { min-width: 0; }
+  .se-table tr > :nth-child(4), .se-table tr > :nth-child(6), .se-table tr > :nth-child(8), .se-table tr > :nth-child(9) { display: none; }
+  .se-name { max-width: 120px; }
+  .se-table .btn.sm { padding: 4px 6px; font-size: 11px; }
+}

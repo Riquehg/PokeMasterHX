@@ -58,7 +58,7 @@ export function tradeValue(p, s) {
     const f = findMon(p, s.mon);
     if (f) {
       const m = f.mon, sp = getSpecies(m.sp), st = statsOf(m);
-      v += (st.atk * 2 + st.maxHp) * 12 + sp.tier * 250 + (m.shiny ? 4000 : 0) + (sp.legendary ? 6000 : 0);
+      v += (st.atk * 2 + st.maxHp) * 12 + sp.tier * 250 + (m.shiny ? 4000 : 0) + (sp.legendary ? 6000 : 0) + (sp.mythical ? 4000 : 0);
     }
   }
   return v;

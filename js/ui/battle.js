@@ -156,7 +156,7 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
       controls += `<div class="subpick">${balls.map(([id, n]) => {
         const c = Math.round(captureChance(state, id) * 100);
         return `<button class="btn sm pickbtn" data-act="b-ball" data-item="${id}"><img src="${itemUrl(id)}" alt="${esc(ITEMS[id].name)}"><span class="pb-nm">${esc(ITEMS[id].name)} ×${n}</span><span class="chip ${c >= 60 ? 'green' : c >= 34 ? 'gold' : 'red'}">${c}%</span></button>`;
-      }).join('')}</div><p class="tiny muted">Dica: HP abaixo de 50% dá +1 e abaixo de 25% dá +2; sono/congelado +2 e outras condições +1. 🎲1 sempre falha e cada erro pode fazê-lo fugir.${getSpecies(foeMon.sp)?.legendary || getSpecies(foeMon.sp)?.tier === 5 ? ' <b>Lendário:</b> enfraqueça bem antes de jogar a bola.' : ''}</p>`;
+      }).join('')}</div><p class="tiny muted">Dica: HP abaixo de 50% dá +1 e abaixo de 25% dá +2; sono/congelado +2 e outras condições +1. 🎲1 sempre falha e cada erro pode fazê-lo fugir.${getSpecies(foeMon.sp)?.legendary || getSpecies(foeMon.sp)?.tier === 5 ? ` <b>${getSpecies(foeMon.sp)?.mythical ? 'Mítico' : 'Lendário'}:</b> enfraqueça bem antes de jogar a bola.` : ''}</p>`;
     }
   }
 
