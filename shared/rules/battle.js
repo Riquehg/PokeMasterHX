@@ -7,13 +7,13 @@
 import { getSpecies } from '../data/pokemon.js';
 import { getItem, ballBonusAgainst } from '../data/items.js';
 import { against, bestAttack, effectivenessLabel, TYPE_LABELS } from './types.js';
-import { monMoves, STAB } from '../data/moves.js';
+import { monMoves, STAB, defaultMoveIds, MAX_FORMS } from '../data/moves.js';
 import { companionBonus, progressMission, companionLevel } from './missions.js';
 import { getCompanion, isIntimate, ASSIST_CHANCE, ASSIST_MAX } from '../data/companions.js';
 import { weatherMult, weatherInflict, weatherChip, weatherOf } from './weather.js';
 import { conquestMult } from './modeBonus.js';
 import { GYMS } from '../data/trainers.js';
-import { statsOf, maxHpOf, gainXp, xpReward, healMon } from './monsters.js';
+import { statsOf, maxHpOf, gainXp, xpReward, healMon, canTransform, transformInto, revertForm } from './monsters.js';
 import {
   fail, getPlayer, log, fx, takeItem, giveMon, markSeen, healthyIndex, hasHealthy, speciesName, canUse, usableIndex, badgesNeeded
 } from './helpers.js';
@@ -163,6 +163,25 @@ function validateChoice(state, si, choice) {
     case 'flee':
       if (b.kind === 'elite' || b.kind === 'champion' || b.kind === 'gym') fail('Não dá para fugir de uma batalha oficial.');
       return;
+    case 'form': { // 🧬 Ditto/Mew: voltar à forma, usar uma forma guardada ou guardar a forma atual
+      const me = team[side.active];
+      if (!canTransform(me)) fail('Esse Pokémon não se transforma.');
+      if (choice.op === 'reset') { if (!me.tf) fail('Ele já está na forma original.'); return; }
+      if (choice.op === 'store') {
+        if (!me.tf) fail('Transforme-se primeiro para guardar a forma.');
+        if ((me.forms || []).some(f => f.sp === me.sp)) fail('Essa forma já está guardada.');
+        if ((me.forms || []).length >= MAX_FORMS) fail(`Já tem ${MAX_FORMS} formas guardadas. Esqueça uma antes.`);
+        return;
+      }
+      if (choice.op === 'forget') { if (!me.forms?.[Number(choice.i)]) fail('Forma inválida.'); return; }
+      if (choice.op === 'use') {
+        const f = me.forms?.[Number(choice.i)];
+        if (!f || !getSpecies(f.sp)) fail('Forma inválida.');
+        if (me.tf && me.sp === f.sp) fail('Ele já está nessa forma.');
+        return;
+      }
+      fail('Ação de forma inválida.');
+    }
     default:
       fail('Ação de batalha inválida.');
   }
@@ -184,6 +203,20 @@ export function submitChoice(state, rng, pid, choice) {
   }
   if (b.mustSwitch.some(Boolean)) fail('Aguardando o adversário escolher o próximo Pokémon.');
 
+  // guardar/esquecer forma não gasta a rodada
+  if (choice.move === 'form' && (choice.op === 'store' || choice.op === 'forget')) {
+    const me = sideActive(state, b.sides[si]);
+    if (choice.op === 'store') {
+      me.forms = [...(me.forms || []), { sp: me.sp, moves: Array.isArray(me.moves) ? [...me.moves] : null }];
+      log(state, `💾 ${speciesName(me.tf.sp)} guardou a forma de ${speciesName(me.sp)} (${me.forms.length}/${MAX_FORMS}).`, 'good');
+      fx(state, { k: 'form_store', side: si, uid: me.uid, sp: me.sp });
+    } else {
+      const [f] = me.forms.splice(Number(choice.i), 1);
+      log(state, `🗑️ Forma de ${speciesName(f.sp)} esquecida.`);
+    }
+    return;
+  }
+
   b.choices[si] = { ...choice };
   const humans = humanSides(state);
   if (humans.every(i => b.choices[i])) {
@@ -203,7 +236,7 @@ export const STATUS = {
 };
 // tipo do golpe → condição que pode causar
 export const TYPE_STATUS = { fire: 'burn', poison: 'poison', electric: 'paralysis', ice: 'freeze', grass: 'sleep', ghost: 'sleep' };
-const INFLICT_CHANCE = { q: 0.08, s: 0.15, x: 0.25 };
+const INFLICT_CHANCE = { q: 0.08, p: 0.1, s: 0.15, x: 0.25 };
 const IMMUNE = { burn: ['fire'], poison: ['poison', 'steel'], paralysis: ['electric'], freeze: ['ice'], sleep: [] };
 
 export function statusOf(b, si, mon) {
@@ -218,7 +251,7 @@ function tryInflict(state, rng, defSi, d, move, aSp) {
   side.status ||= {};
   if (side.status[d.uid]) return; // já tem uma condição
   if (IMMUNE[id].some(t => getSpecies(d.sp).types.includes(t))) return;
-  const tier = move.id?.slice(-1) || 's';
+  const tier = (move.id || '').match(/_(q|p|s|x)\d*$/)?.[1] || 's';
   let chance = INFLICT_CHANCE[tier] || 0.15;
   if (id === 'poison') chance += 0.1;
   { const cb = companionBonus(state, 1 - defSi); if (cb?.inflict === move.type) chance += cb.inflictChance || 0.04; } // companheiro (ex.: Koga) aumenta a chance
@@ -287,7 +320,7 @@ export function expectedDamage(state, si, move) {
   const b = state.battle;
   const a = sideActive(state, b.sides[si]);
   const d = sideActive(state, b.sides[1 - si]);
-  if (!a || !d || move.kind === 'heal' || move.kind === 'buff' || move.kind === 'debuff') return 0;
+  if (!a || !d || move.kind === 'heal' || move.kind === 'buff' || move.kind === 'debuff' || move.kind === 'transform') return 0;
   const mult = against(move.type, getSpecies(d.sp).types);
   const stab = getSpecies(a.sp).types.includes(move.type) ? STAB : 1;
   const hit = 1 - (move.miss || 0) / 6;
@@ -313,6 +346,7 @@ export function bestMoveSlot(state, si) {
     if (m.kind === 'buff') score = stage < 2 && me.hp > foeHit * 2.2 ? expectedDamage(state, si, moves[0]) * 1.1 : 0;
     if (m.kind === 'debuff') score = foeStage > -2 && me.hp > foeHit * 1.8 ? foeHit * 0.9 : 0;
     if (m.kind === 'drain') score += Math.min(myMax - me.hp, score / 2) * 0.6;
+    if (m.kind === 'transform') score = me.tf || foe.sp === 'ditto' ? -1 : 9999; // Ditto/Mew da CPU copia logo no começo
     if (score > bestScore) { bestScore = score; best = i; }
   });
   return best;
@@ -433,6 +467,15 @@ function attackDamage(state, rng, si, slot = 0) {
   const move = mv[slot] || mv[0];
   const who = monLabel(state, atkSide);
 
+  // 🧬 Transform: vira uma cópia do adversário
+  if (move.kind === 'transform') {
+    if ((d.tf ? d.tf.sp : d.sp) === 'ditto' || d.sp === 'ditto') { log(state, `${who} tentou se transformar, mas não dá para copiar um Ditto!`); return false; }
+    const from = speciesName(a.sp);
+    transformInto(a, d.sp, Array.isArray(d.moves) && d.moves.length === 2 ? d.moves : defaultMoveIds(d.sp));
+    fx(state, { k: 'transform', side: si, uid: a.uid, to: a.sp, hpAfter: a.hp, maxHp: maxHpOf(a) });
+    log(state, `🧬 ${from} usou Transform e virou uma cópia de ${speciesName(a.sp)}${a.shiny ? ' (shiny: cópia mais forte!)' : ''}!`, 'good');
+    return false;
+  }
   // golpes de suporte
   if (move.kind === 'heal') {
     const healed = healMon(a, 0.4);
@@ -615,6 +658,19 @@ function resolveRound(state, rng, choices) {
         log(state, `💨 O ${speciesName(sideActive(state, b.sides[1 - si]).sp)} fugiu!`, 'bad');
         return endBattle(state, rng, { result: 'escaped', by: si });
       }
+    } else if (c.move === 'form') {
+      const me = sideActive(state, b.sides[si]);
+      const base = speciesName(me.tf ? me.tf.sp : me.sp);
+      if (c.op === 'reset') {
+        revertForm(me);
+        log(state, `🧬 ${base} voltou à forma original.`);
+        fx(state, { k: 'transform', side: si, uid: me.uid, to: me.sp, reset: true, hpAfter: me.hp, maxHp: maxHpOf(me) });
+      } else {
+        const f = me.forms[Number(c.i)];
+        transformInto(me, f.sp, f.moves);
+        log(state, `🧬 ${base} usou uma forma guardada e virou ${speciesName(me.sp)}!`, 'good');
+        fx(state, { k: 'transform', side: si, uid: me.uid, to: me.sp, hpAfter: me.hp, maxHp: maxHpOf(me) });
+      }
     } else if (c.move === 'flee') {
       const r = tryFlee(state, rng, si);
       if (r === 'fled') return endBattle(state, rng, { result: 'fled', by: si });
@@ -735,6 +791,8 @@ export function setBattleEndHandler(fn) {
 
 function endBattle(state, rng, outcome) {
   const b = state.battle;
+  // 🧬 a transformação dura só a batalha
+  for (const side of b.sides) for (const m of sideTeam(state, side) || []) if (m?.tf) revertForm(m);
   b.over = true;
   b.outcome = outcome;
   if (onBattleEnd) onBattleEnd(state, rng, b, outcome);

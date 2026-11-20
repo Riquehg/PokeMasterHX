@@ -3,13 +3,25 @@ import { getSpecies } from '../../shared/data/pokemon.js';
 import { natureLabel } from '../../shared/data/natures.js';
 import { api } from '../api.js';
 import { esc, toast, openModal, closeModal, setModalBody, bindActions } from './dom.js';
-import { monSprite } from '../config.js';
+import { monSprite, itemUrl } from '../config.js';
+import { ITEMS, isKeepable } from '../../shared/data/items.js';
 import { typeChips, statCard, potentialStars } from './common.js';
 import { fillTraits } from '../../shared/engine.js';
 import { ivPercent } from '../../shared/rules/monsters.js';
 
 const TIER = { 1: 'Rosa', 2: 'Verde', 3: 'Azul', 4: 'Vermelho', 5: 'Lendário' };
 const price = (g, d) => [d ? `<b class="diamonds">💎 ${d}</b>` : '', g ? `<b style="color:var(--gold)">🪙 ${g}</b>` : ''].filter(Boolean).join(' + ') || '<span class="muted">só ofertas</span>';
+
+const isItem = l => l?.mon?.kind === 'item';
+function itemBlock(mon, extra = '') {
+  const it = ITEMS[mon.item] || { name: mon.item, desc: '' };
+  return `<div class="mk-mon"><img src="${itemUrl(mon.item)}" alt="${esc(it.name)}" loading="lazy">
+    <div class="grow"><b>${mon.qty}x ${esc(it.name)}</b> <span class="chip">🎒 item</span><div class="tiny muted">${esc(it.desc)}</div>${extra}</div></div>`;
+}
+/** Bloco de um anúncio (Pokémon ou item). */
+function listingBlock(l) {
+  return isItem(l) ? itemBlock(l.mon) : monBlock({ ...l.mon, sp: l.sp, lvl: l.lvl, shiny: l.shiny });
+}
 
 function monBlock(m, extra = '') {
   const sp = getSpecies(m.sp);
@@ -22,8 +34,8 @@ function monBlock(m, extra = '') {
 /**
  * Abre o Mercado. profile: perfil (para a lista da Coleção ao anunciar/ofertar). onChange(): recarrega o hub.
  */
-export async function openMarket(profile, onChange) {
-  const st = { tab: 'buy', q: '', tier: 0, shiny: false, sort: 'new', data: null, mine: null, busy: false };
+export async function openMarket(profile, onChange, opts = {}) {
+  const st = { tab: opts.tab || 'buy', q: '', tier: 0, shiny: false, sort: 'new', kind: 'all', sellKind: opts.sellKind || 'mons', sellItem: opts.item || null, data: null, mine: null, busy: false };
   const ov = openModal('market', '🏪 Mercado Global', '<p class="muted"><span class="spinner"></span> Carregando...</p>', { wide: true, onClose: () => onChange && onChange() });
 
   const wallet = () => {
@@ -39,19 +51,41 @@ export async function openMarket(profile, onChange) {
     if (!d) return '<p class="muted"><span class="spinner"></span></p>';
     return `<div class="dex-controls">
         <input class="input" id="mk-q" placeholder="Buscar Pokémon ou vendedor" value="${esc(st.q)}" style="flex:1;min-width:140px">
+        <select class="input" id="mk-kind"><option value="all">Pokémon e itens</option><option value="mons" ${st.kind === 'mons' ? 'selected' : ''}>Só Pokémon</option><option value="items" ${st.kind === 'items' ? 'selected' : ''}>🎒 Só itens</option></select>
         <select class="input" id="mk-tier"><option value="0">Todos os tiers</option>${[1, 2, 3, 4, 5].map(t => `<option value="${t}" ${st.tier === t ? 'selected' : ''}>Tier ${t} · ${TIER[t]}</option>`).join('')}</select>
         <select class="input" id="mk-sort"><option value="new">Mais recentes</option><option value="price" ${st.sort === 'price' ? 'selected' : ''}>Menor preço</option><option value="level" ${st.sort === 'level' ? 'selected' : ''}>Maior nível</option></select>
         <label class="small"><input type="checkbox" id="mk-shiny" ${st.shiny ? 'checked' : ''}> só ✨</label>
         <button class="btn sm" data-act="search">🔎</button></div>
-      <div class="pk-grid">${d.listings.map(l => statCard({ ...fillTraits(l.mon), sp: l.sp, lvl: l.lvl, shiny: l.shiny }, { showHp: false, extra: `<div class="mk-sale">
+      <div class="pk-grid">${d.listings.map(l => (isItem(l) ? (x => `<div class="pk-card mk-item-card">${itemBlock(l.mon)}${x}</div>`) : (x => statCard({ ...fillTraits(l.mon), sp: l.sp, lvl: l.lvl, shiny: l.shiny }, { showHp: false, extra: x })))(`<div class="mk-sale">
           <div class="tiny">Vendedor: <b>${esc(l.sellerName)}</b></div>
           <div class="mk-price">${price(l.priceGold, l.priceDiamonds)}</div>
           <div class="row">${l.priceGold || l.priceDiamonds ? `<button class="btn sm green grow" data-act="buy" data-id="${l.id}">Comprar</button>` : ''}
-            ${l.acceptOffers ? `<button class="btn sm blue grow" data-act="offer" data-id="${l.id}">Oferta</button>` : ''}</div></div>` })).join('') || '<p class="muted">Nenhum anúncio com esses filtros. Que tal anunciar o primeiro?</p>'}</div>
-      ${d.recent?.length ? `<h3 style="margin-top:14px">💰 Vendas recentes</h3><div class="mk-recent">${d.recent.map(l => `<span class="chip">${esc(getSpecies(l.sp)?.name)}${l.shiny ? ' ✨' : ''} → ${esc(l.buyerName || '?')} · ${price(l.soldGold, l.soldDiamonds)}</span>`).join('')}</div>` : ''}`;
+            ${l.acceptOffers ? `<button class="btn sm blue grow" data-act="offer" data-id="${l.id}">Oferta</button>` : ''}</div></div>`)).join('') || '<p class="muted">Nenhum anúncio com esses filtros. Que tal anunciar o primeiro?</p>'}</div>
+      ${d.recent?.length ? `<h3 style="margin-top:14px">💰 Vendas recentes</h3><div class="mk-recent">${d.recent.map(l => `<span class="chip">${isItem(l) ? `${l.mon.qty}x ${esc(ITEMS[l.mon.item]?.name || '')}` : esc(getSpecies(l.sp)?.name)}${l.shiny ? ' ✨' : ''} → ${esc(l.buyerName || '?')} · ${price(l.soldGold, l.soldDiamonds)}</span>`).join('')}</div>` : ''}`;
+  };
+
+  const sellItemsView = () => {
+    const bag = Object.entries(profile?.stats?.bag || {}).filter(([id, n]) => isKeepable(id) && n > 0);
+    const cur = st.sellItem && bag.find(([id]) => id === st.sellItem);
+    return `<p class="small muted">Itens da sua 🎒 Mochila da conta (Pokébolas, Amuleto Shiny e TM). Eles saem da Mochila enquanto estiverem anunciados (cancelando, voltam).</p>
+      <div class="trade-mons" style="max-height:260px">${bag.map(([id, n]) => `<button type="button" class="trade-mon ${st.sellItem === id ? 'on' : ''}" data-act="pick-item" data-item="${id}">
+        <img src="${itemUrl(id)}" alt=""><span>${esc(ITEMS[id].name)}</span><span class="tiny">tem ${n}</span></button>`).join('') || '<p class="muted">Sua Mochila está vazia.</p>'}</div>
+      <div class="grid2" style="margin-top:10px">
+        <label class="small">Quantidade <input class="input" type="number" min="1" max="${cur ? cur[1] : 1}" id="mk-qty" value="1"></label>
+        <span></span>
+        <label class="small">🪙 Preço em ouro <input class="input" type="number" min="0" id="mk-pg" value="0"></label>
+        <label class="small">💎 Preço em diamantes <input class="input" type="number" min="0" id="mk-pd" value="0"></label></div>
+      <label class="small" style="display:block;margin:8px 0"><input type="checkbox" id="mk-ao" checked> Aceitar ofertas</label>
+      <button class="btn primary block" data-act="list-item" ${cur ? '' : 'disabled'}>🏷️ Anunciar itens</button>`;
   };
 
   const sellView = () => {
+    const toggle = `<div class="row" style="gap:6px;margin-bottom:8px"><button class="btn sm ${st.sellKind === 'mons' ? 'primary' : ''}" data-act="sell-kind" data-k="mons">🐾 Vender Pokémon</button><button class="btn sm ${st.sellKind === 'items' ? 'primary' : ''}" data-act="sell-kind" data-k="items">🎒 Vender itens</button></div>`;
+    if (st.sellKind === 'items') return toggle + sellItemsView();
+    return toggle + sellMonsView();
+  };
+
+  const sellMonsView = () => {
     const vault = (profile?.vault || []).filter(m => !m.fav);
     return `<p class="small muted">Escolha um Pokémon da sua Coleção. Ele sai da Coleção enquanto estiver anunciado (cancelando, ele volta). ⭐ Favoritos não aparecem aqui.</p>
       <div class="trade-mons" style="max-height:300px">${vault.map(m => `<button type="button" class="trade-mon ${st.pick === m.uid ? 'on' : ''}" data-act="pick" data-uid="${esc(m.uid)}">
@@ -70,15 +104,15 @@ export async function openMarket(profile, onChange) {
       ${(o.mons || []).map(x => `<span class="chip"><img src="${monSprite(x)}" style="width:22px;height:22px;vertical-align:middle"> ${esc(getSpecies(x.sp)?.name)}${x.shiny ? ' ✨' : ''} Nv.${x.lvl}</span>`).join('')}`;
     const status = { open: '🟢 aberto', locked: '⏳ processando', sold: '✅ vendido', cancelled: '⚪ cancelado', pending: '⏳ aguardando', accepted: '✅ aceita', declined: '❌ recusada' };
     return `<h3>📥 Ofertas recebidas</h3>${m.received.map(o => `<div class="mk-deal">
-        <div>${o.listing ? monBlock({ ...o.listing.mon, sp: o.listing.sp, lvl: o.listing.lvl, shiny: o.listing.shiny }) : ''}</div>
+        <div>${o.listing ? listingBlock(o.listing) : ''}</div>
         <div class="grow"><div class="small"><b>${esc(o.buyerName)}</b> oferece:</div>${offerBody(o)}</div>
         <div class="col" style="gap:4px"><button class="btn sm green" data-act="accept" data-id="${o.id}">Aceitar</button><button class="btn sm red" data-act="decline" data-id="${o.id}">Recusar</button></div></div>`).join('') || '<p class="muted small">Nenhuma oferta aguardando.</p>'}
       <h3 style="margin-top:12px">🏷️ Meus anúncios</h3>${m.listings.map(l => `<div class="mk-deal">
-        ${monBlock({ ...l.mon, sp: l.sp, lvl: l.lvl, shiny: l.shiny })}
+        ${listingBlock(l)}
         <div class="grow small">${price(l.priceGold, l.priceDiamonds)} · ${status[l.status] || l.status}${l.status === 'sold' ? ` para <b>${esc(l.buyerName || '')}</b> por ${price(l.soldGold, l.soldDiamonds)}` : ''}</div>
         ${l.status === 'open' ? `<button class="btn sm" data-act="cancel" data-id="${l.id}">Cancelar</button>` : ''}</div>`).join('') || '<p class="muted small">Você ainda não anunciou nada.</p>'}
       <h3 style="margin-top:12px">📤 Ofertas que fiz</h3>${m.sent.map(o => `<div class="mk-deal">
-        ${o.listing ? monBlock({ ...o.listing.mon, sp: o.listing.sp, lvl: o.listing.lvl, shiny: o.listing.shiny }) : ''}
+        ${o.listing ? listingBlock(o.listing) : ''}
         <div class="grow"><div class="small">${status[o.status] || o.status}</div>${offerBody(o)}</div>
         ${o.status === 'pending' ? `<button class="btn sm" data-act="ocancel" data-id="${o.id}">Cancelar</button>` : ''}</div>`).join('') || '<p class="muted small">Nenhuma oferta enviada.</p>'}`;
   };
@@ -88,7 +122,7 @@ export async function openMarket(profile, onChange) {
   async function refresh() {
     try {
       const [d, mine, prof] = await Promise.all([
-        api('market', { op: 'browse', q: st.q, tier: st.tier, shiny: st.shiny, sort: st.sort }),
+        api('market', { op: 'browse', q: st.q, tier: st.tier, shiny: st.shiny, sort: st.sort, kind: st.kind }),
         api('market', { op: 'mine' }),
         api('profile', { op: 'get' })
       ]);
@@ -103,7 +137,7 @@ export async function openMarket(profile, onChange) {
     try {
       const r = await api('market', body);
       toast(r.message || ok || 'Feito!', 'good');
-      st.pick = null;
+      st.pick = null; st.sellItem = null;
       await refresh();
     } catch (e) { toast(e.message, 'bad'); }
     st.busy = false;
@@ -144,6 +178,7 @@ export async function openMarket(profile, onChange) {
     st.tier = Number(ov.querySelector('#mk-tier')?.value || 0);
     st.sort = ov.querySelector('#mk-sort')?.value || 'new';
     st.shiny = !!ov.querySelector('#mk-shiny')?.checked;
+    st.kind = ov.querySelector('#mk-kind')?.value || 'all';
   };
 
   bindActions(ov, {
@@ -155,9 +190,12 @@ export async function openMarket(profile, onChange) {
       ov.querySelector('#mk-pg').value = pg; ov.querySelector('#mk-pd').value = pd; ov.querySelector('#mk-ao').checked = ao;
     },
     list: () => run({ op: 'create', uid: st.pick, priceGold: Number(ov.querySelector('#mk-pg').value) || 0, priceDiamonds: Number(ov.querySelector('#mk-pd').value) || 0, acceptOffers: ov.querySelector('#mk-ao').checked }),
+    'sell-kind': d => { st.sellKind = d.k; draw(); },
+    'pick-item': d => { st.sellItem = st.sellItem === d.item ? null : d.item; draw(); },
+    'list-item': () => run({ op: 'create_item', item: st.sellItem, qty: Number(ov.querySelector('#mk-qty').value) || 1, priceGold: Number(ov.querySelector('#mk-pg').value) || 0, priceDiamonds: Number(ov.querySelector('#mk-pd').value) || 0, acceptOffers: ov.querySelector('#mk-ao').checked }),
     buy: d => {
       const l = st.data?.listings.find(x => x.id === d.id);
-      if (l && confirm(`Comprar ${getSpecies(l.sp)?.name} por ${[l.priceDiamonds ? l.priceDiamonds + ' 💎' : '', l.priceGold ? l.priceGold + ' 🪙' : ''].filter(Boolean).join(' + ')}?`)) run({ op: 'buy', listingId: d.id });
+      if (l && confirm(`Comprar ${isItem(l) ? `${l.mon.qty}x ${ITEMS[l.mon.item]?.name}` : getSpecies(l.sp)?.name} por ${[l.priceDiamonds ? l.priceDiamonds + ' 💎' : '', l.priceGold ? l.priceGold + ' 🪙' : ''].filter(Boolean).join(' + ')}?`)) run({ op: 'buy', listingId: d.id });
     },
     offer: d => offerModal(d.id),
     cancel: d => { if (confirm('Cancelar este anúncio? O Pokémon volta para a sua Coleção.')) run({ op: 'cancel', listingId: d.id }); },

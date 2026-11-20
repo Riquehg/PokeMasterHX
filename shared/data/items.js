@@ -27,7 +27,8 @@ export const ITEMS = {
   // --- Progressão ---
   rare_candy:      { name: 'Rare Candy',      kind: 'candy', price: 900,  minTier: 4, image: 'rare_candy.png',      desc: 'Sobe 1 nível (pode evoluir).' },
   evolution_stone: { name: 'Pedra Evolutiva', kind: 'stone', price: 1200, minTier: 3, image: 'evolution_stone.png', desc: 'Evolui na hora um Pokémon que tenha evolução.' },
-  shiny_charm:     { name: 'Amuleto Shiny',   kind: 'charm', price: 3000, minTier: 4, image: 'shiny_charm.png',     desc: 'Passivo: triplica a chance de encontrar shinies. Não acumula.' },
+  shiny_charm:     { name: 'Amuleto Shiny',   kind: 'charm', price: 0, minTier: 0, image: 'shiny_charm.png',     desc: 'Passivo: triplica a chance de encontrar shinies. Não acumula. Não é vendido nas cidades: vem de Raids lendárias e eventos raros (e fica na Mochila da conta).' },
+  tm:              { name: 'TM',              kind: 'tm', price: 0, minTier: 0, image: 'tm.png',                   desc: 'Ensina um novo 2º golpe a um Pokémon (escolha entre os golpes dos tipos dele). Raro: Raids e eventos. Fica na Mochila da conta e pode ser vendido no Mercado.' },
 
   // --- Tabuleiro ---
   bicycle:     { name: 'Bicicleta',  kind: 'move_bonus', bonus: 2, price: 200, minTier: 1, image: 'bicycle.png',     desc: 'Use antes de rolar: +2 casas no próximo movimento.' },
@@ -53,4 +54,34 @@ export function shopFor(cityTier) {
 }
 
 export const STARTING_ITEMS = { poke_ball: 5, potion: 2 };
+
+// ---------------------------------------------------------------- 🎒 Mochila da conta
+// O que sobra na mochila no fim de uma partida salva vai para a Mochila da conta — mas só itens que não
+// desequilibram o começo de uma partida (Pokébolas, Amuleto Shiny e TM). Poções, Revive, X Attack, doces,
+// pedras e itens de tabuleiro são da partida e somem no fim.
+export const KEEP_KINDS = ['ball', 'charm', 'tm'];
+export const isKeepable = id => !!ITEMS[id] && KEEP_KINDS.includes(ITEMS[id].kind);
+export const BAG_MAX_PER_ITEM = 99;
+/** Quanto de cada item dá para levar para uma partida (modo Coleção). */
+export function bringLimit(id) {
+  const it = ITEMS[id];
+  if (!it || !isKeepable(id)) return 0;
+  if (id === 'master_ball') return 1;
+  if (it.kind === 'charm') return 1;
+  if (it.kind === 'tm') return 3;
+  return 10; // Pokébolas
+}
+export const BRING_BALLS_MAX = 20; // total de Pokébolas levadas
+/** Limpa e limita a lista de itens levados { id: qtd }. */
+export function cleanBring(bring, bag = null) {
+  const out = {};
+  let balls = 0;
+  for (const [id, q0] of Object.entries(bring && typeof bring === 'object' ? bring : {})) {
+    let q = Math.max(0, Math.min(bringLimit(id), Math.floor(Number(q0) || 0)));
+    if (bag) q = Math.min(q, bag[id] || 0);
+    if (ITEMS[id]?.kind === 'ball') { q = Math.min(q, BRING_BALLS_MAX - balls); balls += q; }
+    if (q > 0) out[id] = q;
+  }
+  return out;
+}
 export const STARTING_GOLD = 500;

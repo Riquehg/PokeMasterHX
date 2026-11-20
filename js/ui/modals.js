@@ -1,3 +1,4 @@
+import { tmPickerHtml } from './common.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
 // Janelas da partida: loja, PC, mochila, voo, Pokédex, ficha do treinador, detalhes do Pokémon e regras.
 import { SPECIES_LIST, getSpecies } from '../../shared/data/pokemon.js';
@@ -73,9 +74,10 @@ export function openPC(session, act) {
 }
 
 // ---------------------------------------------------------------- mochila
-const USABLE = ['heal', 'revive', 'candy', 'stone', 'move_bonus', 'escape', 'fly'];
+const USABLE = ['heal', 'revive', 'candy', 'stone', 'move_bonus', 'escape', 'fly', 'tm'];
 export function openBag(session, act) {
   let pending = null; // item aguardando escolha de alvo
+  let tmIndex = null; // TM: Pokémon escolhido (falta escolher o golpe)
   const render = () => {
     const p = me(session);
     const entries = Object.entries(p.items).filter(([, n]) => n > 0);
@@ -87,19 +89,25 @@ export function openBag(session, act) {
         <div><b>${esc(it.name)}</b> <span class="chip">×${n}</span><div class="tiny muted">${esc(it.desc)}</div></div>
         <div>${canUse ? `<button class="btn sm primary" data-act="use" data-item="${id}">Usar</button>` : it.kind === 'ball' ? '<span class="tiny muted">em batalha</span>' : it.kind === 'boost' ? '<span class="tiny muted">em batalha</span>' : '<span class="tiny muted">passivo</span>'}</div></div>`;
     }).join('');
-    const target = pending ? `<div class="divider"></div><b>Usar ${esc(ITEMS[pending].name)} em:</b>
+    const target = pending && tmIndex === null ? `<div class="divider"></div><b>Usar ${esc(ITEMS[pending].name)} em:</b>
       <div class="team bag-target">${p.team.map((m, i) => monCard(m, { index: i, act: 'target' })).join('')}</div>` : '';
-    return `<p class="small muted">Itens fora de batalha só podem ser usados na sua vez.</p><div class="col">${list || '<p class="muted">Mochila vazia.</p>'}</div>${target}`;
+    const tm = pending === 'tm' && tmIndex !== null && p.team[tmIndex] ? `<div class="divider"></div>${tmPickerHtml(p.team[tmIndex])}<button class="btn sm" data-act="tm-back">← Outro Pokémon</button>` : '';
+    return `<p class="small muted">Itens fora de batalha só podem ser usados na sua vez. 🎒 No fim da partida, Pokébolas, Amuleto Shiny e TM que sobrarem vão para a Mochila da sua conta.</p><div class="col">${list || '<p class="muted">Mochila vazia.</p>'}</div>${target}${tm}`;
   };
   const ov = openModal('bag', '🎒 Mochila', render(), { wide: true });
   bindActions(ov, {
     use: d => {
       const it = ITEMS[d.item];
-      if (['heal', 'revive', 'candy', 'stone'].includes(it.kind)) { pending = d.item; setModalBody('bag', render()); return; }
+      if (['heal', 'revive', 'candy', 'stone', 'tm'].includes(it.kind)) { pending = d.item; tmIndex = null; setModalBody('bag', render()); return; }
       if (it.kind === 'fly') { closeModal('bag'); openFly(session, act); return; }
       act({ type: 'use_item', item: d.item });
     },
-    target: d => { const item = pending; pending = null; act({ type: 'use_item', item, index: Number(d.index) }); }
+    target: d => {
+      if (pending === 'tm') { tmIndex = Number(d.index); setModalBody('bag', render()); return; }
+      const item = pending; pending = null; act({ type: 'use_item', item, index: Number(d.index) });
+    },
+    'tm-move': d => { const index = tmIndex; pending = null; tmIndex = null; act({ type: 'use_item', item: 'tm', index, move: d.move }); },
+    'tm-back': () => { tmIndex = null; setModalBody('bag', render()); }
   });
   refreshOnChange(session, 'bag', render);
 }
@@ -289,6 +297,11 @@ export function openHelp() {
       <p><b>Natureza:</b> cada Pokémon nasce com uma das 25 naturezas dos jogos: +10% em um atributo (Ataque, HP ou Velocidade) e −10% em outro. 5 são neutras.</p>
       <p><b>Obediência:</b> Pokémon de casas 🌸 Rosa e 🟢 Verde obedecem sempre. 🔵 Azul precisa de 1 insígnia, 🔴 Vermelho de 2 e 🟡 Amarelo (lendários) de 3. O inicial e os capturados na <b>🤝 Bola da Confiança</b> obedecem sempre. Os que não obedecem aparecem com 🔒.</p>
       <p><b>🤝 Bola da Confiança:</b> raríssima (baús, eventos de casas altas, Raids e convites de viagem — não é vendida), com chance normal de captura. Quem for capturado nela confia em você e luta sem precisar de insígnias, até lendários — e continua assim na sua Coleção.</p>
+      <p><b>🎒 Mochila da conta:</b> no fim de cada partida salva, Pokébolas, Amuleto Shiny e TM que sobraram vão para a Mochila da conta (menu inicial). Poções, Revive, X Attack, doces e pedras são só da partida. No modo 📦 Coleção dá para levar até 20 Pokébolas (Master Ball 1), 1 Amuleto e 3 TM. Itens da Mochila também podem ser vendidos no 🏪 Mercado.</p>
+      <p><b>💿 TM:</b> item raro (Raids e eventos de casas altas, nunca vendido nas lojas). Troca o 2º golpe de um Pokémon por um golpe dos tipos dele. Use na partida ou na Mochila da conta.</p>
+      <p><b>🧬 Transformar (Ditto e Mew):</b> o golpe Transformar copia o Pokémon adversário (tipos, atributos e golpes; o HP fica na mesma proporção). Durante a batalha dá para voltar à forma, guardar a forma (até 3) e usar uma forma guardada. Ditto shiny transformado bate 10% mais forte. Ao fim da batalha ele volta à forma original.</p>
+      <p><b>✨ Amuleto Shiny:</b> não é mais vendido nas cidades — vem de Raids lendárias e eventos raros.</p>
+      <p><b>👑 Battle Royale:</b> selvagens comuns (até casas Azuis) aparecem perto do nível do seu Pokémon mais forte. Lendários e casas Vermelhas continuam fortes.</p>
       <p><b>✨ Shiny:</b> além da cor rara, é mais forte: +15% de HP e Ataque e +10% de Velocidade.</p>
       <p><b>👴 Ajuda do Professor:</b> a cada 4 rodadas, quem tem menos Pokémon (pelo menos 2 a menos que o líder) ganha um Pokémon da região, Great Balls e Potions. Se também estiver 2+ insígnias atrás, ganha uma <b>Insígnia de Incentivo</b> (uma vez por partida).</p>
       <p><b>☠️ Hardcore</b> (opção em qualquer modo): se toda a sua equipe for derrotada, você está fora da partida e perde tudo o que ganhou nela — capturas, níveis, ouro e até o ouro que trouxe da conta. Quem sobrevive até o fim ganha o dobro de ouro da conta. Sair da partida também conta como cair.</p>

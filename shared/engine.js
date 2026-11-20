@@ -12,12 +12,13 @@ import { SPECIES, getSpecies, STARTERS } from './data/pokemon.js';
 import { SPACE_LIST, getSpace, START_SPACE, useMap, useStateMap, BIOMES } from './data/board.js';
 import { tickWeather, weatherSpawn, weatherRare } from './rules/weather.js';
 import { assistTick, giveTravelQuest, questVisit } from './rules/assist.js';
-import { ITEMS, getItem, shopFor, STARTING_ITEMS, STARTING_GOLD } from './data/items.js';
+import { ITEMS, getItem, shopFor, STARTING_ITEMS, STARTING_GOLD, cleanBring } from './data/items.js';
+import { MOVES, tmMovesFor, defaultMoveIds } from './data/moves.js';
 import {
   GYMS, gymAt, ELITE_FOUR, CHAMPION, ELITE_SPACE, CHAMPION_SPACE, ROUTE_TRAINERS, ROCKET, BADGES_TO_LEAGUE, BADGE_REWARDS, ACE_TRAINERS
 } from './data/trainers.js';
 import { createRng } from './rules/rng.js';
-import { createMon, rollWild, hatchEgg, fullHeal, healMon, maxHpOf, levelUp, evolve, TEAM_SIZE, WILD_LEVELS, gainXp, BASE_SHINY_RATE } from './rules/monsters.js';
+import { createMon, rollWild, hatchEgg, fullHeal, healMon, maxHpOf, levelUp, evolve, TEAM_SIZE, WILD_LEVELS, gainXp, BASE_SHINY_RATE, setLevel } from './rules/monsters.js';
 import { destinations, pathTo } from './rules/movement.js';
 import { startBattle, submitChoice, setBattleEndHandler, deliverCapture, sideActive, sideIndexOf } from './rules/battle.js';
 import {
@@ -158,6 +159,12 @@ export function fillTraits(entry) {
   return { ...entry, nature: m.nature, iv: m.iv, moves: m.moves };
 }
 
+function addBrought(items, bring) {
+  for (const [id, q] of Object.entries(cleanBring(bring))) items[id] = (items[id] || 0) + q;
+  if (items.shiny_charm > 1) items.shiny_charm = 1;
+  return items;
+}
+
 function newPlayer(rng, cfg, index) {
   const starter = SPECIES[cfg.starter] ? cfg.starter : STARTERS[index % STARTERS.length];
   const starterLevel = Math.max(1, Math.min(cfg.isBot ? 60 : 10, Number(cfg.starterLevel) || 5));
@@ -173,6 +180,7 @@ function newPlayer(rng, cfg, index) {
       if (m.aura) mon.aura = m.aura;
       if (m.trust) mon.trust = true; // capturado na Bola da Confiança
       if (m.nick) { const n = cleanNick(m.nick); if (n) mon.nick = n; } // apelido (Loja de Diamantes)
+      if (Array.isArray(m.forms)) mon.forms = m.forms.filter(f => f && getSpecies(f.sp)).slice(0, 3).map(f => ({ sp: f.sp, moves: Array.isArray(f.moves) ? f.moves.slice(0, 2) : null })); // 🧬 formas guardadas
       return mon;
   };
   const brought = (Array.isArray(cfg.teamMons) ? cfg.teamMons : []).filter(m => m && SPECIES[m.sp]).slice(0, TEAM_SIZE).map(fromVault);
@@ -199,7 +207,8 @@ function newPlayer(rng, cfg, index) {
     visited: [START_SPACE],
     gold: STARTING_GOLD + BRING_GOLD_OPTIONS.reduce((m, v) => (Number(cfg.bringGold) === v ? v : m), 0), // ouro trazido da conta (modo Coleção)
     broughtGold: BRING_GOLD_OPTIONS.includes(Number(cfg.bringGold)) ? Number(cfg.bringGold) : 0,
-    items: { ...STARTING_ITEMS },
+    items: addBrought({ ...STARTING_ITEMS }, cfg.bringItems),
+    broughtItems: cleanBring(cfg.bringItems), // 🎒 trazidos da Mochila da conta (modo Coleção)
     team: brought.length ? brought : [mon],
     companions: (Array.isArray(cfg.companions) ? cfg.companions : []).filter(id => COMPANIONS[id]),
     companion: COMPANIONS[cfg.companion] ? cfg.companion : null,
@@ -787,6 +796,19 @@ function useItem(state, rng, p, a) {
       log(state, `💎 ${ev.from} evoluiu para ${ev.to} com a Pedra Evolutiva!`, 'good');
       return;
     }
+    case 'tm': { // 💿 ensina um novo 2º golpe
+      if (!target) fail('Escolha um Pokémon.');
+      const mv = String(a.move || '');
+      if (!tmMovesFor(target.sp).some(m => m.id === mv)) fail('Esse Pokémon não aprende esse golpe.');
+      const cur = Array.isArray(target.moves) && target.moves.length === 2 ? target.moves : defaultMoveIds(target.sp);
+      if (cur[1] === mv) fail('Ele já sabe esse golpe.');
+      takeItem(p, a.item);
+      const old = MOVES[cur[1]]?.name || '?';
+      target.moves = [cur[0], mv];
+      log(state, `💿 ${speciesName(target.sp)} esqueceu ${old} e aprendeu ${MOVES[mv].name}!`, 'good');
+      fx(state, { k: 'tm', pid: p.id, uid: target.uid, move: mv });
+      return;
+    }
     case 'move_bonus': {
       if (state.phase !== 'roll') fail('Use a Bicicleta antes de rolar o dado.');
       takeItem(p, a.item);
@@ -823,6 +845,21 @@ function useItem(state, rng, p, a) {
 }
 
 // ------------------------------------------------------------------ encontros e eventos
+/**
+ * ⚔️ Battle Royale: selvagens das casas Rosa/Verde/Azul acompanham o nível do seu Pokémon mais forte
+ * (−3 a +1), para ninguém ficar travado nem passear. Vermelhos e lendários seguem o nível do tier.
+ */
+export function scaleWildForRoyale(state, rng, p, mon, tier) {
+  if (rulesOf(state) !== 'royale' || tier >= 4 || getSpecies(mon.sp)?.legendary) return;
+  const ref = Math.max(1, ...p.team.filter(m => m.hp > 0).map(m => m.lvl));
+  const lvl = Math.max(3, Math.min(55, ref + rng.int(-3, 1)));
+  if (lvl === mon.lvl) return;
+  const full = mon.hp >= maxHpOf(mon);
+  setLevel(mon, lvl);
+  if (full) mon.hp = maxHpOf(mon);
+  else mon.hp = Math.min(mon.hp, maxHpOf(mon));
+}
+
 function wildEncounter(state, rng, p, sp, tier, opts = {}) {
   if (!hasUsable(p)) {
     log(state, `😵 ${p.name} está sem Pokémon de pé (ou que obedeça) e não consegue enfrentar o selvagem.`, 'bad');
@@ -839,6 +876,7 @@ function wildEncounter(state, rng, p, sp, tier, opts = {}) {
   } else {
     log(state, `👀 O ${speciesName(mon.sp)} que já estava aqui continua à espreita (HP ${mon.hp}/${maxHpOf(mon)}).`);
   }
+  scaleWildForRoyale(state, rng, p, mon, tier);
   if (mon.shiny) fx(state, { k: 'shiny', pid: p.id });
   startBattle(state, { kind: 'wild', pid: p.id, foe: { kind: 'wild', mon, spaceId: sp.id } });
   state.phase = 'battle';
@@ -848,11 +886,11 @@ const EVENT_ITEMS = {
   1: [['poke_ball', 5], ['potion', 4], ['bicycle', 2], ['escape_rope', 1], ['great_ball', 1]],
   2: [['poke_ball', 3], ['great_ball', 4], ['potion', 3], ['super_potion', 2], ['revive', 1], ['x_attack', 1]],
   3: [['great_ball', 3], ['ultra_ball', 3], ['super_potion', 3], ['revive', 2], ['evolution_stone', 1], ['flame_ball', 1], ['aqua_ball', 1]],
-  4: [['ultra_ball', 4], ['super_potion', 3], ['revive', 2], ['rare_candy', 2], ['evolution_stone', 1], ['shadow_ball', 1], ['mystic_ball', 1], ['master_ball', 0.05], ['trust_ball', 0.06]],
-  5: [['ultra_ball', 4], ['rare_candy', 3], ['revive', 2], ['rainbow_ball', 1], ['master_ball', 0.1], ['trust_ball', 0.12]]
+  4: [['ultra_ball', 4], ['super_potion', 3], ['revive', 2], ['rare_candy', 2], ['evolution_stone', 1], ['shadow_ball', 1], ['mystic_ball', 1], ['master_ball', 0.05], ['trust_ball', 0.06], ['tm', 0.4]],
+  5: [['ultra_ball', 4], ['rare_candy', 3], ['revive', 2], ['rainbow_ball', 1], ['master_ball', 0.1], ['trust_ball', 0.12], ['tm', 0.7], ['shiny_charm', 0.1]]
 };
 
-const LUCKY_ITEMS = [['rare_candy', 4], ['evolution_stone', 3], ['rainbow_ball', 2], ['master_ball', 0.15], ['trust_ball', 0.25]];
+const LUCKY_ITEMS = [['rare_candy', 4], ['evolution_stone', 3], ['rainbow_ball', 2], ['tm', 1.2], ['master_ball', 0.15], ['trust_ball', 0.25], ['shiny_charm', 0.3]];
 
 function boardEvent(state, rng, p, sp, forceId = null) {
   const t = sp.tier;
@@ -877,7 +915,8 @@ function boardEvent(state, rng, p, sp, forceId = null) {
       break;
     }
     case 'camper_backpack': {
-      const id = rng.weighted(EVENT_ITEMS[t]);
+      let id = rng.weighted(EVENT_ITEMS[t]);
+      if (id === 'shiny_charm' && p.items.shiny_charm) id = 'tm'; // o Amuleto não acumula
       const q = ITEMS[id].kind === 'ball' && ITEMS[id].bonus < 2 ? rng.int(1, 3) : 1;
       addItem(p, id, q);
       effects.push({ text: `+${q}x ${ITEMS[id].name}`, tone: id === 'master_ball' ? 'shiny' : 'good', item: id });
@@ -1035,7 +1074,7 @@ function boardEvent(state, rng, p, sp, forceId = null) {
       break;
     }
     case 'meowth_thief': {
-      const stealable = Object.keys(p.items).filter(id => p.items[id] > 0 && ITEMS[id] && ITEMS[id].kind !== 'charm');
+      const stealable = Object.keys(p.items).filter(id => p.items[id] > 0 && ITEMS[id] && ITEMS[id].kind !== 'charm' && ITEMS[id].kind !== 'tm');
       if (!stealable.length) { effects.push({ text: 'Mochila vazia — o Meowth saiu de mãos abanando!', tone: 'good' }); break; }
       const id = rng.pick(stealable);
       takeItem(p, id, 1);
@@ -1048,7 +1087,8 @@ function boardEvent(state, rng, p, sp, forceId = null) {
       break;
     }
     case 'lucky_find': {
-      const id = rng.weighted(LUCKY_ITEMS);
+      let id = rng.weighted(LUCKY_ITEMS);
+      if (id === 'shiny_charm' && p.items.shiny_charm) id = 'tm'; // o Amuleto não acumula
       addItem(p, id, 1);
       effects.push({ text: `+1x ${ITEMS[id].name}`, tone: 'shiny', item: id });
       break;

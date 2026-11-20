@@ -15,6 +15,8 @@ import { net, api, signIn, signUp, signOut, resetPassword, watchMatch } from '..
 import { LocalSession } from '../session.js';
 import { openDex } from './modals.js';
 import { openMarket } from './market.js';
+import { openAccountBag, bringItemsPicker, bringSummary } from './bag.js';
+import { ITEMS as ALL_ITEMS, isKeepable } from '../../shared/data/items.js';
 import { openDuelQueue } from './tournament.js';
 import { promptInstall, isStandalone } from './install.js';
 import { BADGES_TO_USE } from '../../shared/rules/helpers.js';
@@ -173,7 +175,8 @@ export async function hubScreen(root, ctx) {
         <button class="acct-tile" data-act="vault" ${profile ? '' : 'disabled'}><span>📦</span><b>Coleção</b><small>${(profile?.vault || []).length} Pokémon</small></button>
         <button class="acct-tile" data-act="dex"><span>📖</span><b>Pokédex</b><small>${(profile?.pokedex || []).length} capturados</small></button>
         <button class="acct-tile" data-act="companions" ${profile ? '' : 'disabled'}><span>🤝</span><b>Companheiros</b><small>${(profile?.stats?.companions || []).length}/${Object.keys(COMPANIONS).length}${profile?.stats?.companion && COMPANIONS[profile.stats.companion] ? ` · ${esc(COMPANIONS[profile.stats.companion].name)}${bondLevel(profile?.stats?.companionBond?.[profile.stats.companion] || 0) >= 10 ? ' ❤️' : ''}` : ''}</small></button>
-        <button class="acct-tile" data-act="market" ${profile ? '' : 'disabled'}><span>🏪</span><b>Mercado</b><small>Comprar, vender, trocar</small></button>
+        <button class="acct-tile" data-act="abag" ${profile ? '' : 'disabled'}><span>🎒</span><b>Mochila</b><small>${Object.values(profile?.stats?.bag || {}).reduce((a, b) => a + b, 0)} itens · levar e vender</small></button>
+        <button class="acct-tile" data-act="market" ${profile ? '' : 'disabled'}><span>🏪</span><b>Mercado</b><small>Pokémon e itens</small></button>
         <button class="acct-tile" data-act="ranking"><span>🏆</span><b>Ranking</b><small>Liga, Elos e pontos</small></button>
         <button class="acct-tile" data-act="dshop" ${profile ? '' : 'disabled'}><span>💎</span><b>Loja de cosméticos</b><small>${profile?.diamonds || 0} 💎 · só visual</small></button>
         <button class="acct-tile donate" data-act="donate" ${profile ? '' : 'disabled'}><span>💖</span><b>Apoiar o projeto</b><small>Doe e ganhe 💎 de agradecimento</small></button>
@@ -205,6 +208,7 @@ export async function hubScreen(root, ctx) {
     },
     ranking: () => rankingModal(profile ? (profile.rating ?? 1000) : null, profile?.stats?.league || null, profile?.trainer_name),
     market: () => openMarket(profile, () => ctx.go('hub')),
+    abag: () => openAccountBag(profile, rerender, opts => openMarket(profile, () => ctx.go('hub'), opts)),
     admin: () => adminModal(),
     dshop: () => openDiamondShop(profile, null, () => ctx.go('hub')),
     donate: () => openDiamondShop(profile, null, () => ctx.go('hub'), 'buy'),
@@ -214,7 +218,7 @@ export async function hubScreen(root, ctx) {
 }
 
 function soloModal(profile, ctx) {
-  const st = { bots: 2, turnLimit: 60, useTeam: false, starter: 'charmander', team: [], map: 'kanto', bring: 0, rules: 'classic', hardcore: false };
+  const st = { bots: 2, turnLimit: 60, useTeam: false, starter: 'charmander', team: [], map: 'kanto', bring: 0, rules: 'classic', hardcore: false, items: {} };
   const body = () => `
     <div class="grid2">
       <div class="field"><label>Adversários (CPU)</label><select class="input" id="s-bots">${[1, 2, 3, 4, 5].map(n => `<option ${n === st.bots ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
@@ -226,7 +230,8 @@ function soloModal(profile, ctx) {
     <div class="tabs" style="margin:10px 0"><button class="btn sm ${!st.useTeam ? 'primary' : ''}" data-act="use-starter">🌱 Começar com inicial</button><button class="btn sm ${st.useTeam ? 'primary' : ''}" data-act="use-team">📦 Levar time da Coleção</button></div>
     ${st.useTeam ? teamPicker(profile?.vault, st.team, 0) + `
       <div class="bring-gold"><b>🪙 Levar ouro da conta</b> <span class="tiny muted">(você tem ${profile?.gold || 0}; o que sobrar volta no fim)</span>
-                <div class="row" style="gap:4px;margin-top:4px">${[0, 300, 600, 1000, 2000].map(v => `<button class="btn sm ${(st.bring) === v ? 'primary' : ''}" data-act="s-bring" data-v="${v}" ${v > (profile?.gold || 0) ? 'disabled' : ''}>${v ? v : 'Nada'}</button>`).join('')}</div></div>` : starterPicker(st.starter)}
+                <div class="row" style="gap:4px;margin-top:4px">${[0, 300, 600, 1000, 2000].map(v => `<button class="btn sm ${(st.bring) === v ? 'primary' : ''}" data-act="s-bring" data-v="${v}" ${v > (profile?.gold || 0) ? 'disabled' : ''}>${v ? v : 'Nada'}</button>`).join('')}</div></div>
+      <div class="bring-gold"><b>🎒 Levar itens da Mochila</b> <span class="tiny muted">${esc(bringSummary(st.items))}</span> <button class="btn sm" data-act="s-items">Escolher</button></div>` : starterPicker(st.starter)}
     <button class="btn primary block" data-act="go" style="margin-top:10px">▶ Começar treino</button>`;
   const ov = openModal('solo', '🤖 Treino contra CPUs', body(), { wide: true });
   const keep = () => { st.bots = Number(ov.querySelector('#s-bots').value); st.turnLimit = Number(ov.querySelector('#s-turns').value); st.map = ov.querySelector('#s-map').value; st.rules = ov.querySelector('#s-rules').value; st.hardcore = ov.querySelector('#s-hc').value === '1'; };
@@ -237,10 +242,11 @@ function soloModal(profile, ctx) {
     starter: d => { st.starter = d.id; re(); },
     pick: d => { togglePick(st.team, d.uid); re(); },
     's-bring': d => { st.bring = Number(d.v); re(); },
+    's-items': () => bringItemsPicker(profile, st.items, sel => { st.items = sel; re(); }),
     go: async () => {
       keep();
       try {
-        const { match } = await api('match', { op: 'solo', bots: st.bots, turnLimit: st.turnLimit, map: st.map, rules: st.rules, hardcore: st.hardcore, bringGold: st.useTeam ? st.bring : 0, starter: st.starter, teamUids: st.useTeam ? st.team : [] });
+        const { match } = await api('match', { op: 'solo', bots: st.bots, turnLimit: st.turnLimit, map: st.map, rules: st.rules, hardcore: st.hardcore, bringGold: st.useTeam ? st.bring : 0, bringItems: st.useTeam ? st.items : {}, starter: st.starter, teamUids: st.useTeam ? st.team : [] });
         closeModal('solo');
         ctx.openOnline(match.id);
       } catch (e) { toast(e.message, 'bad'); }
@@ -452,6 +458,7 @@ export async function roomScreen(root, ctx, matchId) {
               ${teamPicker(profile?.vault, picks, o.levelCap || 0)}
               <div class="bring-gold"><b>🪙 Levar ouro da conta</b> <span class="tiny muted">(você tem ${profile?.gold || 0}; o que sobrar volta no fim)</span>
                 <div class="row" style="gap:4px;margin-top:4px">${[0, 300, 600, 1000, 2000].map(v => `<button class="btn sm ${(mine?.bringGold || 0) === v ? 'primary' : ''}" data-act="bring" data-v="${v}" ${v > (profile?.gold || 0) ? 'disabled' : ''}>${v ? v : 'Nada'}</button>`).join('')}</div></div>
+              <div class="bring-gold"><b>🎒 Levar itens da Mochila</b> <span class="tiny muted">${esc(bringSummary(mine?.bringItems))}</span> <button class="btn sm" data-act="bring-items">Escolher</button></div>
               <h3 style="margin-top:8px">${picks.length ? 'Inicial (entra se precisar)' : 'ou um inicial'}</h3>${starterPicker(mine?.starter)}`
               : `<h3>⚔️ Seu time de batalha (até 6)</h3>
               <p class="tiny muted">Duelos não têm tabuleiro nem insígnias: todos obedecem. Nível limitado a ${o.levelCap || 50}. Se não escolher, vão os 6 mais fortes da Coleção. Kit igual para todos: 2 Poções, 1 Super Poção e 1 Revive.</p>
@@ -496,6 +503,7 @@ export async function roomScreen(root, ctx, matchId) {
     },
     ready: () => op({ op: 'update', ready: !match.lobby.find(e => e.id === meId)?.ready }),
     bring: d => op({ op: 'update', bringGold: Number(d.v) }),
+    'bring-items': () => { const mine = match.lobby.find(e => e.id === meId); bringItemsPicker(profile, mine?.bringItems, sel => op({ op: 'update', bringItems: sel })); },
     bot: () => op({ op: 'add_bot' }),
     kick: d => op({ op: 'remove', target: d.id }),
     start: () => op({ op: 'start' }),
@@ -591,7 +599,10 @@ async function adminModal() {
         <div class="row"><input class="input" id="a-gd" type="number" value="500" style="width:110px"><button class="btn" data-act="give-gd">🪙 Dar ouro da conta</button></div>
         <div class="row"><select class="input grow" id="a-sp">${SPECIES_LIST.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select>
           <input class="input" id="a-lv" type="number" min="1" max="60" value="5" style="width:80px"><label class="small"><input type="checkbox" id="a-shiny"> shiny</label>
-          <button class="btn" data-act="grant">🎁 Dar Pokémon (vai para a Coleção)</button></div></div>
+          <button class="btn" data-act="grant">🎁 Dar Pokémon (vai para a Coleção)</button></div>
+        <div class="row"><select class="input grow" id="a-item">${Object.entries(ALL_ITEMS).filter(([id]) => isKeepable(id)).map(([id, it]) => `<option value="${id}">${esc(it.name)}</option>`).join('')}</select>
+          <input class="input" id="a-iq" type="number" min="1" max="99" value="1" style="width:80px">
+          <button class="btn" data-act="grant-item">🎒 Dar item (vai para a Mochila)</button></div></div>
       <div class="card" style="margin-top:10px"><h3>👥 Usuários (${users.length})</h3>
         <table class="score"><tr><th>Nome</th><th>Pontos</th><th>Rating</th><th>💎</th><th>Coleção</th><th>Admin</th></tr>
         ${users.map(u => `<tr><td>${esc(u.name)}</td><td>${u.points}</td><td>${u.rating}</td><td>${u.diamonds}</td><td>${u.vault}</td><td><button class="btn sm ${u.isAdmin ? 'red' : ''}" data-act="toggle" data-id="${u.id}" data-v="${u.isAdmin ? '0' : '1'}">${u.isAdmin ? 'remover' : 'tornar admin'}</button></td></tr>`).join('')}</table>
@@ -627,6 +638,7 @@ async function adminModal() {
     daily: () => run(async () => { const r = await api('admin', { op: 'set_daily', species: ov.querySelector('#a-daily').value || null }); toast(`Pokémon do Dia: ${getSpecies(r.dailyPokemon).name}`, 'good'); }),
     'give-gd': () => run(() => api('admin', { op: 'give_gold', userId: ov.querySelector('#a-user').value, amount: Number(ov.querySelector('#a-gd').value) }), 'Ouro enviado!'),
     'give-dm': () => run(() => api('admin', { op: 'give_diamonds', userId: ov.querySelector('#a-user').value, amount: Number(ov.querySelector('#a-dm').value) }), 'Diamantes enviados!'),
+    'grant-item': () => run(() => api('admin', { op: 'grant_item', userId: ov.querySelector('#a-user').value, item: ov.querySelector('#a-item').value, qty: ov.querySelector('#a-iq').value }), 'Enviado para a Mochila!'),
     grant: () => run(() => api('admin', { op: 'grant_mon', userId: ov.querySelector('#a-user').value, species: ov.querySelector('#a-sp').value, level: ov.querySelector('#a-lv').value, shiny: ov.querySelector('#a-shiny').checked }), 'Enviado para a Coleção!'),
     toggle: d => run(() => api('admin', { op: 'set_admin', userId: d.id, value: d.v === '1' }))
   });

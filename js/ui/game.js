@@ -25,7 +25,7 @@ import { WeatherLayer, weatherChipHtml } from './weather.js';
 import { WEATHERS } from '../../shared/rules/weather.js';
 import { GAME_RULES, stormAt, ownerOf, citiesOf, GARRISON_MAX, alivePlayers } from '../../shared/rules/modes.js';
 
-const BATTLE_FX = new Set(['assist', 'hit', 'heal', 'faint', 'switch', 'status', 'status_dmg', 'status_skip', 'status_cure', 'buff', 'debuff', 'weather_dmg']);
+const BATTLE_FX = new Set(['transform', 'assist', 'hit', 'heal', 'faint', 'switch', 'status', 'status_dmg', 'status_skip', 'status_cure', 'buff', 'debuff', 'weather_dmg']);
 const SPEEDS = [[1, '🎬 Animações: normal'], [2, '⚡ Animações: rápidas'], [0, '⏭️ Animações: desligadas']];
 
 export function mountGame(root, session, opts = {}) {
@@ -597,6 +597,7 @@ export function mountGame(root, session, opts = {}) {
 
   const battleHandlers = {
     'b-attack': d => { ui.battleSub = null; act({ type: 'battle', move: 'attack', slot: Number(d.slot || 0) }); },
+    'b-form': d => { if (d.op === 'forget' && !confirm('Esquecer esta forma guardada?')) return; act({ type: 'battle', move: 'form', op: d.op, i: Number(d.i || 0) }); },
     'b-sub': d => { ui.battleSub = ui.battleSub === d.sub ? null : d.sub; renderBattle(S()); },
     'b-switch': d => { ui.battleSub = null; act({ type: 'battle', move: 'switch', index: Number(d.index) }); },
     'b-ball': d => { ui.battleSub = null; act({ type: 'battle', move: 'ball', item: d.item }); },
@@ -632,7 +633,7 @@ export function mountGame(root, session, opts = {}) {
   }
 
   function renderGameOver(s) {
-    if (s.status === 'finished' && ui.overShown && !ui.leagueShown && (s.leagueChanges?.[vid()] || s.bondChanges?.[vid()]) && document.getElementById('over')) {
+    if (s.status === 'finished' && ui.overShown && !ui.leagueShown && (s.leagueChanges?.[vid()] || s.bondChanges?.[vid()] || s.bagChanges?.[vid()]) && document.getElementById('over')) {
       ui.leagueShown = true; closeModal('over'); showOver(s); return; // o resultado da Liga chega logo depois do fim
     }
     if (s.status !== 'finished' || ui.overShown) return;
@@ -657,6 +658,13 @@ export function mountGame(root, session, opts = {}) {
     if (!c) return '';
     return `<div class="comp-box ${bc.lvl >= 10 ? 'intimate' : ''}" style="margin-top:8px">${companionImg(bc.comp)}<div class="grow"><b>${c.icon} ${esc(c.name)}</b> ${bondBadge(bc.lvl)}
       <div class="small">+${bc.gain} pontos de laço${bc.intimate ? ' · <b style="color:#ff9ccf">❤️ Vocês ficaram ÍNTIMOS!</b>' : bc.up ? ` · <b style="color:#8ff0bd">⬆️ Laço Nv.${bc.lvl}!</b>` : ''}</div></div></div>`;
+  }
+
+  // 🎒 itens que foram para a Mochila da conta
+  function bagLine(s) {
+    const b = s.bagChanges?.[session.viewerId()];
+    const e = b ? Object.entries(b) : [];
+    return e.length ? `<p class="small" style="margin-top:6px">🎒 Foram para a sua Mochila da conta: <b>${e.map(([id, q]) => `${q}x ${esc(ITEMS[id]?.name || id)}`).join(', ')}</b></p>` : '';
   }
 
   function showOver(s) {
@@ -684,7 +692,7 @@ export function mountGame(root, session, opts = {}) {
       <p class="muted">${esc(s.log.filter(l => l.kind === 'win').slice(-1)[0]?.msg || '')}</p></div>
       <table class="score"><tr><th>Treinador</th>${extraTh}<th>Insígnias</th><th>Pokédex</th><th>Shinies</th><th>Pontos</th>${s.ratingChanges ? '<th>Rating</th>' : ''}</tr>
       ${ranked.map(p => { const d = s.ratingChanges?.[p.id]; return `<tr><td>${esc(p.name)}</td>${extraTd(p)}<td>${p.badges.length}</td><td>${p.caught.length}</td><td>${p.stats.shinies}</td><td><b>${score(p)}</b></td>${s.ratingChanges ? `<td style="color:${d >= 0 ? '#8ff0bd' : '#ff9b9e'}"><b>${d >= 0 ? '+' : ''}${d ?? 0}</b></td>` : ''}</tr>`; }).join('')}</table>
-      ${leagueLine(s)}${bondLine(s)}
+      ${leagueLine(s)}${bondLine(s)}${bagLine(s)}
       ${me()?.hardcoreLost ? '<p class="small" style="color:#ff9b9e">☠️ Hardcore: você caiu e perdeu tudo o que ganhou nesta partida.</p>' : session.kind === 'online' ? '<p class="small muted">Seus Pokémon (equipe e PC), Pokédex e estatísticas foram salvos na sua conta — veja em 📦 Coleção.</p>' : '<p class="small muted">Modo offline: o progresso não vai para a conta.</p>'}
       <button class="btn primary block" data-act="exit" style="margin-top:10px">Voltar ao menu</button>`);
     bindActions(ov, { exit: () => { closeModal('over'); onExit(); } });

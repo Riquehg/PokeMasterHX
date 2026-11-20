@@ -1,7 +1,7 @@
 // Componentes visuais reaproveitados (cartas de Pokémon, chips de tipo, etc.).
 import { getSpecies } from '../../shared/data/pokemon.js';
 import { monView, xpToNext, MAX_LEVEL, maxStats, ivPercent, IV_MAX } from '../../shared/rules/monsters.js';
-import { monMoves } from '../../shared/data/moves.js';
+import { monMoves, tmMovesFor as _tmMovesFor, defaultMoveIds as _defMoves } from '../../shared/data/moves.js';
 import { NATURES } from '../../shared/data/natures.js';
 import { TYPE_COLORS, against } from '../../shared/rules/types.js';
 import { esc, hpClass } from './dom.js';
@@ -144,4 +144,13 @@ export function foeIntelHtml(mon) {
     <span class="fi-pot" title="Potencial (IVs) HP ${mon.iv?.hp ?? '?'} · ATQ ${mon.iv?.atk ?? '?'} · VEL ${mon.iv?.spe ?? '?'} (de ${IV_MAX})">${pot === null ? '?' : `<b class="pk-stars">${potentialStars(pot)}</b> ${potentialLabel(pot)} ${pot}%`}</span>
     <span class="fi-moves">${moves.map(m => `<span class="move-chip" style="--tc:${TYPE_COLORS[m.type]}"><b>${esc(m.name)}</b> <span class="tiny">${esc(typeLabel(m.type))}</span></span>`).join('')}</span>
   </div>`;
+}
+
+// ------------------------------------------------ 💿 TM: escolher o novo 2º golpe
+export function tmPickerHtml(mon, act = 'tm-move') {
+  const cur = (Array.isArray(mon.moves) && mon.moves.length === 2 ? mon.moves : _defMoves(mon.sp))[1];
+  const list = _tmMovesFor(mon.sp);
+  return `<p class="small">Escolha o golpe que <b>${esc(getSpecies(mon.sp)?.name)}</b> vai aprender no lugar de <b>${esc(monMoves(mon)[1]?.name || '?')}</b>:</p>
+    <div class="tm-grid">${list.map(m => `<button class="btn move-btn tm-opt ${m.id === cur ? 'on' : ''}" style="--tc:${TYPE_COLORS[m.type]}" data-act="${act}" data-move="${m.id}" ${m.id === cur ? 'disabled' : ''}>
+      <span class="mv-name">${esc(m.name)}</span><span class="mv-meta">${esc(typeLabel(m.type))}${m.kind === 'dmg' || m.kind === 'drain' ? ` · poder ${Math.round((m.power || 1) * 100)}%` : ''}${m.miss ? ` · erra no 🎲${m.miss === 1 ? '1' : '1–2'}` : ''}</span><span class="mv-tag ${m.kind === 'dmg' ? '' : 'sup'}">${esc(m.desc)}</span></button>`).join('')}</div>`;
 }

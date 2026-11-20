@@ -5,6 +5,7 @@
 // As mudanças em dinheiro usam a função atômica wallet_add; a Coleção usa gravação condicional (rev).
 import { bad, notFound, mutateProfile, collectionMax } from './core.js';
 import { getSpecies } from '../../shared/data/pokemon.js';
+import { ITEMS, isKeepable, BAG_MAX_PER_ITEM } from '../../shared/data/items.js';
 
 export const MARKET_FEE = 0.05;          // taxa do mercado (sai de circulação: ajuda a economia)
 export const MAX_OPEN_LISTINGS = 10;
@@ -51,6 +52,33 @@ async function takeMons(db, userId, uids) {
   return taken;
 }
 
+// ---------------------------------------------------------------- 🎒 itens (Mochila da conta)
+const isItemListing = l => l?.mon?.kind === 'item';
+async function takeItems(db, userId, id, qty) {
+  await mutateProfile(db, userId, prof => {
+    const st = { ...(prof.stats || {}) };
+    const bag = { ...(st.bag || {}) };
+    if (!((bag[id] || 0) >= qty)) bad(`Você não tem ${qty}x ${ITEMS[id]?.name || id} na Mochila.`);
+    bag[id] -= qty; if (!bag[id]) delete bag[id];
+    st.bag = bag;
+    return { stats: st };
+  });
+}
+async function giveItems(db, userId, id, qty) {
+  await mutateProfile(db, userId, prof => {
+    const st = { ...(prof.stats || {}) };
+    const bag = { ...(st.bag || {}) };
+    bag[id] = Math.min(BAG_MAX_PER_ITEM * 2, (bag[id] || 0) + qty); // nunca perde o que comprou
+    st.bag = bag;
+    return { stats: st };
+  });
+}
+/** Entrega o que estava anunciado (Pokémon ou itens). */
+async function deliverListing(db, userId, l) {
+  if (isItemListing(l)) return giveItems(db, userId, l.mon.item, l.mon.qty);
+  return giveMons(db, userId, [l.mon]);
+}
+
 /** Coloca Pokémon na Coleção (e na Pokédex). */
 async function giveMons(db, userId, mons) {
   if (!mons.length) return;
@@ -91,7 +119,7 @@ async function announce(db, listing, buyerName, gold, diamonds) {
 async function settle(db, listing, buyer, gold, diamonds, offerMons = []) {
   await db.walletAdd(listing.seller_id, diamonds - fee(diamonds), gold - fee(gold));
   await giveMons(db, listing.seller_id, offerMons);
-  await giveMons(db, buyer.id, [listing.mon]);
+  await deliverListing(db, buyer.id, listing);
   await db.updateListingIf(listing.id, ['locked'], { status: 'sold', buyer_id: buyer.id, buyer_name: buyer.name, sold_gold: gold, sold_diamonds: diamonds });
   for (const o of await db.listOffers({ listingId: listing.id, status: 'pending' })) {
     if (await db.updateOfferIf(o.id, ['pending'], { status: 'declined' })) await refundOffer(db, o);
@@ -107,9 +135,12 @@ export async function marketOp(db, user, body) {
   switch (body.op) {
     case 'browse': {
       const tier = int(body.tier, 5) || undefined;
-      let rows = await db.listListings({ status: 'open', tier, shiny: !!body.shiny, sp: body.sp || undefined, limit: 120 });
+      let rows = await db.listListings({ status: 'open', tier: body.kind === 'items' ? undefined : tier, shiny: !!body.shiny, sp: body.sp || undefined, limit: 160 });
       const q = String(body.q || '').toLowerCase().trim();
-      if (q) rows = rows.filter(r => (getSpecies(r.sp)?.name || r.sp).toLowerCase().includes(q) || (r.seller_name || '').toLowerCase().includes(q));
+      if (body.kind === 'items') rows = rows.filter(r => String(r.sp).startsWith('item:'));
+      if (body.kind === 'mons') rows = rows.filter(r => !String(r.sp).startsWith('item:'));
+      const label = r => (String(r.sp).startsWith('item:') ? ITEMS[r.mon?.item]?.name || '' : getSpecies(r.sp)?.name || r.sp);
+      if (q) rows = rows.filter(r => label(r).toLowerCase().includes(q) || (r.seller_name || '').toLowerCase().includes(q));
       if (body.sort === 'price') rows.sort((a, b) => (a.price_diamonds * 100 + a.price_gold) - (b.price_diamonds * 100 + b.price_gold));
       if (body.sort === 'level') rows.sort((a, b) => b.lvl - a.lvl);
       const recent = await db.listListings({ status: 'sold', limit: 12 });
@@ -147,17 +178,37 @@ export async function marketOp(db, user, body) {
       return { listing: pubListing(row), message: `${sp?.name || mon.sp} anunciado no Mercado!` };
     }
 
+    case 'create_item': { // 🎒 anunciar itens da Mochila da conta
+      const id = String(body.item || '');
+      const qty = Math.max(1, Math.min(BAG_MAX_PER_ITEM, Math.floor(Number(body.qty) || 1)));
+      if (!isKeepable(id)) bad('Esse item não pode ser negociado (só Pokébolas, Amuleto Shiny e TM).');
+      const priceGold = int(body.priceGold), priceDiamonds = int(body.priceDiamonds);
+      const acceptOffers = body.acceptOffers !== false;
+      if (!priceGold && !priceDiamonds && !acceptOffers) bad('Defina um preço ou aceite ofertas.');
+      const open = await db.listListings({ sellerId: user.id, status: ['open', 'locked'] });
+      if (open.length >= MAX_OPEN_LISTINGS) bad(`Você já tem ${MAX_OPEN_LISTINGS} anúncios abertos.`);
+      await takeItems(db, user.id, id, qty);
+      let row;
+      try {
+        row = await db.insertListing({
+          seller_id: user.id, seller_name: myName, mon: { kind: 'item', item: id, qty }, sp: 'item:' + id, tier: 0, lvl: qty, shiny: false,
+          price_gold: priceGold, price_diamonds: priceDiamonds, accept_offers: acceptOffers, status: 'open'
+        });
+      } catch (e) { await giveItems(db, user.id, id, qty); throw e; }
+      return { listing: pubListing(row), message: `${qty}x ${ITEMS[id].name} anunciado no Mercado!` };
+    }
+
     case 'cancel': {
       const l = await db.getListing(body.listingId);
       if (!l) notFound('Anúncio não encontrado.');
       if (l.seller_id !== user.id && !me.is_admin) bad('Esse anúncio não é seu.');
       const locked = await db.updateListingIf(l.id, ['open'], { status: 'cancelled' });
       if (!locked) bad('Esse anúncio não está mais aberto.');
-      await giveMons(db, l.seller_id, [l.mon]);
+      await deliverListing(db, l.seller_id, l);
       for (const o of await db.listOffers({ listingId: l.id, status: 'pending' })) {
         if (await db.updateOfferIf(o.id, ['pending'], { status: 'declined' })) await refundOffer(db, o);
       }
-      return { ok: true, message: 'Anúncio cancelado. O Pokémon voltou para a sua Coleção.' };
+      return { ok: true, message: isItemListing(l) ? 'Anúncio cancelado. Os itens voltaram para a sua Mochila.' : 'Anúncio cancelado. O Pokémon voltou para a sua Coleção.' };
     }
 
     case 'buy': {
@@ -165,7 +216,7 @@ export async function marketOp(db, user, body) {
       if (!l || l.status !== 'open') bad('Esse anúncio não está mais disponível.');
       if (l.seller_id === user.id) bad('Você não pode comprar o próprio anúncio.');
       if (!l.price_gold && !l.price_diamonds) bad('Esse anúncio só aceita ofertas.');
-      await vaultRoom(db, user.id, 1);
+      if (!isItemListing(l)) await vaultRoom(db, user.id, 1);
       const locked = await db.updateListingIf(l.id, ['open'], { status: 'locked', buyer_id: user.id });
       if (!locked) bad('Alguém foi mais rápido! Esse anúncio não está mais disponível.');
       const paid = await db.walletAdd(user.id, -l.price_diamonds, -l.price_gold);
@@ -174,7 +225,7 @@ export async function marketOp(db, user, body) {
         bad(`Saldo insuficiente: precisa de ${l.price_gold} 🪙 e ${l.price_diamonds} 💎.`);
       }
       await settle(db, l, { id: user.id, name: myName }, l.price_gold, l.price_diamonds);
-      return { ok: true, wallet: paid, message: `Você comprou ${getSpecies(l.sp)?.name || l.sp}! Ele já está na sua Coleção.` };
+      return { ok: true, wallet: paid, message: isItemListing(l) ? `Você comprou ${l.mon.qty}x ${ITEMS[l.mon.item]?.name}! Já está na sua 🎒 Mochila.` : `Você comprou ${getSpecies(l.sp)?.name || l.sp}! Ele já está na sua Coleção.` };
     }
 
     case 'offer': {

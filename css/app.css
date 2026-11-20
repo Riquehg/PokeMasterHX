@@ -1586,3 +1586,14 @@ body.in-game .soc-panel { height: min(520px, calc(100dvh - 80px)); }
 .pickbtn .chip { flex: none; }
 .bag-target { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin-top: 6px; }
 @media (max-width: 640px) { .bag-target { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* ---------- v19: 🧬 transformação ---------- */
+.form-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0 0; padding: 6px 8px; border-radius: 12px; background: rgba(170, 120, 255, .1); border: 1px solid rgba(170, 120, 255, .4); }
+.form-chip { display: inline-flex; align-items: center; gap: 0; }
+.form-chip .btn img { width: 22px; height: 22px; object-fit: contain; vertical-align: middle; margin-right: 3px; }
+.form-chip .btn.x { padding: 3px 6px; margin-left: -2px; opacity: .7; }
+.form-chip.on .btn:first-child { box-shadow: 0 0 0 2px #b48bff; }
+.mon-sprite.morph { animation: morph .7s ease; }
+@keyframes morph { 0% { filter: brightness(1); transform: scale(1); } 35% { filter: brightness(3) saturate(0) drop-shadow(0 0 14px #c9a7ff); transform: scale(.75, 1.25); } 70% { filter: brightness(2) drop-shadow(0 0 10px #c9a7ff); transform: scale(1.15, .9); } 100% { filter: none; transform: none; } }
+.tm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; margin: 6px 0 8px; max-height: 340px; overflow: auto; }
+.tm-opt.on { outline: 2px solid var(--gold); }

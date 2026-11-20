@@ -9,6 +9,8 @@ import { duelQueue, duelQueueStatus, duelQueueCancel, duelTeam, startCup, duelFi
 import { SPECIES, STARTERS, getSpecies } from '../../shared/data/pokemon.js';
 import { dailyPokemon } from '../../shared/daily.js';
 import { cleanNick } from '../../shared/data/cosmetics.js';
+import { ITEMS, isKeepable, cleanBring, BAG_MAX_PER_ITEM, STARTING_ITEMS } from '../../shared/data/items.js';
+import { tmMovesFor, defaultMoveIds, MOVES } from '../../shared/data/moves.js';
 import { bondLevel, bondGain, BOND_MAX, COMPANIONS } from '../../shared/data/companions.js';
 import { equippedCosmetic, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment } from './shop.js';
 
@@ -189,6 +191,22 @@ export async function profileOp(db, user, body) {
     });
     return { profile: await withCosmetic(db, prof) };
   }
+  if (body.op === 'use_tm') { // 💿 TM da Mochila da conta num Pokémon da Coleção
+    const mv = String(body.move || '');
+    return { profile: await withCosmetic(db, await mutateProfile(db, user.id, cur => {
+      const st = { ...(cur.stats || {}) };
+      const bag = { ...(st.bag || {}) };
+      if (!(bag.tm > 0)) bad('Você não tem TM na Mochila.');
+      const m = (cur.vault || []).find(x => x.uid === body.uid);
+      if (!m) bad('Pokémon não encontrado na Coleção.');
+      if (!tmMovesFor(m.sp).some(x => x.id === mv)) bad('Esse Pokémon não aprende esse golpe.');
+      const moves = Array.isArray(m.moves) && m.moves.length === 2 ? m.moves : defaultMoveIds(m.sp);
+      if (moves[1] === mv) bad('Ele já sabe esse golpe.');
+      bag.tm -= 1; if (!bag.tm) delete bag.tm;
+      st.bag = bag;
+      return { stats: st, vault: cur.vault.map(x => (x.uid === body.uid ? { ...x, moves: [moves[0], mv] } : x)) };
+    })) };
+  }
   if (body.op === 'restore') { // recuperar um Pokémon que saiu por falta de espaço
     return { profile: await withCosmetic(db, await mutateProfile(db, user.id, prof => {
       const st = { ...(prof.stats || {}) };
@@ -250,7 +268,9 @@ export async function leaderboard(db) {
 
 // ------------------------------------------------------------------ Coleção
 function collectionEntry(mon, matchId) {
-  return { uid: mon.uid, sp: mon.sp, lvl: mon.lvl, shiny: !!mon.shiny, aura: mon.aura || null, nature: mon.nature || null, iv: mon.iv || null, moves: mon.moves || null, capTier: mon.capTier || null, nick: mon.nick || null, trust: !!mon.trust || undefined, from: matchId, at: new Date().toISOString() };
+  const sp = mon.tf ? mon.tf.sp : mon.sp; // 🧬 transformado: salva a forma original
+  const moves = mon.tf ? mon.tf.moves : mon.moves;
+  return { uid: mon.uid, sp, lvl: mon.lvl, forms: Array.isArray(mon.forms) && mon.forms.length ? mon.forms : undefined, shiny: !!mon.shiny, aura: mon.aura || null, nature: mon.nature || null, iv: mon.iv || null, moves: moves || null, capTier: mon.capTier || null, nick: mon.nick || null, trust: !!mon.trust || undefined, from: matchId, at: new Date().toISOString() };
 }
 
 /**
@@ -285,7 +305,7 @@ function collectionPatch(prof, p, state) {
       const e = collectionEntry(mon, state.id);
       if (idx.has(mon.uid)) {
         const old = vault[idx.get(mon.uid)];
-        vault[idx.get(mon.uid)] = { ...old, sp: e.sp, lvl: Math.max(old.lvl || 1, e.lvl), shiny: e.shiny, aura: e.aura || old.aura || null, nature: old.nature || e.nature || null, iv: old.iv || e.iv || null, moves: old.moves || e.moves || null, capTier: old.capTier || e.capTier || null, nick: old.nick || null, ...(old.trust || e.trust ? { trust: true } : {}) };
+        vault[idx.get(mon.uid)] = { ...old, sp: e.sp, lvl: Math.max(old.lvl || 1, e.lvl), shiny: e.shiny, aura: e.aura || old.aura || null, nature: old.nature || e.nature || null, iv: old.iv || e.iv || null, moves: e.moves || old.moves || null, ...(e.forms ? { forms: e.forms } : {}), capTier: old.capTier || e.capTier || null, nick: old.nick || null, ...(old.trust || e.trust ? { trust: true } : {}) };
       } else {
         idx.set(mon.uid, vault.length);
         vault.push(e);
@@ -312,6 +332,23 @@ function collectionPatch(prof, p, state) {
     const changed = overflow || shinyDex.length !== (st.shinyDex || []).length || shinySeen.length !== (st.shinySeen || []).length;
     return { vault, pokedex, pokedex_seen: seen, points: calcPoints(pokedex, st), ...(changed ? { stats: { ...st, shinyDex, shinySeen, ...(overflow ? { overflow } : {}) } } : {}) };
   }
+}
+
+/** Itens da partida que ficam na Mochila da conta (tira as 5 Poké Balls de graça do começo). */
+export function bagFromMatch(p) {
+  const out = {};
+  for (const [id, q] of Object.entries(p.items || {})) {
+    if (!isKeepable(id) || !(q > 0)) continue;
+    const n = q - (STARTING_ITEMS[id] || 0);
+    if (n > 0) out[id] = n;
+  }
+  return out;
+}
+export function addToBag(bag, add) {
+  const out = { ...(bag || {}) };
+  for (const [id, q] of Object.entries(add || {})) if (isKeepable(id)) out[id] = Math.min(BAG_MAX_PER_ITEM, (out[id] || 0) + q);
+  if (out.shiny_charm > 1) out.shiny_charm = 1;
+  return out;
 }
 
 /** Pokémon "comum" que pode sair sozinho quando a Coleção lota. */
@@ -466,6 +503,11 @@ export async function matchOp(db, user, body) {
         if ((prof.gold || 0) < v) bad(`Você tem só ${prof.gold || 0} de ouro na conta.`);
         me.bringGold = v;
       }
+      if (body.bringItems !== undefined) {
+        if (mode !== 'collection') bad('Só dá para levar itens da Mochila em partidas do modo Coleção.');
+        const prof = await getOrCreateProfile(db, user);
+        me.bringItems = cleanBring(body.bringItems, prof.stats?.bag || {});
+      }
       if (body.ready !== undefined) me.ready = !!body.ready;
       return save(db, row, { lobby }, user.id);
     }
@@ -519,6 +561,19 @@ async function playerCfg(db, e, options) {
     // tira o ouro da conta agora; o que sobrar volta no fim da partida
     const paid = db.walletAdd ? await db.walletAdd(e.id, 0, -e.bringGold).catch(() => null) : null;
     if (paid) p.bringGold = e.bringGold;
+  }
+  if (mode === 'collection' && !e.isBot && e.bringItems && Object.keys(e.bringItems).length) {
+    // 🎒 tira os itens da Mochila da conta agora; o que sobrar volta no fim da partida
+    let taken = {};
+    await mutateProfile(db, e.id, cur => {
+      const st = { ...(cur.stats || {}) };
+      const bag = { ...(st.bag || {}) };
+      taken = cleanBring(e.bringItems, bag);
+      for (const [id, q] of Object.entries(taken)) { bag[id] -= q; if (bag[id] <= 0) delete bag[id]; }
+      st.bag = bag;
+      return Object.keys(taken).length ? { stats: st } : null;
+    });
+    p.bringItems = taken;
   }
   if (mode === 'collection' && !e.isBot) {
     // PC da partida = Coleção inteira (o que não está no time), com o mesmo limite de nível
@@ -612,6 +667,7 @@ async function createSolo(db, user, body) {
     if ((profile.gold || 0) < Number(body.bringGold)) bad(`Você tem só ${profile.gold || 0} de ouro na conta.`);
     entry.bringGold = Number(body.bringGold);
   }
+  if (useCollection && body.bringItems) entry.bringItems = cleanBring(body.bringItems, profile.stats?.bag || {});
   const lobby = [entry];
   for (let i = 0; i < bots; i++) lobby.push(botEntry(i));
   const row = await insertRoom(db, user, { name: `Treino de ${profile.trainer_name}`, options: { ...options, solo: true }, isPublic: false, pin: '', lobby });
@@ -762,10 +818,10 @@ export async function actionOp(db, user, body) {
     if (finished && row.options?.mode === 'duel') await duelFinished(db, { ...row, ...patch });
     else if (finished) {
       await recordResults(db, state, row.options || {});
-      if (state.leagueChanges || state.bondChanges) {
+      if (state.leagueChanges || state.bondChanges || state.bagChanges) {
         try { // mostra +PL / subiu de divisão / laço do companheiro na tela de fim de jogo
           const cur = await db.getMatch(row.id);
-          if (cur?.state) await db.updateMatch(cur.id, cur.version, { state: { ...cur.state, leagueChanges: state.leagueChanges || null, bondChanges: state.bondChanges || null }, version: cur.version + 1 });
+          if (cur?.state) await db.updateMatch(cur.id, cur.version, { state: { ...cur.state, leagueChanges: state.leagueChanges || null, bondChanges: state.bondChanges || null, bagChanges: state.bagChanges || null }, version: cur.version + 1 });
         } catch { /* só visual */ }
       }
     }
@@ -835,13 +891,16 @@ export async function recordResults(db, state, options = {}) {
       if (lg.reward && db.walletAdd) { try { await db.walletAdd(p.id, lg.reward, 0); } catch (e) { console.error('[season]', e.message); } }
     }
     if (state.options?.hardcore) st.hardcore = (st.hardcore || 0) + (p.hardcoreLost ? 0 : 1);
+    // 🎒 itens que sobraram (só os que podem ficar: Pokébolas, Amuleto, TM) vão para a Mochila da conta
+    const keep = (p.hardcoreLost || p.left) ? {} : bagFromMatch(p);
+    if (Object.keys(keep).length) (state.bagChanges ||= {})[p.id] = keep;
     // grava só os campos de estatística em cima do perfil MAIS NOVO (não apaga o que outra parte acabou de salvar)
     const fresh = { ...st };
     await mutateProfile(db, p.id, cur => {
       const base = { ...(cur.stats || {}) };
       const merged = { ...base, ...fresh, companions: base.companions || fresh.companions, companion: base.companion ?? fresh.companion,
         shinyDex: base.shinyDex || fresh.shinyDex, shinySeen: base.shinySeen || fresh.shinySeen, overflow: base.overflow || fresh.overflow,
-        vaultBonus: base.vaultBonus || fresh.vaultBonus, nicknames: base.nicknames || fresh.nicknames };
+        vaultBonus: base.vaultBonus || fresh.vaultBonus, nicknames: base.nicknames || fresh.nicknames, bag: addToBag(base.bag, keep) };
       return { ...patch, stats: merged, points: calcPoints(cur.pokedex || [], merged) };
     });
     // Hardcore: quem caiu não leva nada (nem o ouro trazido); quem sobreviveu ganha o dobro de ouro da conta
@@ -912,6 +971,13 @@ export async function adminOp(db, user, body) {
         vault.unshift({ uid: 'adm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), sp: body.species, lvl: Math.max(1, Math.min(60, Number(body.level) || 5)), shiny: !!body.shiny, aura: null, from: 'admin', at: new Date().toISOString() });
         return { vault }; // presente do admin nunca apaga nada (pode passar do limite)
       });
+      if (!ok) notFound('Usuário não encontrado.');
+      return { ok: true };
+    }
+    case 'grant_item': { // 🎒 prêmio de evento: item na Mochila da conta
+      if (!isKeepable(body.item)) bad('Só dá para dar Pokébolas, Amuleto Shiny e TM.');
+      const qty = Math.max(1, Math.min(99, Math.floor(Number(body.qty) || 1)));
+      const ok = await mutateProfile(db, body.userId, prof => ({ stats: { ...(prof.stats || {}), bag: addToBag(prof.stats?.bag, { [body.item]: qty }) } }));
       if (!ok) notFound('Usuário não encontrado.');
       return { ok: true };
     }

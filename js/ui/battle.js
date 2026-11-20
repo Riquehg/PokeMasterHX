@@ -10,6 +10,7 @@ import { whoMustAct } from '../../shared/engine.js';
 import { esc, hpClass } from './dom.js';
 import { monSprite, itemUrl, leaderUrl, typeLabel } from '../config.js';
 import { typeChips, edgeBadge, foeIntelHtml } from './common.js';
+import { canTransform } from '../../shared/rules/monsters.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
 import { wait } from './fx.js';
 
@@ -136,7 +137,14 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
         <span class="mv-name">${esc(m.name)}</span>
         <span class="mv-meta">${esc(typeLabel(m.type))}${dmg ? ` · poder ${Math.round((m.power || 1) * (stab ? 1.2 : 1) * 100)}%` : ''}${m.miss ? ` · erra no 🎲${m.miss === 1 ? '1' : '1–2'}` : ''}</span>${tag}</button>`;
     }).join('');
-    controls = `<div class="move-grid">${moveBtns}</div><div class="battle-actions">
+    // 🧬 Ditto/Mew: voltar à forma, guardar a forma e usar formas guardadas (até 3)
+    const formBar = canTransform(myMon) ? `<div class="form-bar">
+        <span class="tiny"><b>🧬 ${esc(getSpecies(myMon.tf ? myMon.tf.sp : myMon.sp).name)}</b>${myMon.tf ? ` como <b>${esc(getSpecies(myMon.sp).name)}</b>${myMon.shiny ? ' <span class="chip gold" title="Shiny transformado: +10% de ataque">✨ cópia forte</span>' : ''}` : ''}</span>
+        ${myMon.tf ? '<button class="btn sm" data-act="b-form" data-op="reset" title="Gasta a rodada">↩️ Voltar à forma</button>' : ''}
+        ${myMon.tf && !(myMon.forms || []).some(f => f.sp === myMon.sp) && (myMon.forms || []).length < 3 ? '<button class="btn sm green" data-act="b-form" data-op="store" title="Não gasta a rodada">💾 Guardar forma</button>' : ''}
+        ${(myMon.forms || []).map((f, i) => `<span class="form-chip ${myMon.tf && myMon.sp === f.sp ? 'on' : ''}"><button class="btn sm" data-act="b-form" data-op="use" data-i="${i}" title="Virar ${esc(getSpecies(f.sp)?.name)} (gasta a rodada)" ${myMon.tf && myMon.sp === f.sp ? 'disabled' : ''}><img src="${monSprite({ sp: f.sp })}" alt="">${esc(getSpecies(f.sp)?.name)}</button><button class="btn sm x" data-act="b-form" data-op="forget" data-i="${i}" title="Esquecer esta forma">✕</button></span>`).join('')}
+        <span class="tiny muted">${(myMon.forms || []).length}/3 formas</span></div>` : '';
+    controls = `<div class="move-grid">${moveBtns}</div>${formBar}<div class="battle-actions">
         <button class="btn blue" data-act="b-sub" data-sub="switch" ${myTeam.filter(m => m.hp > 0 && canUse(p, m)).length < 2 ? 'disabled' : ''}>🔄 Trocar</button>
         <button class="btn purple" data-act="b-sub" data-sub="item" ${items.length ? '' : 'disabled'}>🎒 Itens</button>
         <button class="btn green" data-act="b-sub" data-sub="ball" ${b.kind === 'wild' && balls.length ? '' : 'disabled'} ${b.kind === 'raid' ? 'title="Na Raid, vença primeiro: a captura é automática no fim"' : ''}>🔴 Capturar</button>
@@ -411,6 +419,12 @@ export async function playBattleFx(fxList) {
     } else if (f.k === 'faint') {
       const s = sprite(f.uid);
       if (s) s.classList.add('faint');
+      await wait(700);
+    } else if (f.k === 'transform') {
+      const el = sprite(f.uid);
+      if (el) { el.classList.remove('morph'); void el.offsetWidth; el.classList.add('morph'); el.src = monSprite({ sp: f.to, shiny: el.classList.contains('shiny') }); }
+      float(arena, el, f.reset ? '↩️' : '🧬', 'heal');
+      setHp(box(f.uid), f.hpAfter, f.maxHp);
       await wait(700);
     } else if (f.k === 'switch') {
       // entrada com a Pokébola abrindo (o sprite novo aparece no próximo desenho)

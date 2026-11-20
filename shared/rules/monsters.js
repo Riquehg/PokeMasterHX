@@ -65,7 +65,39 @@ export function rollIvs(rng) {
 export function statsOf(mon) {
   const st = computeStats(mon.sp, mon.lvl, mon.shiny, mon.nature, mon.iv);
   if (mon.bonusHp) st.maxHp += mon.bonusHp;
+  if (mon.tf && mon.shiny) st.atk = Math.round(st.atk * TRANSFORM_SHINY_ATK); // Ditto/Mew shiny transformado: cópia mais forte
   return st;
+}
+
+// ---------------------------------------------------------------- 🧬 Transformação (Ditto / Mew)
+export const TRANSFORM_SHINY_ATK = 1.1;
+const baseSp = mon => (mon.tf ? mon.tf.sp : mon.sp);
+const baseMoves = mon => (mon.tf ? mon.tf.moves : mon.moves);
+/** Pode se transformar? Ditto sempre; Mew se tiver o golpe Transform. */
+export function canTransform(mon) {
+  if (!mon) return false;
+  const sp = baseSp(mon);
+  return sp === 'ditto' || (sp === 'mew' && Array.isArray(baseMoves(mon)) && baseMoves(mon).includes('transform'));
+}
+/** Vira uma cópia de `sp` (com os golpes `moves`). Mantém nível, natureza, potencial e a % de HP. */
+export function transformInto(mon, sp, moves) {
+  const oldMax = maxHpOf(mon);
+  const ratio = oldMax > 0 ? mon.hp / oldMax : 1;
+  if (!mon.tf) mon.tf = { sp: mon.sp, moves: Array.isArray(mon.moves) ? [...mon.moves] : null };
+  mon.sp = sp;
+  mon.moves = Array.isArray(moves) && moves.length === 2 ? [...moves] : null;
+  mon.hp = mon.hp <= 0 ? 0 : Math.max(1, Math.round(maxHpOf(mon) * ratio));
+}
+/** Volta à forma original. */
+export function revertForm(mon) {
+  if (!mon?.tf) return false;
+  const oldMax = maxHpOf(mon);
+  const ratio = oldMax > 0 ? mon.hp / oldMax : 1;
+  mon.sp = mon.tf.sp;
+  mon.moves = mon.tf.moves;
+  delete mon.tf;
+  mon.hp = mon.hp <= 0 ? 0 : Math.max(1, Math.round(maxHpOf(mon) * ratio));
+  return true;
 }
 
 /** Tier usado para a regra de insígnias: o da espécie quando o Pokémon foi obtido. */
@@ -141,7 +173,7 @@ export function fullHeal(mon) {
 }
 
 /** Muda nível mantendo a proporção de HP. */
-function setLevel(mon, newLevel) {
+export function setLevel(mon, newLevel) {
   const oldMax = maxHpOf(mon);
   const ratio = oldMax > 0 ? mon.hp / oldMax : 1;
   mon.lvl = Math.min(MAX_LEVEL, newLevel);
@@ -172,7 +204,7 @@ export function gainXp(mon, amount) {
     const name = getSpecies(mon.sp).name;
     msgs.push(`${name} subiu para o nível ${mon.lvl}!`);
     const sp = getSpecies(mon.sp);
-    if (sp.evolvesTo && sp.evolutionLevel && mon.lvl >= sp.evolutionLevel) {
+    if (!mon.tf && sp.evolvesTo && sp.evolutionLevel && mon.lvl >= sp.evolutionLevel) {
       const ev = evolve(mon);
       if (ev) msgs.push(`✨ ${ev.from} evoluiu para ${ev.to}!`);
     }

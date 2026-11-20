@@ -5,8 +5,8 @@
 // Solo: a batalha normal (time inteiro) e, vencendo, a mesma fase de captura.
 import { getSpecies } from '../data/pokemon.js';
 import { ITEMS } from '../data/items.js';
-import { monMoves, STAB } from '../data/moves.js';
-import { statsOf, maxHpOf, healMon, fullHeal } from './monsters.js';
+import { monMoves, STAB, defaultMoveIds } from '../data/moves.js';
+import { statsOf, maxHpOf, healMon, fullHeal, transformInto, revertForm } from './monsters.js';
 import { against } from './types.js';
 import { fail, getPlayer, log, fx, takeItem, addItem, speciesName } from './helpers.js';
 import { canUse } from './helpers.js';
@@ -198,6 +198,11 @@ function resolveRaidRound(state, rng) {
       fx(state, { k: 'raid_heal', pid: p.id, amount: h });
       continue;
     }
+    if (move.kind === 'transform') { // 🧬 Ditto/Mew copiam o lendário durante a Raid
+      transformInto(m, boss.sp, Array.isArray(boss.moves) && boss.moves.length === 2 ? boss.moves : defaultMoveIds(boss.sp));
+      r.log.push(`🧬 ${p.name}: virou uma cópia de ${speciesName(boss.sp)}!`);
+      continue;
+    }
     if (move.kind === 'buff') { x.stage = Math.min(2, (x.stage || 0) + 1); r.log.push(`🔺 ${speciesName(m.sp)} (${p.name}) ficou mais forte!`); continue; }
     if (move.kind === 'debuff') { r.bossStage = Math.max(-2, r.bossStage - 1); r.log.push(`🔻 ${speciesName(m.sp)} (${p.name}) intimidou o lendário!`); continue; }
     const st = x.stage || 0;
@@ -250,6 +255,9 @@ function raidWon(state, rng) {
     addItem(p, 'rare_candy', 1);
     // muito raro: uma Bola da Confiança de lembrança da Raid (5%)
     if (rng.chance(0.05)) { addItem(p, 'trust_ball', 1); r.log.push(`🤝 ${p.name} encontrou uma Bola da Confiança no campo de batalha!`); log(state, `🤝 ${p.name} ganhou uma Bola da Confiança raríssima na Raid!`, 'shiny'); }
+    // 💿 TM (30%) e ✨ Amuleto Shiny (8%, só se ainda não tiver) — prêmios das Raids lendárias
+    if (rng.chance(0.3)) { addItem(p, 'tm', 1); r.log.push(`💿 ${p.name} ganhou um TM!`); log(state, `💿 ${p.name} ganhou um TM na Raid!`, 'good'); }
+    if (!p.items.shiny_charm && rng.chance(0.08)) { addItem(p, 'shiny_charm', 1); r.log.push(`✨ ${p.name} ganhou o Amuleto Shiny!`); log(state, `✨ ${p.name} ganhou o raríssimo Amuleto Shiny na Raid!`, 'shiny'); }
     p.stats.raids = (p.stats.raids || 0) + 1;
     progressMission(state, p.id, { k: 'raid_win' });
   }
@@ -262,6 +270,7 @@ function raidWon(state, rng) {
 
 function finishRaid(state) {
   const r = state.raid;
+  for (const x of r.party || []) for (const m of getPlayer(state, x.pid)?.team || []) if (m.tf) revertForm(m);
   state.lastRaid = { sp: r.boss.sp, log: r.log.slice(-10) };
   state.raid = null;
   state.phase = 'action';
