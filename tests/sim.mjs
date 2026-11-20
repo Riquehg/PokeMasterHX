@@ -6,7 +6,7 @@ export function simulate(seed, nPlayers = 4, maxTurns = 400) {
   let state = createMatch({ map: process.env.SIM_MAP || 'kanto', rules: process.env.SIM_RULES || 'classic',
     seed, mode: 'local', now: 0,
     players: Array.from({ length: nPlayers }, (_, i) => ({ id: 'b' + i, name: 'CPU ' + (i + 1), isBot: true })),
-    options: { dailyPokemon: 'pikachu' }
+    options: { dailyPokemon: 'pikachu', hardcore: !!process.env.SIM_HC }
   });
   state.logCap = 1e6;
   let loops = 0;
