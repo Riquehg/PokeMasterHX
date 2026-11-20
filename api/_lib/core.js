@@ -404,16 +404,44 @@ async function mapDataFor(db, mapId) {
   return data;
 }
 
+// Salas "no limbo": lobby sem ninguém olhando some da lista em 15 min e é encerrado em 2 h;
+// partida em andamento sem jogadas há 30 min some da lista (e é encerrada em 6 h se só sobrou CPU ou ninguém joga).
+export const LOBBY_HIDE_MIN = 15, LOBBY_CLOSE_MIN = 120, PLAYING_HIDE_MIN = 30, PLAYING_CLOSE_MIN = 360;
+const ageMin = r => (Date.now() - new Date(r.updated_at || r.updatedAt || 0).getTime()) / 60000;
+
+async function closeStale(db, rows) {
+  for (const r of rows) {
+    const old = r.status === 'lobby' ? ageMin(r) > LOBBY_CLOSE_MIN : r.status === 'playing' && ageMin(r) > PLAYING_CLOSE_MIN && !['duel', 'cup'].includes(r.options?.mode);
+    if (!old) continue;
+    try {
+      const full = await db.getMatch(r.id);
+      if (full && full.status === r.status) await db.updateMatch(full.id, full.version, { status: 'abandoned', version: full.version + 1 });
+    } catch { /* tenta de novo na próxima */ }
+  }
+}
+
 export async function listRooms(db, user) {
-  const rows = await db.listOpenMatches();
-  const mine = user ? await db.myMatches(user.id) : [];
+  const all = await db.listOpenMatches();
+  const mineAll = user ? await db.myMatches(user.id) : [];
+  try { await closeStale(db, [...all, ...mineAll]); } catch { /* limpeza é opcional */ }
+  const alive = r => (r.status === 'lobby' ? ageMin(r) <= LOBBY_HIDE_MIN : ageMin(r) <= PLAYING_HIDE_MIN);
+  const rows = all.filter(alive);
+  const mine = mineAll.filter(r => (r.status === 'lobby' ? ageMin(r) <= LOBBY_CLOSE_MIN : ageMin(r) <= PLAYING_CLOSE_MIN || ['duel', 'cup'].includes(r.options?.mode)));
   const brief = r => ({
     id: r.id, code: r.code, name: r.name, status: r.status, hasPin: !!r.has_pin,
     mode: r.options?.mode || 'balanced', levelCap: r.options?.levelCap || 0, turnLimit: r.options?.turnLimit || 0, rules: r.options?.rules || 'classic', map: r.options?.map || 'kanto', hardcore: !!r.options?.hardcore,
-    players: (r.lobby || []).length, maxPlayers: r.options?.maxPlayers || 4,
+    players: (r.lobby || []).filter(e => !e.left).length, maxPlayers: r.options?.maxPlayers || 4,
     host: (r.lobby || []).find(e => e.id === r.host_id)?.name || '?', updatedAt: r.updated_at
   });
   return { rooms: rows.filter(r => !['solo', 'duel_queue'].includes(r.options?.mode)).map(brief), mine: mine.filter(r => r.options?.mode !== 'duel_queue').map(brief) };
+}
+
+/** Quem cria uma sala nova sai das salas de espera antigas dele (evita salas duplicadas no limbo). */
+async function leaveOldLobbies(db, user) {
+  for (const b of await db.myMatches(user.id)) {
+    if (b.status !== 'lobby' || ['duel_queue'].includes(b.options?.mode)) continue;
+    try { const row = await db.getMatch(b.id); if (row?.status === 'lobby') await leaveRoom(db, user, row); } catch { /* ok */ }
+  }
 }
 
 function lobbyEntry(profile, body) {
@@ -474,6 +502,8 @@ export async function matchOp(db, user, body) {
     if (!row) notFound('Sala não encontrada.');
     const members = await db.listMembers(row.id);
     if (!members.includes(user.id) && !(row.status === 'lobby' && row.is_public)) forbidden();
+    // 💓 quem está com a sala aberta mantém ela "viva" (a tela da sala consulta a cada 5 s)
+    if (row.status === 'lobby' && members.includes(user.id) && ageMin(row) > 3) { try { await db.updateMatch(row.id, row.version, {}); } catch { /* ok */ } }
     return { match: publicMatch(row, user.id) };
   }
 
@@ -644,6 +674,7 @@ async function startRoom(db, row, lobby, userId) {
 
 async function createRoom(db, user, body) {
   const profile = await getOrCreateProfile(db, user);
+  await leaveOldLobbies(db, user);
   const name = cleanName(body.name, `Sala de ${profile.trainer_name}`).slice(0, 30);
   const options = normalizeOptions({ mode: body.mode, maxPlayers: body.maxPlayers, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap, map: body.map, rules: body.rules, hardcore: !!body.hardcore });
   if (options.mode === 'solo') options.mode = 'balanced';
@@ -673,6 +704,7 @@ async function insertRoom(db, user, { name, options, isPublic, pin, lobby }) {
 /** Partida contra CPUs que roda no servidor e salva na conta (Coleção, Pokédex). */
 async function createSolo(db, user, body) {
   const profile = await getOrCreateProfile(db, user);
+  await leaveOldLobbies(db, user);
   const bots = Math.max(1, Math.min(5, Number(body.bots) || 1));
   const useCollection = Array.isArray(body.teamUids) && body.teamUids.length > 0;
   const options = normalizeOptions({ mode: useCollection ? 'collection' : 'balanced', maxPlayers: bots + 1, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap || 0, map: body.map, rules: body.rules, hardcore: !!body.hardcore });
@@ -771,6 +803,12 @@ async function leaveRoom(db, user, row) {
   if (row.status === 'playing') {
     const r = await actionOp(db, user, { matchId: row.id, action: { type: 'leave' } });
     await db.removeMember(row.id, user.id); // some da lista "Minhas partidas" e para de receber as jogadas
+    // saiu o último treinador de verdade e só sobraram CPUs: encerra (não fica "em andamento" no limbo)
+    try {
+      const cur = await db.getMatch(row.id);
+      const humans = (cur?.state?.players || []).filter(p => !p.isBot && !String(p.id).startsWith('cpu_') && !p.left && !p.kicked);
+      if (cur?.status === 'playing' && !humans.length) await db.updateMatch(cur.id, cur.version, { status: 'abandoned', version: cur.version + 1 });
+    } catch { /* ok */ }
     return r;
   }
   await db.removeMember(row.id, user.id);
