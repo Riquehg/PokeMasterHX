@@ -8,6 +8,7 @@ import { createMon } from '../../shared/rules/monsters.js';
 import { createRng, randomSeed } from '../../shared/rules/rng.js';
 import { bad, notFound, publicMatch, mutateProfile, getOrCreateProfile, addToBag } from './core.js';
 import { createDuelMatch } from './tournament.js';
+import { getShop, equippedSkin, equippedCosmetic } from './shop.js';
 
 const CPU_PREFIX = 'cpu_s_';
 const full = (db, m) => (m ? db.getMatch(m.id) : null);
@@ -134,11 +135,13 @@ async function serieView(db, userId, serie, vault, now) {
   const rows = await db.listProfiles(2000);
   const season = serie.season;
   const humans = [];
+  let shopItems = [];
+  try { shopItems = (await getShop(db)).items || []; } catch { /* sem vitrine: avatar padrão */ }
   for (const r of rows) {
     const s = r.stats?.serie;
     if (!s || s.season !== season || (s.div | 0) !== serie.div || !(s.defense || []).length) continue;
     const def = teamFrom(r.vault || [], s.defense);
-    humans.push({ id: r.id, name: r.trainer_name, avatar: r.avatar, club: s.team || cleanTeam(null, `${r.trainer_name} FC`), trophies: (r.stats?.trophies || []).length, pts: s.pts | 0, j: s.j | 0, v: s.v | 0, d: s.d | 0, sp: s.sp | 0, dv: s.dv | 0, dd: s.dd | 0,
+    humans.push({ id: r.id, name: r.trainer_name, avatar: r.avatar, skin: equippedSkin(r, shopItems), club: s.team || cleanTeam(null, `${r.trainer_name} FC`), trophies: (r.stats?.trophies || []).length, pts: s.pts | 0, j: s.j | 0, v: s.v | 0, d: s.d | 0, sp: s.sp | 0, dv: s.dv | 0, dd: s.dd | 0,
       defense: def.map(m => ({ sp: m.sp, lvl: m.lvl, shiny: !!m.shiny })), me: r.id === userId });
   }
   const raw = serieTable(serie.div, humans, season, now, await botAdj(db, season));
@@ -195,12 +198,12 @@ async function challenge(db, user, prof, serie, body, now) {
     if (!other || os?.season !== serie.season || (os.div | 0) !== serie.div) bad('Esse treinador não está na sua série nesta temporada.');
     const team = teamFrom(other.vault || [], os.defense || []);
     if (!team.length) bad('Esse treinador está sem time de defesa.');
-    foe = { id: `${CPU_PREFIX}${other.id.slice(0, 12)}`, name: `${os.team?.name || other.trainer_name + ' FC'} (${other.trainer_name})`, avatar: other.avatar || 1, isBot: true, teamMons: team, ref: other.id };
+    foe = { id: `${CPU_PREFIX}${other.id.slice(0, 12)}`, name: `${os.team?.name || other.trainer_name + ' FC'} (${other.trainer_name})`, avatar: other.avatar || 1, cosmetic: await equippedCosmetic(db, other).catch(() => null), isBot: true, teamMons: team, ref: other.id };
   }
   // gasta o ataque ao começar (sair no meio não devolve)
   serie = { ...serie, dayCount: serie.dayCount + 1, foesToday: [...(serie.foesToday || []), target] };
   await saveSerie(db, user.id, serie);
-  const me = { id: user.id, name: serie.team?.name || prof.trainer_name, avatar: prof.avatar || 1, teamMons: myTeam };
+  const me = { id: user.id, name: serie.team?.name || prof.trainer_name, avatar: prof.avatar || 1, cosmetic: await equippedCosmetic(db, prof).catch(() => null), teamMons: myTeam };
   const row = await createDuelMatch(db, {
     name: `⚽ ${serieInfo(serie.div).name}: ${me.name} x ${foe.name}`, a: me, b: foe, hostId: user.id,
     options: { mode: 'duel', serie: { season: serie.season, div: serie.div, attacker: user.id, defender: foe.ref } }

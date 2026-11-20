@@ -53,6 +53,12 @@ function myCosmetics(profile) {
   return { owned: Array.isArray(c.owned) ? c.owned : [], equipped: c.equipped || {} };
 }
 
+/** Skin de treinador equipada (com a vitrine já carregada — para listas com muitos perfis). */
+export function equippedSkin(profile, items) {
+  const id = myCosmetics(profile || {}).equipped.skin;
+  return sanitizeCosmetic({ skin: id ? items.find(i => i.id === id)?.value : null })?.skin || null;
+}
+
 /** Cosmético equipado no formato que o motor entende ({ aura, frame, title }). */
 export async function equippedCosmetic(db, profile) {
   const { equipped } = myCosmetics(profile);

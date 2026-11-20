@@ -236,3 +236,14 @@ test('captura lendária: repele acima de 50%, 2 dados com teto de bônus, Mític
   assert.ok(s.log.some(l => /repeliu/.test(l.msg)));
   assert.equal(s.players[0].items.ultra_ball, 2);
 });
+
+test('Séries: a tabela mostra a skin de treinador comprada na loja', async () => {
+  const { db, us: [a] } = await users(1);
+  const p = await db.getProfile(a.id);
+  await db.updateProfileIf(a.id, p.rev || 0, { cosmetics: { owned: ['skin_leon'], equipped: { skin: 'skin_leon' } } });
+  await matchOp(db, a, { op: 'serie_defense', uids: p.vault.map(m => m.uid) });
+  const v = await matchOp(db, a, { op: 'serie_get' });
+  assert.equal(v.table.find(r => r.me).skin, 'leon');
+  const c = await matchOp(db, a, { op: 'serie_challenge', target: botsOf(0)[0].id });
+  assert.equal(c.match.state.players[0].cosmetic.skin, 'leon');
+});

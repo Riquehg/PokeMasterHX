@@ -103,7 +103,7 @@ export const supabaseDb = {
   },
 
   async listProfiles(limit) {
-    return check(await admin().from('profiles').select('id, trainer_name, avatar, points, rating, diamonds, gold, stats, pokedex, vault, is_admin, last_seen').order('points', { ascending: false }).limit(limit));
+    return check(await admin().from('profiles').select('id, trainer_name, avatar, points, rating, diamonds, gold, stats, pokedex, vault, is_admin, last_seen, cosmetics').order('points', { ascending: false }).limit(limit));
   },
 
   async getMatch(id) {
