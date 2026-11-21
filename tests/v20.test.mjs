@@ -403,3 +403,55 @@ test('♂/♀ sexo fixo pelo uid; 🌾 Fazenda: XP com o tempo (teto diário, Nv
   assert.equal((await profileOp(db, a, { op: 'farm_top' })).top[0].id, a.id);
   await assert.rejects(profileOp(db, a, { op: 'train', uid: va[0].uid }), /Fazenda/);
 });
+
+test('🥚 Creche: compatibilidade, ovos com o tempo (limite/incubadora), herança, mutações e chocar na Coleção', async () => {
+  const { canBreed, baseForm, makeEgg, MUTATION } = await import('../shared/data/daycare.js');
+  const M = (sp, g, extra = {}) => ({ uid: sp + g + Math.random(), sp, gender: g, lvl: 30, iv: { hp: 31, atk: 31, spe: 31 }, nature: 'adamant', moves: ['fire_q', 'fire_x'], ...extra });
+  assert.equal(baseForm('charizard'), 'charmander');
+  assert.ok(canBreed(M('charizard', 'F'), M('charmander', 'M')).ok);
+  assert.match(canBreed(M('charizard', 'M'), M('charmander', 'M')).why, /macho/);
+  assert.match(canBreed(M('pikachu', 'F'), M('squirtle', 'M')).why, /Não combinam/);
+  assert.ok(canBreed(M('arcanine', 'F'), M('charmeleon', 'M')).ok, 'tipo em comum');
+  assert.ok(canBreed(M('magnemite', 'N'), M('ditto', 'N')).ok, 'sem sexo só com Ditto');
+  assert.match(canBreed(M('ditto', 'N'), M('ditto', 'N')).why, /Dois Ditto/);
+  assert.match(canBreed(M('zapdos', 'N'), M('ditto', 'N')).why, /Lendários/);
+  const rng = createRng(7);
+  const e = makeEgg(rng, M('charizard', 'F'), M('arcanine', 'M'), { natureFrom: 'mother' });
+  assert.equal(e.sp, 'charmander');
+  assert.equal(e.nature, 'adamant');
+  assert.ok(['hp', 'atk', 'spe'].filter(k => e.iv[k] === 31).length >= 2, 'herdou 2 potenciais perfeitos');
+  let shiny = 0, perfect = 0;
+  const r2 = createRng(99);
+  for (let i = 0; i < 4000; i++) { const x = makeEgg(r2, M('pidgey', 'F', { iv: { hp: 0, atk: 0, spe: 0 } }), M('pidgey', 'M', { iv: { hp: 0, atk: 0, spe: 0 } })); if (x.shiny) shiny++; if (x.mutations.includes('perfect')) perfect++; }
+  assert.ok(shiny > 10 && shiny < 60, `shiny ~1/150 (${shiny}/4000)`);
+  assert.ok(perfect > 25 && perfect < 80, `perfeito ~1/80 (${perfect}/4000)`);
+
+  const { db, us: [a] } = await users(1);
+  const admin = await db.verifyToken('dev:admin@kanto.com');
+  await adminOp(db, admin, { op: 'grant_mon', userId: a.id, species: 'ditto', level: 20 });
+  const v = (await db.getProfile(a.id)).vault;
+  const ditto = v.find(m => m.sp === 'ditto'), pika = v.find(m => m.sp === 'pikachu');
+  const set = await profileOp(db, a, { op: 'farm_daycare', a: ditto.uid, b: pika.uid });
+  assert.ok(set.farm.daycare.nextEggIn > 5 * 3600000);
+  // passa 30 h: no máximo 3 ovos (incubadora), não 5
+  const p = await db.getProfile(a.id);
+  p.stats.farm.daycare.since -= 30 * 3600000;
+  await db.updateProfileIf(a.id, p.rev || 0, { stats: p.stats });
+  const g = await profileOp(db, a, { op: 'farm_get' });
+  assert.ok(g.farm.eggs.length >= 1 && g.farm.eggs.length <= 3);
+  const egg = g.farm.eggs[0];
+  await assert.rejects(profileOp(db, a, { op: 'farm_hatch', id: 'nada' }), /não encontrado/);
+  void egg;
+  await profileOp(db, a, { op: 'farm_daycare', a: ditto.uid, b: pika.uid }); // grava a Fazenda com os ovos (mesmo casal mantém o relógio)
+  const p3 = await db.getProfile(a.id);
+  assert.ok(p3.stats.farm.eggs.length >= 1);
+  p3.stats.farm.eggs[0].readyAt = Date.now() - 1000;
+  await db.updateProfileIf(a.id, p3.rev || 0, { stats: p3.stats });
+  const eid = (await db.getProfile(a.id)).stats.farm.eggs[0].id;
+  const h = await profileOp(db, a, { op: 'farm_hatch', id: eid });
+  assert.equal(h.baby.sp, 'pichu', 'nasce na forma básica');
+  assert.equal(h.baby.lvl, 5);
+  assert.ok(h.baby.bred);
+  assert.ok(h.profile.vault.some(m => m.uid === h.baby.uid));
+  assert.ok(['M', 'F'].includes(h.baby.gender));
+});

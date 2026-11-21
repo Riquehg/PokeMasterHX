@@ -6,22 +6,57 @@ import {
   newFarm, tickFarm, pendingOf, slotsFor, addFarmXp, bestBiome, brtDay, decorItemId, farmLevelXp
 } from '../../shared/data/farm.js';
 import { bad, notFound, mutateProfile, getOrCreateProfile } from './core.js';
+import { canBreed, makeEgg, hatchFromEgg, eggsDue, EGG_EVERY_H, EGGS_PER_DAY, INCUBATOR_MAX, NATURE_COST, daycareDay } from '../../shared/data/daycare.js';
+import { createRng, randomSeed } from '../../shared/rules/rng.js';
 import { myCosmetics } from './shop.js';
 
 const typesOf = mon => getSpecies(mon.sp)?.types || ['normal'];
 const vaultMap = prof => new Map((prof.vault || []).map(m => [m.uid, m]));
 const clone = o => JSON.parse(JSON.stringify(o));
 
+const hashStr = str => { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+
+/** 🥚 Creche: põe os ovos que o casal fez desde a última vez (sorteio fixo por casal+hora → igual em toda leitura). */
+function tickDaycare(farm, vm, now) {
+  const dc = farm.daycare;
+  if (!dc?.a || !dc?.b) return;
+  const a = vm.get(dc.a), b = vm.get(dc.b);
+  const chk = canBreed(a, b);
+  if (!chk.ok) { farm.daycare = null; return; } // um dos pais saiu da Coleção
+  farm.eggs ||= [];
+  for (let guard = 0; guard < 8; guard++) {
+    const due = eggsDue(dc, now, 0, farm.eggs.length);
+    if (!due) break;
+    const laid = dc.since + EGG_EVERY_H * 3600000;
+    const day = daycareDay(laid);
+    if (farm.eggDay !== day) { farm.eggDay = day; farm.eggCount = 0; }
+    dc.since = laid;
+    if (farm.eggCount >= EGGS_PER_DAY) continue; // limite do dia: esse ovo não vem
+    let natureFrom = dc.natureFrom || null;
+    if (natureFrom && (farm.res.crystal || 0) >= NATURE_COST.crystal) farm.res.crystal -= NATURE_COST.crystal; else natureFrom = null;
+    const rng = createRng(hashStr(`${dc.a}|${dc.b}|${laid}`));
+    farm.eggs.push(makeEgg(rng, chk.mother, chk.father, { natureFrom: natureFrom === 'mother' || natureFrom === 'father' ? natureFrom : null, now: laid }));
+    farm.eggCount++;
+  }
+  // incubadora cheia: o relógio do próximo ovo espera (não acumula)
+  if (farm.eggs.length >= INCUBATOR_MAX && now - dc.since > EGG_EVERY_H * 3600000) dc.since = now - EGG_EVERY_H * 3600000 + 60000;
+}
+
 /** Fazenda atualizada até agora (sem gravar). */
 function current(prof, now = Date.now()) {
   const farm = clone(prof.stats?.farm || newFarm(now));
-  tickFarm(farm, vaultMap(prof), typesOf, now);
+  const vm = vaultMap(prof);
+  tickFarm(farm, vm, typesOf, now);
+  tickDaycare(farm, vm, now);
   return farm;
 }
+
+const monBrief = m => m && { uid: m.uid, sp: m.sp, lvl: m.lvl, shiny: !!m.shiny, gender: m.gender || null, nick: m.nick || null, iv: m.iv || null, nature: m.nature || null };
 
 /** O que o cliente precisa para desenhar (dono ou visitante). */
 function view(prof, farm, viewerId) {
   const vm = vaultMap(prof);
+  void vm;
   const mine = prof.id === viewerId;
   const day = brtDay();
   return {
@@ -40,6 +75,12 @@ function view(prof, farm, viewerId) {
     likedToday: !mine && farm.likesBy?.[viewerId] === day,
     helpedToday: !mine && farm.helpsBy?.[viewerId] === day,
     visits: mine ? (farm.visits || []).slice(0, 20) : undefined,
+    daycare: mine && farm.daycare ? (() => {
+      const dc = farm.daycare, a = vm.get(dc.a), b = vm.get(dc.b);
+      return { a: monBrief(a), b: monBrief(b), natureFrom: dc.natureFrom || null, nextEggIn: Math.max(0, dc.since + EGG_EVERY_H * 3600000 - Date.now()) };
+    })() : null,
+    eggs: mine ? (farm.eggs || []).map(e => ({ id: e.id, tier: e.tier, readyAt: e.readyAt, ready: e.readyAt <= Date.now(), parentSp: e.parentSp, laid: e.laid })) : undefined,
+    eggsToday: mine ? (farm.eggDay === daycareDay() ? farm.eggCount || 0 : 0) : undefined,
     ownedDecor: mine ? Object.keys(FARM_DECOR).filter(k => FARM_DECOR[k].price === 0 || myCosmetics(prof).owned.includes(decorItemId(k))) : undefined
   };
 }
@@ -193,6 +234,42 @@ export async function farmOp(db, user, body) {
     })).filter(d => FARM_DECOR[d.k] && (FARM_DECOR[d.k].price === 0 || owned.has(decorItemId(d.k))));
     const { prof } = await save(db, user.id, farm => { farm.decor = list; return {}; });
     return { farm: view(prof, current(prof, now), user.id) };
+  }
+
+  if (body.op === 'farm_daycare') { // 🥚 montar o casal da Creche
+    const vm = vaultMap(p);
+    const a = vm.get(String(body.a || '')), b = vm.get(String(body.b || ''));
+    const chk = canBreed(a, b);
+    if (!chk.ok) bad(chk.why);
+    const natureFrom = ['mother', 'father'].includes(body.natureFrom) ? body.natureFrom : null;
+    const { prof } = await save(db, user.id, farm => {
+      const same = farm.daycare && ((farm.daycare.a === a.uid && farm.daycare.b === b.uid) || (farm.daycare.a === b.uid && farm.daycare.b === a.uid));
+      farm.daycare = { a: a.uid, b: b.uid, natureFrom, since: same ? farm.daycare.since : now };
+      return {};
+    });
+    return { farm: view(prof, current(prof, now), user.id) };
+  }
+  if (body.op === 'farm_daycare_clear') {
+    const { prof } = await save(db, user.id, farm => { farm.daycare = null; return {}; });
+    return { farm: view(prof, current(prof, now), user.id) };
+  }
+  if (body.op === 'farm_hatch') { // 🐣 chocar um ovo pronto → vai para a Coleção
+    let baby = null;
+    const prof = await mutateProfile(db, user.id, cur => {
+      const farm = current(cur, now);
+      const egg = (farm.eggs || []).find(e => e.id === body.id);
+      if (!egg) bad('Ovo não encontrado.');
+      if (egg.readyAt > now) bad('Esse ovo ainda não está pronto.');
+      const cap = 300 + (cur.stats?.vaultBonus || 0);
+      if ((cur.vault || []).length >= cap) bad('Sua Coleção está cheia. Solte alguns Pokémon antes de chocar.');
+      baby = hatchFromEgg(createRng(randomSeed()), egg, cur.trainer_name);
+      farm.eggs = farm.eggs.filter(e => e.id !== egg.id);
+      addFarmXp(farm, 10);
+      const pd = new Set(cur.pokedex || []);
+      pd.add(baby.sp);
+      return { vault: [...(cur.vault || []), baby], pokedex: [...pd], stats: { ...(cur.stats || {}), farm } };
+    });
+    return { farm: view(prof, current(prof, now), user.id), profile: prof, baby };
   }
 
   bad('Operação da Fazenda inválida.');

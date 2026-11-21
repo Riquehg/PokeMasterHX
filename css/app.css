@@ -1749,3 +1749,16 @@ body.in-game .soc-panel { height: min(520px, calc(100dvh - 80px)); }
 @media (prefers-reduced-motion: reduce) { .fm-mon, .fm-mon img { animation: none; } }
 .fm-head .grow { min-width: 140px; }
 @media (max-width: 600px) { .fm-zlabel { font-size: 9px; padding: 1px 5px; } .fm-res { font-size: 12px; gap: 5px; } }
+/* 🥚 Creche */
+.dc-pair { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 8px 0; }
+.dc-parent { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px; min-width: 140px; border-radius: 12px; background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.12); text-align: center; }
+.dc-parent img { width: 64px; height: 64px; object-fit: contain; image-rendering: pixelated; }
+.dc-parent.empty { font-size: 34px; justify-content: center; min-height: 140px; }
+.dc-heart { font-size: 30px; animation: fmHop 1.4s ease-in-out infinite; }
+.dc-eggs { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.dc-egg { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; border-radius: 12px; text-align: center; background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--ec) 35%, transparent), rgba(0,0,0,.25)); border: 1px solid color-mix(in srgb, var(--ec) 60%, transparent); }
+.dc-eggic { font-size: 40px; filter: drop-shadow(0 3px 4px rgba(0,0,0,.4)); }
+.dc-egg.ready .dc-eggic { animation: dcWobble .9s ease-in-out infinite; }
+.dc-mut { margin: 8px auto; padding: 8px 12px; border-radius: 12px; font-weight: 900; color: var(--gold); background: rgba(255,210,90,.12); border: 1px solid var(--gold); display: inline-block; }
+.dc-born .pk-card { margin: 0 auto; }
+@keyframes dcWobble { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-14deg); } 75% { transform: rotate(14deg); } }
