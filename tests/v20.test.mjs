@@ -306,3 +306,35 @@ test('Séries: pontos de largada, horário de Brasília, cron de fechamento e ja
   assert.equal((await db.getProfile(a.id)).stats.serie.prev.seen, true);
   assert.equal((await serieCron(db, new Date('2026-11-15T03:10:00Z'))).closed, null);
 });
+
+test('🎁 prêmio diário: sequência, reset ao perder dia, uma vez por dia; 📦 boxes da Coleção; 🛡️ defesa vista', async () => {
+  const { dailyStatus, DAILY_REWARDS } = await import('../shared/data/daily.js');
+  const d1 = new Date('2026-11-20T15:00:00Z'), d2 = new Date('2026-11-21T15:00:00Z'), d4 = new Date('2026-11-23T15:00:00Z');
+  assert.equal(dailyStatus(null, d1).nextStreak, 1);
+  assert.equal(dailyStatus({ last: '2026-11-20', streak: 3 }, d2).nextStreak, 4);
+  assert.equal(dailyStatus({ last: '2026-11-20', streak: 3 }, d4).nextStreak, 1, 'perdeu dia: volta ao 1');
+  assert.equal(dailyStatus({ last: '2026-11-20', streak: 7 }, d2).cycleDay, 1, 'depois do dia 7 recomeça o ciclo');
+  assert.ok(dailyStatus({ last: '2026-11-20', streak: 27 }, d2).bonus.master_ball);
+  assert.equal(DAILY_REWARDS.length, 7);
+
+  const { db, us: [a] } = await users(1);
+  const g0 = (await db.getProfile(a.id)).gold || 0;
+  const r = await profileOp(db, a, { op: 'daily_claim' });
+  assert.equal(r.claimed.streak, 1);
+  assert.equal((r.profile.gold || 0) - g0, 300);
+  await assert.rejects(profileOp(db, a, { op: 'daily_claim' }), /já pegou/);
+
+  const vault = (await db.getProfile(a.id)).vault;
+  const b = await profileOp(db, a, { op: 'boxes_set', boxes: [
+    { id: 'b1', name: 'Fortes', icon: '⚔️', uids: [vault[0].uid, vault[1].uid, 'naoexiste'] },
+    { id: 'b2', name: '<b>Água</b>', icon: 'xx', uids: [vault[1].uid, vault[2].uid] }] });
+  const bx = b.profile.stats.boxes;
+  assert.deepEqual(bx[0].uids, [vault[0].uid, vault[1].uid]);
+  assert.deepEqual(bx[1].uids, [vault[2].uid], 'um Pokémon fica em uma box só');
+  assert.equal(bx[1].icon, '📦');
+  assert.ok(!bx[1].name.includes('<'));
+
+  await matchOp(db, a, { op: 'serie_defense', uids: vault.map(m => m.uid) });
+  await matchOp(db, a, { op: 'serie_def_seen' });
+  assert.ok((await db.getProfile(a.id)).stats.serie.defSeen > 0);
+});

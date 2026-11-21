@@ -2,6 +2,8 @@
 // Recebe um "db" (adaptador Supabase em produção, memória no servidor de desenvolvimento/testes).
 import { createMatch, applyAction, addLatePlayer, score, MAX_PLAYERS, fillTraits, BRING_GOLD_OPTIONS } from '../../shared/engine.js';
 import { isMapId, validateCustomMap } from '../../shared/data/board.js';
+import { dailyStatus, loginDay } from '../../shared/data/daily.js';
+import { BOX_MAX, BOX_ICONS } from '../../shared/data/boxes.js';
 import { randomSeed } from '../../shared/rules/rng.js';
 import { ELO_TIERS } from '../../shared/data/elo.js';
 import { ensureSeason, applyLeagueResult, leagueSort, seasonId, seasonName, divInfo, LEAGUE_DIVS } from '../../shared/data/league.js';
@@ -231,6 +233,36 @@ export async function profileOp(db, user, body) {
       st.overflow = [{ ...m, outAt: new Date().toISOString(), why: 'solto' }, ...(st.overflow || [])].slice(0, OVERFLOW_MAX);
       return { vault: (prof.vault || []).filter(x => x.uid !== body.uid), stats: st };
     })) };
+  }
+  if (body.op === 'daily_claim') { // 🎁 prêmio diário com sequência
+    const now = new Date();
+    const stt = dailyStatus(p.stats?.login, now);
+    if (!stt.canClaim) bad('Você já pegou o prêmio de hoje. Volte amanhã!');
+    const items = { ...(stt.reward.items || {}) };
+    if (stt.bonus) for (const [k, q] of Object.entries(stt.bonus)) items[k] = (items[k] || 0) + q;
+    let ok = false;
+    const prof = await mutateProfile(db, user.id, cur => {
+      const s2 = dailyStatus(cur.stats?.login, now);
+      if (!s2.canClaim) return null; // dois cliques ao mesmo tempo
+      ok = true;
+      const login = { last: loginDay(now), streak: s2.nextStreak, best: Math.max(cur.stats?.login?.best || 0, s2.nextStreak), total: (cur.stats?.login?.total || 0) + 1 };
+      return { stats: { ...(cur.stats || {}), login, bag: Object.keys(items).length ? addToBag(cur.stats?.bag, items) : cur.stats?.bag } };
+    });
+    if (!ok) bad('Você já pegou o prêmio de hoje.');
+    if (stt.reward.gold) await db.walletAdd(user.id, 0, stt.reward.gold);
+    return { profile: await withCosmetic(db, await db.getProfile(user.id) || prof), claimed: { day: stt.cycleDay, streak: stt.nextStreak, gold: stt.reward.gold || 0, items } };
+  }
+  if (body.op === 'boxes_set') { // 📦 boxes da Coleção (organização: cada Pokémon fica em no máximo uma box)
+    const vaultIds = new Set((p.vault || []).map(m => m.uid));
+    const used = new Set();
+    const boxes = (Array.isArray(body.boxes) ? body.boxes : []).slice(0, BOX_MAX).map((b, i) => ({
+      id: String(b?.id || '').replace(/[^a-z0-9_-]/gi, '').slice(0, 12) || `b${i + 1}`,
+      name: String(b?.name || '').replace(/[<>"'`&\\]/g, '').trim().slice(0, 16) || `Box ${i + 1}`,
+      icon: BOX_ICONS.includes(b?.icon) ? b.icon : BOX_ICONS[0],
+      uids: (Array.isArray(b?.uids) ? b.uids : []).map(String).filter(u => vaultIds.has(u) && !used.has(u) && used.add(u))
+    }));
+    if (new Set(boxes.map(b => b.id)).size !== boxes.length) bad('Boxes repetidas.');
+    return { profile: await withCosmetic(db, await mutateProfile(db, user.id, cur => ({ stats: { ...(cur.stats || {}), boxes } }))) };
   }
   if (body.op === 'favorite') {
     return { profile: await withCosmetic(db, await mutateProfile(db, user.id, prof => ({ vault: (prof.vault || []).map(m => (m.uid === body.uid ? { ...m, fav: !m.fav } : m)) }))) };
@@ -493,7 +525,7 @@ export async function matchOp(db, user, body) {
   if (op === 'create') return createRoom(db, user, body);
   if (op === 'solo') return createSolo(db, user, body);
   if (op === 'join') return joinRoom(db, user, body);
-  if (op === 'serie_get' || op === 'serie_defense' || op === 'serie_challenge' || op === 'serie_team' || op === 'serie_seen') return serieOp(db, user, body);
+  if (op === 'serie_get' || op === 'serie_defense' || op === 'serie_challenge' || op === 'serie_team' || op === 'serie_seen' || op === 'serie_def_seen') return serieOp(db, user, body);
   if (op === 'duel_queue') return duelQueue(db, user, body, await getOrCreateProfile(db, user));
   if (op === 'duel_status') return duelQueueStatus(db, user);
   if (op === 'duel_cancel') return duelQueueCancel(db, user);

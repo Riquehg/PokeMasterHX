@@ -149,8 +149,9 @@ export async function serieOp(db, user, body) {
   // 🏁 quem se inscreveu com a temporada andando (antes desta regra) ganha os pontos de largada uma vez
   if (serie.start === undefined && (serie.defense || []).length) { const st = lateStartPoints(serie.div, serie.season, now); serie = { ...serie, start: st, pts: (serie.pts | 0) + st }; changed = true; }
   if (body.op === 'serie_seen' && serie.prev && !serie.prev.seen) { serie = { ...serie, prev: { ...serie.prev, seen: true } }; changed = true; }
+  if (body.op === 'serie_def_seen') { serie = { ...serie, defSeen: Date.now() }; changed = true; }
   if (changed) await saveSerie(db, user.id, serie);
-  if (body.op === 'serie_seen') return { ok: true };
+  if (body.op === 'serie_seen' || body.op === 'serie_def_seen') return { ok: true };
   const vault = prof.vault || [];
 
   if (body.op === 'serie_team') { // ⚽ nome e escudo do time

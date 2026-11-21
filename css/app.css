@@ -1672,3 +1672,34 @@ body.in-game .soc-panel { height: min(520px, calc(100dvh - 80px)); }
 .sr-move.up { background: rgba(74,208,122,.2); color: #8ff0bd; } .sr-move.down { background: rgba(239,80,80,.2); color: #ff9b9e; }
 .sr-cup { display: flex; flex-direction: column; gap: 2px; margin: 8px auto; font-size: 22px; font-weight: 900; color: var(--gold); }
 .sr-prizes { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; padding: 8px; border-radius: 10px; background: rgba(0,0,0,.25); }
+
+/* 📦 boxes da Coleção */
+.bx-bar { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0 8px; scrollbar-width: thin; }
+.bx-chip { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.25); color: inherit; font-weight: 700; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.bx-chip small { opacity: .7; font-weight: 600; }
+.bx-chip.on { background: var(--gold); color: #2a1d10; border-color: var(--gold); }
+.bx-chip.add { border-style: dashed; }
+.bx-head, .bx-pick, .bx-quick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; padding: 8px; border-radius: 10px; background: rgba(0,0,0,.22); }
+.bx-pick { border: 1px dashed var(--gold); }
+.bx-quick { background: none; padding: 0; }
+.vf-cell.bx-hide { display: none !important; }
+.vf-cell { position: relative; }
+.bx-tag { position: absolute; top: 4px; left: 4px; z-index: 2; font-size: 14px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+.bx-picking .vf-cell { cursor: pointer; }
+.bx-picking .vf-cell.bx-sel { outline: 3px solid var(--gold); border-radius: 12px; }
+.bx-picking .vf-cell.bx-sel::after { content: '✔'; position: absolute; top: 4px; right: 6px; z-index: 3; background: var(--gold); color: #2a1d10; border-radius: 50%; width: 22px; height: 22px; display: grid; place-items: center; font-weight: 900; }
+
+/* 🎁 prêmio diário */
+.dl-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.dl-fire { font-size: 40px; line-height: 1; }
+.dl-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
+.dl-day { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 4px; border-radius: 10px; text-align: center; background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.1); min-height: 96px; }
+.dl-day.big { grid-column: span 2; background: linear-gradient(160deg, rgba(255,200,70,.18), rgba(0,0,0,.25)); }
+.dl-day.today { border-color: var(--gold); box-shadow: 0 0 14px rgba(255,200,70,.45); animation: dlPulse 1.4s ease-in-out infinite; }
+.dl-day.done { opacity: .55; }
+.dl-ok { position: absolute; top: 4px; right: 6px; color: #8ff0bd; font-style: normal; font-weight: 900; }
+.dl-icons { display: flex; gap: 2px; min-height: 30px; align-items: center; }
+.dl-item { width: 28px; height: 28px; object-fit: contain; image-rendering: pixelated; }
+.dl-ic { font-size: 24px; }
+.dl-got { margin-top: 6px; padding: 10px; border-radius: 10px; text-align: center; background: rgba(74,208,122,.15); border: 1px solid #4ad07a; }
+@keyframes dlPulse { 50% { transform: scale(1.04); } }

@@ -6,6 +6,9 @@ const HARDCORE_TXT = 'Hardcore: se toda a sua equipe for derrotada você sai da 
 import { MAP_CHOICES, mapChoiceName, BUILTIN_MAPS, setCustomMaps } from '../../shared/data/board.js';
 import { openMapEditor, templateMap } from './mapeditor.js';
 import { openSeries, openTrophies, checkSeasonResult } from './series.js';
+import { openDaily, autoDaily, defenseReport } from './daily.js';
+import { BOX_MAX, BOX_ICONS } from '../../shared/data/boxes.js';
+import { dailyStatus } from '../../shared/data/daily.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
 import { openCompanionPicker } from './missions.js';
 // Telas fora da partida: login, hub do treinador, lobby online, sala de espera, partida local, coleção, ranking e admin.
@@ -180,6 +183,7 @@ export async function hubScreen(root, ctx) {
         <button class="acct-tile" data-act="companions" ${profile ? '' : 'disabled'}><span>🤝</span><b>Companheiros</b><small>${(profile?.stats?.companions || []).length}/${Object.keys(COMPANIONS).length}${profile?.stats?.companion && COMPANIONS[profile.stats.companion] ? ` · ${esc(COMPANIONS[profile.stats.companion].name)}${bondLevel(profile?.stats?.companionBond?.[profile.stats.companion] || 0) >= 10 ? ' ❤️' : ''}` : ''}</small></button>
         <button class="acct-tile" data-act="abag" ${profile ? '' : 'disabled'}><span>🎒</span><b>Mochila</b><small>${Object.values(profile?.stats?.bag || {}).reduce((a, b) => a + b, 0)} itens · levar e vender</small></button>
         <button class="acct-tile" data-act="market" ${profile ? '' : 'disabled'}><span>🏪</span><b>Mercado</b><small>Pokémon e itens</small></button>
+        <button class="acct-tile" data-act="daily" ${profile ? '' : 'disabled'}><span>🎁</span><b>Prêmio diário</b><small>${profile ? (dailyStatus(profile.stats?.login).canClaim ? '🔴 Disponível agora!' : `🔥 ${profile.stats?.login?.streak || 0} dias seguidos`) : ''}</small></button>
         <button class="acct-tile" data-act="trophies" ${profile ? '' : 'disabled'}><span>🏆</span><b>Sala de Troféus</b><small>${(profile?.stats?.trophies || []).length} troféus da Liga das Séries</small></button>
         <button class="acct-tile" data-act="ranking"><span>🏆</span><b>Ranking</b><small>Liga, Elos e pontos</small></button>
         <button class="acct-tile" data-act="dshop" ${profile ? '' : 'disabled'}><span>💎</span><b>Loja de cosméticos</b><small>${profile?.diamonds || 0} 💎 · só visual</small></button>
@@ -205,6 +209,7 @@ export async function hubScreen(root, ctx) {
     duel: () => openDuelQueue(ctx, profile),
     series: () => openSeries(ctx, profile),
     trophies: () => openTrophies(profile),
+    daily: () => openDaily(profile, p => rerender(p)),
     install: () => promptInstall(),
     cup: async () => {
       try {
@@ -221,7 +226,10 @@ export async function hubScreen(root, ctx) {
     logout: async () => { await signOut(); ctx.go('login'); },
     edit: () => editProfile(profile, async p => rerender(p))
   });
-  if (profile) setTimeout(() => checkSeasonResult(profile), 600); // 🏁 resultado da temporada da Liga das Séries
+  // janelas do menu, uma de cada vez: 🎁 diário → 🏁 resultado da temporada → 🛡️ relatório da defesa
+  if (profile) setTimeout(async () => {
+    try { await autoDaily(profile, p => rerender(p)); await checkSeasonResult(profile); await defenseReport(profile); } catch { /* só aviso */ }
+  }, 600);
 }
 
 function soloModal(profile, ctx) {
@@ -263,6 +271,30 @@ function soloModal(profile, ctx) {
 
 function collectionModal(profile, onChange) {
   const cap = () => 300 + (profile?.stats?.vaultBonus ? 50 : 0);
+  // 📦 boxes (organização): view = 'all' | id da box; picking = escolhendo Pokémon para a box
+  let view = 'all', picking = null;
+  const boxes = () => profile?.stats?.boxes || [];
+  const boxOf = uid => boxes().find(b => b.uids.includes(uid));
+  const QUICK = [['shiny', '✨', 'Shinies', m => m.shiny], ['legend', '⚡', 'Lendários', m => getSpecies(m.sp)?.legendary && !getSpecies(m.sp)?.mythical],
+    ['myth', '🌟', 'Míticos', m => getSpecies(m.sp)?.mythical], ['fav', '⭐', 'Favoritos', m => m.fav], ['trust', '🤝', 'Confiança', m => m.trust]];
+  const boxBar = () => {
+    const vault = profile?.vault || [];
+    const cur = boxes().find(b => b.id === view);
+    const free = vault.filter(m => !boxOf(m.uid)).length;
+    return `<div class="bx-bar">
+      <button class="bx-chip ${view === 'all' ? 'on' : ''}" data-act="bx-view" data-id="all">🗂️ Todos <small>${vault.length}</small></button>
+      <button class="bx-chip ${view === 'none' ? 'on' : ''}" data-act="bx-view" data-id="none">📭 Sem box <small>${free}</small></button>
+      ${boxes().map(b => `<button class="bx-chip ${view === b.id ? 'on' : ''}" data-act="bx-view" data-id="${esc(b.id)}">${b.icon} ${esc(b.name)} <small>${b.uids.length}</small></button>`).join('')}
+      ${boxes().length < BOX_MAX ? '<button class="bx-chip add" data-act="bx-new">➕ Nova box</button>' : ''}
+    </div>
+    ${picking ? `<div class="bx-pick">Toque nos Pokémon para colocar em <b>${esc(boxes().find(b => b.id === picking.box)?.name || '')}</b> · <b>${picking.sel.size}</b> escolhido(s)
+        <button class="btn sm primary" data-act="bx-pick-ok" ${picking.sel.size ? '' : 'disabled'}>📥 Colocar na box</button><button class="btn sm" data-act="bx-pick-cancel">Cancelar</button></div>`
+      : cur ? `<div class="bx-head">${cur.icon} <b>${esc(cur.name)}</b> <span class="tiny muted">${cur.uids.length} Pokémon</span>
+        <button class="btn sm primary" data-act="bx-add">➕ Adicionar Pokémon</button><button class="btn sm" data-act="bx-rename">✏️ Nome</button>
+        <select class="input sm" data-act-change="bx-icon">${BOX_ICONS.map(i => `<option ${i === cur.icon ? 'selected' : ''}>${i}</option>`).join('')}</select>
+        <button class="btn sm red" data-act="bx-del">🗑️ Apagar box</button></div>`
+      : view === 'all' ? `<div class="bx-quick tiny muted">Box automática: ${QUICK.map(([k, i, n]) => `<button class="btn sm" data-act="bx-quick" data-k="${k}">${i} ${n}</button>`).join('')}</div>` : ''}`;
+  };
   const body = () => {
     const vault = profile?.vault || [];
     const all = sortCollection(vault);
@@ -274,12 +306,34 @@ function collectionModal(profile, onChange) {
         <div class="pk-grid">${profile.stats.overflow.map(m => statCard(m, { extra: `<div class="tiny muted">${m.why === 'solto' ? 'Solto por você' : 'Coleção cheia'} · ${new Date(m.outAt).toLocaleDateString('pt-BR')}</div><button class="btn sm green" data-act="restore" data-uid="${esc(m.uid)}">↩️ Recuperar</button>` })).join('')}</div></details>` : ''}
       ${(profile?.vault || []).length > cap() ? `<p class="small" style="color:#ffb35c">⚠️ Sua Coleção passou do limite (${(profile.vault || []).length}/${cap()}). Nada some sozinho além dos comuns; solte alguns para liberar espaço.</p>` : ''}
       <div class="vf-sum tiny muted">⚡ ${n(m => getSpecies(m.sp)?.legendary && !getSpecies(m.sp)?.mythical)} lendários · 🌟 ${n(m => getSpecies(m.sp)?.mythical)} míticos · ✨ ${n(m => m.shiny)} shinies · ⭐ ${n(m => m.fav)} favoritos · 🤝 ${n(m => m.trust)} da Confiança</div>
+      ${boxBar()}
       <div class="vf-scope">${vfBar('vault')}
-      <div class="pk-grid">${all.map(m => `<div class="vf-cell" ${vfAttrs(m, recent.get(m.uid) || 0)}>${statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px"><button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="train" data-uid="${esc(m.uid)}" title="Centro de Treino: subir nível com ouro da conta">🏋️</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar">✕</button></div>` })}</div>`).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div></div>`;
+      <div class="pk-grid ${picking ? 'bx-picking' : ''}">${all.map(m => { const bx = boxOf(m.uid); const hide = picking ? !!bx && bx.id === picking.box : view === 'none' ? !!bx : view !== 'all' && bx?.id !== view;
+        return `<div class="vf-cell ${hide ? 'bx-hide' : ''} ${picking?.sel.has(m.uid) ? 'bx-sel' : ''}" data-uid="${esc(m.uid)}" ${vfAttrs(m, recent.get(m.uid) || 0)}>${bx && view === 'all' ? `<span class="bx-tag" title="${esc(bx.name)}">${bx.icon}</span>` : ''}${statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px">${bx && view === bx.id ? `<button class="btn sm" data-act="bx-out" data-uid="${esc(m.uid)}" title="Tirar da box">↩️</button>` : ''}<button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="train" data-uid="${esc(m.uid)}" title="Centro de Treino: subir nível com ouro da conta">🏋️</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar">✕</button></div>` })}</div>`; }).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div></div>`;
   };
   const ov = openModal('vault', `📦 Coleção (${(profile?.vault || []).length}/${cap()})`, body(), { wide: true });
   const redraw = () => { setModalBody('vault', body()); vfBind(document.getElementById('vault')); };
   vfBind(ov);
+  const saveBoxes = async list => {
+    try { profile = (await api('profile', { op: 'boxes_set', boxes: list })).profile; picking = null; redraw(); onChange(profile); }
+    catch (e) { toast(e.message, 'bad'); }
+  };
+  const newId = () => { let i = 1; while (boxes().some(b => b.id === `b${i}`)) i++; return `b${i}`; };
+  // escolhendo Pokémon: toque no card (fora dos botões)
+  ov.addEventListener('click', e => {
+    if (!picking || e.target.closest('button,select,input')) return;
+    const cell = e.target.closest('.vf-cell[data-uid]');
+    if (!cell) return;
+    const u = cell.dataset.uid;
+    picking.sel.has(u) ? picking.sel.delete(u) : picking.sel.add(u);
+    cell.classList.toggle('bx-sel', picking.sel.has(u));
+    const bar = ov.querySelector('.bx-pick b:nth-of-type(2)'); if (bar) bar.textContent = picking.sel.size;
+    const okBtn = ov.querySelector('[data-act=bx-pick-ok]'); if (okBtn) okBtn.disabled = !picking.sel.size;
+  });
+  ov.addEventListener('change', e => {
+    if (e.target.dataset.actChange !== 'bx-icon') return;
+    saveBoxes(boxes().map(b => (b.id === view ? { ...b, icon: e.target.value } : b)));
+  });
   const op = async (o, uid) => {
     try { profile = (await api('profile', { op: o, uid })).profile; redraw(); onChange(profile); }
     catch (e) { toast(e.message, 'bad'); }
@@ -296,13 +350,47 @@ function collectionModal(profile, onChange) {
       catch (e) { toast(e.message, 'bad'); }
     },
     rel: d => { if (confirm('Soltar este Pokémon da sua Coleção? Ele fica na lista "Saíram da Coleção" e dá para recuperar depois.')) op('release', d.uid); },
-    restore: d => op('restore', d.uid)
+    restore: d => op('restore', d.uid),
+    'bx-view': d => { view = d.id; picking = null; redraw(); },
+    'bx-new': () => {
+      const name = prompt('Nome da box (até 16 letras):', `Box ${boxes().length + 1}`);
+      if (name === null) return;
+      const id = newId();
+      view = id;
+      saveBoxes([...boxes(), { id, name: name.trim() || `Box ${boxes().length + 1}`, icon: '📦', uids: [] }]);
+    },
+    'bx-quick': d => {
+      const q = QUICK.find(x => x[0] === d.k);
+      const uids = (profile?.vault || []).filter(q[3]).map(m => m.uid);
+      if (!uids.length) return toast(`Você não tem ${q[2].toLowerCase()} ainda.`, 'info');
+      const id = newId();
+      view = id;
+      saveBoxes([...boxes().map(b => ({ ...b, uids: b.uids.filter(u => !uids.includes(u)) })), { id, name: q[2], icon: q[1], uids }]);
+      toast(`${q[1]} Box "${q[2]}" criada com ${uids.length} Pokémon.`, 'good');
+    },
+    'bx-add': () => { picking = { box: view, sel: new Set() }; redraw(); },
+    'bx-pick-cancel': () => { picking = null; redraw(); },
+    'bx-pick-ok': () => {
+      const add = [...picking.sel], target = picking.box;
+      saveBoxes(boxes().map(b => (b.id === target ? { ...b, uids: [...b.uids.filter(u => !add.includes(u)), ...add] } : { ...b, uids: b.uids.filter(u => !add.includes(u)) })));
+    },
+    'bx-out': d => saveBoxes(boxes().map(b => ({ ...b, uids: b.uids.filter(u => u !== d.uid) }))),
+    'bx-rename': () => {
+      const cur = boxes().find(b => b.id === view); if (!cur) return;
+      const name = prompt('Novo nome da box:', cur.name);
+      if (name !== null) saveBoxes(boxes().map(b => (b.id === view ? { ...b, name: name.trim() || b.name } : b)));
+    },
+    'bx-del': () => {
+      if (!confirm('Apagar esta box? Os Pokémon continuam na Coleção (só saem da box).')) return;
+      const id = view; view = 'all';
+      saveBoxes(boxes().filter(b => b.id !== id));
+    }
   });
 }
 
 async function rankingModal(myRating = null, myLeagueRaw = null, myName = '') {
   openModal('rank', '🏆 Ranking', '<span class="spinner"></span>', { wide: true });
-  let tab = 'league', data = null;
+  let tab = 'elos', data = null;
   const leagueView = () => {
     const lg = data.league || { table: [], divisions: [] };
     const mine = myLeagueRaw ? ensureSeason(myLeagueRaw, lg.season).league : null;
@@ -333,7 +421,7 @@ async function rankingModal(myRating = null, myLeagueRaw = null, myName = '') {
       <p class="tiny muted">Todo mundo começa em 1000 (Prata). Partidas 🏆 Competitivas mudam o rating: terminar à frente de quem tem rating igual ou maior dá mais pontos. ${data.rankedPlayers} treinador(es) já jogaram o Competitivo.</p>`;
   };
   const body = () => {
-    const tabs = `<div class="tabs" style="margin-bottom:8px">${[['league', '🏆 Liga'], ['elos', '🎖️ Elos'], ['competitive', '🏆 Competitivo (rating)'], ['general', '⭐ Geral (pontos)']].map(([k, l]) => `<button class="btn sm ${tab === k ? 'primary' : ''}" data-act="t" data-t="${k}">${l}</button>`).join('')}</div>`;
+    const tabs = `<div class="tabs" style="margin-bottom:8px">${[['elos', '🎖️ Elos'], ['competitive', '🏆 Competitivo (rating)'], ['general', '⭐ Geral (pontos)']].map(([k, l]) => `<button class="btn sm ${tab === k ? 'primary' : ''}" data-act="t" data-t="${k}">${l}</button>`).join('')}</div>`;
     if (tab === 'elos') return tabs + elosView();
     if (tab === 'league') return tabs + leagueView();
     const comp = tab === 'competitive';

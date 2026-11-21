@@ -35,6 +35,7 @@ export function showSeasonResult(prev) {
       <p class="small muted" style="margin-top:8px">Nova temporada já começou — todo mundo zerado. Bora!</p></div>`;
   openModal('season-result', `🏁 ${esc(prev.seasonName || 'Fim de temporada')}`, body);
   api('match', { op: 'serie_seen' }).catch(() => {});
+  return new Promise(res => { const t = setInterval(() => { if (!document.getElementById('season-result')) { clearInterval(t); res(); } }, 250); });
 }
 
 /** No menu: se a temporada virou, vira a Série do jogador (fecha a temporada se ninguém fechou ainda) e mostra o resultado. */
@@ -43,7 +44,7 @@ export async function checkSeasonResult(profile) {
   if (!S) return;
   if (S.season === seasonId() && S.prev && !S.prev.seen) return showSeasonResult(S.prev);
   if (S.season !== seasonId()) {
-    try { const r = await api('match', { op: 'serie_get' }); showSeasonResult(r.serie?.prev); } catch { /* tenta na próxima */ }
+    try { const r = await api('match', { op: 'serie_get' }); await showSeasonResult(r.serie?.prev); } catch { /* tenta na próxima */ }
   }
 }
 
