@@ -1,3 +1,4 @@
+import { genderOf, genderHtml } from '../../shared/data/gender.js';
 // Tela de batalha (arena estilo jogos de Pokémon) + animações de golpe, dano, cura, troca e desmaio.
 import { getSpecies } from '../../shared/data/pokemon.js';
 import { ITEMS, ballBonusAgainst } from '../../shared/data/items.js';
@@ -38,7 +39,7 @@ function hpBox(state, side, mon, cls, vs = null) {
   const r = Math.max(0, v.hp) / v.maxHp;
   return `<div class="hpbox ${cls}" data-uid="${esc(mon.uid)}">
     <div class="owner">${esc(owner || '')}</div>
-    <div class="nm"><span>${vs ? edgeBadge(mon, vs, true) : ''}${esc(v.name)}${v.shiny ? ' ✨' : ''}${mon.raid ? ' <span class="chip red">CHEFE</span>' : ''}</span><span class="lv">Nv.${v.lvl}</span></div>
+    <div class="nm"><span>${vs ? edgeBadge(mon, vs, true) : ''}${esc(v.name)}${genderHtml(genderOf(mon, getSpecies(mon.sp)))}${v.shiny ? ' ✨' : ''}${mon.raid ? ' <span class="chip red">CHEFE</span>' : ''}</span><span class="lv">Nv.${v.lvl}</span></div>
     <div class="types">${typeChips(v.types)}${side.boost?.[mon.uid] ? ` <span class="chip green">ATQ +${side.boost[mon.uid]}</span>` : ''}${statusChip(side, mon)}${stageChip(side, mon)}</div>
     <div class="hp ${hpClass(r)}"><i style="width:${(r * 100).toFixed(1)}%"></i></div>
     <div class="hpnum"><b class="cur">${Math.max(0, v.hp)}</b> / ${v.maxHp}</div>

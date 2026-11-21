@@ -1,3 +1,4 @@
+import { FARM_DECOR } from './farm.js';
 // Cosméticos da Loja de Diamantes. NÃO mudam a força de nada — só a aparência.
 // O admin edita a vitrine (nomes, preços, quais itens estão à venda) pelo painel; aqui ficam os
 // "estilos" visuais disponíveis (cada um tem um CSS em css/app.css) e a vitrine padrão.
@@ -49,14 +50,17 @@ export const SHOP_KINDS = {
   card: 'Cartão de treinador',
   victory: 'Efeito de vitória',
   service: 'Conveniência',
-  skin: 'Skin de treinador'
+  skin: 'Skin de treinador',
+  decor: 'Decoração da Fazenda'
 };
 /** Tipos que se equipam (um por vez). "service" é compra única. */
 export const EQUIP_KINDS = ['skin', 'ball_style', 'frame', 'title', 'dice', 'arena', 'card', 'victory'];
-export const PRESETS_BY_KIND = { skin: SKIN_PRESETS, ball_style: AURA_PRESETS, frame: FRAME_PRESETS, dice: DICE_PRESETS, arena: ARENA_PRESETS, card: CARD_PRESETS, victory: VICTORY_PRESETS, service: SERVICE_PRESETS };
+export const DECOR_PRESETS = Object.fromEntries(Object.entries(FARM_DECOR).filter(([, d]) => d.price > 0).map(([k, d]) => [k, d.name]));
+export const PRESETS_BY_KIND = { decor: DECOR_PRESETS, skin: SKIN_PRESETS, ball_style: AURA_PRESETS, frame: FRAME_PRESETS, dice: DICE_PRESETS, arena: ARENA_PRESETS, card: CARD_PRESETS, victory: VICTORY_PRESETS, service: SERVICE_PRESETS };
 
 export const DEFAULT_SHOP = {
   items: [
+    ...Object.entries(FARM_DECOR).filter(([, d]) => d.price > 0).map(([k, d]) => ({ id: 'decor_' + k, kind: 'decor', value: k, name: `${d.icon} ${d.name}`, price: d.price, active: true, desc: 'Decoração para a sua 🌾 Fazenda (só visual). Coloque quantas vezes quiser.' })),
     ...Object.entries(SKIN_PRESETS).map(([v, name]) => ({ id: 'skin_' + v, kind: 'skin', value: v, name, price: SKIN_PRICE[v] || 180, active: true, desc: 'Personagem exclusivo: vira o seu avatar, o peão do tabuleiro e aparece na abertura das batalhas.' })),
     { id: 'style_galaxy', kind: 'ball_style', value: 'galaxy', name: 'Captura Galáxia', price: 120, active: true, desc: 'Todo Pokémon que você capturar ganha brilho de galáxia.' },
     { id: 'style_gold', kind: 'ball_style', value: 'gold', name: 'Captura Dourada', price: 150, active: true, desc: 'Seus Pokémon capturados brilham em ouro.' },

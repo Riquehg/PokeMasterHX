@@ -14,6 +14,7 @@ import { tickWeather, weatherSpawn, weatherRare } from './rules/weather.js';
 import { assistTick, giveTravelQuest, questVisit } from './rules/assist.js';
 import { ITEMS, getItem, shopFor, STARTING_ITEMS, STARTING_GOLD, cleanBring } from './data/items.js';
 import { MOVES, tmMovesFor, defaultMoveIds } from './data/moves.js';
+import { genderFor } from './data/gender.js';
 import {
   GYMS, gymAt, ELITE_FOUR, CHAMPION, ELITE_SPACE, CHAMPION_SPACE, ROUTE_TRAINERS, ROCKET, BADGES_TO_LEAGUE, BADGE_REWARDS, ACE_TRAINERS
 } from './data/trainers.js';
@@ -158,6 +159,7 @@ function hashStr(str) {
 
 /** Natureza/IV/golpes fixos para um Pokémon antigo da Coleção (derivados do uid, sempre iguais). */
 export function fillTraits(entry) {
+  if (entry && !entry.gender && SPECIES[entry.sp]) entry = { ...entry, gender: genderFor(entry.sp, String(entry.uid || ''), SPECIES[entry.sp]) };
   if (!entry || (entry.nature && entry.iv && entry.moves) || !SPECIES[entry.sp]) return entry;
   const m = createMon(createRng(hashStr(String(entry.uid || entry.sp))), entry.sp, Math.max(1, Number(entry.lvl) || 5),
     { nature: entry.nature || undefined, iv: entry.iv || undefined, moves: entry.moves || undefined });

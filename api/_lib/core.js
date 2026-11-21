@@ -9,6 +9,7 @@ import { ELO_TIERS } from '../../shared/data/elo.js';
 import { ensureSeason, applyLeagueResult, leagueSort, seasonId, seasonName, divInfo, LEAGUE_DIVS } from '../../shared/data/league.js';
 import { CUP_MAX_PLAYERS, DUEL_LEVEL_CAP } from '../../shared/data/cup.js';
 import { serieOp } from './series.js';
+import { farmOp } from './farm.js';
 import { duelQueue, duelQueueStatus, duelQueueCancel, duelTeam, startCup, duelFinished } from './tournament.js';
 import { SPECIES, STARTERS, getSpecies } from '../../shared/data/pokemon.js';
 import { dailyPokemon } from '../../shared/daily.js';
@@ -127,17 +128,18 @@ async function withCosmetic(db, prof) {
 }
 
 export async function profileOp(db, user, body) {
+  if (String(body.op || '').startsWith('farm_')) return farmOp(db, user, body); // 🌾 Fazenda
   const p = await getOrCreateProfile(db, user);
   if (body.op === 'get' || !body.op) {
     let cosmetic = null;
     try { cosmetic = await equippedCosmetic(db, p); } catch { /* ok */ }
     let prof = p;
     // Pokémon antigos da Coleção ganham (uma vez) natureza, potencial e golpes fixos
-    if ((p.vault || []).some(m => !m.nature || !m.iv || !m.moves)) {
+    if ((p.vault || []).some(m => !m.nature || !m.iv || !m.moves || !m.gender)) {
       try {
         prof = (await mutateProfile(db, user.id, cur => {
           const vault = cur.vault || [];
-          return vault.some(m => !m.nature || !m.iv || !m.moves) ? { vault: vault.map(fillTraits) } : null;
+          return vault.some(m => !m.nature || !m.iv || !m.moves || !m.gender) ? { vault: vault.map(fillTraits) } : null;
         })) || p;
       } catch (e) { console.error('[traits]', e.message); prof = { ...p, vault: (p.vault || []).map(fillTraits) }; }
     }
@@ -158,8 +160,9 @@ export async function profileOp(db, user, body) {
       return { stats: st };
     }).then(x => withCosmetic(db, x)) };
   }
-  if (body.op === 'train') {
-    // Centro de Treino: gasta ouro da conta para subir níveis de um Pokémon da Coleção (até o Nv. 50)
+  if (body.op === 'train') bad('O Centro de Treino virou a 🌾 Fazenda: coloque o Pokémon lá para ele ganhar XP com o tempo.');
+  if (body.op === 'train_old') {
+    // (antigo) Centro de Treino por ouro — desativado na v26
     const levels = Math.max(1, Math.min(10, Number(body.levels) || 1));
     const mon = (p.vault || []).find(m => m.uid === body.uid);
     if (!mon) bad('Pokémon não encontrado na Coleção.');

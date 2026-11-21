@@ -152,14 +152,8 @@ test('ouro da conta: levar para partida da Coleção (desconta e o que sobra vol
   assert.equal(C.refundBrought({ gold: 700, broughtGold: 1000 }), 700);
   assert.equal(C.refundBrought({ gold: 1600, broughtGold: 1000 }), 1000);
   assert.equal(C.accountGoldReward({ winner: null }, { gold: 1600, broughtGold: 1000, badges: [] }), 60);
-  // Centro de Treino: Nv.14 → 16 evolui Charmander em Charmeleon
-  const r = await profileOp(db, ash, { op: 'train', uid, levels: 2 });
-  const m = r.profile.vault.find(x => x.uid === uid);
-  assert.equal(m.lvl, 16);
-  assert.equal(m.sp, 'charmeleon');
-  assert.equal(r.cost, C.trainCost(14) + C.trainCost(15));
-  assert.equal(r.profile.gold, 2000 - r.cost);
-  await assert.rejects(profileOp(db, ash, { op: 'train', uid: 'nope' }), /não encontrado/);
+  // Centro de Treino por ouro virou a Fazenda (v26)
+  await assert.rejects(profileOp(db, ash, { op: 'train', uid, levels: 2 }), /Fazenda/);
 });
 
 test('mural do início: lista as últimas capturas de lendários e shinies', async () => {

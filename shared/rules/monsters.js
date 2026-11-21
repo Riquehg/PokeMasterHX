@@ -1,5 +1,6 @@
 // Criação de instâncias de Pokémon, status, XP e evolução.
 import { getSpecies, speciesByTier, MYTHICAL_WILD_CHANCE } from '../data/pokemon.js';
+import { genderFor } from '../data/gender.js';
 import { NATURE_NAMES, natureMult } from '../data/natures.js';
 import { MOVES, rollMoveIds } from '../data/moves.js';
 
@@ -142,6 +143,7 @@ export function createMon(rng, speciesId, level, opts = {}) {
     ot: opts.ot || null // "treinador original" (id do jogador que capturou)
   };
   if (opts.starter) mon.starter = true;
+  mon.gender = genderFor(speciesId, mon.uid, getSpecies(speciesId)); // ♂/♀ fixo pelo uid (não gasta RNG)
   return mon;
 }
 

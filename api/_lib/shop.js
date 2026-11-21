@@ -48,7 +48,7 @@ export function serviceOwned(profile, value) {
   return value === 'vault50' ? !!st.vaultBonus : value === 'nickname' ? !!st.nicknames : false;
 }
 
-function myCosmetics(profile) {
+export function myCosmetics(profile) {
   const c = profile.cosmetics || {};
   return { owned: Array.isArray(c.owned) ? c.owned : [], equipped: c.equipped || {} };
 }
@@ -118,6 +118,10 @@ export async function shopOp(db, user, body, req) {
       if (item.kind === 'service' && serviceOwned(profile, item.value)) bad('Você já tem esta conveniência.');
       const left = await db.addDiamonds(user.id, -item.price);
       if (left === null) bad('Diamantes insuficientes.');
+      if (item.kind === 'decor') { // 🌾 decoração: só fica liberada (não "equipa")
+        const p = await mutateProfile(db, user.id, prof => { const c = myCosmetics(prof); return { cosmetics: { owned: [...new Set([...c.owned, item.id])], equipped: c.equipped } }; });
+        return { me: view(p), message: `${item.name} liberada! Coloque na sua 🌾 Fazenda (botão 🎨 Decorar).` };
+      }
       if (item.kind === 'service') {
         const p = await mutateProfile(db, user.id, prof => {
           const c = myCosmetics(prof), st = { ...(prof.stats || {}) };

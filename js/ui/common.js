@@ -1,3 +1,4 @@
+import { genderOf, genderHtml } from '../../shared/data/gender.js';
 // Componentes visuais reaproveitados (cartas de Pokémon, chips de tipo, etc.).
 import { getSpecies } from '../../shared/data/pokemon.js';
 import { monView, xpToNext, MAX_LEVEL, maxStats, ivPercent, IV_MAX } from '../../shared/rules/monsters.js';
@@ -26,7 +27,7 @@ export function monCard(mon, { index, lead = false, act = 'mon', extra = '', own
   return `<div class="${cls}" data-act="${act}" data-index="${index ?? ''}" data-uid="${esc(mon.uid)}" title="${esc(v.name)} — ${v.types.map(typeLabel).join('/')}${mon.nature ? ' · ' + esc(natureLabel(mon.nature)) : ''}${locked ? ` · 🔒 precisa de ${badgesNeeded(mon)} insígnia${badgesNeeded(mon) > 1 ? 's' : ''} para lutar` : ''}">
     <span class="lv">Nv.${v.lvl}</span>${v.shiny ? '<span style="position:absolute;top:3px;right:6px">✨</span>' : ''}
     <img src="${monSprite(mon)}" alt="${esc(v.name)}" loading="lazy">
-    <div class="nm">${esc(v.name)}</div>
+    <div class="nm">${esc(v.name)}${genderHtml(genderOf(mon, getSpecies(mon.sp)))}</div>
     ${hpBar(v.hp, v.maxHp)}
     <div class="xp"><i style="width:${xpPct}%"></i></div>
     <div class="tiny muted">${Math.max(0, v.hp)}/${v.maxHp} HP${ivPercent(mon) !== null ? ` · <span class="pk-stars-mini">${potentialStars(ivPercent(mon))}</span>` : ''}</div>
@@ -82,7 +83,7 @@ export function statCard(mon, { owner = null, act = '', index = '', extra = '', 
     ${v.shiny ? '<span class="pk-ribbon">★ Shiny +15%</span>' : ''}<span class="pk-tier t${sp.tier}">${TIER_TXT[sp.tier]}</span>${sp.mythical ? '<span class="pk-cat mythic" title="Mítico: não aparece solto, só em aparições raras, Raids e prêmios">🌟 Mítico</span>' : sp.ultra ? '<span class="pk-cat ultra">🌀 Ultra</span>' : ''}
     <div class="pk-art"><img src="${monSprite(mon)}" alt="${esc(v.name)}" loading="lazy"></div>
     <div class="pk-nature" title="${esc(natureLabel(mon.nature))}">❖ ${esc(mon.nature || 'Sem natureza')}</div>
-    <div class="pk-name">${esc(v.name)}${mon.nick ? `<span class="pk-sp">${esc(v.species)}</span>` : ''}</div>
+    <div class="pk-name">${esc(v.name)}${genderHtml(genderOf(mon, getSpecies(mon.sp)))}${mon.nick ? `<span class="pk-sp">${esc(v.species)}</span>` : ''}</div>
     <div class="pk-lv">Nv. ${v.lvl}</div>
     <div class="pk-types">${v.types.map(t => `<span class="pk-type" style="background:${typeColor(t)}">${esc(typeLabel(t))}</span>`).join('')}</div>
     ${showHp && mon.hp !== undefined ? `<div class="pk-hpline">${hpBar(hp, v.maxHp)}<span>${hp}/${v.maxHp}</span></div>` : ''}

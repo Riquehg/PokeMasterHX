@@ -338,3 +338,68 @@ test('🎁 prêmio diário: sequência, reset ao perder dia, uma vez por dia; �
   await matchOp(db, a, { op: 'serie_def_seen' });
   assert.ok((await db.getProfile(a.id)).stats.serie.defSeen > 0);
 });
+
+test('♂/♀ sexo fixo pelo uid; 🌾 Fazenda: XP com o tempo (teto diário, Nv. 60), recursos, carinho, visitas e decoração só visual', async () => {
+  const { genderFor, genderOf } = await import('../shared/data/gender.js');
+  const { createMon } = await import('../shared/rules/monsters.js');
+  assert.equal(genderFor('ditto', 'x'), 'N');
+  assert.equal(genderFor('chansey', 'x'), 'F');
+  assert.equal(genderFor('tauros', 'x'), 'M');
+  assert.equal(genderFor('zapdos', 'x', SPECIES.zapdos), 'N');
+  let males = 0;
+  for (let i = 0; i < 400; i++) if (genderFor('charmander', 'u' + i) === 'M') males++;
+  assert.ok(males > 310 && males < 380, `iniciais ~87,5% machos (${males}/400)`);
+  const m = createMon(createRng(3), 'pikachu', 5);
+  assert.ok(['M', 'F'].includes(m.gender));
+  assert.equal(genderOf({ sp: m.sp, uid: m.uid }), m.gender, 'mesmo sexo calculado depois');
+
+  const { tickFarm, newFarm, XP_DAY_CAP, slotsFor } = await import('../shared/data/farm.js');
+  const f = newFarm(0);
+  const mon = { uid: 'a', sp: 'squirtle', lvl: 10 };
+  f.slots.push({ uid: 'a', biome: 'lago', happy: 100, t: 0 });
+  tickFarm(f, new Map([['a', mon]]), () => ['water'], 2 * 3600000);
+  assert.ok(f.slots[0].pxp > 110 && f.slots[0].pxp < 150, `2h no lago ≈ 30×1,5×~1,4×2 (${f.slots[0].pxp})`);
+  assert.ok(f.slots[0].pres >= 1.4);
+  tickFarm(f, new Map([['a', mon]]), () => ['water'], 200 * 3600000);
+  assert.ok(f.slots[0].dayXp <= XP_DAY_CAP + 1e-6);
+  assert.equal(slotsFor(1), 6); assert.equal(slotsFor(99), 20);
+
+  const { db, us: [a, b] } = await users(2);
+  const va = (await db.getProfile(a.id)).vault.slice().sort((x, y) => (x.sp === 'charizard' ? -1 : y.sp === 'charizard' ? 1 : 0));
+  const placed = await profileOp(db, a, { op: 'farm_place', uid: va[0].uid });
+  assert.equal(placed.farm.slots.length, 1);
+  assert.equal(placed.farm.slots[0].biome, 'vulcao', 'Charizard vai pro vulcão');
+  // simula 10 h passando
+  const pr = await db.getProfile(a.id);
+  pr.stats.farm.slots[0].t -= 10 * 3600000;
+  await db.updateProfileIf(a.id, pr.rev || 0, { stats: pr.stats });
+  const lvl0 = va[0].lvl;
+  const col = await profileOp(db, a, { op: 'farm_collect' });
+  assert.equal(lvl0, 60);
+  assert.equal(col.collected.xp, 0, 'Nv. 60: a Fazenda não sobe mais (só batalhando)');
+  assert.ok((col.farm.res.ember || 0) >= 5, 'Brasas do vulcão');
+  const sold = await profileOp(db, a, { op: 'farm_sell', res: 'ember', qty: 2 });
+  assert.equal(sold.gold, 28);
+  await profileOp(db, a, { op: 'farm_care' });
+  await assert.rejects(profileOp(db, a, { op: 'farm_care' }), /já receberam/);
+  // Pokémon de nível baixo sobe de nível na Fazenda
+  await adminOp(db, (await db.verifyToken('dev:admin@kanto.com')), { op: 'grant_mon', userId: a.id, species: 'charmander', level: 5 });
+  const ch = (await db.getProfile(a.id)).vault.find(m => m.sp === 'charmander');
+  await profileOp(db, a, { op: 'farm_place', uid: ch.uid });
+  const p2 = await db.getProfile(a.id);
+  p2.stats.farm.slots.find(s => s.uid === ch.uid).t -= 20 * 3600000;
+  await db.updateProfileIf(a.id, p2.rev || 0, { stats: p2.stats });
+  const c2 = await profileOp(db, a, { op: 'farm_collect' });
+  assert.ok(c2.profile.vault.find(m => m.uid === ch.uid).lvl >= 12, 'subiu vários níveis (teto de 600 XP no dia)');
+  // visitas
+  const liked = await profileOp(db, b, { op: 'farm_like', userId: a.id });
+  assert.equal(liked.farm.likes, 1);
+  await assert.rejects(profileOp(db, b, { op: 'farm_like', userId: a.id }), /já curtiu/);
+  await profileOp(db, b, { op: 'farm_help', userId: a.id });
+  assert.equal((await profileOp(db, a, { op: 'farm_get' })).farm.visits.length, 2);
+  // decoração: grátis entra, paga sem comprar não entra
+  const d = await profileOp(db, a, { op: 'farm_decor', decor: [{ k: 'tree', x: 10, y: 10 }, { k: 'castle', x: 50, y: 50 }] });
+  assert.deepEqual(d.farm.decor.map(x => x.k), ['tree']);
+  assert.equal((await profileOp(db, a, { op: 'farm_top' })).top[0].id, a.id);
+  await assert.rejects(profileOp(db, a, { op: 'train', uid: va[0].uid }), /Fazenda/);
+});

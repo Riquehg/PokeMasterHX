@@ -7,6 +7,7 @@ import { MAP_CHOICES, mapChoiceName, BUILTIN_MAPS, setCustomMaps } from '../../s
 import { openMapEditor, templateMap } from './mapeditor.js';
 import { openSeries, openTrophies, checkSeasonResult } from './series.js';
 import { openDaily, autoDaily, defenseReport } from './daily.js';
+import { openFarm } from './farm.js';
 import { BOX_MAX, BOX_ICONS } from '../../shared/data/boxes.js';
 import { dailyStatus } from '../../shared/data/daily.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
@@ -152,7 +153,7 @@ export async function hubScreen(root, ctx) {
             <div class="small">⭐ ${profile?.points || 0} pts · ${eloOf(profile?.rating ?? 1000).icon} ${eloOf(profile?.rating ?? 1000).name} (${profile?.rating ?? 1000}) · 📖 ${(profile?.pokedex || []).length} · 📦 ${(profile?.vault || []).length}</div></div>
           <div class="col" style="gap:6px;align-items:flex-end">
             <button class="btn sm" data-act="edit" ${profile ? '' : 'disabled'} title="Editar nome e avatar">✏️</button>
-            <span class="chip gold" title="Ouro da conta: ganho no fim de cada partida salva. Use no Mercado, no Centro de Treino (🏋️ na Coleção) ou leve para partidas do modo Coleção.">🪙 ${profile?.gold || 0}</span>
+            <span class="chip gold" title="Ouro da conta: ganho no fim de cada partida salva. Use no Mercado ou leve para partidas do modo Coleção. Ganhe mais vendendo recursos da 🌾 Fazenda.">🪙 ${profile?.gold || 0}</span>
             <span class="chip" title="Diamantes"><span class="diamonds">💎 ${profile?.diamonds || 0}</span></span>
           </div>
         </div>
@@ -183,6 +184,7 @@ export async function hubScreen(root, ctx) {
         <button class="acct-tile" data-act="companions" ${profile ? '' : 'disabled'}><span>🤝</span><b>Companheiros</b><small>${(profile?.stats?.companions || []).length}/${Object.keys(COMPANIONS).length}${profile?.stats?.companion && COMPANIONS[profile.stats.companion] ? ` · ${esc(COMPANIONS[profile.stats.companion].name)}${bondLevel(profile?.stats?.companionBond?.[profile.stats.companion] || 0) >= 10 ? ' ❤️' : ''}` : ''}</small></button>
         <button class="acct-tile" data-act="abag" ${profile ? '' : 'disabled'}><span>🎒</span><b>Mochila</b><small>${Object.values(profile?.stats?.bag || {}).reduce((a, b) => a + b, 0)} itens · levar e vender</small></button>
         <button class="acct-tile" data-act="market" ${profile ? '' : 'disabled'}><span>🏪</span><b>Mercado</b><small>Pokémon e itens</small></button>
+        <button class="acct-tile" data-act="farm" ${profile ? '' : 'disabled'}><span>🌾</span><b>Fazenda</b><small>${profile?.stats?.farm?.slots?.length ? `${profile.stats.farm.slots.length} Pokémon · Nv. ${profile.stats.farm.lvl || 1}` : 'Solte seus Pokémon para treinar'}</small></button>
         <button class="acct-tile" data-act="daily" ${profile ? '' : 'disabled'}><span>🎁</span><b>Prêmio diário</b><small>${profile ? (dailyStatus(profile.stats?.login).canClaim ? '🔴 Disponível agora!' : `🔥 ${profile.stats?.login?.streak || 0} dias seguidos`) : ''}</small></button>
         <button class="acct-tile" data-act="trophies" ${profile ? '' : 'disabled'}><span>🏆</span><b>Sala de Troféus</b><small>${(profile?.stats?.trophies || []).length} troféus da Liga das Séries</small></button>
         <button class="acct-tile" data-act="ranking"><span>🏆</span><b>Ranking</b><small>Liga, Elos e pontos</small></button>
@@ -210,6 +212,7 @@ export async function hubScreen(root, ctx) {
     series: () => openSeries(ctx, profile),
     trophies: () => openTrophies(profile),
     daily: () => openDaily(profile, p => rerender(p)),
+    farm: () => openFarm({ onProfile: p => { profile = p; } }, profile),
     install: () => promptInstall(),
     cup: async () => {
       try {
@@ -309,7 +312,7 @@ function collectionModal(profile, onChange) {
       ${boxBar()}
       <div class="vf-scope">${vfBar('vault')}
       <div class="pk-grid ${picking ? 'bx-picking' : ''}">${all.map(m => { const bx = boxOf(m.uid); const hide = picking ? !!bx && bx.id === picking.box : view === 'none' ? !!bx : view !== 'all' && bx?.id !== view;
-        return `<div class="vf-cell ${hide ? 'bx-hide' : ''} ${picking?.sel.has(m.uid) ? 'bx-sel' : ''}" data-uid="${esc(m.uid)}" ${vfAttrs(m, recent.get(m.uid) || 0)}>${bx && view === 'all' ? `<span class="bx-tag" title="${esc(bx.name)}">${bx.icon}</span>` : ''}${statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px">${bx && view === bx.id ? `<button class="btn sm" data-act="bx-out" data-uid="${esc(m.uid)}" title="Tirar da box">↩️</button>` : ''}<button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="train" data-uid="${esc(m.uid)}" title="Centro de Treino: subir nível com ouro da conta">🏋️</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar">✕</button></div>` })}</div>`; }).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div></div>`;
+        return `<div class="vf-cell ${hide ? 'bx-hide' : ''} ${picking?.sel.has(m.uid) ? 'bx-sel' : ''}" data-uid="${esc(m.uid)}" ${vfAttrs(m, recent.get(m.uid) || 0)}>${bx && view === 'all' ? `<span class="bx-tag" title="${esc(bx.name)}">${bx.icon}</span>` : ''}${statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px">${bx && view === bx.id ? `<button class="btn sm" data-act="bx-out" data-uid="${esc(m.uid)}" title="Tirar da box">↩️</button>` : ''}<button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="farm" data-uid="${esc(m.uid)}" title="Mandar para a 🌾 Fazenda (ganha XP com o tempo)">🌾</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar">✕</button></div>` })}</div>`; }).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div></div>`;
   };
   const ov = openModal('vault', `📦 Coleção (${(profile?.vault || []).length}/${cap()})`, body(), { wide: true });
   const redraw = () => { setModalBody('vault', body()); vfBind(document.getElementById('vault')); };
@@ -340,7 +343,10 @@ function collectionModal(profile, onChange) {
   };
   bindActions(ov, {
     fav: d => op('favorite', d.uid),
-    train: d => trainModal(profile, d.uid, np => { profile = np; redraw(); onChange(profile); }),
+    farm: async d => {
+      try { await api('profile', { op: 'farm_place', uid: d.uid }); toast('🌾 Foi para a Fazenda! Ele ganha XP com o tempo.', 'good'); }
+      catch (e) { toast(e.message, 'bad'); }
+    },
     nick: async d => {
       if (!profile?.stats?.nicknames) return toast('Apelidos são liberados na 💎 Loja de Diamantes → Conveniência.', 'info');
       const m = (profile.vault || []).find(x => x.uid === d.uid);

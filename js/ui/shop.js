@@ -17,6 +17,7 @@ function preview(item, avatar) {
   if (item.kind === 'arena') return `<div class="cos-arena arena arena-${esc(item.value)}"><img src="${monSprite('pikachu')}" alt=""></div>`;
   if (item.kind === 'card') return `<div class="cos-card tcard-${esc(item.value)}"><img class="avatar" src="${avatarUrl(avatar)}" alt=""><span></span></div>`;
   if (item.kind === 'victory') return `<button class="cos-victory" data-act="vic-try" data-v="${esc(item.value)}" title="Ver o efeito">${VIC_ICON[item.value] || '🎉'}<span class="tiny">ver</span></button>`;
+  if (item.kind === 'decor') return `<div class="cos-svc" style="font-size:40px">${esc(String(item.name).split(' ')[0])}</div>`;
   if (item.kind === 'service') return `<div class="cos-svc">${item.value === 'vault50' ? '📦+50' : '✏️'}</div>`;
   return `<div class="cos-title">“${esc(item.value)}”</div>`;
 }
@@ -52,8 +53,8 @@ export async function openShop(profile, onChange, onClose, startTab = 'cosmetics
       const items = data.items.filter(i => i.kind === kind);
       if (!items.length) return '';
       return `<h3 style="margin:10px 0 6px">${esc(label)}</h3><div class="cos-grid">${items.map(i => {
-        const svc = kind === 'service';
-        const owned = svc ? svcOwned(me, i.value) : me.owned.includes(i.id), on = me.equipped[kind] === i.id;
+        const svc = kind === 'service' || kind === 'decor';
+        const owned = kind === 'service' ? svcOwned(me, i.value) : me.owned.includes(i.id), on = me.equipped[kind] === i.id;
         return `<div class="cos ${on ? 'on' : ''}">${preview(i, profile?.avatar)}
           <b>${esc(i.name)}</b><div class="tiny muted">${esc(i.desc)}</div>
           ${owned && svc ? '<span class="chip green">✔ Liberado</span>' : owned
