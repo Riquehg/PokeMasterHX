@@ -8,7 +8,9 @@ import { TYPE_COLORS, against } from '../../shared/rules/types.js';
 import { esc, hpClass } from './dom.js';
 import { canUse, badgesNeeded } from '../../shared/rules/helpers.js';
 import { natureLabel } from '../../shared/data/natures.js';
-import { monSprite, typeLabel, typeColor, avatarUrl, PLAYER_COLORS } from '../config.js';
+import { monSprite, typeLabel, typeColor, avatarUrl, PLAYER_COLORS, itemUrl } from '../config.js';
+import { ITEMS } from '../../shared/data/items.js';
+import { MEGAS } from '../../shared/data/megas.js';
 
 export function typeChips(types) {
   return types.map(t => `<span class="chip type" style="background:${typeColor(t)}">${esc(typeLabel(t))}</span>`).join(' ');
@@ -33,6 +35,7 @@ export function monCard(mon, { index, lead = false, act = 'mon', extra = '', own
     <div class="tiny muted">${Math.max(0, v.hp)}/${v.maxHp} HP${ivPercent(mon) !== null ? ` · <span class="pk-stars-mini">${potentialStars(ivPercent(mon))}</span>` : ''}</div>
     ${locked ? `<div class="lock-tag">🔒 ${badgesNeeded(mon)} insígnia${badgesNeeded(mon) > 1 ? 's' : ''}</div>` : ''}
     ${mon.trust ? '<span class="trust-chip" title="Capturado na Bola da Confiança: obedece sem insígnias">🤝</span>' : ''}
+    ${heldBadge(mon)}
     ${extra}
   </div>`;
 }
@@ -93,8 +96,36 @@ export function statCard(mon, { owner = null, act = '', index = '', extra = '', 
     <div class="pk-moves">${monMoves(mon).map(m => moveBox(m)).join('')}</div>
     ${locked ? `<div class="lock-tag">🔒 precisa de ${badgesNeeded(mon)} insígnia${badgesNeeded(mon) > 1 ? 's' : ''}</div>` : ''}
     ${mon.trust ? '<div class="tiny"><span class="trust-chip" title="Capturado na Bola da Confiança: obedece sem insígnias">🤝 Confiança</span></div>' : ''}
+    ${heldLine(mon)}
     ${extra}
   </div>`;
+}
+
+/** Ícone compacto de Pokémon (PC, listas longas): sprite, nome, nível, HP mínimo e selos. */
+export function miniMon(mon, { act = '', index = '', sel = false, owner = null, extraCls = '' } = {}) {
+  const v = monView(mon);
+  const hp = mon.hp === undefined ? v.maxHp : Math.max(0, v.hp);
+  const locked = owner && !canUse(owner, mon);
+  return `<div class="mini-mon ${v.shiny ? 'shiny' : ''} ${hp <= 0 ? 'fainted' : ''} ${sel ? 'sel' : ''} ${locked ? 'locked' : ''} ${extraCls}" ${act ? `data-act="${act}" data-index="${index}"` : ''} data-uid="${esc(mon.uid || '')}" title="${esc(v.name)} Nv.${v.lvl} — ${v.types.map(typeLabel).join('/')}">
+    <span class="mm-lv">${v.lvl}</span>${v.shiny ? '<span class="mm-sh">✨</span>' : ''}${mon.held ? `<img class="mm-held" src="${itemUrl(mon.held)}" alt="">` : ''}${locked ? '<span class="mm-lock">🔒</span>' : ''}
+    <img src="${monSprite(mon)}" alt="" loading="lazy">
+    <b>${esc(v.name)}</b>${hpBar(hp, v.maxHp, 'mm-hp')}
+  </div>`;
+}
+
+/** 💎 item segurado (Megapedra): selo no canto + linha no card de status. */
+export function heldBadge(mon) {
+  const it = mon?.held && ITEMS[mon.held];
+  if (!it) return '';
+  const m = MEGAS[it.mega];
+  return `<span class="held-badge" title="Segurando: ${esc(it.name)}${m ? ` — pode virar ${esc(m.name)}` : ''}"><img src="${itemUrl(mon.held)}" alt="">💎</span>`;
+}
+function heldLine(mon) {
+  const it = mon?.held && ITEMS[mon.held];
+  if (!it) return '';
+  const m = MEGAS[it.mega];
+  const active = mon.mega;
+  return `<div class="pk-held"><img src="${itemUrl(mon.held)}" alt=""><span>Segura <b>${esc(it.name)}</b>${m ? ` · ${active ? '💎 Mega Evoluído' : `pode virar <b>${esc(m.name)}</b>`}` : ''}</span></div>`;
 }
 
 export function speciesName(id) {

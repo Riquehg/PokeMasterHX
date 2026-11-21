@@ -896,8 +896,9 @@ export function deliverCapture(state, pid, mon, ballId) {
   mon.ball = ballId;
   if (ballId) progressMission(state, pid, { k: 'capture', sp: mon.sp });
   const where = giveMon(p, mon);
+  p.lastPlaced = { uid: mon.uid, where }; // ➕ dá para escolher na hora: equipe ou PC (ação 'place')
   (p.captureLog ||= []).push({ sp: mon.sp, shiny: !!mon.shiny, t: state.turn || 0 });
   if (p.captureLog.length > 20) p.captureLog.splice(0, p.captureLog.length - 20);
-  fx(state, { k: 'placed', pid, sp: mon.sp, shiny: !!mon.shiny, where, via: ballId ? 'capture' : 'egg' });
+  fx(state, { k: 'placed', pid, uid: mon.uid, sp: mon.sp, shiny: !!mon.shiny, where, via: ballId ? 'capture' : 'egg' });
   log(state, `🎉 ${speciesName(mon.sp)}${mon.shiny ? ' ✨' : ''} entrou ${where === 'team' ? 'na equipe' : 'no PC (equipe cheia)'} de ${p.name}!`, mon.shiny ? 'shiny' : 'good');
 }

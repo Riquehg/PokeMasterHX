@@ -200,11 +200,11 @@ export const supabaseDb = {
   async deleteChat(id) { check(await admin().from('global_chat').delete().eq('id', id)); },
   async searchProfiles(q, limit = 10) {
     const safe = String(q).replace(/[%_,()]/g, '');
-    return check(await admin().from('profiles').select('id, trainer_name, avatar, rating, points, last_seen').ilike('trainer_name', `%${safe}%`).limit(limit));
+    return check(await admin().from('profiles').select('id, trainer_name, avatar, rating, points, cosmetics, last_seen').ilike('trainer_name', `%${safe}%`).limit(limit));
   },
   async getProfilesByIds(ids) {
     if (!ids.length) return [];
-    return check(await admin().from('profiles').select('id, trainer_name, avatar, rating, points, stats, last_seen').in('id', ids));
+    return check(await admin().from('profiles').select('id, trainer_name, avatar, rating, points, stats, cosmetics, last_seen').in('id', ids));
   },
   async listFriendships(userId) {
     return check(await admin().from('friendships').select('*').or(`user_id.eq.${userId},friend_id.eq.${userId}`));

@@ -665,3 +665,49 @@ test('💎 Pokédex Mega: quem evolui registra (normal e shiny), o adversário v
   assert.equal(mergeMegaDex({ seen: ['gengar'], used: ['gengar'] }, { seen: ['gengar'] }), null);
   assert.deepEqual(mergeMegaDex(null, s.players[0].megaDex).shinyUsed, ['gengar']);
 });
+
+test('💎 Mega não conta como evolução (sem animação de evoluir nem missão) — nem ao voltar', async () => {
+  const { applyAction } = await import('../shared/engine.js');
+  let s = applyAction(megaDuel(), 'a', { type: 'battle', move: 'mega' }, { now: 0 }).state;
+  assert.ok(!s.fx.some(f => f.k === 'evolve'));
+  // termina a batalha: volta à forma normal sem 'evolve'
+  for (let i = 0; i < 200 && s.battle; i++) {
+    let moved = false;
+    for (const who of ['a', 'b']) {
+      const si = s.battle?.sides.findIndex(x => x.pid === who);
+      if (si < 0 || !s.battle) continue;
+      const team = s.players.find(p => p.id === who).team;
+      const a = s.battle.mustSwitch[si] ? { type: 'battle', move: 'switch', index: team.findIndex(m => m.hp > 0) } : { type: 'battle', move: 'attack' };
+      const r = applyAction(s, who, a, { now: 0 });
+      if (!r.error) { s = r.state; moved = true; assert.ok(!s.fx.some(f => f.k === 'evolve'), 'sem evolução falsa'); }
+    }
+    if (!moved) break;
+  }
+  assert.equal(s.battle, null);
+  assert.equal(s.players[0].team[0].sp, 'gengar');
+});
+
+test('➕ recém-capturado: escolher equipe ou PC na hora (troca com alguém da equipe)', async () => {
+  const { applyAction } = await import('../shared/engine.js');
+  const { deliverCapture } = await import('../shared/rules/battle.js');
+  const { createMon } = await import('../shared/rules/monsters.js');
+  let s = createMatch({ seed: 5, mode: 'online', now: 0, players: [{ id: 'a', name: 'A', starter: 'bulbasaur' }, { id: 'b', name: 'B', starter: 'charmander' }] });
+  const p = s.players[0];
+  const rng = createRng(2);
+  while (p.team.length < 6) p.team.push(createMon(rng, 'rattata', 5));
+  const novo = createMon(rng, 'pikachu', 10);
+  deliverCapture(s, 'a', novo, 'poke_ball');
+  assert.equal(p.lastPlaced.where, 'box');
+  // fora da vez e fora da cidade também pode (é só organizar o recém-capturado)
+  s = applyAction(s, 'a', { type: 'place', op: 'to_team', swap: 3 }, { now: 0 }).state;
+  assert.equal(s.players[0].team[3].sp, 'pikachu');
+  assert.equal(s.players[0].box.at(-1).sp, 'rattata');
+  assert.equal(s.players[0].lastPlaced, undefined);
+  assert.match(applyAction(s, 'a', { type: 'place', op: 'to_box' }, { now: 0 }).error, /Nada para organizar/);
+  // na equipe → mandar para o PC
+  const s2 = createMatch({ seed: 6, mode: 'online', now: 0, players: [{ id: 'a', name: 'A', starter: 'bulbasaur' }, { id: 'b', name: 'B', starter: 'charmander' }] });
+  deliverCapture(s2, 'a', createMon(rng, 'eevee', 8), 'poke_ball');
+  const r = applyAction(s2, 'a', { type: 'place', op: 'to_box' }, { now: 0 }).state;
+  assert.equal(r.players[0].box.at(-1).sp, 'eevee');
+  assert.equal(r.players[0].team.length, 1);
+});

@@ -6,6 +6,8 @@ const HARDCORE_TXT = 'Hardcore: se toda a sua equipe for derrotada você sai da 
 import { MAP_CHOICES, mapChoiceName, BUILTIN_MAPS, setCustomMaps } from '../../shared/data/board.js';
 import { openMapEditor, templateMap } from './mapeditor.js';
 import { openSeries, openTrophies, checkSeasonResult } from './series.js';
+import { openTrainerCard } from './trainercard.js';
+import { megaBySpecies } from '../../shared/data/megas.js';
 import { openDaily, autoDaily, defenseReport } from './daily.js';
 import { openFarm } from './farm.js';
 import { BOX_MAX, BOX_ICONS } from '../../shared/data/boxes.js';
@@ -158,7 +160,8 @@ export async function hubScreen(root, ctx) {
           </div>
         </div>
         <div class="daily"><img src="${monSprite(daily)}" alt="${esc(dsp?.name)}"><div><div class="tiny" style="color:var(--gold)">⭐ POKÉMON DO DIA</div><b>${esc(dsp?.name)}</b> ${typeChips(dsp?.types || [])}
-          <div class="tiny muted">Aparece mais, dá XP em dobro e tem chance de shiny 1/64.</div></div></div>
+          <div class="tiny muted">Aparece mais, dá XP em dobro e tem chance de shiny 1/64.</div>
+          <button class="wall-inline" data-wall-open title="Últimos lendários e shinies capturados por todos">✨ Capturas raras <b data-wall-count></b></button></div></div>
       </div>
 
       ${mine.length || localSave ? `<div class="hub-continue"><b>▶ Continuar</b>
@@ -313,7 +316,7 @@ function collectionModal(profile, onChange) {
       ${boxBar()}
       <div class="vf-scope">${vfBar('vault')}
       <div class="pk-grid ${picking ? 'bx-picking' : ''}">${all.map(m => { const bx = boxOf(m.uid); const hide = picking ? !!bx && bx.id === picking.box : view === 'none' ? !!bx : view !== 'all' && bx?.id !== view;
-        return `<div class="vf-cell ${hide ? 'bx-hide' : ''} ${picking?.sel.has(m.uid) ? 'bx-sel' : ''}" data-uid="${esc(m.uid)}" ${vfAttrs(m, recent.get(m.uid) || 0)}>${bx && view === 'all' ? `<span class="bx-tag" title="${esc(bx.name)}">${bx.icon}</span>` : ''}${statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px">${bx && view === bx.id ? `<button class="btn sm" data-act="bx-out" data-uid="${esc(m.uid)}" title="Tirar da box">↩️</button>` : ''}<button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="farm" data-uid="${esc(m.uid)}" title="Mandar para a 🌾 Fazenda (ganha XP com o tempo)">🌾</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar">✕</button></div>` })}</div>`; }).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div></div>`;
+        return `<div class="vf-cell ${hide ? 'bx-hide' : ''} ${picking?.sel.has(m.uid) ? 'bx-sel' : ''}" data-uid="${esc(m.uid)}" ${vfAttrs(m, recent.get(m.uid) || 0)}>${bx && view === 'all' ? `<span class="bx-tag" title="${esc(bx.name)}">${bx.icon}</span>` : ''}${statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px">${bx && view === bx.id ? `<button class="btn sm" data-act="bx-out" data-uid="${esc(m.uid)}" title="Tirar da box">↩️</button>` : ''}<button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="farm" data-uid="${esc(m.uid)}" title="Mandar para a 🌾 Fazenda (ganha XP com o tempo)">🌾</button>${megaBySpecies(m.sp).length ? `<button class="btn sm ${m.held ? 'purple' : ''}" data-act="mstone" data-uid="${esc(m.uid)}" title="💎 Megapedra: equipar / trocar / tirar">💎</button>` : ''}<button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar">✕</button></div>` })}</div>`; }).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div></div>`;
   };
   const ov = openModal('vault', `📦 Coleção (${(profile?.vault || []).length}/${cap()})`, body(), { wide: true });
   const redraw = () => { setModalBody('vault', body()); vfBind(document.getElementById('vault')); };
@@ -355,6 +358,24 @@ function collectionModal(profile, onChange) {
       if (nick === null) return;
       try { profile = (await api('profile', { op: 'nickname', uid: d.uid, nick })).profile; redraw(); onChange(profile); toast(nick.trim() ? `✏️ Agora é ${nick.trim().slice(0, 12)}!` : 'Apelido removido.', 'good'); }
       catch (e) { toast(e.message, 'bad'); }
+    },
+    mstone: d => { // 💎 equipar a Megapedra direto no Pokémon
+      const m = (profile.vault || []).find(x => x.uid === d.uid);
+      if (!m) return;
+      const bag = profile?.stats?.bag || {};
+      const opts = megaBySpecies(m.sp);
+      const ov2 = openModal('mstone', `💎 Megapedra — ${esc(m.nick || getSpecies(m.sp).name)}`, `<div class="ms-pick">
+          ${opts.map(x => { const id = `ms_${x.key}`, n = bag[id] || 0, on = m.held === id;
+            return `<div class="ms-opt ${on ? 'on' : ''}"><img class="ms-st" src="${itemUrl(id)}" alt=""><img class="ms-mon" src="${monSprite({ sp: x.sp, shiny: m.shiny })}" alt="">
+              <div class="grow"><b>${esc(ALL_ITEMS[id].name)}</b><div class="tiny muted">vira <b>${esc(x.name)}</b> · você tem ${n} na Mochila</div></div>
+              ${on ? '<span class="chip purple">Segurando</span>' : `<button class="btn sm primary" data-act="ms-hold" data-item="${id}" ${n > 0 ? '' : 'disabled'}>Equipar</button>`}</div>`; }).join('')}
+          ${m.held ? '<button class="btn sm" data-act="ms-off">↩️ Tirar a pedra (volta para a Mochila)</button>' : ''}
+          <p class="tiny muted">O Pokémon que segura a pedra é quem pode Mega Evoluir (precisa também do 🔗 Bracelete Mega na conta). Pedras vêm da 🔨 Oficina (10 fragmentos), de Mega Raids e do 🏪 Mercado.</p></div>`);
+      const hold = async item => {
+        try { profile = (await api('profile', { op: 'hold_stone', uid: m.uid, item })).profile; closeModal('mstone'); redraw(); onChange(profile); toast(item ? '💎 Megapedra equipada!' : 'A pedra voltou para a Mochila.', 'good'); }
+        catch (e) { toast(e.message, 'bad'); }
+      };
+      bindActions(ov2, { 'ms-hold': x => hold(x.item), 'ms-off': () => hold(null) });
     },
     rel: d => { if (confirm('Soltar este Pokémon da sua Coleção? Ele fica na lista "Saíram da Coleção" e dá para recuperar depois.')) op('release', d.uid); },
     restore: d => op('restore', d.uid),
@@ -424,7 +445,7 @@ async function rankingModal(myRating = null, myLeagueRaw = null, myName = '') {
           <div class="elo-big">${t.icon}</div><b style="color:${t.color}">${t.name}</b>
           <div class="tiny muted">${t.max ? `${t.min} – ${t.max - 1}` : `${t.min}+`} de rating</div>
           <div class="small"><b>${t.count}</b> treinador(es)</div>
-          <div class="elo-top">${t.top.map(p => `<span title="${esc(p.name)} · ${p.rating}"><img src="${avatarUrl(p.avatar)}" alt="">${esc(p.name)}</span>`).join('') || '<span class="tiny muted">ninguém ainda</span>'}</div></div>`).join('')}</div>
+          <div class="elo-top">${t.top.map(p => `<span title="${esc(p.name)} · ${p.rating}" ${p.id ? `data-act="card" data-id="${esc(p.id)}" style="cursor:pointer"` : ''}><img src="${avatarUrl(p.avatar, p.skin)}" alt="">${esc(p.name)}</span>`).join('') || '<span class="tiny muted">ninguém ainda</span>'}</div></div>`).join('')}</div>
       <p class="tiny muted">Todo mundo começa em 1000 (Prata). Partidas 🏆 Competitivas mudam o rating: terminar à frente de quem tem rating igual ou maior dá mais pontos. ${data.rankedPlayers} treinador(es) já jogaram o Competitivo.</p>`;
   };
   const body = () => {
@@ -435,7 +456,7 @@ async function rankingModal(myRating = null, myLeagueRaw = null, myName = '') {
     const rows = comp ? data.competitive : data.ranking;
     return `${tabs}
       <table class="score"><tr><th>#</th><th>Treinador</th>${comp ? '<th>Elo</th><th>Rating</th><th>Partidas</th><th>Vitórias</th>' : '<th>Pontos</th><th>Pokédex</th><th>Vitórias</th><th>Campeão</th><th>✨</th>'}</tr>
-      ${rows.map((r, i) => `<tr><td>${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</td><td>${esc(r.name)}</td>${comp
+      ${rows.map((r, i) => `<tr><td>${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</td><td>${r.id ? `<a class="tc-link" data-act="card" data-id="${esc(r.id)}"><img class="rk-av" src="${avatarUrl(r.avatar, r.skin)}" alt="">${esc(r.name)}</a>` : esc(r.name)}</td>${comp
         ? `<td>${eloTag(r.rating)}</td><td><b>${r.rating}</b></td><td>${r.ranked}</td><td>${r.rankedWins}</td>`
         : `<td><b>${r.points}</b></td><td>${r.pokedex}</td><td>${r.wins}</td><td>${r.champion}</td><td>${r.shinies}</td>`}</tr>`).join('') || `<tr><td colspan="7" class="muted">${comp ? 'Ninguém jogou uma partida competitiva ainda.' : 'Ninguém pontuou ainda.'}</td></tr>`}</table>
       <p class="tiny muted">${comp ? 'Rating Elo (começa em 1000): sobe ao terminar à frente de quem tem rating igual ou maior. Só partidas 🏆 Competitivas contam.' : 'Pontos: 10 por espécie na Pokédex, 300 por vitória, 500 por título de Campeão, 50 por shiny, 25 por vitória PvP.'}</p>`;
@@ -443,7 +464,7 @@ async function rankingModal(myRating = null, myLeagueRaw = null, myName = '') {
   try {
     data = await api('leaderboard', null, 'GET');
     setModalBody('rank', body());
-    bindActions(document.getElementById('rank'), { t: d => { tab = d.t; setModalBody('rank', body()); } });
+    bindActions(document.getElementById('rank'), { t: d => { tab = d.t; setModalBody('rank', body()); }, card: d => openTrainerCard(d.id) });
   } catch (e) { setModalBody('rank', `<p class="muted">${esc(e.message)}</p>`); }
 }
 

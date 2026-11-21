@@ -158,15 +158,18 @@ export class BoardView {
     const vp = this.vp;
     const pts = new Map();
     let last = null, moved = 0, pinch = null;
+    let armed = false; // o toque começou de verdade no mapa (não num botão, menu ou janela por cima)
+    let ptype = 'mouse';
+    const slop = e => ((e?.pointerType || ptype) === 'touch' ? 12 : 6);
     vp.addEventListener('wheel', e => {
       e.preventDefault();
       const r = vp.getBoundingClientRect();
       this.zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top);
     }, { passive: false });
     vp.addEventListener('pointerdown', e => {
-      if (e.target.closest('.zoom-ctrl')) return;
+      if (e.target.closest('.zoom-ctrl')) { armed = false; return; }
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pts.size === 1) { last = { x: e.clientX, y: e.clientY }; moved = 0; }
+      if (pts.size === 1) { last = { x: e.clientX, y: e.clientY }; moved = 0; armed = true; ptype = e.pointerType || 'mouse'; }
       if (pts.size === 2) {
         const [a, b] = [...pts.values()];
         pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), s: this.scale };
@@ -190,7 +193,7 @@ export class BoardView {
       if (!last) return;
       const dx = e.clientX - last.x, dy = e.clientY - last.y;
       moved += Math.abs(dx) + Math.abs(dy);
-      if (moved > 6) {
+      if (moved > slop(e)) {
         vp.classList.add('dragging');
         if (!vp.hasPointerCapture(e.pointerId)) vp.setPointerCapture(e.pointerId);
         this.x += dx; this.y += dy;
@@ -207,7 +210,11 @@ export class BoardView {
     vp.addEventListener('pointercancel', end);
     // clique só conta se não arrastou
     vp.addEventListener('click', e => {
-      if (moved > 6) { e.stopPropagation(); e.preventDefault(); moved = 0; return; }
+      if (e.target.closest('.zoom-ctrl')) return; // botões de zoom nunca movem o peão
+      // clique "fantasma" (o toque começou fora do mapa, num menu que sumiu, ou tem janela aberta): ignora
+      const modalOpen = !!document.querySelector('.overlay');
+      if (!armed || modalOpen || moved > slop()) { e.stopPropagation(); e.preventDefault(); moved = 0; armed = false; return; }
+      armed = false;
       // destino: a casa possível mais perto do toque (não depende de qual enfeite ficou por cima)
       if (this.vp.classList.contains('moving')) {
         const to = this.nearestOption(e.clientX, e.clientY);

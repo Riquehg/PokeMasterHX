@@ -3,6 +3,7 @@ import { esc, toast } from './dom.js';
 import { avatarUrl } from '../config.js';
 import { net, api } from '../api.js';
 import { eloOf } from '../../shared/data/elo.js';
+import { openTrainerCard } from './trainercard.js';
 
 const EMOJIS = ['😄', '😂', '😍', '😎', '🤔', '😭', '😡', '👍', '👏', '🙏', '🔥', '⚡', '✨', '💎', '🎉', '🏆', '👑', '🤝', 'GG', '❤️'];
 const st = { open: false, tab: 'chat', chat: [], lastId: 0, online: [], onlineCount: 0, friendReq: 0, friends: null, unread: 0, search: [], started: false, myId: null, ctx: null };
@@ -21,18 +22,20 @@ function ensureRoot() {
   return root;
 }
 
+// skin conhecida de quem está online/amigo (o chat só guarda o avatar)
+const skinOf = id => (st.online.find(p => p.id === id) || st.friends?.friends?.find(p => p.id === id))?.skin || null;
 const eloChip = r => { const e = eloOf(r); return `<span class="elo-chip" style="--ec:${e.color}" title="${e.name} (${r})">${e.icon}</span>`; };
 
 function chatHtml() {
   return `<div class="soc-msgs" id="soc-msgs">${st.chat.map(m => `<div class="soc-msg ${m.userId === st.myId ? 'me' : ''}">
-      <img src="${avatarUrl(m.avatar)}" alt=""><div><b>${esc(m.name)}</b> <span class="tiny muted">${new Date(m.at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+      <img src="${avatarUrl(m.avatar, skinOf(m.userId))}" alt="" data-soc="card" data-id="${esc(m.userId)}" style="cursor:pointer"><div><b data-soc="card" data-id="${esc(m.userId)}" style="cursor:pointer">${esc(m.name)}</b> <span class="tiny muted">${new Date(m.at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
       <div class="soc-text">${esc(m.text)}</div></div></div>`).join('') || '<p class="muted small center">Ninguém falou nada ainda. Diga oi! 👋</p>'}</div>
     <div class="soc-emojis">${EMOJIS.map(e => `<button data-emoji="${e}">${e}</button>`).join('')}</div>
     <div class="soc-send"><input class="input" id="soc-input" maxlength="240" placeholder="Mensagem para todos online..."><button class="btn primary sm" data-soc="send">Enviar</button></div>`;
 }
 
 function personRow(p, extra = '') {
-  return `<div class="soc-person"><img src="${avatarUrl(p.avatar)}" alt=""><span class="dot ${p.online ? 'on' : ''}"></span>
+  return `<div class="soc-person" data-soc="card" data-id="${esc(p.id)}" title="Ver o cartão do treinador"><img src="${avatarUrl(p.avatar, p.skin)}" alt=""><span class="dot ${p.online ? 'on' : ''}"></span>
     <div class="grow"><b>${esc(p.name)}</b> ${eloChip(p.rating)}<div class="tiny muted">${p.online ? 'online' : 'offline'} · ${p.points} pts</div></div>${extra}</div>`;
 }
 
@@ -160,8 +163,10 @@ function onClick(e) {
     if (inp) { inp.value = (inp.value + ' ' + em.dataset.emoji).trimStart(); inp.focus(); }
     return;
   }
-  const b = e.target.closest('[data-soc]');
+  let b = e.target.closest('[data-soc]');
   if (!b) return;
+  // botões dentro da linha (Amigo, Aceitar...) têm prioridade sobre abrir o cartão
+  if (b.dataset.soc === 'card' && e.target.closest('button')) b = e.target.closest('button');
   const id = b.dataset.id;
   switch (b.dataset.soc) {
     case 'open': st.open = true; if (st.tab === 'chat') st.unread = 0; draw(); if (st.tab === 'friends') loadFriends(); break;
@@ -173,6 +178,7 @@ function onClick(e) {
     case 'accept': friendOp('friend_accept', id); break;
     case 'remove': friendOp('friend_remove', id); break;
     case 'join': joinRoom(id); break;
+    case 'card': if (id) openTrainerCard(id); break;
   }
 }
 

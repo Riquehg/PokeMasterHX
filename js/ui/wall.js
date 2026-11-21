@@ -4,7 +4,7 @@ import { esc } from './dom.js';
 import { monSprite, avatarUrl } from '../config.js';
 import { getSpecies } from '../../shared/data/pokemon.js';
 
-const st = { open: window.innerWidth >= 1500, items: [], timer: null, visible: false, filter: 'all' };
+const st = { open: false, items: [], timer: null, visible: false, filter: 'all' };
 
 function ago(iso) {
   const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
@@ -13,6 +13,13 @@ function ago(iso) {
   if (s < 86400) return `${Math.floor(s / 3600)} h`;
   return `${Math.floor(s / 86400)} d`;
 }
+
+// botão "✨ Capturas raras" dentro da tela inicial
+document.addEventListener('click', e => {
+  if (!e.target.closest('[data-wall-open]')) return;
+  st.open = !st.open;
+  draw();
+});
 
 function root() {
   let r = document.getElementById('wall');
@@ -36,9 +43,9 @@ function draw() {
   r.classList.toggle('hidden', !st.visible);
   if (!st.visible) return;
   const list = st.items.filter(x => st.filter === 'all' || (st.filter === 'shiny' ? x.shiny : x.kind === 'legendary' || getSpecies(x.sp)?.tier >= 5));
-  if (!st.open) {
-    const n = st.items.length;
-    r.innerHTML = `<button class="wall-fab" data-wall="toggle" title="Últimos lendários e shinies capturados">✨ Capturas raras${n ? ` <b>${n}</b>` : ''}</button>`;
+  document.querySelectorAll('[data-wall-count]').forEach(el => { el.textContent = st.items.length ? String(st.items.length) : ''; });
+  if (!st.open) { // fechado: o botão fica dentro da tela inicial (no card do Pokémon do dia), sem tampar nada
+    r.innerHTML = '';
     return;
   }
   r.innerHTML = `<div class="wall-panel">

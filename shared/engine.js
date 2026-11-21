@@ -251,12 +251,14 @@ function newPlayer(rng, cfg, index) {
 // ------------------------------------------------------------------ API principal
 /** Compara antes/depois e gera um efeito 'evolve' para cada Pokémon que mudou de espécie (para a animação). */
 function detectEvolutions(prev, next) {
+  // forma "de verdade": 💎 Mega e 🧬 Transformar (mon.tf) não são evolução — nem ao entrar nem ao voltar
+  const real = m => m.tf?.sp || m.sp;
   const before = new Map();
-  for (const p of prev.players) for (const m of [...p.team, ...p.box]) before.set(m.uid, m.sp);
+  for (const p of prev.players) for (const m of [...p.team, ...p.box]) before.set(m.uid, real(m));
   for (const p of next.players) {
     for (const m of [...p.team, ...p.box]) {
       const old = before.get(m.uid);
-      if (old && old !== m.sp) {
+      if (old && old !== real(m) && !m.tf) {
         next.fx.push({ k: 'evolve', pid: p.id, uid: m.uid, from: old, to: m.sp, shiny: !!m.shiny });
         markCaught(p, m.sp, !!m.shiny); // a forma evoluída entra na Pokédex
         progressMission(next, p.id, { k: 'evolve' });
@@ -330,6 +332,7 @@ function dispatch(state, rng, actorId, action, now) {
     return;
   }
   if (type === 'trade_respond') return respondTrade(state, rng, actor, action);
+  if (type === 'place') return placeCaught(state, actor, action); // ➕ recém-capturado: equipe ou PC (fora da cidade também)
 
   // Convite de PvP pendente: só o desafiado responde
   if (state.pending?.kind === 'pvp_invite') {
@@ -394,6 +397,7 @@ function summarizeBattle(state, b) {
 // ------------------------------------------------------------------ turno
 function roll(state, rng, p) {
   if (state.phase !== 'roll') fail('Você já rolou o dado neste turno.');
+  delete p.lastPlaced; // a escolha "equipe ou PC" vale até a próxima rolada
   const die = rng.d6();
   const bonus = p.moveBonus || 0;
   p.moveBonus = 0;
@@ -719,6 +723,37 @@ function startEliteBattle(state, rng, p) {
 
 function npcTeam(rng, list) {
   return list.map(([sp, lvl]) => createMon(rng, sp, lvl));
+}
+
+/** ➕ Logo depois de capturar: colocar o novo Pokémon na equipe (trocando com alguém) ou mandar para o PC. */
+function placeCaught(state, p, a) {
+  const lp = p.lastPlaced;
+  if (!lp) fail('Nada para organizar agora.');
+  const inBattle = state.battle && !state.battle.over && state.battle.sides.some(sd => sd.pid === p.id);
+  if (inBattle || (state.raid && (state.raid.party || []).some(x => x.pid === p.id))) fail('Termine a batalha primeiro.');
+  const ti = p.team.findIndex(m => m.uid === lp.uid), bi = p.box.findIndex(m => m.uid === lp.uid);
+  if (ti < 0 && bi < 0) { delete p.lastPlaced; fail('Esse Pokémon não está mais com você.'); }
+  if (a.op === 'keep' || (a.op === 'to_team' && ti >= 0) || (a.op === 'to_box' && bi >= 0)) { delete p.lastPlaced; return; }
+  if (a.op === 'to_box') {
+    if (p.team.length <= 1) fail('A equipe precisa de pelo menos 1 Pokémon.');
+    const [m] = p.team.splice(ti, 1);
+    p.box.push(m);
+    log(state, `💻 ${p.name} mandou ${speciesName(m.sp)} para o PC.`);
+  } else if (a.op === 'to_team') {
+    if (p.team.length < TEAM_SIZE) {
+      const [m] = p.box.splice(bi, 1);
+      p.team.push(m);
+      log(state, `➕ ${p.name} colocou ${speciesName(m.sp)} na equipe.`);
+    } else {
+      const sw = Number(a.swap);
+      if (!p.team[sw]) fail('Escolha quem vai para o PC.');
+      const out = p.team[sw];
+      p.team[sw] = p.box[bi];
+      p.box[bi] = out;
+      log(state, `➕ ${p.name} colocou ${speciesName(p.team[sw].sp)} na equipe e mandou ${speciesName(out.sp)} para o PC.`);
+    }
+  } else fail('Opção inválida.');
+  delete p.lastPlaced;
 }
 
 function pcAction(state, p, a) {

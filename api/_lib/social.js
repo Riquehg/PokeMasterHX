@@ -1,14 +1,49 @@
 // Social: quem está online, chat global e amigos. Tudo pelo endpoint /api/feed (POST) — a Vercel grátis só aceita 12 funções.
 import { bad, notFound, cleanName } from './core.js';
 import { eloOf } from '../../shared/data/elo.js';
+import { getShop, equippedSkin, equippedCosmetic } from './shop.js';
 
 export const ONLINE_WINDOW_MS = 90_000; // visto nos últimos 90 s = online
 const CHAT_COOLDOWN_MS = 2_000;
 const MAX_FRIENDS = 100;
 
-const pub = p => ({ id: p.id, name: p.trainer_name || 'Treinador', avatar: p.avatar || 1, rating: p.rating ?? 1000, elo: eloOf(p.rating ?? 1000).id,
+// skin = skin de treinador equipada (da 💎 Loja), para a foto bater com o cartão do treinador
+let SHOP_ITEMS = [];
+const pub = p => ({ id: p.id, name: p.trainer_name || 'Treinador', avatar: p.avatar || 1, skin: equippedSkin(p, SHOP_ITEMS), rating: p.rating ?? 1000, elo: eloOf(p.rating ?? 1000).id,
   points: p.points || 0, online: !!p.last_seen && Date.now() - new Date(p.last_seen).getTime() < ONLINE_WINDOW_MS,
   title: p.cosmetics?.equipped?.title ? true : false });
+async function loadShop(db) { try { SHOP_ITEMS = (await getShop(db)).items || []; } catch { SHOP_ITEMS = []; } }
+
+/** 🪪 Cartão do treinador (público): o que os outros podem ver. Nada de e-mail nem dados da conta. */
+async function trainerCard(db, id) {
+  const p = await db.getProfile(String(id || ''));
+  if (!p) notFound('Treinador não encontrado.');
+  const st = p.stats || {};
+  const vault = p.vault || [];
+  const mini = m => (m ? { sp: m.sp, lvl: m.lvl, shiny: !!m.shiny, held: m.held || null, nick: m.nick || null, gender: m.gender || null } : null);
+  const byUid = Object.fromEntries(vault.map(m => [m.uid, m]));
+  const serie = st.serie || null;
+  // "time": o time de defesa da Liga; se não tiver, os 6 de nível mais alto
+  let team = (serie?.defense || []).map(u => mini(byUid[u])).filter(Boolean);
+  const teamFrom = team.length ? 'liga' : 'top';
+  if (!team.length) team = [...vault].sort((a, b) => (b.lvl | 0) - (a.lvl | 0) || Number(!!b.shiny) - Number(!!a.shiny)).slice(0, 6).map(mini);
+  let cosmetic = null;
+  try { cosmetic = await equippedCosmetic(db, p); } catch { /* ok */ }
+  return {
+    card: {
+      id: p.id, name: p.trainer_name || 'Treinador', avatar: p.avatar || 1, cosmetic,
+      online: !!p.last_seen && Date.now() - new Date(p.last_seen).getTime() < ONLINE_WINDOW_MS,
+      points: p.points || 0, rating: p.rating ?? 1000, elo: eloOf(p.rating ?? 1000),
+      dex: (p.pokedex || []).length, collection: vault.length, shinies: vault.filter(m => m.shiny).length,
+      megaBracelet: !!st.megaBracelet, megaDex: (st.megaDex?.used || []).length,
+      wins: st.wins | 0, games: st.matches | 0, champion: st.champion | 0, captures: st.captures | 0,
+      serie: serie ? { div: serie.div | 0, team: serie.team || null, pts: serie.pts | 0 } : null,
+      trophies: (st.trophies || []).length, trophyList: (st.trophies || []).slice(-6),
+      companion: st.companion || null, farmLvl: st.farm?.lvl || 1,
+      team, teamFrom
+    }
+  };
+}
 const pubChat = c => ({ id: c.id, userId: c.user_id, name: c.name, avatar: c.avatar, text: c.text, at: c.created_at });
 
 // filtro simples de palavrões/links (o admin pode apagar mensagens)
@@ -45,8 +80,12 @@ export async function socialOp(db, user, body) {
   const since = new Date(now - ONLINE_WINDOW_MS).toISOString();
 
   switch (body.op) {
+    case 'card': // 🪪 cartão de outro treinador (lista online, amigos, chat)
+      return trainerCard(db, body.userId);
+
     case 'ping': { // batimento: marca online e devolve o resumo
       await db.touchSeen(user.id);
+      await loadShop(db);
       const [online, chat, f] = await Promise.all([
         db.listOnline(since, 60),
         db.listChat(Math.max(0, Number(body.chatSince) || 0), 50),
@@ -80,12 +119,14 @@ export async function socialOp(db, user, body) {
     }
 
     case 'friends':
+      await loadShop(db);
       return friendsView(db, user.id);
 
     case 'friend_search': {
       const q = String(body.q || '').trim();
       if (q.length < 2) return { results: [] };
       const rows = await db.searchProfiles(q, 12);
+      await loadShop(db);
       return { results: rows.filter(p => p.id !== user.id).map(pub) };
     }
 

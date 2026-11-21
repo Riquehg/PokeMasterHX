@@ -16,7 +16,7 @@ import { against, TYPES } from '../../shared/rules/types.js';
 import { score } from '../../shared/engine.js';
 import { esc, openModal, closeModal, setModalBody, bindActions } from './dom.js';
 import { monSprite, itemUrl, badgeUrl, typeLabel, leaderUrl } from '../config.js';
-import { monCard, statCard, typeChips, avatarImg, playerColor, hpBar } from './common.js';
+import { monCard, statCard, typeChips, avatarImg, playerColor, hpBar, miniMon } from './common.js';
 import { openTradeBuilder } from './trade.js';
 
 const me = session => session.state.players.find(p => p.id === session.viewerId());
@@ -46,32 +46,88 @@ export function openShop(session, act) {
 }
 
 // ---------------------------------------------------------------- PC
+// Compacto: ícones (toque para ver o card completo). Toque num da equipe e num do PC para trocar.
 export function openPC(session, act) {
   let sel = null; // { from: 'team'|'box', index }
+  const f = { q: '', sort: 'recent' };
   const render = () => {
     const p = me(session);
-    return `<p class="small muted">Clique em um Pokémon da equipe e depois em um do PC para trocar. Ou use os botões para guardar/retirar.</p>
-      <b>Equipe (${p.team.length}/6)</b>
-      <div class="pk-grid" style="margin:6px 0 10px">${p.team.map((m, i) => statCard(m, { index: i, act: 'pick-team', owner: p, lead: i === 0, extra: `<button class="btn sm" data-act="deposit" data-index="${i}" ${p.team.length <= 1 ? 'disabled' : ''}>Guardar</button>` })).join('')}</div>
-      <b>PC (${p.box.length})</b>
-      <div class="pk-grid" style="margin-top:6px">${p.box.map((m, i) => statCard(m, { index: i, act: 'pick-box', owner: p, extra: `<div class="row" style="justify-content:center;gap:3px"><button class="btn sm" data-act="withdraw" data-index="${i}" ${p.team.length >= 6 ? 'disabled' : ''}>Retirar</button><button class="btn sm red" data-act="release" data-index="${i}" title="Soltar">✕</button></div>` })).join('') || '<p class="muted small">Vazio. Pokémon capturados com a equipe cheia vêm para cá.</p>'}</div>
-      ${sel ? `<p class="small" style="margin-top:8px">Selecionado: <b>${esc(getSpecies((sel.from === 'team' ? p.team : p.box)[sel.index].sp).name)}</b> — agora clique no outro lado para trocar.</p>` : ''}`;
+    if (sel && !(sel.from === 'team' ? p.team : p.box)[sel.index]) sel = null;
+    const box = p.box.map((m, i) => ({ m, i })).filter(({ m }) => !f.q || (m.nick || getSpecies(m.sp).name).toLowerCase().includes(f.q));
+    if (f.sort === 'lvl') box.sort((a, b) => b.m.lvl - a.m.lvl);
+    else if (f.sort === 'name') box.sort((a, b) => getSpecies(a.m.sp).name.localeCompare(getSpecies(b.m.sp).name));
+    else box.reverse(); // mais recentes primeiro
+    const cur = sel ? (sel.from === 'team' ? p.team : p.box)[sel.index] : null;
+    const actions = !cur ? '' : sel.from === 'team'
+      ? `<button class="btn sm" data-act="deposit" data-index="${sel.index}" ${p.team.length <= 1 ? 'disabled' : ''}>💻 Guardar no PC</button>`
+      : `<button class="btn sm primary" data-act="withdraw" data-index="${sel.index}" ${p.team.length >= 6 ? 'disabled title="Equipe cheia: toque num da equipe para trocar"' : ''}>➕ Pôr na equipe</button>
+         <button class="btn sm red" data-act="release" data-index="${sel.index}">✕ Soltar</button>`;
+    return `<p class="tiny muted">Toque num Pokémon para ver o card completo. Para <b>trocar</b>: toque num da equipe e depois num do PC (ou o contrário).</p>
+      <div class="pc-sec"><b>Equipe (${p.team.length}/6)</b>
+        <div class="mini-row">${p.team.map((m, i) => miniMon(m, { act: 'pick-team', index: i, owner: p, sel: sel?.from === 'team' && sel.index === i, extraCls: i === 0 ? 'lead' : '' })).join('')}</div></div>
+      ${cur ? `<div class="pc-detail"><div class="pc-card">${statCard(cur, { owner: p, lead: sel.from === 'team' && sel.index === 0 })}</div>
+        <div class="pc-acts">${actions}<button class="btn sm" data-act="unsel">Fechar</button>
+        ${sel.from === 'box' && p.team.length >= 6 ? '<div class="tiny muted">Equipe cheia: toque em quem vai sair da equipe para trocar.</div>' : sel.from === 'team' && p.box.length ? '<div class="tiny muted">Toque num do PC para trocar com ele.</div>' : ''}</div></div>` : ''}
+      <div class="pc-sec"><div class="spread"><b>💻 PC (${p.box.length})</b>
+        ${p.box.length > 6 ? `<div class="row" style="gap:4px"><input class="input sm" id="pc-q" placeholder="Buscar" value="${esc(f.q)}" style="width:110px"><select class="input sm" id="pc-sort"><option value="recent" ${f.sort === 'recent' ? 'selected' : ''}>Recentes</option><option value="lvl" ${f.sort === 'lvl' ? 'selected' : ''}>Nível</option><option value="name" ${f.sort === 'name' ? 'selected' : ''}>Nome</option></select></div>` : ''}</div>
+        <div class="mini-grid">${box.map(({ m, i }) => miniMon(m, { act: 'pick-box', index: i, owner: p, sel: sel?.from === 'box' && sel.index === i })).join('') || '<p class="muted small">Vazio. Pokémon capturados com a equipe cheia vêm para cá.</p>'}</div></div>`;
   };
   const ov = openModal('pc', '💻 PC de Armazenamento', render(), { wide: true });
-  const trySwap = () => {
-    if (sel?.team !== undefined && sel?.box !== undefined) {
-      const { team, box } = sel; sel = null;
-      act({ type: 'pc', op: 'swap', team, box });
-    } else setModalBody('pc', render());
+  const redraw = () => {
+    const q = document.activeElement?.id === 'pc-q';
+    setModalBody('pc', render());
+    if (q) { const el = ov.querySelector('#pc-q'); el?.focus(); el?.setSelectionRange(el.value.length, el.value.length); }
   };
+  const pick = (from, index) => {
+    if (sel && sel.from !== from) { // troca equipe ↔ PC
+      const team = from === 'team' ? index : sel.index, box = from === 'box' ? index : sel.index;
+      sel = null;
+      act({ type: 'pc', op: 'swap', team, box });
+      return;
+    }
+    sel = sel && sel.from === from && sel.index === index ? null : { from, index };
+    redraw();
+  };
+  ov.addEventListener('input', e => { if (e.target.id === 'pc-q') { f.q = e.target.value.trim().toLowerCase(); redraw(); } });
+  ov.addEventListener('change', e => { if (e.target.id === 'pc-sort') { f.sort = e.target.value; redraw(); } });
   bindActions(ov, {
-    'pick-team': d => { sel = { ...(sel || {}), from: 'team', index: Number(d.index), team: Number(d.index) }; trySwap(); },
-    'pick-box': d => { sel = { ...(sel || {}), from: 'box', index: Number(d.index), box: Number(d.index) }; trySwap(); },
-    deposit: d => act({ type: 'pc', op: 'deposit', team: Number(d.index) }),
-    withdraw: d => act({ type: 'pc', op: 'withdraw', box: Number(d.index) }),
-    release: d => { if (confirm('Soltar este Pokémon na natureza? (o Professor te dá um pouco de ouro)')) act({ type: 'pc', op: 'release', box: Number(d.index) }); }
+    'pick-team': d => pick('team', Number(d.index)),
+    'pick-box': d => pick('box', Number(d.index)),
+    unsel: () => { sel = null; redraw(); },
+    deposit: d => { sel = null; act({ type: 'pc', op: 'deposit', team: Number(d.index) }); },
+    withdraw: d => { sel = null; act({ type: 'pc', op: 'withdraw', box: Number(d.index) }); },
+    release: d => { if (confirm('Soltar este Pokémon na natureza? (o Professor te dá um pouco de ouro)')) { sel = null; act({ type: 'pc', op: 'release', box: Number(d.index) }); } }
   });
   refreshOnChange(session, 'pc', render);
+}
+
+// ---------------------------------------------------------------- ➕ recém-capturado: equipe ou PC
+export function openPlaceCaught(session, act, uid) {
+  const render = () => {
+    const p = me(session);
+    if (!p?.lastPlaced || p.lastPlaced.uid !== uid) return null;
+    const inTeam = p.team.findIndex(m => m.uid === uid), inBox = p.box.findIndex(m => m.uid === uid);
+    const mon = inTeam >= 0 ? p.team[inTeam] : p.box[inBox];
+    if (!mon) return null;
+    const full = p.team.length >= 6;
+    return `<div class="pl-new">${statCard(mon, { owner: p })}</div>
+      ${inTeam >= 0
+        ? `<p class="small center">Ele entrou na <b>equipe</b>.</p>
+           <div class="row" style="justify-content:center;gap:6px"><button class="btn primary" data-act="pl-keep">✅ Fica na equipe</button><button class="btn" data-act="pl-box" ${p.team.length <= 1 ? 'disabled' : ''}>💻 Mandar para o PC</button></div>`
+        : `<p class="small center">${full ? 'Sua equipe está cheia — ele foi para o <b>PC</b>. Quer trocar? Toque em quem sai da equipe:' : 'Ele está no PC.'}</p>
+           ${full ? `<div class="mini-row">${p.team.map((m, i) => miniMon(m, { act: 'pl-swap', index: i, owner: p })).join('')}</div>` : ''}
+           <div class="row" style="justify-content:center;gap:6px;margin-top:8px">${full ? '' : '<button class="btn primary" data-act="pl-team">➕ Pôr na equipe</button>'}<button class="btn" data-act="pl-keep">💻 Deixar no PC</button></div>`}`;
+  };
+  const html = render();
+  if (!html) return;
+  const ov = openModal('placecaught', '🎉 Novo Pokémon!', html, { wide: true });
+  const go = a => { closeModal('placecaught'); act({ type: 'place', ...a }); };
+  bindActions(ov, {
+    'pl-keep': () => go({ op: 'keep' }),
+    'pl-box': () => go({ op: 'to_box' }),
+    'pl-team': () => go({ op: 'to_team' }),
+    'pl-swap': d => go({ op: 'to_team', swap: Number(d.index) })
+  });
 }
 
 // ---------------------------------------------------------------- mochila
@@ -268,7 +324,7 @@ export function openTrainer(session, pid) {
     <div class="row" style="margin:10px 0">${GYMS.map(g => `<img src="${badgeUrl(g.id)}" alt="${esc(g.badge)}" title="${esc(g.badge)} (${esc(g.leader)})" style="width:34px;height:34px;object-fit:contain;${p.badges.includes(g.id) ? '' : 'filter:grayscale(1) brightness(.4)'}">`).join('')}
       ${p.eliteStage ? `<span class="chip gold">👑 Elite ${p.eliteStage}/4</span>` : ''}</div>
     <b>Equipe</b><div class="pk-grid" style="margin-top:6px">${p.team.map((m, i) => statCard(m, { owner: p, lead: i === 0 })).join('')}</div>
-    ${p.box.length ? `<details style="margin-top:8px"><summary class="small"><b>💻 Banco / PC (${p.box.length})</b> — toque para ver</summary><div class="pk-grid" style="margin-top:6px">${p.box.map(m => statCard(m, { owner: p })).join('')}</div></details>` : ''}
+    ${p.box.length ? `<details style="margin-top:8px"><summary class="small"><b>💻 Banco / PC (${p.box.length})</b> — toque para ver</summary><div class="mini-grid" style="margin-top:6px">${p.box.map(m => miniMon(m, { owner: p })).join('')}</div></details>` : ''}
     ${p.companion && COMPANIONS[p.companion] ? `<div class="comp-box" style="margin-top:8px"><img class="comp-img" src="${leaderUrl(COMPANIONS[p.companion].sprite)}" alt=""><div><b>${COMPANIONS[p.companion].icon} ${esc(COMPANIONS[p.companion].name)}</b><div class="tiny muted">${esc(COMPANIONS[p.companion].desc)}</div></div></div>` : ''}
     ${(p.captureLog || []).length ? `<div class="small" style="margin-top:8px"><b>🔴 Últimas capturas</b><div class="row" style="gap:4px;margin-top:4px">${p.captureLog.slice(-12).reverse().map(c => `<img src="${monSprite({ sp: c.sp, shiny: c.shiny })}" title="${esc(getSpecies(c.sp).name)}${c.shiny ? ' ✨' : ''}" style="width:34px;height:34px;object-fit:contain">`).join('')}</div></div>` : ''}
     ${canTrade ? `<button class="btn primary block" data-act="trade-with" style="margin-top:10px">🤝 Propor troca (Pokémon, itens, ouro)</button>` : ''}`;
@@ -327,7 +383,7 @@ export function openHelp() {
       <p><b>🌾 Fazenda:</b> coloque Pokémon da Coleção soltos nos biomas: eles ganham XP com o tempo (até o Nv. 50, evoluem no caminho; do 50 ao 60 só batalhando ou com 🍬 Doce Raro da Oficina; bioma certo e felicidade alta rendem mais; limite diário), produzem recursos (🍓🫧🔥⛏️💠🌑🪶) e ficam felizes com carinho e Frutinhas. Visite amigos para curtir ❤️ e cuidar 🤝 (1 vez por dia cada). Vagas sobem com o nível da Fazenda; diamantes só compram decoração. 🏡 Casinha (grátis): seu companheiro equipado mora nela e cuida da Fazenda — felicidade cai 40% mais devagar, +20% de XP nos Pokémon do tipo dele e cada carinho dá +3 de laço. ♂/♀: os Pokémon agora têm sexo.</p>
       <p><b>🥚 Creche (na Fazenda):</b> um macho ♂ e uma fêmea ♀ da mesma família ou com um tipo em comum (ou Ditto com qualquer um) botam um ovo a cada 6 h (até 4 por dia, incubadora de 3). O filhote nasce no Nv. 5 na forma básica, herda 2 dos 3 potenciais dos pais (e a natureza, gastando 3 💠) e pode herdar o 2º golpe do pai. Mutações raras: ✨ shiny (1/150; 1/40 com pais shiny), 🌈 aura (1/40) e 💯 potencial máximo (1/80). Lendários e Míticos não fazem ovos.</p>
       <p><b>🔨 Oficina (na Fazenda):</b> transforme recursos em itens nas bancadas (levam horas; +1 bancada no Nv. 4 e no Nv. 7 da Fazenda). Receitas boas pedem recursos de vários biomas. Fabricar e entregar os 📋 Pedidos do dia sobem o Nível de Artesão (Aprendiz → Artesão → Mestre → Grão-Mestre), que libera Ultra/Rainbow Ball, Doce Raro, Amuleto de Incubação, Incenso Brilhante (shiny ×3 nos ovos), TM, Bola da Confiança e Master Ball (1 por semana) e decorações exclusivas.</p>
-      <p><b>💎 Mega Evolução:</b> precisa de 3 coisas — o <b>🔗 Bracelete Mega</b> (só cai em 💎 Mega Raids, raríssimo, e não pode ser trocado), a <b>Megapedra</b> certa segurada pelo Pokémon (equipe na 🎒 Mochila da conta) e uma batalha onde as Megas estão liberadas: salas do modo 📦 Coleção com "💎 Megas liberadas" (inclusive o Treino com time) e a Liga das Séries B e A. Na batalha, o botão "💎 Mega Evoluir" não gasta a rodada e vale 1 vez por batalha; a forma Mega fica mais forte (e às vezes muda de tipo) até a batalha acabar. Megapedras saem na 🔨 Oficina (Grão-Mestre, 1 por semana): 10 💠 Fragmentos da pedra + recursos + ouro. Fragmentos caem nas 💎 Mega Raids (casas de Raid/Santuário: às vezes o chefe vem Mega) e em raros encontros com energia Mega nas casas Vermelhas (não dá para capturar — vença para ganhar fragmentos). Pedras e fragmentos podem ir ao 🏪 Mercado. Na 📖 Pokédex, a aba "💎 Megas" mostra as 68 formas: 👁️ vista (enfrentou ou viu alguém usar) e ● registrada (você Mega Evoluiu o seu), normal e ✨ shiny.</p>
+      <p><b>💎 Mega Evolução:</b> precisa de 3 coisas — o <b>🔗 Bracelete Mega</b> (só cai em 💎 Mega Raids, raríssimo, e não pode ser trocado), a <b>Megapedra</b> certa segurada pelo Pokémon (equipe na 🎒 Mochila da conta) e uma batalha onde as Megas estão liberadas: salas do modo 📦 Coleção com "💎 Megas liberadas" (inclusive o Treino com time) e a Liga das Séries B e A. Na batalha, o botão "💎 Mega Evoluir" não gasta a rodada e vale 1 vez por batalha; a forma Mega fica mais forte (e às vezes muda de tipo) até a batalha acabar. Megapedras saem na 🔨 Oficina (Grão-Mestre, 1 por semana): 10 💠 Fragmentos da pedra + recursos + ouro. Fragmentos caem nas 💎 Mega Raids (casas de Raid/Santuário: às vezes o chefe vem Mega) e em raros encontros com energia Mega nas casas Vermelhas (não dá para capturar — vença para ganhar fragmentos). Pedras e fragmentos podem ir ao 🏪 Mercado. A Megapedra é equipada <b>no Pokémon</b> (botão 💎 no card dele na Coleção, ou pela Mochila) e aparece no card de status dele. Na 📖 Pokédex, a aba "💎 Megas" mostra as 68 formas: 👁️ vista (enfrentou ou viu alguém usar) e ● registrada (você Mega Evoluiu o seu), normal e ✨ shiny.</p>
       <p><b>⚡ Eventos relâmpago:</b> de vez em quando surge um ícone numa casa de evento — 🎁 <b>Baú do Tesouro</b> (ouro e itens), 🔥 <b>Raid Relâmpago</b> ou ❔ <b>Pokémon Misterioso</b> (silhueta de um Pokémon mais forte, com mais chance de shiny). O ⏳ mostra quantas rodadas faltam para sumir; quem parar na casa primeiro ativa.</p>
       <p><b>📖 Pokédex:</b> mostra as 806 espécies com tier (cor da casa onde aparece), insígnias para obedecer, condições que os golpes causam e variações de golpe. Registra também os <b>shinies</b>: ✧ visto e ✨ capturado (filtro “✨ Shiny” e botão “Arte shiny”).</p>
       <p><b>💎 Loja de Diamantes:</b> só visual e conveniência — dado personalizado, cenário de batalha, cartão de treinador, efeito de vitória, +50 vagas na Coleção e apelidos para Pokémon. Ninguém fica mais forte por comprar.</p>

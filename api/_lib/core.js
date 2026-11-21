@@ -18,7 +18,7 @@ import { ITEMS, isKeepable, cleanBring, BAG_MAX_PER_ITEM, STARTING_ITEMS } from 
 import { tmMovesFor, defaultMoveIds, MOVES } from '../../shared/data/moves.js';
 import { MEGAS, megaByStone } from '../../shared/data/megas.js';
 import { bondLevel, bondGain, BOND_MAX, COMPANIONS } from '../../shared/data/companions.js';
-import { equippedCosmetic, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment } from './shop.js';
+import { equippedCosmetic, equippedSkin, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment } from './shop.js';
 
 export class HttpError extends Error {
   constructor(status, message) {
@@ -296,8 +296,10 @@ export async function profileOp(db, user, body) {
 
 export async function leaderboard(db) {
   const rows = await db.listProfiles(500);
+  let shopItems = [];
+  try { shopItems = (await getShop(db)).items || []; } catch { /* sem loja */ }
   const map = r => ({
-    name: r.trainer_name, avatar: r.avatar, points: r.points || 0, rating: r.rating ?? START_RATING,
+    id: r.id, name: r.trainer_name, avatar: r.avatar, skin: equippedSkin(r, shopItems), points: r.points || 0, rating: r.rating ?? START_RATING,
     ranked: r.stats?.ranked || 0, rankedWins: r.stats?.rankedWins || 0,
     pokedex: (r.pokedex || []).length, wins: r.stats?.wins || 0, champion: r.stats?.champion || 0,
     shinies: r.stats?.shinies || 0
@@ -307,7 +309,7 @@ export async function leaderboard(db) {
   const elos = ELO_TIERS.map((t, i) => {
     const max = ELO_TIERS[i + 1]?.min ?? null;
     const people = ranked.filter(r => r.rating >= t.min && (max === null || r.rating < max));
-    return { ...t, max, count: people.length, top: people.slice(0, 5).map(r => ({ name: r.name, avatar: r.avatar, rating: r.rating })) };
+    return { ...t, max, count: people.length, top: people.slice(0, 5).map(r => ({ id: r.id, name: r.name, avatar: r.avatar, skin: r.skin, rating: r.rating })) };
   });
   // 🏆 Liga: tabela da temporada atual (quem tem liga de outra temporada aparece já "virado")
   const season = seasonId();

@@ -125,12 +125,23 @@ export function mountGame(root, session, opts = {}) {
       const next = ui.queue.shift();
       const prev = ui.shown;
       try { await playFx(prev, next); } catch (e) { console.error('animação', e); }
+      if (prev && next.fxSeq !== prev.fxSeq && !ui.spectate) { const pl = (next.fx || []).find(f => f.k === 'placed' && f.pid === vid() && f.uid); if (pl) ui.placeAsk = pl.uid; }
       ui.shown = next;
       render();
     }
     ui.playing = false;
     document.body.classList.remove('anim-busy');
     if (!ui.dead) render();
+    askPlace();
+  }
+  // ➕ depois da captura (e da batalha fechar): equipe ou PC?
+  function askPlace() {
+    if (!ui.placeAsk || ui.dead) return;
+    const s = S();
+    if (s?.battle && !s.battle.over && s.battle.sides.some(x => x.pid === vid())) return; // espera a batalha acabar
+    if (s?.raid) return;
+    const uid = ui.placeAsk; ui.placeAsk = null;
+    setTimeout(() => { if (!ui.dead) M.openPlaceCaught(viewSession(), act, uid); }, 350);
   }
 
   async function playFx(prev, next) {
@@ -257,8 +268,8 @@ export function mountGame(root, session, opts = {}) {
           if (f.ok && (f.from === v || f.to === v)) { toast('🤝 Troca concluída!', 'good'); confetti(60); }
           else if (!f.ok && f.from === v) toast(`🤝 ${nameOf(f.to)} recusou sua troca.`, 'bad');
           break;
-        case 'placed':
-          if (f.pid === v && f.where === 'box') toast(`💻 ${speciesName(f.sp)}${f.shiny ? ' ✨' : ''} foi para o PC — sua equipe já tem 6.`, 'info');
+        case 'placed': // ➕ escolher na hora: equipe ou PC
+          if (f.pid === v && f.where === 'box' && !f.uid) toast(`💻 ${speciesName(f.sp)}${f.shiny ? ' ✨' : ''} foi para o PC — sua equipe já tem 6.`, 'info');
           break;
         case 'win':
           victoryFx(vicOf(next, f.pid || next.winner), 1);

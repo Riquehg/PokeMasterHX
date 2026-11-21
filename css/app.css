@@ -1871,3 +1871,77 @@ body.in-game .soc-panel { height: min(520px, calc(100dvh - 80px)); }
 .bracelet-ic.off { filter: grayscale(1) opacity(.45); }
 .ws-mega { margin-top: 4px; }
 .ws-mega select { max-width: 260px; }
+
+/* ================= v33 · cartão do treinador, PC compacto, item segurado, mapa ================= */
+/* mapa: nunca fica por cima dos menus (dock/abas) */
+.board-viewport { isolation: isolate; z-index: 0; overscroll-behavior: contain; }
+.dock { overscroll-behavior: contain; }
+/* ✨ Capturas raras: botão dentro do card do Pokémon do dia; o painel abre no canto */
+.wall-inline { margin-top: 6px; display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; border: 1.5px solid #c779f0; cursor: pointer;
+  background: linear-gradient(135deg, #2a1640, #160c22); color: #fff; font-weight: 800; font-size: 12px; }
+.wall-inline b:empty { display: none; }
+.wall-inline b { background: #c779f0; color: #160c22; border-radius: 999px; padding: 0 6px; font-size: 10px; }
+#wall:empty { display: none; }
+@media (max-width: 760px) { #wall { bottom: 70px; right: 8px; left: 8px; } #wall .wall-panel { width: auto; } }
+/* lista online clicável */
+.soc-person { cursor: pointer; border-radius: 10px; transition: background .15s; }
+.soc-person:hover { background: rgba(255, 255, 255, .05); }
+.tc-link { cursor: pointer; display: inline-flex; align-items: center; gap: 6px; color: inherit; text-decoration: none; }
+.tc-link:hover { color: var(--gold); }
+.rk-av { width: 24px; height: 24px; object-fit: contain; image-rendering: pixelated; }
+/* 🪪 cartão do treinador */
+.tcx-head { display: flex; gap: 12px; align-items: center; padding: 10px; border-radius: 14px; background: linear-gradient(135deg, #2a1640, #121a2e); border: 1px solid #6c4a8f; }
+.tcx-head .avatar { width: 72px; height: 72px; }
+.tcx-head h3 { margin: 0; color: var(--gold); }
+.tcx-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.tcx-stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin: 10px 0; }
+.tcx-stats > div { text-align: center; padding: 6px 2px; border-radius: 10px; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .08); }
+.tcx-stats b { display: block; font-size: 17px; }
+.tcx-stats span { font-size: 10px; opacity: .8; }
+@media (max-width: 520px) { .tcx-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.tcx-liga { display: flex; gap: 8px; align-items: center; padding: 8px; border-radius: 12px; border: 1px solid var(--sc); background: color-mix(in srgb, var(--sc) 12%, transparent); }
+.tcx-comp { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.tcx-comp img { width: 34px; height: 34px; object-fit: contain; }
+.tcx-team { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+@media (max-width: 520px) { .tcx-team { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.tcx-mon { position: relative; text-align: center; padding: 6px 2px; border-radius: 10px; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .08); font-size: 11px; overflow: clip; }
+.tcx-mon.shiny { border-color: rgba(255, 211, 77, .6); }
+.tcx-mon > img:first-child { width: 56px; height: 56px; object-fit: contain; image-rendering: pixelated; display: block; margin: 0 auto; }
+.tcx-mon b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tcx-mon span { opacity: .75; }
+.tcx-sh { position: absolute; top: 2px; right: 4px; font-style: normal; }
+.tcx-held { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; object-fit: contain; }
+/* 💎 item segurado */
+.held-badge { position: absolute; top: 22px; right: 4px; display: inline-flex; align-items: center; font-size: 9px; padding: 1px 3px; border-radius: 8px; background: rgba(167, 126, 244, .25); border: 1px solid #a77ef4; }
+.held-badge img { width: 14px; height: 14px; object-fit: contain; }
+.pk-held { display: flex; align-items: center; gap: 6px; margin: 4px 6px 0; padding: 4px 6px; border-radius: 8px; font-size: 11px; background: linear-gradient(90deg, rgba(167, 126, 244, .2), transparent); border: 1px solid rgba(167, 126, 244, .45); }
+.pk-held img { width: 20px; height: 20px; object-fit: contain; }
+.ms-pick { display: flex; flex-direction: column; gap: 8px; }
+.ms-opt { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .1); }
+.ms-opt.on { border-color: #a77ef4; background: rgba(167, 126, 244, .12); }
+.ms-st { width: 32px; height: 32px; object-fit: contain; }
+.ms-mon { width: 56px; height: 56px; object-fit: contain; image-rendering: pixelated; }
+/* 💻 PC compacto */
+.pc-sec { margin-top: 8px; }
+.mini-row { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin-top: 6px; }
+.mini-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px; margin-top: 6px; max-height: 46dvh; overflow: auto; padding: 2px; }
+@media (max-width: 520px) { .mini-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } .mini-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.mini-mon { position: relative; text-align: center; padding: 4px 3px 5px; border-radius: 10px; background: rgba(255, 255, 255, .04); border: 1.5px solid rgba(255, 255, 255, .1); cursor: pointer; font-size: 10px; overflow: clip; }
+.mini-mon:hover { border-color: rgba(244, 194, 91, .6); }
+.mini-mon.sel { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(244, 194, 91, .35); background: rgba(244, 194, 91, .1); }
+.mini-mon.lead { border-color: rgba(76, 199, 240, .6); }
+.mini-mon.shiny { background: linear-gradient(180deg, rgba(255, 211, 77, .14), rgba(255, 255, 255, .03)); }
+.mini-mon.fainted img { filter: grayscale(1); opacity: .55; }
+.mini-mon.locked { opacity: .75; }
+.mini-mon img { width: 46px; height: 46px; object-fit: contain; image-rendering: pixelated; display: block; margin: 2px auto 0; }
+.mini-mon b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-mon .hp { height: 4px; margin-top: 2px; }
+.mm-lv { position: absolute; top: 2px; left: 4px; font-size: 9px; font-weight: 800; opacity: .85; }
+.mm-sh { position: absolute; top: 1px; right: 3px; font-size: 10px; }
+.mm-held { position: absolute !important; bottom: 14px; right: 2px; width: 16px !important; height: 16px !important; margin: 0 !important; }
+.mm-lock { position: absolute; bottom: 14px; left: 2px; font-size: 10px; }
+.pc-detail { display: flex; gap: 10px; align-items: flex-start; margin-top: 8px; padding: 8px; border-radius: 12px; background: rgba(244, 194, 91, .06); border: 1px solid rgba(244, 194, 91, .3); }
+.pc-card { flex: 0 0 auto; width: min(260px, 100%); }
+.pc-acts { display: flex; flex-direction: column; gap: 6px; }
+@media (max-width: 520px) { .pc-detail { flex-direction: column; } .pc-card { width: 100%; } .pc-acts { flex-direction: row; flex-wrap: wrap; } }
+.pl-new { max-width: 260px; margin: 0 auto 6px; }
