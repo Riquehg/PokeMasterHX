@@ -46,6 +46,10 @@ export const farmLevelXp = lvl => 100 * lvl; // XP da Fazenda para passar do ní
 export const slotsFor = lvl => Math.min(SLOTS_MAX, SLOTS_BASE + SLOTS_PER_LEVEL * (Math.max(1, lvl) - 1));
 export const HELP_HAPPY = 15;           // visita de amigo (cuidar) dá felicidade a todos
 export const DECOR_MAX = 40;
+// 🏡 Casinha do Companheiro: o companheiro equipado mora na Fazenda e cuida dos Pokémon.
+export const COMPANION_DECAY_MULT = 0.6; // felicidade cai 40% mais devagar
+export const COMPANION_XP_MULT = 1.2;    // +20% de XP nos Pokémon do tipo dele
+export const COMPANION_CARE_BOND = 3;    // pontos de laço a cada "Carinho em todos"
 
 const brtDay = (ms = Date.now()) => new Date(ms - 3 * 3600000).toISOString().slice(0, 10);
 export { brtDay };
@@ -65,7 +69,9 @@ export function addFarmXp(farm, n) {
  * Avança o tempo de cada vaga: felicidade cai, XP pendente e recursos acumulam (com teto diário de XP).
  * vaultById: Map uid → mon (precisa de types/lvl). Vagas de Pokémon que saíram da Coleção somem.
  */
-export function tickFarm(farm, vaultById, typesOf, now = Date.now()) {
+export function tickFarm(farm, vaultById, typesOf, now = Date.now(), opts = {}) {
+  const decay = HAPPY_DECAY_PER_HOUR * (opts.decayMult ?? 1);
+  const helpTypes = opts.boostTypes || [];
   farm.slots = (farm.slots || []).filter(s => vaultById.has(s.uid));
   for (const s of farm.slots) {
     const t0 = s.t ?? now;
@@ -74,13 +80,14 @@ export function tickFarm(farm, vaultById, typesOf, now = Date.now()) {
     const mon = vaultById.get(s.uid);
     const types = typesOf(mon);
     const h0 = s.happy ?? 70;
-    const h1 = Math.max(0, h0 - HAPPY_DECAY_PER_HOUR * hours);
+    const h1 = Math.max(0, h0 - decay * hours);
     const avgHappy = hours > 0 ? (h0 + h1) / 2 : h0;
     const fit = biomeMatch(s.biome, types) ? 1.5 : 1;
     const day = brtDay(now);
     if (s.day !== day) { s.day = day; s.dayXp = 0; }
     if (mon.lvl < FARM_MAX_LEVEL) {
-      const want = XP_PER_HOUR * fit * (0.5 + avgHappy / 100) * hours;
+      const coach = types.some(t => helpTypes.includes(t)) ? COMPANION_XP_MULT : 1; // 🏡 o companheiro treina os do tipo dele
+      const want = XP_PER_HOUR * fit * coach * (0.5 + avgHappy / 100) * hours;
       const room = Math.max(0, XP_DAY_CAP - (s.dayXp || 0));
       const got = Math.min(want, room);
       s.pxp = (s.pxp || 0) + got;

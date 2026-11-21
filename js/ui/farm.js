@@ -4,7 +4,7 @@ import { FARM_BIOMES, BIOME_IDS, RESOURCES, FARM_DECOR, DECOR_MAX, FARM_MAX_LEVE
 import { genderHtml } from '../../shared/data/gender.js';
 import { api } from '../api.js';
 import { esc, toast, openModal, closeModal, setModalBody, bindActions } from './dom.js';
-import { monSprite, avatarUrl } from '../config.js';
+import { monSprite, avatarUrl, leaderUrl } from '../config.js';
 import { canBreed, EGGS_PER_DAY, INCUBATOR_MAX, NATURE_COST, EGG_EVERY_H } from '../../shared/data/daycare.js';
 import { statCard } from './common.js';
 import { RECIPES, FARM_ITEMS, ARTISAN_LEVELS } from '../../shared/data/workshop.js';
@@ -13,12 +13,34 @@ import { natureLabel } from '../../shared/data/natures.js';
 const hash = s => { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
 // zonas da cena (3 × 2), em %
 const ZONES = { pasto: [0, 0], floresta: [1, 0], lago: [2, 0], caverna: [0, 1], vulcao: [1, 1], campo: [2, 1] };
-const zoneBox = b => { const [c, r] = ZONES[b] || [0, 0]; return { x: c * 33.333, y: r * 50, w: 33.333, h: 50 }; };
+const ZONES_M = { pasto: [0, 0], floresta: [1, 0], lago: [0, 1], caverna: [1, 1], vulcao: [0, 2], campo: [1, 2] }; // celular: 2 × 3
+const narrow = () => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 600px)').matches;
+const zoneBox = b => {
+  if (narrow()) { const [c, r] = ZONES_M[b] || [0, 0]; return { x: c * 50, y: r * 33.333, w: 50, h: 33.333 }; }
+  const [c, r] = ZONES[b] || [0, 0]; return { x: c * 33.333, y: r * 50, w: 33.333, h: 50 };
+};
+// decoração/casinha são salvas na grade do PC (3 × 2); no celular (2 × 3) cada ponto vai para o mesmo lugar dentro do seu bioma
+const byCell = (map, c, r) => Object.keys(map).find(k => map[k][0] === c && map[k][1] === r);
+const toView = (x, y) => {
+  if (!narrow()) return { x, y };
+  const c = Math.min(2, Math.floor(x / 33.334)), r = Math.min(1, Math.floor(y / 50));
+  const b = byCell(ZONES, c, r), lx = (x - c * 33.333) / 33.333, ly = (y - r * 50) / 50;
+  const z = zoneBox(b);
+  return { x: z.x + lx * z.w, y: z.y + ly * z.h };
+};
+const toStore = (x, y) => {
+  if (!narrow()) return { x, y };
+  const c = Math.min(1, Math.floor(x / 50)), r = Math.min(2, Math.floor(y / 33.334));
+  const b = byCell(ZONES_M, c, r), lx = (x - c * 50) / 50, ly = (y - r * 33.333) / 33.333;
+  const [pc, pr] = ZONES[b];
+  return { x: Math.round((pc * 33.333 + lx * 33.333) * 10) / 10, y: Math.round((pr * 50 + ly * 50) * 10) / 10 };
+};
 const heart = h => (h >= 75 ? '💖' : h >= 45 ? '💛' : h >= 20 ? '🧡' : '💔');
 const nameOf = s => s.nick || getSpecies(s.sp)?.name || s.sp;
 
 export async function openFarm(ctx, profile, userId = null) {
   let pair = [];
+  let houseMode = false;
   let farm = null, tab = 'farm', sel = null, decorMode = false, decorPick = null, decorDraft = null, visitList = null;
   let me = profile;
   const ov = openModal('farm', '🌾 Fazenda', '<span class="spinner"></span>', { wide: true });
@@ -27,22 +49,81 @@ export async function openFarm(ctx, profile, userId = null) {
   const load = async (uid = userId) => { farm = (await api('profile', uid ? { op: 'farm_get', userId: uid } : { op: 'farm_get' })).farm; userId = farm.mine ? null : farm.owner.id; render(); };
   const ownedDecor = () => Object.entries(FARM_DECOR).filter(([k, d]) => d.price === 0 || (farm.ownedDecor || []).includes(k));
 
+  // posições fixas por bioma (grade 3×2 dentro de uma área segura → ninguém sai do campo nem fica em cima do outro)
+  const SPOTS = [[0.28, 0.55], [0.72, 0.58], [0.5, 0.82], [0.22, 0.86], [0.78, 0.88], [0.5, 0.5]];
+  const placeMons = () => {
+    const byZone = {};
+    for (const s of [...farm.slots].sort((a, b) => hash(a.uid) - hash(b.uid))) (byZone[s.biome] ||= []).push(s);
+    const out = [];
+    for (const [b, list] of Object.entries(byZone)) {
+      const z = zoneBox(b);
+      list.forEach((s, k) => {
+        const [fx, fy] = SPOTS[k % SPOTS.length];
+        const h = hash(s.uid), jx = ((h % 100) / 100 - 0.5) * 0.08, jy = (((h >> 8) % 100) / 100 - 0.5) * 0.06;
+        const ring = Math.floor(k / SPOTS.length) * 0.05;
+        out.push({ s, x: z.x + z.w * Math.min(0.86, Math.max(0.14, fx + jx + ring)), y: z.y + z.h * Math.min(0.93, Math.max(0.45, fy + jy - ring)) });
+      });
+    }
+    return out;
+  };
+  const daypart = () => { const h = new Date().getHours(); return h >= 19 || h < 5 ? 'night' : h < 7 ? 'dawn' : h >= 17 ? 'dusk' : 'day'; };
+  const AMBIENT = {
+    pasto: '<i class="amb bfly" style="left:30%;top:40%">🦋</i><i class="amb bfly b2" style="left:65%;top:55%">🦋</i>',
+    floresta: Array.from({ length: 7 }, (_, i) => `<i class="amb ffly" style="left:${12 + i * 12}%;top:${30 + ((i * 37) % 55)}%;--fd:${2 + (i % 3)}s;--fl:-${i * 0.7}s"></i>`).join('') + '<i class="amb leaf" style="left:20%">🍃</i><i class="amb leaf l2" style="left:70%">🍂</i>',
+    lago: '<i class="amb ripple" style="left:45%;top:62%"></i><i class="amb ripple r2" style="left:60%;top:72%"></i><i class="amb glint" style="left:38%;top:55%"></i><i class="amb glint g2" style="left:62%;top:66%"></i>',
+    caverna: '<i class="amb crys" style="left:18%;top:72%">💎</i><i class="amb crys c2" style="left:80%;top:62%">💎</i>',
+    vulcao: Array.from({ length: 6 }, (_, i) => `<i class="amb ember" style="left:${38 + i * 5}%;--ed:${2 + (i % 3) * 0.7}s;--el:-${i * 0.5}s"></i>`).join(''),
+    campo: '<i class="amb spark" style="left:25%;top:45%">⚡</i><i class="amb spark s2" style="left:70%;top:70%">⚡</i><i class="amb spark s3" style="left:50%;top:30%">✦</i>'
+  };
+  const emote = s => (s.happy < 25 ? '💤' : s.happy >= 85 ? '♪' : '');
   const scene = () => {
     const decor = decorMode ? decorDraft : farm.decor;
-    return `<div class="fm-scene ${decorMode ? 'decorating' : ''}">
-      ${BIOME_IDS.map(b => { const z = zoneBox(b); return `<div class="fm-zone fm-${b}" style="left:${z.x}%;top:${z.y}%;width:${z.w}%;height:${z.h}%"><span class="fm-zlabel">${FARM_BIOMES[b].icon} ${FARM_BIOMES[b].name}</span></div>`; }).join('')}
-      ${decor.map((d, i) => `<span class="fm-decor" data-di="${i}" style="left:${d.x}%;top:${d.y}%">${FARM_DECOR[d.k]?.icon || ''}</span>`).join('')}
-      ${farm.slots.map(s => {
-        const z = zoneBox(s.biome), h = hash(s.uid);
-        const x = z.x + 5 + (h % 1000) / 1000 * (z.w - 10), y = z.y + 18 + ((h >> 10) % 1000) / 1000 * (z.h - 28);
-        return `<button class="fm-mon ${sel === s.uid ? 'on' : ''}" data-act="pick" data-uid="${s.uid}" style="left:${x}%;top:${y}%;--d:${(h % 7) + 6}s;--dl:-${h % 5}s">
-          <img src="${monSprite({ sp: s.sp, shiny: s.shiny })}" alt=""><span class="fm-h">${heart(s.happy)}</span>${farm.mine && s.pxp ? `<span class="fm-xp">+${s.pxp}</span>` : ''}</button>`;
+    const comp = farm.companion, hs = farm.house;
+    return `<div class="fm-scene dp-${daypart()} ${decorMode || houseMode ? 'decorating' : ''}">
+      ${BIOME_IDS.map(b => { const z = zoneBox(b); return `<div class="fm-zone fm-${b}" style="left:${z.x}%;top:${z.y}%;width:${z.w}%;height:${z.h}%"><div class="fm-amb">${AMBIENT[b] || ''}</div><span class="fm-zlabel">${FARM_BIOMES[b].icon} ${FARM_BIOMES[b].name}</span></div>`; }).join('')}
+      <div class="fm-cloud c1"></div><div class="fm-cloud c2"></div>
+      ${decor.map((d, i) => { const v = toView(d.x, d.y); return `<span class="fm-decor" data-di="${i}" style="left:${v.x}%;top:${v.y}%;z-index:${Math.round(v.y)}">${FARM_DECOR[d.k]?.icon || ''}</span>`; }).join('')}
+      ${hs ? (() => { const v = toView(hs.x, hs.y); return `<div class="fm-house" style="left:${v.x}%;top:${v.y}%;z-index:${Math.round(v.y)}" data-act="house-info">`; })() + `<span class="fm-house-ic">🏡</span>
+        ${comp ? `<img class="fm-comp" src="${leaderUrl(comp.sprite)}" alt="${esc(comp.name)}" title="${esc(comp.name)} cuidando da Fazenda">` : '<span class="fm-house-tag">vazia</span>'}</div>` : ''}
+      ${placeMons().map(({ s, x, y }) => { const h = hash(s.uid); const swim = s.biome === 'lago' && ['water', 'ice'].includes(getSpecies(s.sp)?.types?.[0]);
+        return `<button class="fm-mon ${sel === s.uid ? 'on' : ''} ${swim ? 'swim' : ''} ${s.shiny ? 'shiny' : ''}" data-act="pick" data-uid="${s.uid}" style="left:${x}%;top:${y}%;z-index:${Math.round(y) + 1};--d:${(h % 5) + 5}s;--dl:-${h % 5}s">
+          <span class="fm-walk"><span class="fm-shadow"></span><img src="${monSprite({ sp: s.sp, shiny: s.shiny })}" alt="">${s.shiny ? '<i class="fm-sparkle">✨</i>' : ''}</span>
+          <span class="fm-h">${heart(s.happy)}</span>${emote(s) ? `<span class="fm-emote">${emote(s)}</span>` : ''}${farm.mine && s.pxp ? `<span class="fm-xp">+${s.pxp}</span>` : ''}</button>`;
       }).join('')}
+      ${daypart() === 'night' ? '<div class="fm-stars"></div>' : ''}
+      <div class="fm-fx"></div>
       ${!farm.slots.length ? `<div class="fm-empty">${farm.mine ? 'Sua Fazenda está vazia. Toque em <b>➕ Colocar Pokémon</b>.' : 'Esta Fazenda ainda está vazia.'}</div>` : ''}
+      ${houseMode ? '<div class="fm-tip">🏡 Toque onde quer a casinha</div>' : ''}
     </div>`;
   };
+  /** Efeitinhos por cima dos Pokémon (corações, recursos voando). */
+  const burst = (icons, uids = null) => {
+    const sc = ov.querySelector('.fm-scene'), fx = sc?.querySelector('.fm-fx');
+    if (!fx) return;
+    const targets = [...sc.querySelectorAll('.fm-mon')].filter(b => !uids || uids.includes(b.dataset.uid));
+    targets.forEach((b, i) => {
+      for (let k = 0; k < 3; k++) {
+        const e = document.createElement('i');
+        e.className = 'fm-pop';
+        e.textContent = Array.isArray(icons) ? icons[(i + k) % icons.length] : icons;
+        e.style.left = b.style.left; e.style.top = b.style.top;
+        e.style.setProperty('--dx', `${(k - 1) * 18}px`); e.style.animationDelay = `${k * 0.12 + i * 0.05}s`;
+        fx.appendChild(e);
+        setTimeout(() => e.remove(), 1800);
+      }
+    });
+  };
 
+  let houseSel = false;
+  const housePanel = () => {
+    const c = farm.companion;
+    return `<div class="fm-panel card"><span style="font-size:48px">🏡</span><div class="grow"><b>Casinha do Companheiro</b>
+      ${c ? `<div class="small">${esc(c.icon)} <b>${esc(c.name)}</b> mora aqui e cuida da Fazenda:</div><div class="tiny">• felicidade cai 40% mais devagar<br>• +20% de XP nos Pokémon ${c.types.length ? 'do tipo ' + c.types.join('/') : 'do tipo dele'}<br>• cada "❤️ Carinho em todos" dá +3 de laço 💞 (Nv. ${c.bond})</div>`
+        : `<div class="small muted">${farm.hasCompanion === false ? 'Você ainda não tem um companheiro equipado. Ganhe um nas missões das partidas e equipe em 🎒 Minha conta → Companheiros.' : 'Equipe um companheiro para ele morar aqui.'}</div>`}
+      ${farm.mine ? '<div class="row" style="gap:4px;margin-top:6px"><button class="btn sm" data-act="house">↔️ Mover</button><button class="btn sm red" data-act="house-del">Tirar casinha</button></div>' : ''}</div></div>`;
+  };
   const monPanel = () => {
+    if (houseSel && farm.house) return housePanel();
     const s = farm.slots.find(x => x.uid === sel);
     if (!s) return '';
     const sp = getSpecies(s.sp);
@@ -79,6 +160,7 @@ export async function openFarm(ctx, profile, userId = null) {
       <button class="btn green" data-act="care">❤️ Carinho em todos</button>
       <button class="btn" data-act="add" ${farm.slots.length >= farm.slotsMax ? 'disabled' : ''}>➕ Colocar Pokémon</button>
       <button class="btn" data-act="decor">🎨 Decorar</button>
+      <button class="btn" data-act="house">🏡 ${farm.house ? 'Mover casinha' : 'Casinha'}</button>
       <button class="btn ${(farm.eggs || []).some(e => e.ready) ? 'primary' : ''}" data-act="tab" data-t="creche">🥚 Creche${(farm.eggs || []).length ? ` (${farm.eggs.length})` : ''}</button>
       <button class="btn ${(farm.workshop?.jobs || []).some(j => j.ready) ? 'primary' : ''}" data-act="tab" data-t="oficina">🔨 Oficina</button>
       <button class="btn" data-act="tab" data-t="res">📦 Recursos</button>
@@ -192,6 +274,15 @@ export async function openFarm(ctx, profile, userId = null) {
 
   // colocar/remover decoração tocando na cena
   ov.addEventListener('click', e => {
+    if (houseMode) {
+      const sc = e.target.closest('.fm-scene');
+      if (!sc) return;
+      const r = sc.getBoundingClientRect();
+      houseMode = false;
+      const pos = toStore(((e.clientX - r.left) / r.width) * 100, ((e.clientY - r.top) / r.height) * 100);
+      run(() => api('profile', { op: 'farm_house', x: pos.x, y: pos.y }), farm.companion || farm.hasCompanion ? '🏡 Casinha no lugar!' : '🏡 Casinha pronta — equipe um companheiro para morar nela.');
+      return;
+    }
     if (!decorMode) return;
     const d = e.target.closest('.fm-decor');
     if (d) { decorDraft.splice(Number(d.dataset.di), 1); render(); return; }
@@ -199,7 +290,8 @@ export async function openFarm(ctx, profile, userId = null) {
     if (!sc || !decorPick) return;
     if (decorDraft.length >= DECOR_MAX) return toast(`Máximo de ${DECOR_MAX} decorações.`, 'bad');
     const r = sc.getBoundingClientRect();
-    decorDraft.push({ k: decorPick, x: Math.round(((e.clientX - r.left) / r.width) * 1000) / 10, y: Math.round(((e.clientY - r.top) / r.height) * 1000) / 10 });
+    const pos = toStore(((e.clientX - r.left) / r.width) * 100, ((e.clientY - r.top) / r.height) * 100);
+    decorDraft.push({ k: decorPick, x: Math.round(pos.x * 10) / 10, y: Math.round(pos.y * 10) / 10 });
     render();
   });
   ov.addEventListener('change', e => {
@@ -208,7 +300,10 @@ export async function openFarm(ctx, profile, userId = null) {
   });
 
   bindActions(ov, {
-    pick: d => { if (decorMode) return; sel = sel === d.uid ? null : d.uid; render(); },
+    pick: d => { if (decorMode || houseMode) return; houseSel = false; sel = sel === d.uid ? null : d.uid; render(); },
+    house: () => { if (!farm.mine) return; houseMode = true; houseSel = false; sel = null; render(); },
+    'house-info': () => { if (houseMode || decorMode) return; houseSel = !houseSel; sel = null; render(); },
+    'house-del': () => run(async () => { const r = await api('profile', { op: 'farm_house', remove: true }); houseSel = false; return r; }),
     tab: async d => {
       tab = d.t; render();
       if (d.t === 'visit') {
@@ -222,12 +317,12 @@ export async function openFarm(ctx, profile, userId = null) {
     add: () => { tab = 'add'; render(); },
     place: d => run(async () => { const r = await api('profile', { op: 'farm_place', uid: d.uid }); tab = 'farm'; sel = d.uid; return r; }, '🌾 Chegou na Fazenda!'),
     remove: () => { if (confirm('Tirar da Fazenda? O XP e os recursos que ele juntou são coletados agora.')) run(async () => { const r = await api('profile', { op: 'farm_remove', uid: sel }); sel = null; return r; }); },
-    feed: () => run(() => api('profile', { op: 'farm_feed', uid: sel }), '🍓 Nhac! +felicidade +XP'),
-    collect: () => run(() => api('profile', { op: 'farm_collect' }), r => {
+    feed: async () => { const u = sel; const r = await run(() => api('profile', { op: 'farm_feed', uid: u }), '🍓 Nhac! +felicidade +XP'); if (r) burst(['🍓', '💖'], [u]); },
+    collect: async () => { const res = await run(() => api('profile', { op: 'farm_collect' }), r => {
       const res = Object.entries(r.collected?.res || {}).map(([k, n]) => `${RESOURCES[k].icon}${n}`).join(' ');
       return `✨ Coletado: +${r.collected?.xp || 0} XP${r.collected?.levels ? ` (${r.collected.levels} nível${r.collected.levels > 1 ? 'eis' : ''})` : ''} ${res}${(r.msgs || []).length ? ' · ' + r.msgs.join(' ') : ''}`;
-    }),
-    care: () => run(() => api('profile', { op: 'farm_care' }), r => `❤️ Carinho em ${r.cared} Pokémon!`),
+    }); if (res) burst(Object.keys(res.collected?.res || {}).map(k => RESOURCES[k].icon).concat(['✨'])); },
+    care: async () => { const r = await run(() => api('profile', { op: 'farm_care' }), r => `❤️ Carinho em ${r.cared} Pokémon!${r.bond ? ` ${r.companion} ajudou: +${r.bond} de laço 💞` : ''}`); if (r) burst(['💖', '💕', '💗']); },
     sell: d => run(() => api('profile', { op: 'farm_sell', res: d.k, qty: Number(d.q) }), r => `🪙 +${r.gold} ouro`),
     decor: () => { decorMode = true; decorDraft = (farm.decor || []).map(x => ({ ...x })); decorPick = ownedDecor()[0]?.[0] || null; sel = null; render(); },
     dpick: d => { decorPick = d.k; render(); },

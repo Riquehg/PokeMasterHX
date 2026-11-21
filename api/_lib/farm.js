@@ -8,6 +8,8 @@ import {
 import { bad, notFound, mutateProfile, getOrCreateProfile } from './core.js';
 import { canBreed, makeEgg, hatchFromEgg, eggsDue, EGG_EVERY_H, EGGS_PER_DAY, INCUBATOR_MAX, NATURE_COST, daycareDay } from '../../shared/data/daycare.js';
 import { createRng, randomSeed } from '../../shared/rules/rng.js';
+import { COMPANIONS, bondLevel } from '../../shared/data/companions.js';
+import { COMPANION_DECAY_MULT, COMPANION_CARE_BOND } from '../../shared/data/farm.js';
 import { RECIPES, FARM_ITEMS, ARTISAN_LEVELS, artisanOf, benchesFor, CANDY_MAX_LEVEL, FERT_HOURS, RATION_HAPPY, INCENSE_EGGS, INCENSE_MULT, dailyOrders, weekId } from '../../shared/data/workshop.js';
 import { addToBag } from './core.js';
 import { myCosmetics } from './shop.js';
@@ -47,10 +49,15 @@ function tickDaycare(farm, vm, now) {
 }
 
 /** Fazenda atualizada até agora (sem gravar). */
+function companionOf(prof, farm) {
+  const id = prof.stats?.companion;
+  return farm?.house && id && COMPANIONS[id] ? { id, ...COMPANIONS[id] } : null;
+}
 function current(prof, now = Date.now()) {
   const farm = clone(prof.stats?.farm || newFarm(now));
   const vm = vaultMap(prof);
-  tickFarm(farm, vm, typesOf, now);
+  const comp = companionOf(prof, farm);
+  tickFarm(farm, vm, typesOf, now, comp ? { decayMult: COMPANION_DECAY_MULT, boostTypes: comp.bonus?.types || [] } : {});
   tickDaycare(farm, vm, now);
   return farm;
 }
@@ -79,6 +86,9 @@ function view(prof, farm, viewerId) {
     likedToday: !mine && farm.likesBy?.[viewerId] === day,
     helpedToday: !mine && farm.helpsBy?.[viewerId] === day,
     visits: mine ? (farm.visits || []).slice(0, 20) : undefined,
+    house: farm.house || null,
+    companion: (() => { const c = companionOf(prof, farm); return c ? { id: c.id, name: c.name, sprite: c.sprite, icon: c.icon, types: c.bonus?.types || [], bond: bondLevel(prof.stats?.companionBond?.[c.id] || 0) } : null; })(),
+    hasCompanion: mine ? !!(prof.stats?.companion && COMPANIONS[prof.stats.companion]) : undefined,
     daycare: mine && farm.daycare ? (() => {
       const dc = farm.daycare, a = vm.get(dc.a), b = vm.get(dc.b);
       return { a: monBrief(a), b: monBrief(b), natureFrom: dc.natureFrom || null, nextEggIn: Math.max(0, dc.since + EGG_EVERY_H * 3600000 - Date.now()) };
@@ -210,7 +220,14 @@ export async function farmOp(db, user, body) {
       return {};
     });
     if (!n) bad(`Todos já receberam carinho. Volte em até ${CARE_COOLDOWN_H} h.`);
-    return { farm: view(prof, current(prof, now), user.id), cared: n };
+    // 🏡 cuidar junto com o companheiro dá laço
+    let final = prof, bond = 0;
+    const c = companionOf(prof, prof.stats?.farm);
+    if (c) {
+      bond = COMPANION_CARE_BOND;
+      final = await mutateProfile(db, user.id, cur => ({ stats: { ...(cur.stats || {}), companionBond: { ...(cur.stats?.companionBond || {}), [c.id]: (cur.stats?.companionBond?.[c.id] || 0) + bond } } })) || prof;
+    }
+    return { farm: view(final, current(final, now), user.id), cared: n, bond, companion: c?.name || null };
   }
 
   if (body.op === 'farm_feed') { // 🍓 dar Frutinha: felicidade + XP
@@ -286,6 +303,14 @@ export async function farmOp(db, user, body) {
       return { vault: [...(cur.vault || []), baby], pokedex: [...pd], stats: { ...(cur.stats || {}), farm } };
     });
     return { farm: view(prof, current(prof, now), user.id), profile: prof, baby };
+  }
+
+  if (body.op === 'farm_house') { // 🏡 casinha do companheiro (grátis): colocar/mover/tirar
+    const { prof } = await save(db, user.id, farm => {
+      farm.house = body.remove ? null : { x: Math.max(8, Math.min(92, Number(body.x) || 50)), y: Math.max(14, Math.min(94, Number(body.y) || 50)) };
+      return {};
+    });
+    return { farm: view(prof, current(prof, now), user.id) };
   }
 
   // ---------------------------------------------------------------- 🔨 Oficina

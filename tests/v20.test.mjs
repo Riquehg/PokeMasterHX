@@ -514,3 +514,28 @@ test('🔨 Oficina: receitas com tempo e recursos de vários biomas, nível de A
   const dd = await profileOp(db, a, { op: 'farm_decor', decor: [{ k: 'statue', x: 30, y: 30 }] });
   assert.equal(dd.farm.decor[0].k, 'statue');
 });
+
+test('🏡 Casinha do Companheiro: felicidade cai mais devagar, +XP no tipo dele e laço ao cuidar', async () => {
+  const { tickFarm, newFarm } = await import('../shared/data/farm.js');
+  const mk = () => { const f = newFarm(0); f.slots.push({ uid: 'a', biome: 'lago', happy: 100, t: 0 }); return f; };
+  const mon = new Map([['a', { uid: 'a', sp: 'squirtle', lvl: 10 }]]);
+  const f1 = tickFarm(mk(), mon, () => ['water'], 10 * 3600000);
+  const f2 = tickFarm(mk(), mon, () => ['water'], 10 * 3600000, { decayMult: 0.6, boostTypes: ['water'] });
+  const f3 = tickFarm(mk(), mon, () => ['water'], 3 * 3600000), f4 = tickFarm(mk(), mon, () => ['water'], 3 * 3600000, { boostTypes: ['water'] });
+  assert.ok(f2.slots[0].happy > f1.slots[0].happy, 'cai mais devagar');
+  assert.ok(f4.slots[0].pxp > f3.slots[0].pxp * 1.15, 'treina os do tipo dele');
+
+  const { db, us: [a] } = await users(1);
+  const p = await db.getProfile(a.id);
+  await db.updateProfileIf(a.id, p.rev || 0, { stats: { ...p.stats, companions: ['misty'], companion: 'misty' } });
+  await profileOp(db, a, { op: 'farm_place', uid: p.vault[0].uid });
+  const h = await profileOp(db, a, { op: 'farm_house', x: 30, y: 40 });
+  assert.equal(h.farm.companion.id, 'misty');
+  assert.deepEqual(h.farm.house, { x: 30, y: 40 });
+  const c = await profileOp(db, a, { op: 'farm_care' });
+  assert.equal(c.bond, 3);
+  assert.equal((await db.getProfile(a.id)).stats.companionBond.misty, 3);
+  const r = await profileOp(db, a, { op: 'farm_house', remove: true });
+  assert.equal(r.farm.house, null);
+  assert.equal(r.farm.companion, null);
+});
