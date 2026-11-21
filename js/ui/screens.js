@@ -5,7 +5,7 @@ import { ensureSeason, divInfo, LEAGUE_DIVS, TOP_DIV, LP_PER_DIV } from '../../s
 const HARDCORE_TXT = 'Hardcore: se toda a sua equipe for derrotada você sai da partida e perde tudo o que ganhou nela (capturas, níveis e ouro). Quem sobrevive ganha o dobro de ouro da conta.';
 import { MAP_CHOICES, mapChoiceName, BUILTIN_MAPS, setCustomMaps } from '../../shared/data/board.js';
 import { openMapEditor, templateMap } from './mapeditor.js';
-import { openSeries, openTrophies } from './series.js';
+import { openSeries, openTrophies, checkSeasonResult } from './series.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
 import { openCompanionPicker } from './missions.js';
 // Telas fora da partida: login, hub do treinador, lobby online, sala de espera, partida local, coleção, ranking e admin.
@@ -221,6 +221,7 @@ export async function hubScreen(root, ctx) {
     logout: async () => { await signOut(); ctx.go('login'); },
     edit: () => editProfile(profile, async p => rerender(p))
   });
+  if (profile) setTimeout(() => checkSeasonResult(profile), 600); // 🏁 resultado da temporada da Liga das Séries
 }
 
 function soloModal(profile, ctx) {

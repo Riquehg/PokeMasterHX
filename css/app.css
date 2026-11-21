@@ -1664,3 +1664,11 @@ body.in-game .soc-panel { height: min(520px, calc(100dvh - 80px)); }
 .tr-cup { font-size: 44px; filter: drop-shadow(0 3px 6px rgba(0,0,0,.5)); }
 @media (max-width: 600px) { .se-name { max-width: 170px; } }
 @media (max-width: 600px) { .se-bt { display: none; } .se-name { max-width: 150px; } .se-table td, .se-table th { padding: 4px 3px; } }
+/* 🏁 resultado da temporada */
+.sr-box { text-align: center; padding: 6px 4px; }
+.sr-pos { font-family: Cinzel, serif; font-size: 56px; line-height: 1; color: var(--sc); text-shadow: 0 3px 10px rgba(0,0,0,.5); }
+.sr-line { margin: 6px 0; font-weight: 700; }
+.sr-move { display: inline-block; margin: 6px 0; padding: 6px 12px; border-radius: 999px; font-weight: 800; background: rgba(255,255,255,.08); }
+.sr-move.up { background: rgba(74,208,122,.2); color: #8ff0bd; } .sr-move.down { background: rgba(239,80,80,.2); color: #ff9b9e; }
+.sr-cup { display: flex; flex-direction: column; gap: 2px; margin: 8px auto; font-size: 22px; font-weight: 900; color: var(--gold); }
+.sr-prizes { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; padding: 8px; border-radius: 10px; background: rgba(0,0,0,.25); }

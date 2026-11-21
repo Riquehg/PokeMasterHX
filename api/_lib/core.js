@@ -493,7 +493,7 @@ export async function matchOp(db, user, body) {
   if (op === 'create') return createRoom(db, user, body);
   if (op === 'solo') return createSolo(db, user, body);
   if (op === 'join') return joinRoom(db, user, body);
-  if (op === 'serie_get' || op === 'serie_defense' || op === 'serie_challenge' || op === 'serie_team') return serieOp(db, user, body);
+  if (op === 'serie_get' || op === 'serie_defense' || op === 'serie_challenge' || op === 'serie_team' || op === 'serie_seen') return serieOp(db, user, body);
   if (op === 'duel_queue') return duelQueue(db, user, body, await getOrCreateProfile(db, user));
   if (op === 'duel_status') return duelQueueStatus(db, user);
   if (op === 'duel_cancel') return duelQueueCancel(db, user);

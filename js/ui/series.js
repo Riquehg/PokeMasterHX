@@ -3,7 +3,8 @@ import { getSpecies } from '../../shared/data/pokemon.js';
 import { api } from '../api.js';
 import { esc, toast, openModal, closeModal, setModalBody, bindActions } from './dom.js';
 import { monSprite, avatarUrl } from '../config.js';
-import { CRESTS, CREST_COLORS, SERIES, trophyLabel } from '../../shared/data/series.js';
+import { CRESTS, CREST_COLORS, SERIES, trophyLabel, seasonId } from '../../shared/data/series.js';
+import { ITEMS } from '../../shared/data/items.js';
 
 export const crest = (t, size = 26) => `<span class="se-crest" style="--cc:${t?.color || '#3d7fe0'};width:${size}px;height:${size}px;font-size:${Math.round(size * 0.55)}px">${t?.crest || '⚽'}</span>`;
 
@@ -16,6 +17,34 @@ export function trophyRoomHtml(trophies = []) {
 export function openTrophies(profile) {
   const t = profile?.stats?.trophies || [];
   openModal('trophies', `🏆 Sala de Troféus (${t.length})`, trophyRoomHtml(t), { wide: true });
+}
+
+/** 🏁 Janela "Resultado da temporada" (uma vez por temporada). */
+export function showSeasonResult(prev) {
+  if (!prev || prev.seen) return;
+  const from = SERIES[prev.div] || SERIES[0], to = SERIES[prev.newDiv] || from;
+  const moved = prev.newDiv > prev.div ? 'up' : prev.newDiv < prev.div ? 'down' : 'stay';
+  const items = prev.items ? Object.entries(prev.items).map(([id, q]) => `${q}x ${esc(ITEMS[id]?.name || id)}`).join(' · ') : '';
+  const body = `<div class="sr-box" style="--sc:${to.color}">
+      <div class="sr-pos">${prev.pos ? `${prev.pos}º` : '—'}</div>
+      <div class="small muted">${esc(from.name)}${prev.total ? ` · de ${prev.total} times` : ''}</div>
+      <div class="sr-line">${prev.pts} pts · ${prev.v}V ${prev.d}D · saldo ${prev.sp >= 0 ? '+' : ''}${prev.sp}</div>
+      <div class="sr-move ${moved}">${moved === 'up' ? `⬆️ Subiu para a ${esc(to.name)}!` : moved === 'down' ? `⬇️ Caiu para a ${esc(to.name)}` : `➡️ Continua na ${esc(to.name)}`}</div>
+      ${prev.trophy ? `<div class="sr-cup">${prev.trophy === 1 ? '🏆 CAMPEÃO!' : '🥈 VICE-CAMPEÃO!'}<span class="tiny">O troféu foi para a sua Sala de Troféus.</span></div>` : ''}
+      ${prev.prize || items || prev.mythical ? `<div class="sr-prizes"><b>Prêmios</b>${prev.prize ? `<span>💎 ${prev.prize}</span>` : ''}${items ? `<span>🎒 ${items}</span>` : ''}${prev.mythical ? `<span>🌟 Pokémon Mítico${typeof prev.mythical === 'string' ? `: ${esc(getSpecies(prev.mythical)?.name || prev.mythical)}` : ''} (na Coleção)</span>` : ''}</div>` : ''}
+      <p class="small muted" style="margin-top:8px">Nova temporada já começou — todo mundo zerado. Bora!</p></div>`;
+  openModal('season-result', `🏁 ${esc(prev.seasonName || 'Fim de temporada')}`, body);
+  api('match', { op: 'serie_seen' }).catch(() => {});
+}
+
+/** No menu: se a temporada virou, vira a Série do jogador (fecha a temporada se ninguém fechou ainda) e mostra o resultado. */
+export async function checkSeasonResult(profile) {
+  const S = profile?.stats?.serie;
+  if (!S) return;
+  if (S.season === seasonId() && S.prev && !S.prev.seen) return showSeasonResult(S.prev);
+  if (S.season !== seasonId()) {
+    try { const r = await api('match', { op: 'serie_get' }); showSeasonResult(r.serie?.prev); } catch { /* tenta na próxima */ }
+  }
 }
 
 const mini = m => `<img class="se-mini" src="${monSprite({ sp: m.sp, shiny: m.shiny })}" alt="" title="${esc(getSpecies(m.sp)?.name || m.sp)} Nv.${m.lvl}">`;
@@ -70,6 +99,8 @@ export async function openSeries(ctx, profile) {
       <p>⚔️ <b>Ataque:</b> escolha um adversário da sua série e jogue um duelo 1x1 — você contra ele — com times de ${data.rules.team} Pokémon (Nv. máx. ${data.rules.cap}) contra o time de defesa dele. Vitória = <b>+3 pontos</b>. Até <b>${data.rules.daily} ataques por dia</b> e 1 contra o mesmo adversário por dia.</p>
       <p>🛡️ <b>Defesa:</b> quando te desafiam, o seu time de defesa joga sozinho. Segurou = <b>+1 ponto</b> (não precisa estar online).</p>
       <p>📊 Desempate: pontos, vitórias, saldo de Pokémon (derrubados − perdidos), menos jogos.</p>
+      <p>🏁 <b>Entrou com a temporada andando?</b> Você começa com os <b>pontos de largada</b> (os pontos do 16º colocado no dia da inscrição), para não entrar dezenas de pontos atrás.${data.serie.start ? ` Você recebeu <b>${data.serie.start}</b>.` : ''}</p>
+      <p>🕛 A temporada vira à meia-noite (horário de Brasília) do dia 1, automaticamente. Os ataques do dia renovam à meia-noite.</p>
       <p>👥 Cada série tem ${data.rules.slots} times. Dê nome e escudo ao seu em ⚽ Meu time.</p>
       <p>🏁 <b>Fim do mês:</b> os ${data.rules.up} primeiros sobem e os ${data.rules.down} últimos caem (a Série D não cai, a A não sobe).</p>
       <p>🏆 <b>1º e 2º</b> ganham troféu para a Sala de Troféus e um prêmio especial da ${esc(data.serie.info.name)}: 1º ${esc(data.rules.items[0])} · 2º ${esc(data.rules.items[1])}. Pódio também ganha 💎 (${data.rules.prize.map((p, i) => `${i + 1}º ${p}`).join(' · ')}). <b>Campeão da Série A ganha também um Pokémon Mítico 🌟</b>.</p>
@@ -127,5 +158,5 @@ export async function openSeries(ctx, profile) {
       } catch (e) { toast(e.message, 'bad'); el.disabled = false; }
     }
   });
-  try { await load(); } catch (e) { setModalBody('series', `<p class="muted">${esc(e.message)}</p>`); }
+  try { await load(); showSeasonResult(data.serie.prev); } catch (e) { setModalBody('series', `<p class="muted">${esc(e.message)}</p>`); }
 }

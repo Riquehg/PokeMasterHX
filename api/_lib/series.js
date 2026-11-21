@@ -1,7 +1,7 @@
 // ⚽ Liga das Séries no servidor: inscrição (time de defesa), tabela, desafios e fechamento da temporada.
 // Os duelos usam createDuelMatch (o defensor vira uma CPU jogando com o time dele).
 import { SERIES, TOP_SERIE, SERIE_TEAM, SERIE_LEVEL_CAP, SERIE_DAILY, SERIE_SAME_FOE, SERIE_UP, SERIE_DOWN, SERIE_PRIZE, SERIE_ITEMS, SERIE_SLOTS,
-  newSerie, cleanTeam, seasonId, seasonName, dayId, serieTable, botById, botTeam, applySerieDuel, zoneOf, serieInfo, trophyLabel } from '../../shared/data/series.js';
+  newSerie, cleanTeam, lateStartPoints, seasonId, seasonName, dayId, serieTable, botById, botTeam, applySerieDuel, zoneOf, serieInfo, trophyLabel } from '../../shared/data/series.js';
 import { ITEMS } from '../../shared/data/items.js';
 import { MYTHICAL, SPECIES } from '../../shared/data/pokemon.js';
 import { createMon } from '../../shared/rules/monsters.js';
@@ -43,7 +43,7 @@ async function closeSeason(db, season, now = new Date()) {
   if (hist.closed[season]) return hist.closed[season];
   const rows = await db.listProfiles(2000);
   const humans = rows.filter(r => r.stats?.serie?.season === season && (r.stats.serie.defense || []).length);
-  const result = { moves: {}, podium: [], champions: {}, at: now.toISOString() };
+  const result = { moves: {}, final: {}, podium: [], champions: {}, at: now.toISOString() };
   hist.closed[season] = result; // marca antes de pagar (evita pagar duas vezes)
   const adj = await botAdj(db, season);
   for (let div = 0; div <= TOP_SERIE; div++) {
@@ -54,6 +54,7 @@ async function closeSeason(db, season, now = new Date()) {
       if (row.bot) continue;
       const z = zoneOf(row.pos, table.length, div);
       result.moves[row.id] = z === 'up' ? div + 1 : z === 'down' ? div - 1 : div;
+      result.final[row.id] = { pos: row.pos, total: table.length, div, pts: row.pts, v: row.v, d: row.d, sp: row.sp };
       if (row.pos <= 3) result.podium.push({ id: row.id, name: row.name, div, pos: row.pos, prize: SERIE_PRIZE[div][row.pos - 1], mythical: div === TOP_SERIE && row.pos === 1 });
     }
   }
@@ -86,7 +87,34 @@ async function closeSeason(db, season, now = new Date()) {
     }
   }
   await db.setConfig('serie_history', hist);
+  // já coloca todo mundo que jogou na série nova (assim o "Resultado da temporada" aparece no menu, sem esperar abrir a Liga)
+  const newSeason = seasonId(now);
+  if (newSeason !== season) {
+    for (const r of humans) {
+      try {
+        await mutateProfile(db, r.id, prof => {
+          const cur = prof.stats?.serie;
+          if (!cur || cur.season !== season) return null;
+          return { stats: { ...(prof.stats || {}), serie: rolledSerie(prof.id, cur, result, newSeason) } };
+        });
+      } catch (e) { console.error('[serie rollover]', e.message); }
+    }
+  }
   return result;
+}
+
+/** Série nova a partir da antiga + resultado do fechamento (com o resumo para a janela "Resultado da temporada"). */
+function rolledSerie(userId, cur, closed, season) {
+  const fin = closed.final?.[userId];
+  const div = closed.moves[userId] ?? Math.max(0, (cur.div | 0) - 1); // não terminou a tabela (sem defesa): cai uma
+  const pod = (closed.podium || []).find(p => p.id === userId);
+  return {
+    ...newSerie(season, div), defense: cur.defense || [], team: cur.team || null, start: 0,
+    prev: { season: cur.season, seasonName: seasonName(cur.season), div: cur.div | 0, newDiv: div, pos: fin?.pos || null, total: fin?.total || null,
+      pts: fin?.pts ?? cur.pts ?? 0, v: fin?.v ?? cur.v ?? 0, d: fin?.d ?? cur.d ?? 0, sp: fin?.sp ?? cur.sp ?? 0,
+      prize: pod?.prize || 0, items: pod?.items || (pod && pod.pos <= 2 ? SERIE_ITEMS[pod.div][pod.pos - 1] : null), mythical: pod?.prizeMon || (pod?.mythical ? true : null),
+      trophy: pod && pod.pos <= 2 ? pod.pos : 0, seen: false }
+  };
 }
 
 /** Garante a Série da temporada atual (vira a temporada: sobe/cai pela tabela final). */
@@ -96,8 +124,16 @@ async function ensureSerie(db, prof, now = new Date()) {
   if (cur?.season === season) return { ...newSerie(season), ...cur };
   if (!cur) return newSerie(season, 0);
   const closed = await closeSeason(db, cur.season, now);
-  const div = closed.moves[prof.id] ?? Math.max(0, (cur.div | 0) - 1); // não terminou a tabela (sem defesa): cai uma
-  return { ...newSerie(season, div), defense: cur.defense || [], prev: { season: cur.season, div: cur.div, pts: cur.pts } };
+  return rolledSerie(prof.id, cur, closed, season);
+}
+
+/** ⏰ Vercel Cron (dia 1, meia-noite de Brasília): fecha a temporada que acabou e já vira todo mundo. */
+export async function serieCron(db, now = new Date()) {
+  const prev = seasonId(new Date(now.getTime() - 6 * 3600000)); // 6 h antes = mês que acabou
+  const cur = seasonId(now);
+  if (prev === cur) return { ok: true, closed: null, note: 'Temporada ainda em andamento.' };
+  const r = await closeSeason(db, prev, now);
+  return { ok: true, closed: prev, podium: r.podium.length, players: Object.keys(r.final || {}).length };
 }
 
 async function saveSerie(db, userId, serie) {
@@ -109,7 +145,12 @@ export async function serieOp(db, user, body) {
   const prof = await getOrCreateProfile(db, user);
   const now = new Date();
   let serie = await ensureSerie(db, prof, now);
-  if (prof.stats?.serie?.season !== serie.season) await saveSerie(db, user.id, serie);
+  let changed = prof.stats?.serie?.season !== serie.season;
+  // 🏁 quem se inscreveu com a temporada andando (antes desta regra) ganha os pontos de largada uma vez
+  if (serie.start === undefined && (serie.defense || []).length) { const st = lateStartPoints(serie.div, serie.season, now); serie = { ...serie, start: st, pts: (serie.pts | 0) + st }; changed = true; }
+  if (body.op === 'serie_seen' && serie.prev && !serie.prev.seen) { serie = { ...serie, prev: { ...serie.prev, seen: true } }; changed = true; }
+  if (changed) await saveSerie(db, user.id, serie);
+  if (body.op === 'serie_seen') return { ok: true };
   const vault = prof.vault || [];
 
   if (body.op === 'serie_team') { // ⚽ nome e escudo do time
@@ -124,6 +165,7 @@ export async function serieOp(db, user, body) {
     const uids = [...new Set((body.uids || []).map(String))].filter(u => vault.some(v => v.uid === u)).slice(0, SERIE_TEAM);
     if (uids.length < Math.min(SERIE_TEAM, vault.length) || !uids.length) bad(`O time de defesa precisa ter ${SERIE_TEAM} Pokémon da Coleção.`);
     serie = { ...serie, defense: uids, team: serie.team || cleanTeam(null, `${prof.trainer_name} FC`) };
+    if (serie.start === undefined) { const st = lateStartPoints(serie.div, serie.season, now); serie.start = st; serie.pts = (serie.pts | 0) + st; }
     await saveSerie(db, user.id, serie);
     return serieView(db, user.id, serie, vault, now);
   }

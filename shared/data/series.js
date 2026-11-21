@@ -9,7 +9,7 @@
 //    1º e 2º ganham troféu (Sala de Troféus) e item especial da série; pódio ganha 💎; campeão da A ganha um Mítico.
 // Fica em profiles.stats.serie (sem mudar o banco). Histórico de fechamento em game_config 'serie_history'.
 import { createRng } from '../rules/rng.js';
-import { seasonId, seasonName } from './league.js';
+import { seasonId as utcSeasonId, seasonName } from './league.js';
 
 export const SERIES = [
   { idx: 0, id: 'D', name: 'Série D', icon: '🟤', color: '#a0714a', level: 32 },
@@ -40,20 +40,26 @@ export const TROPHY_NAMES = { 1: 'Campeão', 2: 'Vice-campeão' };
 export const trophyLabel = t => `${t.pos === 1 ? '🏆' : '🥈'} ${TROPHY_NAMES[t.pos]} da ${SERIES[t.div]?.name || 'Série'}`;
 
 export const serieInfo = idx => SERIES[Math.max(0, Math.min(TOP_SERIE, idx | 0))];
-export { seasonId, seasonName };
+export { seasonName };
+
+// 🕛 A Liga das Séries usa o horário de Brasília (UTC−3): a temporada vira à meia-noite do dia 1
+// e os ataques do dia renovam à meia-noite.
+export const SERIE_TZ_HOURS = -3;
+const brt = (now = new Date()) => new Date(now.getTime() + SERIE_TZ_HOURS * 3600000);
+export const seasonId = (now = new Date()) => utcSeasonId(brt(now));
 
 export function newSerie(season = seasonId(), div = 0) {
   return { season, div, team: null, pts: 0, j: 0, v: 0, d: 0, sp: 0, dv: 0, dd: 0, defense: [], day: '', dayCount: 0, foesToday: [], log: [] };
 }
 
-export const dayId = (now = new Date()) => now.toISOString().slice(0, 10);
+export const dayId = (now = new Date()) => brt(now).toISOString().slice(0, 10);
 
 /** Dias da temporada já "jogados" pelos clubes (até hoje, inclusive). */
 export function seasonDays(season, now = new Date()) {
   const [y, m] = season.split('-').map(Number);
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  if (seasonId(now) !== season) return now < new Date(Date.UTC(y, m - 1, 1)) ? 0 : last;
-  return now.getUTCDate();
+  if (seasonId(now) !== season) return seasonId(now) < season ? 0 : last;
+  return brt(now).getUTCDate();
 }
 
 // ---------------------------------------------------------------- treinadores da liga (CPU)
@@ -143,13 +149,13 @@ export function botRecord(bot, season, days, adj = null) {
   const rng = createRng(hash(`${season}|${bot.id}`));
   const r = { pts: 0, j: 0, v: 0, d: 0, sp: 0, dv: 0, dd: 0 };
   for (let k = 0; k < days; k++) {
-    const games = 1 + rng.int(0, 1); // 1 ou 2 jogos por dia (ritmo de referência para quem joga)
+    const games = 1; // 1 jogo por dia: ritmo de referência (quem joga todo dia passa os CPU)
     for (let g = 0; g < games; g++) {
       r.j++;
       if (rng.chance(bot.power)) { r.v++; r.pts += PTS_ATTACK_WIN; r.sp += rng.int(1, 3); }
       else { r.d++; r.sp -= rng.int(1, 3); }
     }
-    if (rng.chance(0.4)) { if (rng.chance(bot.power)) { r.dv++; r.pts += PTS_DEFENSE_WIN; } else r.dd++; }
+    if (rng.chance(0.3)) { if (rng.chance(bot.power)) { r.dv++; r.pts += PTS_DEFENSE_WIN; } else r.dd++; }
   }
   if (adj) { r.pts += adj.pts || 0; r.dv += adj.dv || 0; r.dd += adj.dd || 0; }
   return r;
@@ -159,6 +165,17 @@ function hash(str) {
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
   return h >>> 0;
+}
+
+/**
+ * 🏁 Pontos de largada para quem se inscreve com a temporada andando: os pontos que o 16º colocado
+ * (linha do rebaixamento) dos CPU tem hoje. Assim ninguém entra 70 pontos atrás — entra no bolo de baixo.
+ */
+export function lateStartPoints(div, season, now = new Date()) {
+  const days = seasonDays(season, now);
+  if (days <= 1) return 0;
+  const pts = botsOf(div).map(b => botRecord(b, season, days).pts).sort((a, b) => b - a);
+  return pts[Math.min(pts.length - 1, SERIE_SLOTS - SERIE_DOWN - 1)] || 0;
 }
 
 /** Ordem da tabela: pontos, vitórias, saldo, menos jogos. */

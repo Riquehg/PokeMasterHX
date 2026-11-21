@@ -164,8 +164,8 @@ test('Séries: inscrição, desafio contra a defesa de outro treinador (offline)
   assert.equal(done.status, 'finished');
   const sa = (await db.getProfile(a.id)).stats.serie, sb = (await db.getProfile(b.id)).stats.serie;
   assert.equal(sa.j, 1);
-  assert.equal(sa.pts, done.state.winner === a.id ? 3 : 0);
-  assert.equal(sb.pts, done.state.winner === a.id ? 0 : 1);
+  assert.equal(sa.pts - (sa.start || 0), done.state.winner === a.id ? 3 : 0);
+  assert.equal(sb.pts - (sb.start || 0), done.state.winner === a.id ? 0 : 1);
   assert.equal(sb.log[0].kind, 'def');
   assert.ok((await db.getMatch(c.match.id)).state.serieResult);
 
@@ -272,4 +272,37 @@ test('salas no limbo: sala nova fecha a antiga, lobby parado some/encerra, últi
   await matchOp(db, b, { op: 'leave', matchId: s.match.id });
   assert.ok(['abandoned', 'finished'].includes((await db.getMatch(s.match.id)).status), 'não fica em andamento');
   assert.ok(!(await listRooms(db, b)).mine.some(r => r.id === s.match.id));
+});
+
+test('Séries: pontos de largada, horário de Brasília, cron de fechamento e janela de resultado', async () => {
+  const { seasonId: sid, dayId, lateStartPoints, seasonDays } = await import('../shared/data/series.js');
+  assert.equal(sid(new Date('2026-12-01T02:00:00Z')), '2026-11', 'meia-noite de Brasília = 03:00 UTC');
+  assert.equal(sid(new Date('2026-12-01T03:30:00Z')), '2026-12');
+  assert.equal(dayId(new Date('2026-11-21T02:00:00Z')), '2026-11-20');
+  assert.equal(lateStartPoints(0, '2026-11', new Date('2026-11-01T12:00:00Z')), 0, 'dia 1: largada zero');
+  const late = lateStartPoints(0, '2026-11', new Date('2026-11-20T15:00:00Z'));
+  const top = serieTable(0, [], '2026-11', new Date('2026-11-20T15:00:00Z'))[0].pts;
+  assert.ok(late > 0 && top - late < 45, `largada ${late}, líder ${top}`);
+  assert.equal(seasonDays('2026-11', new Date('2026-12-05T12:00:00Z')), 30);
+
+  const { db, us: [a] } = await users(1);
+  await matchOp(db, a, { op: 'serie_defense', uids: (await db.getProfile(a.id)).vault.map(m => m.uid) });
+  const p = await db.getProfile(a.id);
+  assert.equal(p.stats.serie.pts, p.stats.serie.start);
+  // simula fim de outubro na Série D com muitos pontos
+  await db.updateProfileIf(a.id, p.rev || 0, { stats: { ...p.stats, serie: { ...p.stats.serie, season: '2026-10', pts: 500, v: 99 } } });
+  const { serieCron } = await import('../api/_lib/series.js');
+  const r = await serieCron(db, new Date('2026-11-01T03:10:00Z'));
+  assert.equal(r.closed, '2026-10');
+  const after = (await db.getProfile(a.id)).stats.serie;
+  assert.equal(after.season, '2026-11', 'o cron já virou o jogador');
+  assert.equal(after.div, 1, 'subiu da D para a C');
+  assert.equal(after.prev.pos, 1);
+  assert.equal(after.prev.trophy, 1);
+  assert.ok(after.prev.items.tm >= 1);
+  assert.ok(after.team, 'o time continua');
+  assert.equal(after.pts, 0, 'começa zerado (largada só para quem entra depois)');
+  await matchOp(db, a, { op: 'serie_seen' });
+  assert.equal((await db.getProfile(a.id)).stats.serie.prev.seen, true);
+  assert.equal((await serieCron(db, new Date('2026-11-15T03:10:00Z'))).closed, null);
 });

@@ -1,6 +1,6 @@
 // GET /api/health — diagnóstico da configuração (abra no navegador: https://SEU-SITE/api/health).
 // Não revela as chaves: só diz quais variáveis existem, de que tipo são e se o banco responde.
-import { route } from './_lib/http.js';
+import { route, getDb } from './_lib/http.js';
 
 function keyKind(k) {
   if (!k) return 'ausente';
@@ -16,7 +16,7 @@ function keyKind(k) {
   }
 }
 
-export default route(async () => {
+const health = route(async () => {
   if (globalThis.__PMHX_DB__) return { ok: true, mode: 'dev (banco em memória)' };
   const { serviceKey, supabaseUrl, SERVICE_KEY_NAMES } = await import('./_lib/supabase-db.js');
   const url = supabaseUrl();
@@ -68,3 +68,20 @@ export default route(async () => {
   out.ok = out.problemas.length === 0;
   return out;
 }, { auth: false, methods: ['GET'] });
+
+// ⏰ Vercel Cron (vercel.json): GET /api/health?cron=serie no dia 1 à meia-noite de Brasília.
+// A Vercel manda "Authorization: Bearer <CRON_SECRET>" — configure a variável CRON_SECRET no projeto.
+export default async function handler(req, res) {
+  if (!String(req.url || '').includes('cron=serie')) return health(req, res);
+  const json = (code, body) => { res.statusCode = code; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(body)); };
+  const secret = process.env.CRON_SECRET;
+  const auth = req.headers.authorization || req.headers.Authorization || '';
+  if (!secret || auth !== `Bearer ${secret}`) return json(401, { error: 'Cron sem autorização (configure CRON_SECRET na Vercel).' });
+  try {
+    const { serieCron } = await import('./_lib/series.js');
+    json(200, await serieCron(await getDb()));
+  } catch (e) {
+    console.error('[cron serie]', e);
+    json(500, { error: String(e?.message || e) });
+  }
+}
