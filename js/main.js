@@ -1,10 +1,10 @@
 // Ponto de entrada: inicializa a rede e navega entre as telas.
-import { initNet, net, api } from './api.js';
+import { initNet, net, api, setNewPassword } from './api.js';
 import { dailyPokemon } from '../shared/daily.js';
 import { OnlineSession } from './session.js';
 import { mountGame } from './ui/game.js';
 import { loginScreen, hubScreen, lobbyScreen, roomScreen, localSetupScreen } from './ui/screens.js';
-import { toast } from './ui/dom.js';
+import { toast, openModal, closeModal, bindActions } from './ui/dom.js';
 import { startNotifications } from './ui/notify.js';
 import { startSocial } from './ui/social.js';
 import { cupScreen } from './ui/tournament.js';
@@ -88,4 +88,24 @@ async function go(screen, arg) {
   if (net.config?.maps) setCustomMaps(net.config.maps);
   startNotifications(net.config);
   go(net.user ? 'hub' : 'login');
+  // 🔑 chegou pelo link "Esqueci a senha": pede a senha nova
+  const askPw = () => { if (net.recovery && net.user) openNewPassword(); };
+  askPw();
+  window.addEventListener('pmhx-recovery', () => setTimeout(askPw, 300));
 })();
+
+function openNewPassword() {
+  if (document.getElementById('newpw')) return;
+  const ov = openModal('newpw', '🔑 Criar nova senha', `<p class="small">Você entrou pelo link de recuperação. Escolha a senha nova para os próximos logins.</p>
+    <div class="col" style="gap:8px"><input class="input" id="np-1" type="password" placeholder="Nova senha (mín. 6)" autocomplete="new-password">
+    <input class="input" id="np-2" type="password" placeholder="Repita a senha" autocomplete="new-password">
+    <button class="btn primary" data-act="np-save">Salvar senha</button></div>`);
+  bindActions(ov, {
+    'np-save': async () => {
+      const a = ov.querySelector('#np-1').value, b = ov.querySelector('#np-2').value;
+      if (a !== b) return toast('As senhas não são iguais.', 'bad');
+      try { await setNewPassword(a); closeModal('newpw'); toast('🔑 Senha nova salva! Use ela no próximo login.', 'good'); }
+      catch (e) { toast(e.message, 'bad'); }
+    }
+  });
+}

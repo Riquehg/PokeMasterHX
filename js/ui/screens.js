@@ -744,11 +744,36 @@ async function adminModal() {
         <div class="row"><select class="input grow" id="a-item">${Object.entries(ALL_ITEMS).filter(([id]) => isKeepable(id) || id === 'mega_bracelet').map(([id, it]) => `<option value="${id}">${esc(it.name)}</option>`).join('')}</select>
           <input class="input" id="a-iq" type="number" min="1" max="99" value="1" style="width:80px">
           <button class="btn" data-act="grant-item">🎒 Dar item (vai para a Mochila)</button></div></div>
+      <div class="card col" style="margin-top:10px"><h3>🔐 Conta do jogador (suporte)</h3>
+        <p class="tiny muted">Ninguém vê a senha (nem o admin) — dá para <b>definir uma nova</b>. Use o jogador escolhido em "Dar presente" ou procure pelo e-mail.</p>
+        <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn" data-act="acc-info">🔎 Ver conta do jogador escolhido</button>
+          <input class="input" id="a-acc-q" placeholder="ou procurar por e-mail…" style="width:200px"><button class="btn" data-act="acc-find">Procurar</button></div>
+        <div id="a-acc">${accHtml()}</div></div>
       <div class="card" style="margin-top:10px"><h3>👥 Usuários (${users.length})</h3>
         <table class="score"><tr><th>Nome</th><th>Pontos</th><th>Rating</th><th>💎</th><th>Coleção</th><th>Admin</th></tr>
         ${users.map(u => `<tr><td>${esc(u.name)}</td><td>${u.points}</td><td>${u.rating}</td><td>${u.diamonds}</td><td>${u.vault}</td><td><button class="btn sm ${u.isAdmin ? 'red' : ''}" data-act="toggle" data-id="${u.id}" data-v="${u.isAdmin ? '0' : '1'}">${u.isAdmin ? 'remover' : 'tornar admin'}</button></td></tr>`).join('')}</table>
-        <p class="tiny muted">Senhas e exclusão de contas ficam no Supabase (Authentication → Users).</p></div>`;
+        <p class="tiny muted">Excluir contas continua no Supabase (Authentication → Users).</p></div>`;
   };
+  // 🔐 painel de suporte da conta
+  let acc = null, accList = null;
+  const fmt = t => (t ? new Date(t).toLocaleString('pt-BR') : '—');
+  function accHtml() {
+    if (accList) return accList.length ? `<table class="score" style="margin-top:6px"><tr><th>E-mail</th><th>Treinador</th><th>Ativada</th><th></th></tr>${accList.map(a => `<tr><td class="small">${esc(a.email)}</td><td>${esc(a.trainer || '—')}</td><td>${a.confirmedAt ? '✅' : '❌'}</td><td><button class="btn sm" data-act="acc-pick" data-id="${a.id}">Abrir</button></td></tr>`).join('')}</table>` : '<p class="muted small">Nenhum e-mail encontrado.</p>';
+    if (!acc) return '';
+    return `<div class="acc-box">
+      <div><b>${esc(acc.trainer || 'Sem perfil ainda')}</b> · <span class="small">${esc(acc.email || '')}</span></div>
+      <div class="small">Conta ativada: ${acc.confirmedAt ? `✅ ${fmt(acc.confirmedAt)}` : '❌ <b>não ativou</b> (não clicou no link do e-mail)'}</div>
+      <div class="tiny muted">Criada: ${fmt(acc.createdAt)} · Último login: ${fmt(acc.lastSignIn)}</div>
+      <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">
+        ${acc.confirmedAt ? '' : '<button class="btn sm green" data-act="acc-confirm">✅ Ativar conta agora</button><button class="btn sm" data-act="acc-mail" data-k="signup">📧 Reenviar e-mail de ativação</button>'}
+        <button class="btn sm" data-act="acc-mail" data-k="recovery">📧 Mandar link de nova senha</button>
+        <button class="btn sm primary" data-act="acc-pw">🔑 Definir senha nova</button>
+        ${acc.megaBracelet ? '<button class="btn sm red" data-act="acc-bracelet">🔗 Tirar Bracelete Mega</button>' : ''}
+      </div></div>`;
+  }
+  const accDraw = () => { const el = ov.querySelector('#a-acc'); if (el) el.innerHTML = accHtml(); };
+  const accLoad = async id => { try { acc = (await api('admin', { op: 'account_info', userId: id })).account; accList = null; accDraw(); } catch (e) { toast(e.message, 'bad'); } };
+  const accRun = async (fn, ok) => { try { await fn(); toast(ok, 'good'); await accLoad(acc.id); } catch (e) { toast(e.message, 'bad'); } };
 
   // lê os campos editáveis (data-f="items.0.name") de volta para data.shop
   const collect = () => {
@@ -784,6 +809,16 @@ async function adminModal() {
     'grant-item': () => run(() => api('admin', { op: 'grant_item', userId: ov.querySelector('#a-user').value, item: ov.querySelector('#a-item').value, qty: ov.querySelector('#a-iq').value }), 'Enviado para a Mochila!'),
     grant: () => run(() => api('admin', { op: 'grant_mon', userId: ov.querySelector('#a-user').value, species: ov.querySelector('#a-sp').value, level: ov.querySelector('#a-lv').value, shiny: ov.querySelector('#a-shiny').checked }), 'Enviado para a Coleção!'),
     toggle: d => run(() => api('admin', { op: 'set_admin', userId: d.id, value: d.v === '1' })),
+    'acc-info': () => accLoad(ov.querySelector('#a-user').value),
+    'acc-find': async () => { try { accList = (await api('admin', { op: 'account_find', q: ov.querySelector('#a-acc-q').value })).accounts; acc = null; accDraw(); } catch (e) { toast(e.message, 'bad'); } },
+    'acc-pick': d => accLoad(d.id),
+    'acc-confirm': () => accRun(() => api('admin', { op: 'account_confirm', userId: acc.id }), '✅ Conta ativada! Ele já pode entrar.'),
+    'acc-mail': d => accRun(() => api('admin', { op: 'account_mail', userId: acc.id, kind: d.k, origin: location.origin }), d.k === 'signup' ? '📧 E-mail de ativação enviado.' : '📧 Link de nova senha enviado.'),
+    'acc-pw': () => {
+      const pw = prompt(`Senha nova para ${acc.trainer || acc.email} (mín. 6). Mande para ele no privado e peça para trocar depois:`);
+      if (pw) accRun(() => api('admin', { op: 'account_password', userId: acc.id, password: pw }), '🔑 Senha nova definida.');
+    },
+    'acc-bracelet': () => { if (confirm(`Tirar o Bracelete Mega de ${acc.trainer}?`)) accRun(() => api('admin', { op: 'remove_bracelet', userId: acc.id }), '🔗 Bracelete removido.'); },
     'map-new': d => openMapEditor(templateMap(d.from === 'blank' ? 'blank' : ov.querySelector('#a-mapfrom').value), mapsSaved),
     'map-edit': d => { const m = (data.maps || []).find(x => x.id === d.id); if (m) openMapEditor({ ...structuredClone(m), id: m.id.replace(/^custom:/, '') }, mapsSaved); },
     'map-pub': d => { const m = (data.maps || []).find(x => x.id === d.id); if (m) run(async () => { const r = await api('admin', { op: 'save_map', map: { ...m, id: m.id.replace(/^custom:/, '') }, published: d.v === '1' }); mapsSaved(r.maps); }, d.v === '1' ? 'Mapa publicado!' : 'Mapa virou rascunho.'); },

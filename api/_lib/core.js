@@ -1144,6 +1144,47 @@ export async function adminOp(db, user, body) {
       if (!ok) notFound('Usuário não encontrado.');
       return { ok: true };
     }
+    // ---- 🔐 suporte a contas (o admin nunca vê a senha; só define uma nova)
+    case 'account_info': {
+      const info = await db.authInfo(String(body.userId || ''));
+      if (!info) notFound('Conta não encontrada.');
+      const p = await db.getProfile(info.id);
+      return { account: { ...info, trainer: p?.trainer_name || null, megaBracelet: !!p?.stats?.megaBracelet } };
+    }
+    case 'account_find': { // procurar pelo e-mail (para quem não lembra o nome de treinador)
+      const q = String(body.q || '').trim();
+      if (q.length < 3) bad('Digite pelo menos 3 letras do e-mail.');
+      const found = await db.authFindEmail(q);
+      const out = [];
+      for (const a of found) { const p = await db.getProfile(a.id); out.push({ ...a, trainer: p?.trainer_name || null }); }
+      return { accounts: out };
+    }
+    case 'account_confirm':
+      await db.authConfirm(String(body.userId || ''));
+      return { ok: true };
+    case 'account_password': {
+      const pw = String(body.password || '');
+      if (pw.length < 6) bad('A senha precisa ter pelo menos 6 caracteres.');
+      await db.authSetPassword(String(body.userId || ''), pw);
+      return { ok: true };
+    }
+    case 'account_mail': { // 📧 reenviar ativação ou link de recuperar senha
+      const info = await db.authInfo(String(body.userId || ''));
+      if (!info?.email) notFound('Conta não encontrada.');
+      const origin = /^https?:\/\/[\w.-]+(:\d+)?$/.test(String(body.origin || '')) ? body.origin : (process.env.PUBLIC_URL || undefined);
+      if (body.kind === 'signup') await db.authResendSignup(info.email, origin);
+      else await db.authSendRecovery(info.email, origin);
+      return { ok: true, email: info.email };
+    }
+    case 'remove_bracelet': {
+      const ok = await mutateProfile(db, body.userId, prof => {
+        const st = { ...(prof.stats || {}) };
+        delete st.megaBracelet;
+        return { stats: st };
+      });
+      if (!ok) notFound('Usuário não encontrado.');
+      return { ok: true };
+    }
     case 'set_admin': {
       await db.upsertProfile(body.userId, { is_admin: !!body.value });
       return { ok: true };

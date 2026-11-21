@@ -33,9 +33,14 @@ export async function initNet() {
     return net;
   }
   try {
+    // 🔑 veio pelo link "recuperar senha" do e-mail? (o Supabase limpa o endereço ao abrir)
+    net.recovery = /type=recovery/.test(location.hash) || /type=recovery/.test(location.search);
     const { createClient } = await import(SUPABASE_ESM);
     net.sb = createClient(net.config.supabaseUrl, net.config.supabaseAnonKey, {
       auth: { persistSession: true, autoRefreshToken: true }
+    });
+    net.sb.auth.onAuthStateChange(ev => {
+      if (ev === 'PASSWORD_RECOVERY') { net.recovery = true; window.dispatchEvent(new Event('pmhx-recovery')); }
     });
     const { data } = await net.sb.auth.getSession();
     if (data.session) net.user = { id: data.session.user.id, email: data.session.user.email };
@@ -90,6 +95,15 @@ export async function resetPassword(email) {
   if (net.mode !== 'prod') throw new Error('Disponível apenas online.');
   const { error } = await net.sb.auth.resetPasswordForEmail(String(email).trim(), { redirectTo: location.origin });
   if (error) throw new Error(translateAuth(error.message));
+}
+
+/** 🔑 Troca a senha de quem está logado (usado depois do link de recuperação). */
+export async function setNewPassword(password) {
+  if (net.mode !== 'prod') throw new Error('Disponível apenas online.');
+  if (String(password).length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.');
+  const { error } = await net.sb.auth.updateUser({ password: String(password) });
+  if (error) throw new Error(translateAuth(error.message));
+  net.recovery = false;
 }
 
 export async function signOut() {

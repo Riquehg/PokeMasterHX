@@ -711,3 +711,24 @@ test('➕ recém-capturado: escolher equipe ou PC na hora (troca com alguém da 
   assert.equal(r.players[0].box.at(-1).sp, 'eevee');
   assert.equal(r.players[0].team.length, 1);
 });
+
+test('🔐 admin: ver conta, procurar e-mail, ativar, senha nova, e-mails e tirar Bracelete', async () => {
+  const { db, admin, us: [a] } = await users(1);
+  await assert.rejects(adminOp(db, a, { op: 'account_info', userId: a.id }), /administradores/);
+  const info = (await adminOp(db, admin, { op: 'account_info', userId: a.id })).account;
+  assert.ok(info.email.includes('@'));
+  assert.equal(info.trainer !== undefined, true);
+  const found = (await adminOp(db, admin, { op: 'account_find', q: info.email.slice(0, 4) })).accounts;
+  assert.ok(found.some(x => x.id === a.id));
+  await adminOp(db, admin, { op: 'account_confirm', userId: a.id });
+  await assert.rejects(adminOp(db, admin, { op: 'account_password', userId: a.id, password: '123' }), /6 caracteres/);
+  await adminOp(db, admin, { op: 'account_password', userId: a.id, password: 'nova1234' });
+  assert.equal(db._authMeta().get(a.id).password, 'nova1234');
+  const m = await adminOp(db, admin, { op: 'account_mail', userId: a.id, kind: 'recovery', origin: 'https://evil.com/x?y' });
+  assert.equal(m.email, info.email);
+  assert.equal(db._authMeta().get('last_mail').kind, 'recovery');
+  await adminOp(db, admin, { op: 'grant_item', userId: a.id, item: 'mega_bracelet' });
+  assert.equal((await adminOp(db, admin, { op: 'account_info', userId: a.id })).account.megaBracelet, true);
+  await adminOp(db, admin, { op: 'remove_bracelet', userId: a.id });
+  assert.equal((await db.getProfile(a.id)).stats.megaBracelet, undefined);
+});

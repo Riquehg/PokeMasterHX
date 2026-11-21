@@ -9,6 +9,7 @@ export function createMemoryDb() {
   const members = new Map(); // matchId -> Set(userId)
   const config = new Map();
   const users = new Map(); // email -> id
+  const authMeta = new Map(); // id -> { confirmedAt, password } (só no dev)
   const listeners = new Set();
   const payments = new Map();
   const feed = [];
@@ -24,6 +25,21 @@ export function createMemoryDb() {
 
   return {
     onMatchChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+
+    // ---- 🔐 contas (dev: tudo em memória, sem e-mail de verdade)
+    async authInfo(id) {
+      for (const [email, uid] of users) if (uid === id) return { id, email, confirmedAt: authMeta.get(id)?.confirmedAt ?? new Date(0).toISOString(), lastSignIn: null, createdAt: null };
+      return null;
+    },
+    async authFindEmail(text) {
+      const q = String(text || '').toLowerCase();
+      return [...users].filter(([e]) => e.includes(q)).map(([email, id]) => ({ id, email, confirmedAt: authMeta.get(id)?.confirmedAt ?? new Date(0).toISOString(), lastSignIn: null }));
+    },
+    async authConfirm(id) { authMeta.set(id, { ...(authMeta.get(id) || {}), confirmedAt: new Date().toISOString() }); },
+    async authSetPassword(id, password) { authMeta.set(id, { ...(authMeta.get(id) || {}), password }); },
+    async authSendRecovery(email) { authMeta.set('last_mail', { kind: 'recovery', email }); },
+    async authResendSignup(email) { authMeta.set('last_mail', { kind: 'signup', email }); },
+    _authMeta: () => authMeta,
 
     async verifyToken(token) {
       if (!token || !token.startsWith('dev:')) return null;

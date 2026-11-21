@@ -30,6 +30,41 @@ function check({ data, error }) {
 const MATCH_COLS = 'id, code, name, host_id, status, is_public, has_pin, options, lobby, state, chat, version, created_at, updated_at';
 
 export const supabaseDb = {
+  // ---- 🔐 contas (só o admin usa; nunca dá para ver a senha)
+  async authInfo(id) {
+    const { data, error } = await admin().auth.admin.getUserById(id);
+    if (error || !data?.user) return null;
+    const u = data.user;
+    return { id: u.id, email: u.email, confirmedAt: u.email_confirmed_at || u.confirmed_at || null, lastSignIn: u.last_sign_in_at || null, createdAt: u.created_at || null };
+  },
+  async authFindEmail(text) {
+    const q = String(text || '').trim().toLowerCase();
+    const out = [];
+    for (let page = 1; page <= 10 && out.length < 20; page++) {
+      const { data, error } = await admin().auth.admin.listUsers({ page, perPage: 1000 });
+      if (error) throw new Error(error.message);
+      for (const u of data.users) if (u.email?.toLowerCase().includes(q)) out.push({ id: u.id, email: u.email, confirmedAt: u.email_confirmed_at || null, lastSignIn: u.last_sign_in_at || null });
+      if (data.users.length < 1000) break;
+    }
+    return out.slice(0, 20);
+  },
+  async authConfirm(id) {
+    const { error } = await admin().auth.admin.updateUserById(id, { email_confirm: true });
+    if (error) throw new Error(error.message);
+  },
+  async authSetPassword(id, password) {
+    const { error } = await admin().auth.admin.updateUserById(id, { password });
+    if (error) throw new Error(error.message);
+  },
+  async authSendRecovery(email, redirectTo) {
+    const { error } = await admin().auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) throw new Error(error.message);
+  },
+  async authResendSignup(email, redirectTo) {
+    const { error } = await admin().auth.resend({ type: 'signup', email, options: { emailRedirectTo: redirectTo } });
+    if (error) throw new Error(error.message);
+  },
+
   async verifyToken(token) {
     const { data, error } = await admin().auth.getUser(token);
     if (error || !data?.user) return null;
