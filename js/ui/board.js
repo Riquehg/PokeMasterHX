@@ -6,7 +6,7 @@ import { WeatherLayer } from './weather.js';
 import { stormAt, ownerOf } from '../../shared/rules/modes.js';
 import { gymAt, ELITE_SPACE, CHAMPION_SPACE, GYMS, BADGES_TO_LEAGUE } from '../../shared/data/trainers.js';
 import { distancesFrom } from '../../shared/rules/movement.js';
-import { badgeUrl, leaderUrl } from '../config.js';
+import { badgeUrl, leaderUrl, itemUrl } from '../config.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
 import { maxHpOf } from '../../shared/rules/monsters.js';
 import { esc } from './dom.js';
@@ -304,6 +304,7 @@ export class BoardView {
       <div class="pin ${fr ? 'frame-' + fr : ''}"><img src="${avatarUrl(pl.avatar, c.skin)}" alt="${esc(pl.name)}" data-color="${playerColor(state, pl.id)}" draggable="false"></div>
       ${pl.companion && COMPANIONS[pl.companion] ? `<img class="tk-comp" src="${leaderUrl(COMPANIONS[pl.companion].sprite)}" alt="" title="${esc(COMPANIONS[pl.companion].name)}" draggable="false">` : ''}
       ${pl.companion && (pl.bond?.[pl.companion] || 0) >= 10 ? `<span class="tk-heart" title="${esc(COMPANIONS[pl.companion]?.name || '')} é íntimo de ${esc(pl.name)}">❤️</span>` : ''}
+      ${pl.megaKey ? `<img class="tk-mega" src="${itemUrl('mega_bracelet')}" alt="" title="🔗 Bracelete Mega" draggable="false" data-color="#7b4bd6">` : ''}
       <span class="name">${pl.id === viewerId ? 'Você' : esc(pl.name.split(' ')[0])}</span>
       ${c.title ? `<span class="ttitle">★ ${esc(c.title)}</span>` : ''}</div>`;
   }

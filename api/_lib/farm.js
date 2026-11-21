@@ -13,6 +13,8 @@ import { COMPANION_DECAY_MULT, COMPANION_CARE_BOND } from '../../shared/data/far
 import { RECIPES, FARM_ITEMS, ARTISAN_LEVELS, artisanOf, benchesFor, CANDY_MAX_LEVEL, FERT_HOURS, RATION_HAPPY, INCENSE_EGGS, INCENSE_MULT, dailyOrders, weekId } from '../../shared/data/workshop.js';
 import { addToBag } from './core.js';
 import { myCosmetics } from './shop.js';
+import { MEGAS, fragItemId } from '../../shared/data/megas.js';
+import { ITEMS } from '../../shared/data/items.js';
 
 const typesOf = mon => getSpecies(mon.sp)?.types || ['normal'];
 const vaultMap = prof => new Map((prof.vault || []).map(m => [m.uid, m]));
@@ -118,7 +120,7 @@ async function save(db, userId, fn) {
     const r = fn(farm, cur);
     if (r === null) return null;
     out = r;
-    const st = { ...(cur.stats || {}), farm };
+    const st = { ...(cur.stats || {}), farm, ...(r?.bag ? { bag: r.bag } : {}) };
     return r?.vault ? { stats: st, vault: r.vault } : { stats: st };
   });
   return { prof, out };
@@ -319,6 +321,12 @@ export async function farmOp(db, user, body) {
     const R = RECIPES[id];
     if (!R) bad('Receita inválida.');
     const gold = R.cost.gold || 0;
+    // 💎 Megapedra: qual Mega + 10 fragmentos dela na Mochila
+    const mg = R.out.mega ? MEGAS[String(body.mega || '')] : null;
+    if (R.out.mega && !mg) bad('Escolha qual Megapedra fabricar.');
+    const fragId = mg ? fragItemId(mg) : null;
+    const checkFrags = bag => { if (mg && ((bag || {})[fragId] || 0) < R.frags) bad(`Faltam fragmentos: precisa de ${R.frags}x ${ITEMS[fragId].name} (você tem ${(bag || {})[fragId] || 0}).`); };
+    checkFrags(p.stats?.bag);
     const check = farm => {
       if (artisanOf(farm.axp).lvl < R.lvl) bad(`Precisa ser ${ARTISAN_LEVELS[R.lvl - 1].name} (Nível de Artesão ${R.lvl}).`);
       if ((farm.jobs || []).length >= benchesFor(farm.lvl)) bad(`Todas as bancadas estão ocupadas (${benchesFor(farm.lvl)}). Suba o nível da Fazenda para ter mais.`);
@@ -328,7 +336,7 @@ export async function farmOp(db, user, body) {
     check(current(p, now)); // avisa antes de cobrar o ouro
     if (gold) { const ok = await db.walletAdd(user.id, 0, -gold); if (!ok) bad(`Ouro insuficiente: precisa de 🪙 ${gold}.`); }
     try {
-      const { prof } = await save(db, user.id, farm => {
+      const { prof } = await save(db, user.id, (farm, cur) => {
         check(farm);
         if (artisanOf(farm.axp).lvl < R.lvl) bad(`Precisa ser ${ARTISAN_LEVELS[R.lvl - 1].name} (Nível de Artesão ${R.lvl}).`);
         farm.jobs ||= [];
@@ -337,7 +345,13 @@ export async function farmOp(db, user, body) {
         for (const [k, q] of Object.entries(R.cost)) if (k !== 'gold' && (farm.res[k] || 0) < q) bad(`Faltam recursos: ${q} ${RESOURCES[k].icon} ${RESOURCES[k].name} (você tem ${farm.res[k] || 0}).`);
         for (const [k, q] of Object.entries(R.cost)) if (k !== 'gold') farm.res[k] -= q;
         if (R.week) farm.weekly = { ...(farm.weekly || {}), [id]: weekId(now) };
-        farm.jobs.push({ id: 'j' + now.toString(36) + Math.floor(Math.random() * 1e4).toString(36), recipe: id, start: now, done: now + R.hours * 3600000 });
+        farm.jobs.push({ id: 'j' + now.toString(36) + Math.floor(Math.random() * 1e4).toString(36), recipe: id, start: now, done: now + R.hours * 3600000, ...(mg ? { mega: mg.key } : {}) });
+        if (mg) { // gasta os fragmentos da Mochila
+          const bag = { ...(cur.stats?.bag || {}) };
+          checkFrags(bag);
+          bag[fragId] -= R.frags; if (!bag[fragId]) delete bag[fragId];
+          return { bag };
+        }
         return {};
       });
       const fresh = (await db.getProfile(user.id)) || prof;
@@ -356,7 +370,7 @@ export async function farmOp(db, user, body) {
       const R = RECIPES[j.recipe];
       farm.jobs = farm.jobs.filter(x => x.id !== j.id);
       farm.axp = (farm.axp || 0) + R.xp;
-      got = { recipe: j.recipe, out: R.out };
+      got = { recipe: j.recipe, out: R.out.mega ? { bag: { [`ms_${j.mega}`]: 1 } } : R.out };
       if (R.out.farm) for (const [k, q] of Object.entries(R.out.farm)) farm.items = { ...(farm.items || {}), [k]: ((farm.items || {})[k] || 0) + q };
       if (R.out.decor) farm.craftedDecor = [...new Set([...(farm.craftedDecor || []), R.out.decor])];
       return {};

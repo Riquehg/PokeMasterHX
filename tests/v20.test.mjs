@@ -539,3 +539,115 @@ test('🏡 Casinha do Companheiro: felicidade cai mais devagar, +XP no tipo dele
   assert.equal(r.farm.house, null);
   assert.equal(r.farm.companion, null);
 });
+
+// ------------------------------------------------------------------ v30 · 💎 Mega Evolução
+test('💎 Megas: 68 formas fora da Pokédex, com pedra, fragmento e status maiores', async () => {
+  const { MEGAS, MEGA_KEYS, megaFor } = await import('../shared/data/megas.js');
+  const { SPECIES_LIST } = await import('../shared/data/pokemon.js');
+  const { ITEMS, isKeepable, bringLimit } = await import('../shared/data/items.js');
+  const { computeStats } = await import('../shared/rules/monsters.js');
+  assert.equal(MEGA_KEYS.length, 68);
+  assert.deepEqual(SPECIES.mega_clefable.types, ['fairy', 'flying']);
+  assert.ok(!SPECIES_LIST.some(s => s.mega), 'Megas não entram na Pokédex/selvagens');
+  assert.deepEqual(SPECIES.mega_charizard_x.types, ['fire', 'dragon']);
+  assert.equal(SPECIES.mega_gyarados.types[1], 'dark');
+  for (const k of MEGA_KEYS) {
+    assert.ok(ITEMS[`ms_${k}`] && ITEMS[`mf_${k}`], k);
+    assert.ok(isKeepable(`ms_${k}`) && bringLimit(`ms_${k}`) === 0, 'fica na conta, não vai para a partida');
+  }
+  const a = computeStats('gengar', 40), b = computeStats('mega_gengar', 40);
+  assert.ok(b.atk > a.atk && b.spe > a.spe);
+  assert.equal(megaFor({ sp: 'gengar', held: 'ms_gengar' }).key, 'gengar');
+  assert.equal(megaFor({ sp: 'gengar', held: 'ms_alakazam' }), null);
+  assert.equal(MEGAS.charizard_y.base, 'charizard');
+});
+
+function megaDuel({ megas = true, key = true, held = 'ms_gengar' } = {}) {
+  return createMatch({ kind: 'duel', seed: 9, mode: 'online', now: 0, options: { megas },
+    players: [
+      { id: 'a', name: 'A', megaKey: key, teamMons: [{ uid: 'g1', sp: 'gengar', lvl: 40, held }, { uid: 'g2', sp: 'pikachu', lvl: 40 }] },
+      { id: 'b', name: 'B', teamMons: [{ uid: 'h1', sp: 'snorlax', lvl: 40 }] }] });
+}
+
+test('💎 Mega na batalha: ação grátis, 1 por batalha, precisa de Bracelete + pedra + sala liberada', async () => {
+  const { applyAction } = await import('../shared/engine.js');
+  let s = megaDuel();
+  const r = applyAction(s, 'a', { type: 'battle', move: 'mega' }, { now: 0 });
+  assert.equal(r.error, undefined, r.error);
+  s = r.state;
+  const g = s.players[0].team[0];
+  assert.equal(g.sp, 'mega_gengar');
+  assert.equal(g.tf.sp, 'gengar');
+  assert.equal(s.battle.round, 0, 'não gastou a rodada');
+  assert.ok(s.fx.some(f => f.k === 'mega'));
+  assert.match(applyAction(s, 'a', { type: 'battle', move: 'mega' }, { now: 0 }).error, /1 vez/);
+  assert.match(applyAction(megaDuel({ megas: false }), 'a', { type: 'battle', move: 'mega' }, { now: 0 }).error, /não está liberada/);
+  assert.match(applyAction(megaDuel({ key: false }), 'a', { type: 'battle', move: 'mega' }, { now: 0 }).error, /Bracelete/);
+  assert.match(applyAction(megaDuel({ held: null }), 'a', { type: 'battle', move: 'mega' }, { now: 0 }).error, /Megapedra/);
+});
+
+test('💎 Mega Raid: fragmentos para quem vence; Bracelete só cai lá e vira flag da conta', async () => {
+  const { grantMegaRewards, makeMegaBoss } = await import('../shared/rules/mega.js');
+  const { MEGAS } = await import('../shared/data/megas.js');
+  const { createMon } = await import('../shared/rules/monsters.js');
+  const s = createMatch({ seed: 3, mode: 'online', now: 0, players: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }] });
+  const p = s.players[0];
+  const rng = { int: (x, y) => y, chance: () => true };
+  grantMegaRewards(s, rng, p, 'gengar', true);
+  assert.equal(p.items.mf_gengar, 3);
+  assert.equal(p.items.mega_bracelet, 1);
+  assert.equal(p.megaKey, true, 'já pode usar na partida');
+  grantMegaRewards(s, rng, p, 'gengar', true);
+  assert.equal(p.items.mega_bracelet, 1, 'não cai outro');
+  const boss = makeMegaBoss(createMon(createRng(1), 'gengar', 30), MEGAS.gengar);
+  assert.equal(boss.sp, 'mega_gengar');
+  assert.equal(boss.megaBoss, 'gengar');
+});
+
+test('💎 conta: segurar/tirar Megapedra, Oficina fabrica a pedra com 10 fragmentos, Liga A/B libera Megas', async () => {
+  const { db, admin, us: [a] } = await users(1);
+  let p = await db.getProfile(a.id);
+  const ch = p.vault.find(m => m.sp === 'charizard');
+  await adminOp(db, admin, { op: 'grant_item', userId: a.id, item: 'ms_charizard_x', qty: 1 });
+  await adminOp(db, admin, { op: 'grant_item', userId: a.id, item: 'mega_bracelet' });
+  await assert.rejects(profileOp(db, a, { op: 'hold_stone', uid: p.vault.find(m => m.sp === 'gengar').uid, item: 'ms_charizard_x' }), /só funciona/);
+  let r = await profileOp(db, a, { op: 'hold_stone', uid: ch.uid, item: 'ms_charizard_x' });
+  assert.equal(r.profile.vault.find(m => m.uid === ch.uid).held, 'ms_charizard_x');
+  assert.equal(r.profile.stats.bag.ms_charizard_x, undefined);
+  assert.equal(r.profile.stats.megaBracelet, true);
+  r = await profileOp(db, a, { op: 'hold_stone', uid: ch.uid, item: null });
+  assert.equal(r.profile.vault.find(m => m.uid === ch.uid).held, undefined);
+  assert.equal(r.profile.stats.bag.ms_charizard_x, 1);
+  // Oficina: Megapedra precisa de Grão-Mestre + 10 fragmentos
+  p = await db.getProfile(a.id);
+  await db.updateProfileIf(a.id, p.rev || 0, { gold: 99999, stats: { ...p.stats, bag: { ...p.stats.bag, mf_gengar: 9 }, farm: { ...(p.stats.farm || {}), axp: 999999, res: { crystal: 50, essence: 50 } } } });
+  await assert.rejects(profileOp(db, a, { op: 'farm_craft', recipe: 'megastone', mega: 'gengar' }), /Faltam fragmentos/);
+  p = await db.getProfile(a.id);
+  await db.updateProfileIf(a.id, p.rev || 0, { stats: { ...p.stats, bag: { ...p.stats.bag, mf_gengar: 12 } } });
+  const c = await profileOp(db, a, { op: 'farm_craft', recipe: 'megastone', mega: 'gengar' });
+  assert.equal(c.profile.stats.bag.mf_gengar, 2);
+  const job = c.farm.workshop.jobs.find(j => j.recipe === 'megastone');
+  assert.equal(job.mega, 'gengar');
+  p = await db.getProfile(a.id);
+  await db.updateProfileIf(a.id, p.rev || 0, { stats: { ...p.stats, farm: { ...p.stats.farm, jobs: p.stats.farm.jobs.map(j => ({ ...j, done: 1 })) } } });
+  const got = await profileOp(db, a, { op: 'farm_claim', id: job.id });
+  assert.equal(got.profile.stats.bag.ms_gengar, 1);
+  // Liga: CPU das Séries A/B levam Megapedra
+  const { MEGA_SERIE } = await import('../shared/data/series.js');
+  assert.equal(MEGA_SERIE, 2);
+  assert.ok(botsOf(3).some(b => botTeam(b).some(m => m.held)));
+  assert.ok(!botsOf(1).some(b => botTeam(b).some(m => m.held)));
+});
+
+test('💎 sala: Megas só no modo Coleção; o treino com time leva o Bracelete para a partida', async () => {
+  const { db, admin, us: [a] } = await users(1);
+  await adminOp(db, admin, { op: 'grant_item', userId: a.id, item: 'mega_bracelet' });
+  const bal = await matchOp(db, a, { op: 'create', mode: 'balanced', megas: true });
+  assert.equal(bal.match.options.megas, false);
+  const col = await matchOp(db, a, { op: 'create', mode: 'collection', megas: true });
+  assert.equal(col.match.options.megas, true);
+  const p = await db.getProfile(a.id);
+  const solo = await matchOp(db, a, { op: 'solo', bots: 1, megas: true, teamUids: p.vault.slice(0, 2).map(m => m.uid) });
+  assert.equal(solo.match.state.options.megas, true);
+  assert.equal(solo.match.state.players.find(x => x.id === a.id).megaKey, true);
+});

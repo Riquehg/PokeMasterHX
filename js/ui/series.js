@@ -98,6 +98,7 @@ export async function openSeries(ctx, profile) {
   const rulesView = () => `<div class="small" style="line-height:1.6">
       <p>⚽ Como no Brasileirão: <b>Série D → C → B → A</b>, uma temporada por mês. Todo mundo começa na Série D.</p>
       <p>⚔️ <b>Ataque:</b> escolha um adversário da sua série e jogue um duelo 1x1 — você contra ele — com times de ${data.rules.team} Pokémon (Nv. máx. ${data.rules.cap}) contra o time de defesa dele. Vitória = <b>+3 pontos</b>. Até <b>${data.rules.daily} ataques por dia</b> e 1 contra o mesmo adversário por dia.</p>
+      <p>💎 <b>Megas:</b> nas <b>Séries B e A</b> a Mega Evolução está liberada (ataque e defesa): quem tem o 🔗 Bracelete Mega e um Pokémon segurando a Megapedra dele pode Mega Evoluir 1 vez por duelo. Os treinadores CPU dessas séries também usam Megas.</p>
       <p>🛡️ <b>Defesa:</b> quando te desafiam, o seu time de defesa joga sozinho. Segurou = <b>+1 ponto</b> (não precisa estar online).</p>
       <p>📊 Desempate: pontos, vitórias, saldo de Pokémon (derrubados − perdidos), menos jogos.</p>
       <p>🏁 <b>Entrou com a temporada andando?</b> Você começa com os <b>pontos de largada</b> (os pontos do 16º colocado no dia da inscrição), para não entrar dezenas de pontos atrás.${data.serie.start ? ` Você recebeu <b>${data.serie.start}</b>.` : ''}</p>

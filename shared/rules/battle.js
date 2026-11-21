@@ -13,7 +13,8 @@ import { getCompanion, isIntimate, ASSIST_CHANCE, ASSIST_MAX } from '../data/com
 import { weatherMult, weatherInflict, weatherChip, weatherOf } from './weather.js';
 import { conquestMult } from './modeBonus.js';
 import { GYMS } from '../data/trainers.js';
-import { statsOf, maxHpOf, gainXp, xpReward, healMon, canTransform, transformInto, revertForm } from './monsters.js';
+import { statsOf, maxHpOf, gainXp, xpReward, healMon, canTransform, transformInto, revertForm, megaEvolveMon } from './monsters.js';
+import { megaFor } from '../data/megas.js';
 import {
   fail, getPlayer, log, fx, takeItem, giveMon, markSeen, healthyIndex, hasHealthy, speciesName, canUse, usableIndex, badgesNeeded
 } from './helpers.js';
@@ -196,6 +197,7 @@ function validateChoice(state, si, choice) {
     }
     case 'ball': {
       if (b.kind !== 'wild') fail('Só dá para capturar Pokémon selvagens.');
+      if (sideActive(state, b.sides[1 - si])?.megaBoss) fail('Esse Pokémon está cheio de energia Mega — não dá para capturar. Vença para ganhar fragmentos!');
       const it = getItem(choice.item);
       if (!it || it.kind !== 'ball') fail('Escolha uma Pokébola.');
       if (!(player.items[choice.item] > 0)) fail('Você não tem essa Pokébola.');
@@ -204,6 +206,11 @@ function validateChoice(state, si, choice) {
     case 'flee':
       if (b.kind === 'elite' || b.kind === 'champion' || b.kind === 'gym') fail('Não dá para fugir de uma batalha oficial.');
       return;
+    case 'mega': { // 💎 Mega Evolução
+      const why = megaBlock(state, si);
+      if (why) fail(why);
+      return;
+    }
     case 'form': { // 🧬 Ditto/Mew: voltar à forma, usar uma forma guardada ou guardar a forma atual
       const me = team[side.active];
       if (!canTransform(me)) fail('Esse Pokémon não se transforma.');
@@ -243,6 +250,9 @@ export function submitChoice(state, rng, pid, choice) {
     return;
   }
   if (b.mustSwitch.some(Boolean)) fail('Aguardando o adversário escolher o próximo Pokémon.');
+
+  // 💎 Mega Evolução: ação grátis (não gasta a rodada), 1 por batalha
+  if (choice.move === 'mega') { doMega(state, si); return; }
 
   // guardar/esquecer forma não gasta a rodada
   if (choice.move === 'form' && (choice.op === 'store' || choice.op === 'forget')) {
@@ -685,9 +695,40 @@ function companionAssist(state, rng, si) {
   return false;
 }
 
+/** Por que este lado NÃO pode Mega Evoluir agora? (null = pode) */
+export function megaBlock(state, si) {
+  const b = state.battle;
+  const side = b?.sides[si];
+  if (!side || side.kind !== 'player') return 'Só treinadores Mega Evoluem.';
+  if (!state.options?.megas) return 'Mega Evolução não está liberada nesta partida.';
+  const player = getPlayer(state, side.pid);
+  if (!player?.megaKey) return 'Você precisa do 🔗 Bracelete Mega (cai em Mega Raids).';
+  if (side.megaUsed) return 'Só dá para Mega Evoluir 1 vez por batalha.';
+  const me = sideTeam(state, side)[side.active];
+  if (!me || me.hp <= 0) return 'Pokémon inválido.';
+  if (!megaFor(me)) return 'Esse Pokémon não está segurando a Megapedra dele.';
+  return null;
+}
+function doMega(state, si) {
+  const b = state.battle;
+  const side = b.sides[si];
+  const me = sideTeam(state, side)[side.active];
+  const m = megaFor(me);
+  const from = speciesName(me.sp);
+  megaEvolveMon(me, m.sp);
+  side.megaUsed = true;
+  log(state, `💎 ${getPlayer(state, side.pid).name}: o ${from} reagiu à ${getItem(me.held)?.name || 'Megapedra'} e Mega Evoluiu em ${speciesName(me.sp)}!`, 'shiny');
+  fx(state, { k: 'mega', side: si, uid: me.uid, from: m.base, to: me.sp, hpAfter: me.hp, maxHp: maxHpOf(me) });
+}
+
 function resolveRound(state, rng, choices) {
   const b = state.battle;
   b.round += 1;
+  // CPU com Bracelete Mega evolui assim que puder
+  for (let si = 0; si < 2; si++) {
+    const sd = b.sides[si];
+    if (sd.kind === 'player' && getPlayer(state, sd.pid)?.isBot && !megaBlock(state, si)) doMega(state, si);
+  }
 
   // 1) ações rápidas (troca, item, bola, fuga) — na ordem dos lados
   for (let si = 0; si < 2; si++) {

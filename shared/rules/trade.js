@@ -23,6 +23,7 @@ function cleanSide(p, side, label) {
     const n = Math.floor(Number(q) || 0);
     if (n <= 0) continue;
     if (!ITEMS[id]) fail('Item inválido na troca.');
+    if (ITEMS[id].kind === 'key') fail('O Bracelete Mega não pode ser trocado.');
     out.items[id] = Math.min(n, 99);
   }
   if (out.mon) {

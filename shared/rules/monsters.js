@@ -30,7 +30,7 @@ export function computeStats(speciesId, level, shiny = false, nature = null, iv 
   return {
     maxHp: Math.max(8, Math.round(sp.hp * (1 + 0.07 * (L - 1)) * s * natureMult(nature, 'hp') * ivMult(v.hp))),
     atk: Math.max(2, Math.round(sp.str * (1 + 0.06 * (L - 1)) * s * natureMult(nature, 'atk') * ivMult(v.atk))),
-    spe: Math.round(L * 10 * (shiny ? 1.1 : 1) * natureMult(nature, 'spe') * ivMult(v.spe))
+    spe: Math.round(L * 10 * (shiny ? 1.1 : 1) * (sp.speMult || 1) * natureMult(nature, 'spe') * ivMult(v.spe))
   };
 }
 
@@ -89,6 +89,12 @@ export function transformInto(mon, sp, moves) {
   mon.moves = Array.isArray(moves) && moves.length === 2 ? [...moves] : null;
   mon.hp = mon.hp <= 0 ? 0 : Math.max(1, Math.round(maxHpOf(mon) * ratio));
 }
+/** 💎 Mega Evolução: vira a forma Mega (mantém golpes e a % de HP). Volta no fim da batalha (revertForm). */
+export function megaEvolveMon(mon, megaSp) {
+  transformInto(mon, megaSp, Array.isArray(mon.moves) ? mon.moves : null);
+  if (!Array.isArray(mon.tf.moves)) mon.moves = null;
+  mon.mega = true;
+}
 /** Volta à forma original. */
 export function revertForm(mon) {
   if (!mon?.tf) return false;
@@ -97,6 +103,7 @@ export function revertForm(mon) {
   mon.sp = mon.tf.sp;
   mon.moves = mon.tf.moves;
   delete mon.tf;
+  delete mon.mega;
   mon.hp = mon.hp <= 0 ? 0 : Math.max(1, Math.round(maxHpOf(mon) * ratio));
   return true;
 }

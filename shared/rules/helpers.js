@@ -49,11 +49,13 @@ export function takeItem(player, itemId, qty = 1) {
 }
 
 export function markSeen(player, speciesId, shiny = false) {
+  if (String(speciesId).startsWith('mega_')) speciesId = getSpecies(speciesId)?.megaBase || speciesId; // 💎 Mega conta como a forma base
   if (!player.seen.includes(speciesId)) player.seen.push(speciesId);
   if (shiny) { const l = (player.shinySeen ||= []); if (!l.includes(speciesId)) l.push(speciesId); }
 }
 
 export function markCaught(player, speciesId, shiny = false) {
+  if (String(speciesId).startsWith('mega_')) speciesId = getSpecies(speciesId)?.megaBase || speciesId;
   markSeen(player, speciesId, shiny);
   if (!player.caught.includes(speciesId)) player.caught.push(speciesId);
   if (shiny) { const l = (player.shinyCaught ||= []); if (!l.includes(speciesId)) l.push(speciesId); }

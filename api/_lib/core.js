@@ -16,6 +16,7 @@ import { dailyPokemon } from '../../shared/daily.js';
 import { cleanNick } from '../../shared/data/cosmetics.js';
 import { ITEMS, isKeepable, cleanBring, BAG_MAX_PER_ITEM, STARTING_ITEMS } from '../../shared/data/items.js';
 import { tmMovesFor, defaultMoveIds, MOVES } from '../../shared/data/moves.js';
+import { MEGAS, megaByStone } from '../../shared/data/megas.js';
 import { bondLevel, bondGain, BOND_MAX, COMPANIONS } from '../../shared/data/companions.js';
 import { equippedCosmetic, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment } from './shop.js';
 
@@ -212,6 +213,26 @@ export async function profileOp(db, user, body) {
       bag.tm -= 1; if (!bag.tm) delete bag.tm;
       st.bag = bag;
       return { stats: st, vault: cur.vault.map(x => (x.uid === body.uid ? { ...x, moves: [moves[0], mv] } : x)) };
+    })) };
+  }
+  if (body.op === 'hold_stone') { // 💎 segurar/tirar a Megapedra de um Pokémon da Coleção (a pedra sai/volta da Mochila)
+    const item = body.item ? String(body.item) : null;
+    return { profile: await withCosmetic(db, await mutateProfile(db, user.id, cur => {
+      const st = { ...(cur.stats || {}) };
+      const bag = { ...(st.bag || {}) };
+      const m = (cur.vault || []).find(x => x.uid === body.uid);
+      if (!m) bad('Pokémon não encontrado na Coleção.');
+      if (item) {
+        const mg = megaByStone(ITEMS[item]?.kind === 'megastone' ? MEGAS[ITEMS[item].mega]?.stone : null);
+        if (!mg) bad('Isso não é uma Megapedra.');
+        if (mg.base !== m.sp) bad(`A ${ITEMS[item].name} só funciona com ${getSpecies(mg.base)?.name || mg.base}.`);
+        if (m.held === item) bad('Ele já está segurando essa pedra.');
+        if (!(bag[item] > 0)) bad('Você não tem essa Megapedra na Mochila.');
+        bag[item] -= 1; if (!bag[item]) delete bag[item];
+      } else if (!m.held) bad('Ele não está segurando nada.');
+      if (m.held) bag[m.held] = Math.min(BAG_MAX_PER_ITEM, (bag[m.held] || 0) + 1); // a pedra antiga volta para a Mochila
+      st.bag = bag;
+      return { stats: st, vault: cur.vault.map(x => (x.uid === body.uid ? { ...x, held: item || undefined } : x)) };
     })) };
   }
   if (body.op === 'restore') { // recuperar um Pokémon que saiu por falta de espaço
@@ -464,7 +485,7 @@ export async function listRooms(db, user) {
   const mine = mineAll.filter(r => (r.status === 'lobby' ? ageMin(r) <= LOBBY_CLOSE_MIN : ageMin(r) <= PLAYING_CLOSE_MIN || ['duel', 'cup'].includes(r.options?.mode)));
   const brief = r => ({
     id: r.id, code: r.code, name: r.name, status: r.status, hasPin: !!r.has_pin,
-    mode: r.options?.mode || 'balanced', levelCap: r.options?.levelCap || 0, turnLimit: r.options?.turnLimit || 0, rules: r.options?.rules || 'classic', map: r.options?.map || 'kanto', hardcore: !!r.options?.hardcore,
+    mode: r.options?.mode || 'balanced', levelCap: r.options?.levelCap || 0, turnLimit: r.options?.turnLimit || 0, rules: r.options?.rules || 'classic', map: r.options?.map || 'kanto', hardcore: !!r.options?.hardcore, megas: !!r.options?.megas,
     players: (r.lobby || []).filter(e => !e.left).length, maxPlayers: r.options?.maxPlayers || 4,
     host: (r.lobby || []).find(e => e.id === r.host_id)?.name || '?', updatedAt: r.updated_at
   });
@@ -513,6 +534,9 @@ function normalizeOptions(body, prev = {}) {
   if (body.hardcore !== undefined) o.hardcore = !!body.hardcore;
   if (['duel', 'cup', 'duel_queue'].includes(o.mode)) o.hardcore = false;
   o.hardcore = !!o.hardcore;
+  // 💎 Megas: só no modo personalizado (Coleção, onde os Pokémon seguram Megapedras)
+  if (body.megas !== undefined) o.megas = !!body.megas;
+  o.megas = !!o.megas && o.mode === 'collection';
   // entrar no meio da partida (online): ligado por padrão, menos no Battle Royale e no competitivo
   if (body.lateJoin !== undefined) o.allowLate = !!body.lateJoin;
   o.allowLate = o.allowLate !== false;
@@ -631,6 +655,7 @@ async function playerCfg(db, e, options) {
   const p = { id: e.id, name: e.name, avatar: e.avatar, isBot: e.isBot, starter: e.starter };
   const prof = e.isBot ? null : await db.getProfile(e.id);
   if (prof) { try { p.cosmetic = await equippedCosmetic(db, prof); } catch { /* sem cosmético */ } }
+  if (prof?.stats?.megaBracelet) p.megaKey = true; // 🔗 Bracelete Mega (ícone no peão; Mega só se a sala permitir)
   if (prof) { // companheiros da conta + nível de laço de cada um
     p.companions = prof.stats?.companions || []; p.companion = prof.stats?.companion || null;
     p.companionBond = Object.fromEntries(Object.entries(prof.stats?.companionBond || {}).map(([id, pts]) => [id, bondLevel(pts)]));
@@ -699,7 +724,7 @@ async function startRoom(db, row, lobby, userId) {
   }
   const state = createMatch({
     id: row.id, mode: 'online', seed: randomSeed(), now: Date.now(), players, map: options.map, mapData: await mapDataFor(db, options.map), rules: options.rules,
-    options: { dailyPokemon: await currentDaily(db), turnLimit: options.turnLimit || 0, trades: mode !== 'ranked', hardcore: !!options.hardcore }
+    options: { dailyPokemon: await currentDaily(db), turnLimit: options.turnLimit || 0, trades: mode !== 'ranked', hardcore: !!options.hardcore, megas: !!options.megas }
   });
   state.roomMode = mode;
   const res = await save(db, row, { status: state.status === 'finished' ? 'finished' : 'playing', state, options }, userId);
@@ -711,7 +736,7 @@ async function createRoom(db, user, body) {
   const profile = await getOrCreateProfile(db, user);
   await leaveOldLobbies(db, user);
   const name = cleanName(body.name, `Sala de ${profile.trainer_name}`).slice(0, 30);
-  const options = normalizeOptions({ mode: body.mode, maxPlayers: body.maxPlayers, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap, map: body.map, rules: body.rules, hardcore: !!body.hardcore });
+  const options = normalizeOptions({ mode: body.mode, maxPlayers: body.maxPlayers, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap, map: body.map, rules: body.rules, hardcore: !!body.hardcore, megas: !!body.megas });
   if (options.mode === 'solo') options.mode = 'balanced';
   const pin = String(body.pin || '').replace(/\D/g, '').slice(0, 6);
   const row = await insertRoom(db, user, { name, options, isPublic: body.isPublic !== false, pin, lobby: [lobbyEntry(profile, body)] });
@@ -742,7 +767,7 @@ async function createSolo(db, user, body) {
   await leaveOldLobbies(db, user);
   const bots = Math.max(1, Math.min(5, Number(body.bots) || 1));
   const useCollection = Array.isArray(body.teamUids) && body.teamUids.length > 0;
-  const options = normalizeOptions({ mode: useCollection ? 'collection' : 'balanced', maxPlayers: bots + 1, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap || 0, map: body.map, rules: body.rules, hardcore: !!body.hardcore });
+  const options = normalizeOptions({ mode: useCollection ? 'collection' : 'balanced', maxPlayers: bots + 1, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap || 0, map: body.map, rules: body.rules, hardcore: !!body.hardcore, megas: !!body.megas });
   const entry = lobbyEntry(profile, body);
   if (useCollection) {
     const owned = new Set((profile.vault || []).map(v => v.uid));
@@ -992,7 +1017,8 @@ export async function recordResults(db, state, options = {}) {
       const merged = { ...base, ...fresh, companions: base.companions || fresh.companions, companion: base.companion ?? fresh.companion,
         shinyDex: base.shinyDex || fresh.shinyDex, shinySeen: base.shinySeen || fresh.shinySeen, overflow: base.overflow || fresh.overflow,
         vaultBonus: base.vaultBonus || fresh.vaultBonus, nicknames: base.nicknames || fresh.nicknames, bag: addToBag(base.bag, keep),
-        serie: base.serie ?? fresh.serie, trophies: base.trophies ?? fresh.trophies };
+        serie: base.serie ?? fresh.serie, trophies: base.trophies ?? fresh.trophies,
+        ...(base.megaBracelet || (p.items?.mega_bracelet > 0 && !p.hardcoreLost) ? { megaBracelet: true } : {}) }; // 🔗 Bracelete Mega (só cai em Mega Raid)
       return { ...patch, stats: merged, points: calcPoints(cur.pokedex || [], merged) };
     });
     // Hardcore: quem caiu não leva nada (nem o ouro trazido); quem sobreviveu ganha o dobro de ouro da conta
@@ -1073,7 +1099,7 @@ export async function adminOp(db, user, body) {
       return { users: rows.map(r => ({ id: r.id, name: r.trainer_name, points: r.points, rating: r.rating ?? START_RATING, diamonds: r.diamonds || 0, isAdmin: r.is_admin, pokedex: (r.pokedex || []).length, vault: (r.vault || []).length })) };
     }
     case 'grant_mon': {
-      if (!SPECIES[body.species]) bad('Espécie inválida.');
+      if (!SPECIES[body.species] || SPECIES[body.species].mega) bad('Espécie inválida.');
       const ok = await mutateProfile(db, body.userId, prof => {
         const vault = [...(prof.vault || [])];
         vault.unshift({ uid: 'adm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), sp: body.species, lvl: Math.max(1, Math.min(60, Number(body.level) || 5)), shiny: !!body.shiny, aura: null, from: 'admin', at: new Date().toISOString() });
@@ -1083,6 +1109,11 @@ export async function adminOp(db, user, body) {
       return { ok: true };
     }
     case 'grant_item': { // 🎒 prêmio de evento: item na Mochila da conta
+      if (body.item === 'mega_bracelet') { // 🔗 Bracelete Mega (prêmio de evento do admin)
+        const ok = await mutateProfile(db, body.userId, prof => ({ stats: { ...(prof.stats || {}), megaBracelet: true } }));
+        if (!ok) notFound('Usuário não encontrado.');
+        return { ok: true };
+      }
       if (!isKeepable(body.item)) bad('Só dá para dar Pokébolas, Amuleto Shiny e TM.');
       const qty = Math.max(1, Math.min(99, Math.floor(Number(body.qty) || 1)));
       const ok = await mutateProfile(db, body.userId, prof => ({ stats: { ...(prof.stats || {}), bag: addToBag(prof.stats?.bag, { [body.item]: qty }) } }));

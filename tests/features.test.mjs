@@ -136,7 +136,7 @@ test('casas Amarelas só têm eventos especiais; Raid só nas Azuis e Vermelhas'
 test('Raid: chefe lendário com HP extra, sem pokébolas, vitória dá prêmio e tentativa de captura', () => {
   let s = game(31);
   const p = s.players[0];
-  p.team = Array.from({ length: 6 }, (_, i) => createMon(createRng(i + 1), 'mewtwo', 60, { starter: true }));
+  p.team = Array.from({ length: 6 }, (_, i) => createMon(createRng(i + 1), i < 3 ? 'lucario' : 'mewtwo', 60, { starter: true }));
   p.items.ultra_ball = 0;
   s.players[1].team.forEach(m => { m.hp = 0; }); // ninguém mais pode entrar: Raid solo
   s = _internals.boardEvent(s, 'ash', eventSpace(4), 'raid');
@@ -158,7 +158,7 @@ test('Raid: chefe lendário com HP extra, sem pokébolas, vitória dá prêmio e
   const r = applyAction(s, 'ash', { type: 'raid', op: 'catch', ball: 'master_ball' }, { now: T0 });
   assert.equal(r.error, undefined, r.error);
   assert.equal(r.state.raid, null);
-  assert.ok([...r.state.players[0].team, ...r.state.players[0].box].some(m => m.sp === boss.sp));
+  assert.ok([...r.state.players[0].team, ...r.state.players[0].box].some(m => m.sp === (getSpecies(boss.sp).megaBase || boss.sp)));
 });
 
 test('eventos especiais: Chuva de Estrelas traz Pokémon forte (shiny só às vezes); Tesouro dá ouro e itens', () => {

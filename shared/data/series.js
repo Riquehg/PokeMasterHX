@@ -1,3 +1,4 @@
+import { megaBySpecies } from './megas.js';
 // ⚽ Liga das Séries (estilo Brasileirão): Série D → C → B → A, temporada mensal.
 // Assíncrona: cada treinador inscreve um TIME DE DEFESA (6 Pokémon da Coleção). Os outros desafiam esse time
 // num duelo 1x1 contra a CPU que joga com ele — não precisa ninguém estar online.
@@ -139,9 +140,16 @@ export const botById = id => {
 };
 
 /** Time de defesa de um treinador CPU (nível da série). */
+export const MEGA_SERIE = 2; // 💎 Megas liberadas da Série B (2) para cima
 export function botTeam(bot) {
   const lvl = SERIES[bot.div].level;
-  return bot.team.map((sp, i) => ({ uid: `${bot.id}_${i}`, sp, lvl }));
+  const team = bot.team.map((sp, i) => ({ uid: `${bot.id}_${i}`, sp, lvl }));
+  // Séries A/B: o treinador CPU leva a Megapedra do primeiro Pokémon do time que tem Mega
+  if (bot.div >= MEGA_SERIE) {
+    const m = team.find(x => megaBySpecies(x.sp).length);
+    if (m) { const opts = megaBySpecies(m.sp); m.held = `ms_${opts[hash(bot.id) % opts.length].key}`; }
+  }
+  return team;
 }
 
 /** Campanha simulada do treinador CPU até o dia `days` da temporada (determinística). adj = resultados reais contra treinadores. */

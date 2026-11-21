@@ -1,6 +1,6 @@
 // ⚽ Liga das Séries no servidor: inscrição (time de defesa), tabela, desafios e fechamento da temporada.
 // Os duelos usam createDuelMatch (o defensor vira uma CPU jogando com o time dele).
-import { SERIES, TOP_SERIE, SERIE_TEAM, SERIE_LEVEL_CAP, SERIE_DAILY, SERIE_SAME_FOE, SERIE_UP, SERIE_DOWN, SERIE_PRIZE, SERIE_ITEMS, SERIE_SLOTS,
+import { MEGA_SERIE, SERIES, TOP_SERIE, SERIE_TEAM, SERIE_LEVEL_CAP, SERIE_DAILY, SERIE_SAME_FOE, SERIE_UP, SERIE_DOWN, SERIE_PRIZE, SERIE_ITEMS, SERIE_SLOTS,
   newSerie, cleanTeam, lateStartPoints, seasonId, seasonName, dayId, serieTable, botById, botTeam, applySerieDuel, zoneOf, serieInfo, trophyLabel } from '../../shared/data/series.js';
 import { ITEMS } from '../../shared/data/items.js';
 import { MYTHICAL, SPECIES } from '../../shared/data/pokemon.js';
@@ -234,20 +234,20 @@ async function challenge(db, user, prof, serie, body, now) {
   const bot = botById(target);
   if (bot) {
     if (bot.div !== serie.div) bad('Esse treinador não está na sua série nesta temporada.');
-    foe = { id: `${CPU_PREFIX}${bot.id}`, name: `${bot.club.name} (${bot.name})`, avatar: bot.avatar, cosmetic: bot.skin ? { skin: bot.skin } : null, isBot: true, teamMons: botTeam(bot), ref: bot.id };
+    foe = { id: `${CPU_PREFIX}${bot.id}`, name: `${bot.club.name} (${bot.name})`, avatar: bot.avatar, cosmetic: bot.skin ? { skin: bot.skin } : null, isBot: true, teamMons: botTeam(bot), ref: bot.id, megaKey: bot.div >= MEGA_SERIE };
   } else {
     const other = await db.getProfile(target);
     const os = other?.stats?.serie;
     if (!other || os?.season !== serie.season || (os.div | 0) !== serie.div) bad('Esse treinador não está na sua série nesta temporada.');
     const team = teamFrom(other.vault || [], os.defense || []);
     if (!team.length) bad('Esse treinador está sem time de defesa.');
-    foe = { id: `${CPU_PREFIX}${other.id.slice(0, 12)}`, name: `${os.team?.name || other.trainer_name + ' FC'} (${other.trainer_name})`, avatar: other.avatar || 1, cosmetic: await equippedCosmetic(db, other).catch(() => null), isBot: true, teamMons: team, ref: other.id };
+    foe = { id: `${CPU_PREFIX}${other.id.slice(0, 12)}`, name: `${os.team?.name || other.trainer_name + ' FC'} (${other.trainer_name})`, avatar: other.avatar || 1, cosmetic: await equippedCosmetic(db, other).catch(() => null), isBot: true, teamMons: team, ref: other.id, megaKey: !!other.stats?.megaBracelet };
   }
   // gasta o ataque ao começar (sair no meio não devolve)
   serie = { ...serie, dayCount: serie.dayCount + 1, foesToday: [...(serie.foesToday || []), target] };
   await saveSerie(db, user.id, serie);
-  const me = { id: user.id, name: serie.team?.name || prof.trainer_name, avatar: prof.avatar || 1, cosmetic: await equippedCosmetic(db, prof).catch(() => null), teamMons: myTeam };
-  const row = await createDuelMatch(db, {
+  const me = { id: user.id, name: serie.team?.name || prof.trainer_name, avatar: prof.avatar || 1, cosmetic: await equippedCosmetic(db, prof).catch(() => null), teamMons: myTeam, megaKey: !!prof.stats?.megaBracelet };
+  const row = await createDuelMatch(db, { megas: serie.div >= MEGA_SERIE, // 💎 Megas liberadas nas Séries A e B
     name: `⚽ ${serieInfo(serie.div).name}: ${me.name} x ${foe.name}`, a: me, b: foe, hostId: user.id,
     options: { mode: 'duel', serie: { season: serie.season, div: serie.div, attacker: user.id, defender: foe.ref } }
   });

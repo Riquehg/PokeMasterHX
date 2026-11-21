@@ -1,3 +1,5 @@
+import { MEGAS } from './megas.js';
+import { SPECIES } from './pokemon.js';
 // Itens. Só entra aqui o que tem efeito implementado no motor (shared/engine.js).
 // minTier: a partir de que tier de cidade o item aparece na loja (0 = não vende).
 // image: arquivo dentro do bucket "sprites/items/" do Supabase (fallback no front se não existir).
@@ -59,13 +61,20 @@ export const STARTING_ITEMS = { poke_ball: 5, potion: 2 };
 // O que sobra na mochila no fim de uma partida salva vai para a Mochila da conta — mas só itens que não
 // desequilibram o começo de uma partida (Pokébolas, Amuleto Shiny e TM). Poções, Revive, X Attack, doces,
 // pedras e itens de tabuleiro são da partida e somem no fim.
-export const KEEP_KINDS = ['ball', 'charm', 'tm'];
+// 💎 Megapedras e Fragmentos (geradas da lista de Megas). Ficam na Mochila da conta e podem ir ao Mercado; não vão para a partida.
+for (const m of Object.values(MEGAS)) {
+  ITEMS[`ms_${m.key}`] = { name: m.stoneName, kind: 'megastone', price: 0, minTier: 0, image: `megastones/${m.stone}.png`, mega: m.key, desc: `Megapedra: segurada por ${SPECIES[m.base]?.name || m.base}, deixa virar ${m.name} na batalha (precisa do 🔗 Bracelete Mega).` };
+  ITEMS[`mf_${m.key}`] = { name: `Fragmento de ${m.stoneName}`, kind: 'fragment', price: 0, minTier: 0, image: `megastones/${m.stone}.png`, mega: m.key, desc: `10 fragmentos + recursos na 🔨 Oficina viram a ${m.stoneName}. Vêm de Mega Raids e de encontros com energia Mega.` };
+}
+ITEMS.mega_bracelet = { name: 'Bracelete Mega', kind: 'key', price: 0, minTier: 0, image: 'mega-bracelet.png', desc: 'Permite Mega Evoluir. Só cai em Mega Raids (raríssimo) e não pode ser trocado.' };
+
+export const KEEP_KINDS = ['ball', 'charm', 'tm', 'megastone', 'fragment'];
 export const isKeepable = id => !!ITEMS[id] && KEEP_KINDS.includes(ITEMS[id].kind);
 export const BAG_MAX_PER_ITEM = 99;
 /** Quanto de cada item dá para levar para uma partida (modo Coleção). */
 export function bringLimit(id) {
   const it = ITEMS[id];
-  if (!it || !isKeepable(id)) return 0;
+  if (!it || !isKeepable(id) || it.kind === 'megastone' || it.kind === 'fragment') return 0;
   if (id === 'master_ball') return 1;
   if (it.kind === 'charm') return 1;
   if (it.kind === 'tm') return 3;

@@ -14,7 +14,7 @@ const vicOf = (s, pid) => s?.players?.find(x => x.id === pid)?.cosmetic?.victory
 import * as M from './modals.js';
 import { renderTrades } from './trade.js';
 import { badgeStatus } from './board.js';
-import { badgeUrl } from '../config.js';
+import { badgeUrl, itemUrl } from '../config.js';
 import { missionsHtml, companionHtml, openCompanionPicker, companionImg, bondBadge } from './missions.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
 import { renderRaid } from './raid.js';
@@ -25,7 +25,7 @@ import { WeatherLayer, weatherChipHtml } from './weather.js';
 import { WEATHERS } from '../../shared/rules/weather.js';
 import { GAME_RULES, stormAt, ownerOf, citiesOf, GARRISON_MAX, alivePlayers } from '../../shared/rules/modes.js';
 
-const BATTLE_FX = new Set(['transform', 'assist', 'hit', 'heal', 'faint', 'switch', 'status', 'status_dmg', 'status_skip', 'status_cure', 'buff', 'debuff', 'weather_dmg']);
+const BATTLE_FX = new Set(['mega', 'transform', 'assist', 'hit', 'heal', 'faint', 'switch', 'status', 'status_dmg', 'status_skip', 'status_cure', 'buff', 'debuff', 'weather_dmg']);
 const SPEEDS = [[1, '🎬 Animações: normal'], [2, '⚡ Animações: rápidas'], [0, '⏭️ Animações: desligadas']];
 
 export function mountGame(root, session, opts = {}) {
@@ -513,7 +513,7 @@ export function mountGame(root, session, opts = {}) {
     root.querySelector('#g-players').innerHTML = s.players.map((pl, i) => `
       <div class="list-item" data-act="trainer" data-pid="${esc(pl.id)}" style="cursor:pointer;${s.current === i ? 'border-color:' + playerColor(s, pl.id) : ''}">
         ${avatarImg(pl, 'avatar sm', playerColor(s, pl.id))}
-        <div class="grow"><b style="color:${playerColor(s, pl.id)}">${esc(pl.name)}</b>${pl.companion && COMPANIONS[pl.companion] ? ` <span class="chip ${(pl.bond?.[pl.companion] || 1) >= 10 ? 'intimate-chip' : ''}">${COMPANIONS[pl.companion].icon} ${esc(COMPANIONS[pl.companion].name)}${(pl.bond?.[pl.companion] || 1) >= 10 ? ' ❤️' : ` · Nv.${pl.bond?.[pl.companion] || 1}`}</span>` : ''}${pl.isBot ? ' <span class="chip">CPU</span>' : ''}${pl.left ? ' <span class="chip red">saiu</span>' : ''}${pl.kicked ? ' <span class="chip red">🚫 removido</span>' : pl.out ? ` <span class="chip red">💀 ${s.rules === 'royale' ? pl.place + 'º' : 'fora'}</span>` : ''}${pl.lateJoin ? ' <span class="chip green" title="Entrou no meio da partida">🙋</span>' : ''}${s.rules === 'conquest' ? ` <span class="chip">🏰 ${citiesOf(s, pl.id)}</span>` : ''}${pl.cosmetic?.title ? `<div class="player-title">${esc(pl.cosmetic.title)}</div>` : ''}
+        <div class="grow"><b style="color:${playerColor(s, pl.id)}">${esc(pl.name)}</b>${pl.companion && COMPANIONS[pl.companion] ? ` <span class="chip ${(pl.bond?.[pl.companion] || 1) >= 10 ? 'intimate-chip' : ''}">${COMPANIONS[pl.companion].icon} ${esc(COMPANIONS[pl.companion].name)}${(pl.bond?.[pl.companion] || 1) >= 10 ? ' ❤️' : ` · Nv.${pl.bond?.[pl.companion] || 1}`}</span>` : ''}${pl.megaKey ? ` <span class="chip purple" title="🔗 Bracelete Mega${s.options?.megas ? ' — pode Mega Evoluir nesta partida' : ''}"><img class="chip-ic" src="${itemUrl('mega_bracelet')}" alt="">Mega</span>` : ''}${pl.isBot ? ' <span class="chip">CPU</span>' : ''}${pl.left ? ' <span class="chip red">saiu</span>' : ''}${pl.kicked ? ' <span class="chip red">🚫 removido</span>' : pl.out ? ` <span class="chip red">💀 ${s.rules === 'royale' ? pl.place + 'º' : 'fora'}</span>` : ''}${pl.lateJoin ? ' <span class="chip green" title="Entrou no meio da partida">🙋</span>' : ''}${s.rules === 'conquest' ? ` <span class="chip">🏰 ${citiesOf(s, pl.id)}</span>` : ''}${pl.cosmetic?.title ? `<div class="player-title">${esc(pl.cosmetic.title)}</div>` : ''}
           <div class="tiny muted">📍 ${esc(getSpace(pl.pos).name)} · 🪙 ${pl.gold} · 🎖️ ${pl.badges.length} · 📖 ${pl.caught.length}${pl.eliteStage ? ` · 👑 ${pl.eliteStage}/4` : ''}${pl.skip ? ' · ⏸️' : ''}</div></div>
         <div class="row" style="gap:2px">${pl.team.slice(0, 6).map(m => `<img src="${monSprite(m)}" alt="${esc(speciesName(m.sp))}" style="width:24px;height:24px;object-fit:contain;${m.hp <= 0 ? 'filter:grayscale(1);opacity:.5' : ''}">`).join('')}</div>
         ${canKick(s, pl) ? `<button class="btn sm red kick-btn" data-act="kick" data-pid="${esc(pl.id)}" title="Remover da partida (o anfitrião não precisa esperar a CPU)">🚫</button>` : ''}
@@ -597,6 +597,7 @@ export function mountGame(root, session, opts = {}) {
 
   const battleHandlers = {
     'b-attack': d => { ui.battleSub = null; act({ type: 'battle', move: 'attack', slot: Number(d.slot || 0) }); },
+    'b-mega': () => act({ type: 'battle', move: 'mega' }),
     'b-form': d => { if (d.op === 'forget' && !confirm('Esquecer esta forma guardada?')) return; act({ type: 'battle', move: 'form', op: d.op, i: Number(d.i || 0) }); },
     'b-sub': d => { ui.battleSub = ui.battleSub === d.sub ? null : d.sub; renderBattle(S()); },
     'b-switch': d => { ui.battleSub = null; act({ type: 'battle', move: 'switch', index: Number(d.index) }); },

@@ -1,6 +1,7 @@
 // Configuração do front. O endereço dos sprites é o Storage público do seu Supabase (mesmo do projeto original).
 import { getSpecies } from '../shared/data/pokemon.js';
 import { ITEMS } from '../shared/data/items.js';
+import { MEGAS } from '../shared/data/megas.js';
 import { TYPE_LABELS, TYPE_COLORS } from '../shared/rules/types.js';
 
 export const CFG = {
@@ -29,6 +30,11 @@ const NORMAL_DIRS = ['monsters/', 'normal/', 'pokemon/'];
 export function spriteCandidates(spId, shiny) {
   const s = getSpecies(spId);
   if (!s) return [];
+  // 💎 forma Mega: megas/<arquivo>.png (shiny: megas/shiny/<arquivo>.png); sem imagem → sprite da forma base
+  if (s.mega) {
+    const file = MEGAS[s.mega]?.file;
+    return [...(shiny ? [`megas/shiny/${file}.png`] : []), `megas/${file}.png`, ...spriteCandidates(s.megaBase, shiny)];
+  }
   const dirs = shiny ? SHINY_DIRS : NORMAL_DIRS;
   const out = [];
   for (const d of dirs) out.push(`${d}${pad(s.dex)}.png`);
@@ -51,7 +57,7 @@ export function monSprite(spOrMon, shiny) {
   const isShiny = !!(typeof spOrMon === 'string' ? shiny : spOrMon.shiny);
   const list = spriteCandidates(id, isShiny);
   if (!list.length) return '';
-  const i = Math.min(preferred(isShiny), list.length - 1);
+  const i = String(id).startsWith('mega_') ? 0 : Math.min(preferred(isShiny), list.length - 1);
   return `${CFG.sprites}${list[i]}#${isShiny ? 's' : 'n'}:${id}:${i}`;
 }
 

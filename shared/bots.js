@@ -130,7 +130,7 @@ function battleAction(state, p) {
     if (myMult <= 0.5 && moveMatchup(cand, foe) >= 2) return { type: 'battle', move: 'switch', index: sw0 };
   }
 
-  if (b.kind === 'wild') {
+  if (b.kind === 'wild' && !foe.megaBoss) {
     const sp = getSpecies(foe.sp);
     const newSpecies = !p.caught.includes(foe.sp);
     const want = newSpecies || foe.shiny || sp.tier >= 3 || p.team.length < TEAM_SIZE;

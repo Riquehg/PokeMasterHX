@@ -30,6 +30,7 @@ import { cardsForTier } from './data/events.js';
 import { proposeTrade, respondTrade } from './rules/trade.js';
 import { initMissions, progressMission, playerCompanionBonus } from './rules/missions.js';
 import { COMPANIONS } from './data/companions.js';
+import { pickRaidMega, pickWildMega, makeMegaBoss, grantMegaRewards, MEGA_RAID_CHANCE, MEGA_WILD_CHANCE } from './rules/mega.js';
 import { startGroupRaid, startCatchStage, raidWaiting, raidAction, raidBallChance } from './rules/raid.js';
 import { sanitizeCosmetic, cleanNick } from './data/cosmetics.js';
 import { botAction } from './bots.js';
@@ -81,6 +82,7 @@ export function createMatch(config) {
       dailyPokemon: config.options?.dailyPokemon && SPECIES[config.options.dailyPokemon] ? config.options.dailyPokemon : null,
       turnLimit: Number(config.options?.turnLimit) || 0,
       trades: config.options?.trades !== false,
+      megas: !!config.options?.megas, // 💎 Mega Evolução liberada nesta partida
       hardcore: config.kind !== 'duel' && !!config.options?.hardcore // perdeu a equipe = eliminado e perde tudo da partida
     },
     players,
@@ -185,6 +187,7 @@ function newPlayer(rng, cfg, index) {
       mon.brought = true; // veio da Coleção (segue a regra das insígnias como qualquer outro)
       if (m.uid) mon.uid = String(m.uid);
       if (m.aura) mon.aura = m.aura;
+      if (m.held && ITEMS[m.held]?.kind === 'megastone') mon.held = m.held; // 💎 Megapedra segurada
       if (m.trust) mon.trust = true; // capturado na Bola da Confiança
       if (m.nick) { const n = cleanNick(m.nick); if (n) mon.nick = n; } // apelido (Loja de Diamantes)
       if (Array.isArray(m.forms)) mon.forms = m.forms.filter(f => f && getSpecies(f.sp)).slice(0, 3).map(f => ({ sp: f.sp, moves: Array.isArray(f.moves) ? f.moves.slice(0, 2) : null })); // 🧬 formas guardadas
@@ -233,7 +236,8 @@ function newPlayer(rng, cfg, index) {
     skip: 0,
     moveBonus: 0,
     stats: { captures: 0, shinies: brought.length ? 0 : (mon.shiny ? 1 : 0), wins: 0, losses: 0, pvpWins: 0, ballsThrown: 0 },
-    cosmetic: sanitizeCosmetic(cfg.cosmetic)
+    cosmetic: sanitizeCosmetic(cfg.cosmetic),
+    ...(cfg.megaKey ? { megaKey: true } : {}) // 🔗 Bracelete Mega da conta
   };
   // Pokémon extra (ex.: herdado do Cofre)
   if (cfg.extraMon && SPECIES[cfg.extraMon.sp]) {
@@ -879,6 +883,13 @@ function wildEncounter(state, rng, p, sp, tier, opts = {}) {
     const rare = weatherRare(state) && rng.chance(weatherRare(state)) ? Math.min(4, tier + 1) : tier;
     const favorTypes = [...(BIOMES[sp.biome]?.spawn || []), ...weatherSpawn(state)];
     mon = rollWild(rng, rare, { dailyPokemon: state.options.dailyPokemon, shinyCharm: !!p.items.shiny_charm, favorTypes });
+    // 💎 energia Mega (casas de tier 4+): um Pokémon Mega Evoluído selvagem — não dá para capturar, mas vencer dá fragmentos
+    if (tier >= 4 && rng.chance(MEGA_WILD_CHANCE)) {
+      const m = pickWildMega(rng, tier);
+      mon = makeMegaBoss(createMon(rng, m.base, mon.lvl + 2, { capTier: getSpecies(m.base).tier }), m);
+      mon.wild = true;
+      log(state, `💎 Uma energia estranha… um ${speciesName(mon.sp)} selvagem apareceu! (não dá para capturar — vença para ganhar fragmentos)`, 'shiny');
+    }
     state.board[sp.id] = mon;
   } else {
     log(state, `👀 O ${speciesName(mon.sp)} que já estava aqui continua à espreita (HP ${mon.hp}/${maxHpOf(mon)}).`);
@@ -1116,10 +1127,13 @@ export const RAID_HP_BONUS = 0.6; // chefe tem +60% de HP
 
 function raidBoss(rng, tier, shrine, charm = false) {
   const pool = RAID_POOL[tier] || RAID_POOL[4];
-  const sp = rng.pick(pool.filter(id => SPECIES[id]));
+  // 💎 Mega Raid: o chefe é um Pokémon Mega Evoluído (vence → fragmentos de Megapedra; Bracelete raríssimo)
+  const mega = rng.chance(MEGA_RAID_CHANCE) ? pickRaidMega(rng, shrine) : null;
+  const sp = mega ? mega.base : rng.pick(pool.filter(id => SPECIES[id]));
   const lvl = WILD_LEVELS[tier][1] + (shrine ? 0 : 1);
   // lendário também pode vir shiny (1/450; Amuleto Shiny triplica)
   const mon = createMon(rng, sp, lvl, { shiny: rng.chance(BASE_SHINY_RATE * (charm ? 3 : 1)), capTier: 5 });
+  if (mega) makeMegaBoss(mon, mega);
   mon.bonusHp = Math.round(maxHpOf(mon) * RAID_HP_BONUS);
   mon.hp = maxHpOf(mon);
   mon.wild = true;
@@ -1234,10 +1248,12 @@ setBattleEndHandler((state, rng, b, outcome) => {
       p0.gold += g;
       p0.stats.wins += 1;
       log(state, `🏅 ${p0.name} venceu o selvagem e ganhou ${g} de ouro.`, 'good');
+      if (wild.megaBoss) grantMegaRewards(state, rng, p0, wild.megaBoss, false);
     } else if (r === 'win' && outcome.winner === 1) {
       p0.stats.losses += 1;
       knockOut(state, p0);
     }
+    if (wild.megaBoss && sid) delete state.board[sid]; // a energia Mega some depois da luta
     return;
   }
 
@@ -1250,7 +1266,8 @@ setBattleEndHandler((state, rng, b, outcome) => {
       p0.gold += g;
       addItem(p0, 'rare_candy', 1);
       addItem(p0, 'ultra_ball', 2);
-      log(state, `🔥 ${p0.name} venceu a RAID contra ${speciesName(boss.sp)}! +${g} de ouro, Rare Candy e 2 Ultra Balls. Agora escolha a Pokébola!`, 'win');
+      log(state, `🔥 ${p0.name} venceu a RAID${boss.megaBoss ? ' MEGA' : ''} contra ${speciesName(boss.sp)}! +${g} de ouro, Rare Candy e 2 Ultra Balls. Agora escolha a Pokébola!`, 'win');
+      if (boss.megaBoss) grantMegaRewards(state, rng, p0, boss.megaBoss, true);
       progressMission(state, p0.id, { k: 'raid_win' });
       startCatchStage(state, boss, [p0.id]);
     } else if (r !== 'draw') {

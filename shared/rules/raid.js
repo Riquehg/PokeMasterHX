@@ -12,6 +12,7 @@ import { fail, getPlayer, log, fx, takeItem, addItem, speciesName } from './help
 import { canUse } from './helpers.js';
 import { playerCompanionBonus, progressMission } from './missions.js';
 import { deliverCapture } from './battle.js';
+import { grantMegaRewards } from './mega.js';
 
 export const RAID_JOIN_TIMEOUT_TURNS = 1;
 /** Itens que dá para usar na luta da Raid em grupo (no lugar do golpe da rodada). */
@@ -124,7 +125,8 @@ export function raidAction(state, rng, p, a) {
       r.log.push(`${p.name} jogou ${ITEMS[ball].name} (${Math.round(chance * 100)}%)... ${ok ? 'CAPTUROU!' : 'escapou!'}`);
       if (ok) {
         const boss = r.boss;
-        delete boss.bonusHp; delete boss.raid; delete boss.wild;
+        if (boss.tf) revertForm(boss); // 💎 Mega volta à forma normal ao ser capturado
+        delete boss.bonusHp; delete boss.raid; delete boss.wild; delete boss.megaBoss;
         fullHeal(boss);
         log(state, `🎯 ${p.name} capturou o lendário ${name}${boss.shiny ? ' ✨' : ''} na Raid!`, 'shiny');
         deliverCapture(state, p.id, boss, ball);
@@ -258,6 +260,7 @@ function raidWon(state, rng) {
     // 💿 TM (30%) e ✨ Amuleto Shiny (8%, só se ainda não tiver) — prêmios das Raids lendárias
     if (rng.chance(0.3)) { addItem(p, 'tm', 1); r.log.push(`💿 ${p.name} ganhou um TM!`); log(state, `💿 ${p.name} ganhou um TM na Raid!`, 'good'); }
     if (!p.items.shiny_charm && rng.chance(0.08)) { addItem(p, 'shiny_charm', 1); r.log.push(`✨ ${p.name} ganhou o Amuleto Shiny!`); log(state, `✨ ${p.name} ganhou o raríssimo Amuleto Shiny na Raid!`, 'shiny'); }
+    if (boss.megaBoss) r.log.push(...grantMegaRewards(state, rng, p, boss.megaBoss, true)); // 💎 Mega Raid
     p.stats.raids = (p.stats.raids || 0) + 1;
     progressMission(state, p.id, { k: 'raid_win' });
   }
