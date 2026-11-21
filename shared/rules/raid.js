@@ -8,7 +8,7 @@ import { ITEMS } from '../data/items.js';
 import { monMoves, STAB, defaultMoveIds } from '../data/moves.js';
 import { statsOf, maxHpOf, healMon, fullHeal, transformInto, revertForm } from './monsters.js';
 import { against } from './types.js';
-import { fail, getPlayer, log, fx, takeItem, addItem, speciesName } from './helpers.js';
+import { fail, getPlayer, log, fx, takeItem, addItem, speciesName, markSeen } from './helpers.js';
 import { canUse } from './helpers.js';
 import { playerCompanionBonus, progressMission } from './missions.js';
 import { deliverCapture } from './battle.js';
@@ -150,6 +150,7 @@ function beginFight(state) {
   const base = maxHpOf({ ...r.boss, bonusHp: 0 });
   r.boss.bonusHp = Math.round(base * RAID_GROUP_HP_PER_MEMBER * r.party.length);
   r.boss.hp = maxHpOf(r.boss);
+  for (const x of r.party) { const pl = getPlayer(state, x.pid); if (pl) markSeen(pl, r.boss.sp, !!r.boss.shiny); } // Pokédex (💎 Mega também)
   r.stage = 'fight';
   r.round = 0;
   r.log.push(`⚔️ ${r.party.length} treinador(es) contra ${speciesName(r.boss.sp)} (${r.boss.hp} HP)!`);

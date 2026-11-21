@@ -207,7 +207,7 @@ export async function hubScreen(root, ctx) {
     vault: () => collectionModal(profile, rerender),
     companions: () => openCompanionPicker({ owned: profile?.stats?.companions || [], current: profile?.stats?.companion || null, bond: profile?.stats?.companionBond || {},
       onPick: async id => { try { profile = (await api('profile', { op: 'companion', id })).profile; toast(id ? `🤝 ${COMPANIONS[id].name} vai com você nas próximas partidas!` : 'Sem companheiro.', 'good'); rerender(profile); } catch (e) { toast(e.message, 'bad'); } } }),
-    dex: () => openDex(null, profile?.pokedex || [], profile?.pokedex_seen || [], { shinyCaught: profile?.stats?.shinyDex || [], shinySeen: profile?.stats?.shinySeen || [], vault: profile?.vault || [] }),
+    dex: () => openDex(null, profile?.pokedex || [], profile?.pokedex_seen || [], { shinyCaught: profile?.stats?.shinyDex || [], shinySeen: profile?.stats?.shinySeen || [], megaDex: profile?.stats?.megaDex || null, vault: profile?.vault || [] }),
     duel: () => openDuelQueue(ctx, profile),
     series: () => openSeries(ctx, profile),
     trophies: () => openTrophies(profile),

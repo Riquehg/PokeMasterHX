@@ -48,8 +48,17 @@ export function takeItem(player, itemId, qty = 1) {
   return true;
 }
 
+/** 💎 Pokédex Mega: vistas e registradas (quem Mega Evoluiu o próprio Pokémon), normal e shiny. */
+export function markMega(player, megaSp, shiny = false, used = false) {
+  const key = getSpecies(megaSp)?.mega;
+  if (!key || !player) return;
+  const d = (player.megaDex ||= { seen: [], used: [], shinySeen: [], shinyUsed: [] });
+  const add = (k, v) => { if (!d[k].includes(v)) d[k].push(v); };
+  add('seen', key); if (shiny) add('shinySeen', key);
+  if (used) { add('used', key); if (shiny) add('shinyUsed', key); }
+}
 export function markSeen(player, speciesId, shiny = false) {
-  if (String(speciesId).startsWith('mega_')) speciesId = getSpecies(speciesId)?.megaBase || speciesId; // 💎 Mega conta como a forma base
+  if (String(speciesId).startsWith('mega_')) { markMega(player, speciesId, shiny); speciesId = getSpecies(speciesId)?.megaBase || speciesId; } // 💎 Mega conta como a forma base
   if (!player.seen.includes(speciesId)) player.seen.push(speciesId);
   if (shiny) { const l = (player.shinySeen ||= []); if (!l.includes(speciesId)) l.push(speciesId); }
 }

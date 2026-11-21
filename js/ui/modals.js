@@ -2,6 +2,7 @@ import { tmPickerHtml } from './common.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
 // Janelas da partida: loja, PC, mochila, voo, Pokédex, ficha do treinador, detalhes do Pokémon e regras.
 import { SPECIES_LIST, getSpecies } from '../../shared/data/pokemon.js';
+import { MEGAS, MEGA_KEYS } from '../../shared/data/megas.js';
 import { getSpace } from '../../shared/data/board.js';
 import { ITEMS, shopFor } from '../../shared/data/items.js';
 import { GYMS } from '../../shared/data/trainers.js';
@@ -139,6 +140,10 @@ export function openDex(session, extraCaught = [], extraSeen = [], extra = {}) {
     ...(p ? [...p.team, ...p.box].filter(m => m.shiny).map(m => m.sp) : [])]);
   const shinySeen = new Set([...(p?.shinySeen || []), ...(extra.shinySeen || []), ...shinyCaught]);
   shinyCaught.forEach(id => caught.add(id)); shinySeen.forEach(id => seen.add(id));
+  // 💎 Pokédex Mega (vistas / registradas = você Mega Evoluiu), normal e shiny
+  const md = { seen: new Set(), used: new Set(), shinySeen: new Set(), shinyUsed: new Set() };
+  for (const src of [extra.megaDex, p?.megaDex]) for (const k of Object.keys(md)) for (const v of src?.[k] || []) md[k].add(v);
+  md.used.forEach(v => md.seen.add(v)); md.shinyUsed.forEach(v => { md.shinySeen.add(v); md.used.add(v); md.seen.add(v); }); md.shinySeen.forEach(v => md.seen.add(v));
   const f = { show: 'all', q: '', tier: 0, type: '', shinyArt: false };
   const pct = (a, b) => Math.round((a / b) * 100);
   const counts = `<div class="dex-stats">
@@ -146,17 +151,37 @@ export function openDex(session, extraCaught = [], extraSeen = [], extra = {}) {
       <span class="chip">👁️ Só vistos <b>${seen.size - caught.size}</b></span>
       <span class="chip">❔ Desconhecidos <b>${SPECIES_LIST.length - seen.size}</b></span>
       <span class="chip gold">${pct(caught.size, SPECIES_LIST.length)}% de ${SPECIES_LIST.length}</span>
-      <span class="chip shiny-chip">✨ Shiny: <b>${shinyCaught.size}</b> capturados · <b>${shinySeen.size - shinyCaught.size}</b> só vistos</span></div>
+      <span class="chip shiny-chip">✨ Shiny: <b>${shinyCaught.size}</b> capturados · <b>${shinySeen.size - shinyCaught.size}</b> só vistos</span>
+      <span class="chip purple">💎 Megas: <b>${md.used.size}</b>/${MEGA_KEYS.length} registradas · ✨ <b>${md.shinyUsed.size}</b></span></div>
     <div class="dex-tiers">${[1, 2, 3, 4, 5].map(t => { const all = SPECIES_LIST.filter(s => s.tier === t); const c = all.filter(s => caught.has(s.id)).length;
       return `<div class="dex-tier t${t}" title="Tier ${t} · ${TIER_NAMES[t]}"><b>T${t}</b> ${c}/${all.length}<i style="width:${pct(c, all.length)}%"></i></div>`; }).join('')}</div>`;
   const controls = `<div class="dex-controls">
-      <div class="seg">${[['all', 'Todos'], ['caught', 'Capturados'], ['seen', 'Só vistos'], ['unseen', 'Desconhecidos'], ['shiny', '✨ Shiny']].map(([k, l]) => `<button class="btn sm ${k === 'all' ? 'on' : ''}" data-act="dex-show" data-v="${k}">${l}</button>`).join('')}</div>
+      <div class="seg">${[['all', 'Todos'], ['caught', 'Capturados'], ['seen', 'Só vistos'], ['unseen', 'Desconhecidos'], ['shiny', '✨ Shiny'], ['mega', '💎 Megas']].map(([k, l]) => `<button class="btn sm ${k === 'all' ? 'on' : ''}" data-act="dex-show" data-v="${k}">${l}</button>`).join('')}</div>
       <input class="input" id="dex-q" placeholder="Buscar nome ou nº" style="flex:1;min-width:120px">
       <select class="input" id="dex-tier"><option value="0">Todos os tiers</option>${[1, 2, 3, 4, 5].map(t => `<option value="${t}">Tier ${t} · ${TIER_NAMES[t]}</option>`).join('')}</select>
       <select class="input" id="dex-type"><option value="">Todos os tipos</option>${TYPES.map(t => `<option value="${t}">${esc(typeLabel(t))}</option>`).join('')}</select>
       <button class="btn sm" data-act="dex-art" title="Mostrar a forma shiny de quem você já viu shiny">✨ Arte shiny</button></div>`;
 
-  const grid = () => SPECIES_LIST.filter(s => {
+  const megaGrid = () => {
+    const list = MEGA_KEYS.map(k => MEGAS[k]).filter(m => {
+      const v = md.seen.has(m.key), base = getSpecies(m.base);
+      if (f.tier && base.tier !== f.tier) return false;
+      if (f.type && (!v || !m.types.includes(f.type))) return false;
+      if (f.q) { const q = f.q.toLowerCase(); if (!(String(base.dex) === q.replace(/^#?0*/, '') || (v && m.name.toLowerCase().includes(q)))) return false; }
+      return true;
+    });
+    return `<p class="tiny muted" style="grid-column:1/-1">👁️ <b>Vista</b>: você enfrentou ou viu alguém usar. ● <b>Registrada</b>: você Mega Evoluiu o seu próprio Pokémon. ✨ vale para a versão shiny. Use "✨ Arte shiny" para ver as cores shiny das que você já viu.</p>`
+      + list.map(m => {
+        const u = md.used.has(m.key), v = md.seen.has(m.key), su = md.shinyUsed.has(m.key), ss = md.shinySeen.has(m.key);
+        const base = getSpecies(m.base);
+        return `<div class="e ${u ? 'caught' : v ? 'seen' : 'unseen'} mega-e ${su ? 'shiny-c' : ss ? 'shiny-s' : ''}" data-act="dex-mega" data-id="${m.key}" title="${v ? esc(m.name) : '???'}">
+          ${u ? '<span class="dex-ball" title="Registrada">●</span>' : v ? '<span class="dex-eye" title="Vista">👁️</span>' : ''}
+          ${su ? '<span class="dex-shiny" title="Shiny registrada">✨</span>' : ss ? '<span class="dex-shiny seen" title="Shiny vista">✧</span>' : ''}
+          <img src="${monSprite(m.sp, f.shinyArt && ss)}" alt="${v ? esc(m.name) : '?'}" loading="lazy">
+          <div>#${String(base.dex).padStart(3, '0')} 💎</div><div><b>${v ? esc(m.name) : '???'}</b></div>${v ? `<div>${typeChips(m.types)}</div>` : ''}</div>`;
+      }).join('');
+  };
+  const grid = () => f.show === 'mega' ? megaGrid() : SPECIES_LIST.filter(s => {
     const c = caught.has(s.id), v = seen.has(s.id);
     if (f.show === 'caught' && !c) return false;
     if (f.show === 'seen' && (c || !v)) return false;
@@ -187,6 +212,18 @@ export function openDex(session, extraCaught = [], extraSeen = [], extra = {}) {
   bindActions(ov, {
     'dex-show': d => { f.show = d.v; ov.querySelectorAll('[data-act="dex-show"]').forEach(b => b.classList.toggle('on', b.dataset.v === d.v)); redraw(); },
     'dex-art': (d, el) => { f.shinyArt = !f.shinyArt; ov.querySelector('[data-act="dex-art"]').classList.toggle('on', f.shinyArt); redraw(); },
+    'dex-mega': d => {
+      const m = MEGAS[d.id];
+      if (!m || !md.seen.has(m.key)) return;
+      const ss = md.shinySeen.has(m.key), b = getSpecies(m.base), ms = getSpecies(m.sp);
+      openModal('dex-entry', `💎 ${esc(m.name)}`, `<div class="row" style="align-items:flex-start">
+          <div class="dex-arts"><div><img class="mon-sprite mega" src="${monSprite(m.sp)}" alt=""><span class="tiny">Normal</span></div>${ss ? `<div><img class="mon-sprite mega" src="${monSprite(m.sp, true)}" alt=""><span class="tiny">✨ Shiny</span></div>` : ''}</div>
+          <div class="grow small"><div>${typeChips(m.types)}</div>
+            <p>Forma Mega de <b>${esc(b.name)}</b> (#${String(b.dex).padStart(3, '0')}). Precisa do 🔗 Bracelete Mega e da <b>${esc(m.stoneName)}</b> segurada.</p>
+            <p>Na batalha: HP ×${m.mult.hp} · Ataque ×${m.mult.str} · Velocidade ×${m.mult.spe}${m.types.join() !== b.types.join() ? ` · muda de tipo (${b.types.map(typeLabel).join('/')} → ${m.types.map(typeLabel).join('/')})` : ''}.</p>
+            <p>${md.used.has(m.key) ? '● <b>Registrada</b> (você já Mega Evoluiu)' : '👁️ Só vista — Mega Evolua o seu para registrar.'}${md.shinyUsed.has(m.key) ? ' · ✨ shiny registrada' : ss ? ' · ✧ shiny vista' : ''}</p>
+            <p class="tiny muted">Fragmentos: 💎 Mega Raids e encontros com energia Mega. A pedra sai na 🔨 Oficina (Grão-Mestre).</p></div></div>`);
+    },
     'dex-open': d => {
       const sp = getSpecies(d.id);
       if (!seen.has(sp.id)) return;
@@ -290,7 +327,7 @@ export function openHelp() {
       <p><b>🌾 Fazenda:</b> coloque Pokémon da Coleção soltos nos biomas: eles ganham XP com o tempo (até o Nv. 50, evoluem no caminho; do 50 ao 60 só batalhando ou com 🍬 Doce Raro da Oficina; bioma certo e felicidade alta rendem mais; limite diário), produzem recursos (🍓🫧🔥⛏️💠🌑🪶) e ficam felizes com carinho e Frutinhas. Visite amigos para curtir ❤️ e cuidar 🤝 (1 vez por dia cada). Vagas sobem com o nível da Fazenda; diamantes só compram decoração. 🏡 Casinha (grátis): seu companheiro equipado mora nela e cuida da Fazenda — felicidade cai 40% mais devagar, +20% de XP nos Pokémon do tipo dele e cada carinho dá +3 de laço. ♂/♀: os Pokémon agora têm sexo.</p>
       <p><b>🥚 Creche (na Fazenda):</b> um macho ♂ e uma fêmea ♀ da mesma família ou com um tipo em comum (ou Ditto com qualquer um) botam um ovo a cada 6 h (até 4 por dia, incubadora de 3). O filhote nasce no Nv. 5 na forma básica, herda 2 dos 3 potenciais dos pais (e a natureza, gastando 3 💠) e pode herdar o 2º golpe do pai. Mutações raras: ✨ shiny (1/150; 1/40 com pais shiny), 🌈 aura (1/40) e 💯 potencial máximo (1/80). Lendários e Míticos não fazem ovos.</p>
       <p><b>🔨 Oficina (na Fazenda):</b> transforme recursos em itens nas bancadas (levam horas; +1 bancada no Nv. 4 e no Nv. 7 da Fazenda). Receitas boas pedem recursos de vários biomas. Fabricar e entregar os 📋 Pedidos do dia sobem o Nível de Artesão (Aprendiz → Artesão → Mestre → Grão-Mestre), que libera Ultra/Rainbow Ball, Doce Raro, Amuleto de Incubação, Incenso Brilhante (shiny ×3 nos ovos), TM, Bola da Confiança e Master Ball (1 por semana) e decorações exclusivas.</p>
-      <p><b>💎 Mega Evolução:</b> precisa de 3 coisas — o <b>🔗 Bracelete Mega</b> (só cai em 💎 Mega Raids, raríssimo, e não pode ser trocado), a <b>Megapedra</b> certa segurada pelo Pokémon (equipe na 🎒 Mochila da conta) e uma batalha onde as Megas estão liberadas: salas do modo 📦 Coleção com "💎 Megas liberadas" (inclusive o Treino com time) e a Liga das Séries B e A. Na batalha, o botão "💎 Mega Evoluir" não gasta a rodada e vale 1 vez por batalha; a forma Mega fica mais forte (e às vezes muda de tipo) até a batalha acabar. Megapedras saem na 🔨 Oficina (Grão-Mestre, 1 por semana): 10 💠 Fragmentos da pedra + recursos + ouro. Fragmentos caem nas 💎 Mega Raids (casas de Raid/Santuário: às vezes o chefe vem Mega) e em raros encontros com energia Mega nas casas Vermelhas (não dá para capturar — vença para ganhar fragmentos). Pedras e fragmentos podem ir ao 🏪 Mercado.</p>
+      <p><b>💎 Mega Evolução:</b> precisa de 3 coisas — o <b>🔗 Bracelete Mega</b> (só cai em 💎 Mega Raids, raríssimo, e não pode ser trocado), a <b>Megapedra</b> certa segurada pelo Pokémon (equipe na 🎒 Mochila da conta) e uma batalha onde as Megas estão liberadas: salas do modo 📦 Coleção com "💎 Megas liberadas" (inclusive o Treino com time) e a Liga das Séries B e A. Na batalha, o botão "💎 Mega Evoluir" não gasta a rodada e vale 1 vez por batalha; a forma Mega fica mais forte (e às vezes muda de tipo) até a batalha acabar. Megapedras saem na 🔨 Oficina (Grão-Mestre, 1 por semana): 10 💠 Fragmentos da pedra + recursos + ouro. Fragmentos caem nas 💎 Mega Raids (casas de Raid/Santuário: às vezes o chefe vem Mega) e em raros encontros com energia Mega nas casas Vermelhas (não dá para capturar — vença para ganhar fragmentos). Pedras e fragmentos podem ir ao 🏪 Mercado. Na 📖 Pokédex, a aba "💎 Megas" mostra as 68 formas: 👁️ vista (enfrentou ou viu alguém usar) e ● registrada (você Mega Evoluiu o seu), normal e ✨ shiny.</p>
       <p><b>⚡ Eventos relâmpago:</b> de vez em quando surge um ícone numa casa de evento — 🎁 <b>Baú do Tesouro</b> (ouro e itens), 🔥 <b>Raid Relâmpago</b> ou ❔ <b>Pokémon Misterioso</b> (silhueta de um Pokémon mais forte, com mais chance de shiny). O ⏳ mostra quantas rodadas faltam para sumir; quem parar na casa primeiro ativa.</p>
       <p><b>📖 Pokédex:</b> mostra as 806 espécies com tier (cor da casa onde aparece), insígnias para obedecer, condições que os golpes causam e variações de golpe. Registra também os <b>shinies</b>: ✧ visto e ✨ capturado (filtro “✨ Shiny” e botão “Arte shiny”).</p>
       <p><b>💎 Loja de Diamantes:</b> só visual e conveniência — dado personalizado, cenário de batalha, cartão de treinador, efeito de vitória, +50 vagas na Coleção e apelidos para Pokémon. Ninguém fica mais forte por comprar.</p>

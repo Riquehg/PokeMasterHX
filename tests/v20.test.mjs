@@ -651,3 +651,17 @@ test('💎 sala: Megas só no modo Coleção; o treino com time leva o Bracelete
   assert.equal(solo.match.state.options.megas, true);
   assert.equal(solo.match.state.players.find(x => x.id === a.id).megaKey, true);
 });
+
+test('💎 Pokédex Mega: quem evolui registra (normal e shiny), o adversário vê; a conta guarda', async () => {
+  const { applyAction } = await import('../shared/engine.js');
+  const { mergeMegaDex } = await import('../api/_lib/core.js');
+  const s0 = megaDuel();
+  s0.players[0].team[0].shiny = true;
+  const s = applyAction(s0, 'a', { type: 'battle', move: 'mega' }, { now: 0 }).state;
+  assert.deepEqual(s.players[0].megaDex, { seen: ['gengar'], used: ['gengar'], shinySeen: ['gengar'], shinyUsed: ['gengar'] });
+  assert.deepEqual(s.players[1].megaDex.used, []);
+  assert.deepEqual(s.players[1].megaDex.seen, ['gengar']);
+  assert.ok(!s.players[0].seen.includes('mega_gengar'), 'a Pokédex normal não ganha a forma Mega');
+  assert.equal(mergeMegaDex({ seen: ['gengar'], used: ['gengar'] }, { seen: ['gengar'] }), null);
+  assert.deepEqual(mergeMegaDex(null, s.players[0].megaDex).shinyUsed, ['gengar']);
+});

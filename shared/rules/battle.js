@@ -16,7 +16,7 @@ import { GYMS } from '../data/trainers.js';
 import { statsOf, maxHpOf, gainXp, xpReward, healMon, canTransform, transformInto, revertForm, megaEvolveMon } from './monsters.js';
 import { megaFor } from '../data/megas.js';
 import {
-  fail, getPlayer, log, fx, takeItem, giveMon, markSeen, healthyIndex, hasHealthy, speciesName, canUse, usableIndex, badgesNeeded
+  fail, getPlayer, log, fx, takeItem, giveMon, markSeen, markMega, healthyIndex, hasHealthy, speciesName, canUse, usableIndex, badgesNeeded
 } from './helpers.js';
 
 export const MAX_ROUNDS = 30;
@@ -717,6 +717,10 @@ function doMega(state, si) {
   const from = speciesName(me.sp);
   megaEvolveMon(me, m.sp);
   side.megaUsed = true;
+  // 💎 Pokédex Mega: quem evoluiu registra; o adversário (treinador) vê
+  markMega(getPlayer(state, side.pid), me.sp, !!me.shiny, true);
+  const other = b.sides[1 - si];
+  if (other?.kind === 'player') markMega(getPlayer(state, other.pid), me.sp, !!me.shiny);
   log(state, `💎 ${getPlayer(state, side.pid).name}: o ${from} reagiu à ${getItem(me.held)?.name || 'Megapedra'} e Mega Evoluiu em ${speciesName(me.sp)}!`, 'shiny');
   fx(state, { k: 'mega', side: si, uid: me.uid, from: m.base, to: me.sp, hpAfter: me.hp, maxHp: maxHpOf(me) });
 }

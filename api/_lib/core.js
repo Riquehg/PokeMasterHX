@@ -351,6 +351,20 @@ export async function purgeMatchCaptures(db, pid, matchId) {
   });
 }
 
+/** 💎 junta a Pokédex Mega da partida (p.megaDex) na da conta (stats.megaDex). Devolve o objeto novo ou null se nada mudou. */
+export function mergeMegaDex(cur, add) {
+  if (!add) return null;
+  const base = cur || {};
+  const out = {};
+  let changed = false;
+  for (const k of ['seen', 'used', 'shinySeen', 'shinyUsed']) {
+    const set = [...new Set([...(base[k] || []), ...(add[k] || [])])];
+    if (set.length !== (base[k] || []).length) changed = true;
+    out[k] = set;
+  }
+  return changed ? out : null;
+}
+
 function collectionPatch(prof, p, state) {
   {
     const away = new Set(p.tradedAway || []);
@@ -387,8 +401,9 @@ function collectionPatch(prof, p, state) {
     const st = prof.stats || {};
     const shinyDex = [...new Set([...(st.shinyDex || []), ...(p.shinyCaught || [])])];
     const shinySeen = [...new Set([...(st.shinySeen || []), ...(p.shinySeen || []), ...shinyDex])];
-    const changed = overflow || shinyDex.length !== (st.shinyDex || []).length || shinySeen.length !== (st.shinySeen || []).length;
-    return { vault, pokedex, pokedex_seen: seen, points: calcPoints(pokedex, st), ...(changed ? { stats: { ...st, shinyDex, shinySeen, ...(overflow ? { overflow } : {}) } } : {}) };
+    const megaDex = mergeMegaDex(st.megaDex, p.megaDex);
+    const changed = overflow || megaDex || shinyDex.length !== (st.shinyDex || []).length || shinySeen.length !== (st.shinySeen || []).length;
+    return { vault, pokedex, pokedex_seen: seen, points: calcPoints(pokedex, st), ...(changed ? { stats: { ...st, shinyDex, shinySeen, ...(megaDex ? { megaDex } : {}), ...(overflow ? { overflow } : {}) } } : {}) };
   }
 }
 
@@ -931,7 +946,14 @@ export async function actionOp(db, user, body) {
         });
       } catch (e) { console.error('[companion]', e.message); }
     }
-    if (finished && row.options?.mode === 'duel') await duelFinished(db, { ...row, ...patch });
+    if (finished && row.options?.mode === 'duel') {
+      // 💎 Pokédex Mega também vale nos duelos (Liga/Torneio)
+      for (const pl of state.players) {
+        if (pl.id.startsWith('cpu_') || !pl.megaDex) continue;
+        try { await mutateProfile(db, pl.id, prof => { const md = mergeMegaDex(prof.stats?.megaDex, pl.megaDex); return md ? { stats: { ...(prof.stats || {}), megaDex: md } } : null; }); } catch (e) { console.error('[megadex]', e.message); }
+      }
+      await duelFinished(db, { ...row, ...patch });
+    }
     else if (finished) {
       await recordResults(db, state, row.options || {});
       if (state.leagueChanges || state.bondChanges || state.bagChanges) {
@@ -1015,7 +1037,7 @@ export async function recordResults(db, state, options = {}) {
     await mutateProfile(db, p.id, cur => {
       const base = { ...(cur.stats || {}) };
       const merged = { ...base, ...fresh, companions: base.companions || fresh.companions, companion: base.companion ?? fresh.companion,
-        shinyDex: base.shinyDex || fresh.shinyDex, shinySeen: base.shinySeen || fresh.shinySeen, overflow: base.overflow || fresh.overflow,
+        shinyDex: base.shinyDex || fresh.shinyDex, shinySeen: base.shinySeen || fresh.shinySeen, megaDex: base.megaDex || fresh.megaDex, overflow: base.overflow || fresh.overflow,
         vaultBonus: base.vaultBonus || fresh.vaultBonus, nicknames: base.nicknames || fresh.nicknames, bag: addToBag(base.bag, keep),
         serie: base.serie ?? fresh.serie, trophies: base.trophies ?? fresh.trophies,
         ...(base.megaBracelet || (p.items?.mega_bracelet > 0 && !p.hardcoreLost) ? { megaBracelet: true } : {}) }; // 🔗 Bracelete Mega (só cai em Mega Raid)
