@@ -339,7 +339,7 @@ test('🎁 prêmio diário: sequência, reset ao perder dia, uma vez por dia; �
   assert.ok((await db.getProfile(a.id)).stats.serie.defSeen > 0);
 });
 
-test('♂/♀ sexo fixo pelo uid; 🌾 Fazenda: XP com o tempo (teto diário, Nv. 60), recursos, carinho, visitas e decoração só visual', async () => {
+test('♂/♀ sexo fixo pelo uid; 🌾 Fazenda: XP com o tempo (teto diário, Nv. 50), recursos, carinho, visitas e decoração só visual', async () => {
   const { genderFor, genderOf } = await import('../shared/data/gender.js');
   const { createMon } = await import('../shared/rules/monsters.js');
   assert.equal(genderFor('ditto', 'x'), 'N');
@@ -376,7 +376,7 @@ test('♂/♀ sexo fixo pelo uid; 🌾 Fazenda: XP com o tempo (teto diário, Nv
   const lvl0 = va[0].lvl;
   const col = await profileOp(db, a, { op: 'farm_collect' });
   assert.equal(lvl0, 60);
-  assert.equal(col.collected.xp, 0, 'Nv. 60: a Fazenda não sobe mais (só batalhando)');
+  assert.equal(col.collected.xp, 0, 'acima do Nv. 50 a Fazenda não sobe mais');
   assert.ok((col.farm.res.ember || 0) >= 5, 'Brasas do vulcão');
   const sold = await profileOp(db, a, { op: 'farm_sell', res: 'ember', qty: 2 });
   assert.equal(sold.gold, 28);
@@ -454,4 +454,63 @@ test('🥚 Creche: compatibilidade, ovos com o tempo (limite/incubadora), heran�
   assert.ok(h.baby.bred);
   assert.ok(h.profile.vault.some(m => m.uid === h.baby.uid));
   assert.ok(['M', 'F'].includes(h.baby.gender));
+});
+
+test('🔨 Oficina: receitas com tempo e recursos de vários biomas, nível de Artesão, bancadas, pedidos do dia, itens da Fazenda e limite semanal', async () => {
+  const { RECIPES, dailyOrders, artisanOf, benchesFor } = await import('../shared/data/workshop.js');
+  assert.equal(benchesFor(1), 1); assert.equal(benchesFor(4), 2); assert.equal(benchesFor(7), 3); assert.equal(benchesFor(30), 3);
+  assert.equal(artisanOf(0).lvl, 1); assert.equal(artisanOf(3500).lvl, 4);
+  assert.deepEqual(dailyOrders('u1', '2026-11-21'), dailyOrders('u1', '2026-11-21'), 'pedidos fixos no dia');
+  assert.ok(Object.keys(RECIPES.master.cost).length >= 7, 'Master Ball pede todos os recursos');
+
+  const { db, us: [a] } = await users(1);
+  const give = async (res, extra = {}) => { const p = await db.getProfile(a.id); const farm = { ...(p.stats.farm || { lvl: 1, xp: 0, slots: [], res: {}, decor: [] }), res, ...extra }; await db.updateProfileIf(a.id, p.rev || 0, { stats: { ...p.stats, farm } }); };
+  await assert.rejects(profileOp(db, a, { op: 'farm_craft', recipe: 'poke5' }), /Faltam recursos/);
+  await give({ berry: 50, ore: 50, pearl: 50, ember: 50, crystal: 50, essence: 50, feather: 50 });
+  await assert.rejects(profileOp(db, a, { op: 'farm_craft', recipe: 'tm' }), /Mestre Artesão/);
+  const c = await profileOp(db, a, { op: 'farm_craft', recipe: 'poke5' });
+  assert.equal(c.farm.workshop.jobs.length, 1);
+  assert.equal(c.farm.res.berry, 47);
+  await assert.rejects(profileOp(db, a, { op: 'farm_craft', recipe: 'ration' }), /bancadas estão ocupadas/);
+  await assert.rejects(profileOp(db, a, { op: 'farm_claim', id: c.farm.workshop.jobs[0].id }), /Ainda fabricando/);
+  let p = await db.getProfile(a.id); p.stats.farm.jobs[0].done = Date.now() - 1; await db.updateProfileIf(a.id, p.rev || 0, { stats: p.stats });
+  const before = (await db.getProfile(a.id)).stats.bag?.poke_ball || 0;
+  const got = await profileOp(db, a, { op: 'farm_claim', id: c.farm.workshop.jobs[0].id });
+  assert.equal((got.profile.stats.bag.poke_ball || 0) - before, 5);
+  assert.equal(got.farm.workshop.axp, RECIPES.poke5.xp);
+  // gold insuficiente devolve tudo
+  const g0 = (await db.getProfile(a.id)).gold || 0;
+  await db.walletAdd(a.id, 0, -g0);
+  await assert.rejects(profileOp(db, a, { op: 'farm_craft', recipe: 'great3' }), /Ouro insuficiente/);
+  assert.equal((await db.getProfile(a.id)).stats.farm.res.ore, 48, 'recursos não foram gastos');
+  // pedido do dia
+  const o = got.farm.workshop.orders[0];
+  const del = await profileOp(db, a, { op: 'farm_order', idx: 0 });
+  assert.equal(del.reward.gold, o.gold);
+  await assert.rejects(profileOp(db, a, { op: 'farm_order', idx: 0 }), /já entregue/);
+  // itens da Fazenda: Doce Raro e Fertilizante
+  await give({ ...((await db.getProfile(a.id)).stats.farm.res) }, { items: { candy: 1, fert: 1, incense: 1 }, axp: 5000 });
+  await adminOp(db, await db.verifyToken('dev:admin@kanto.com'), { op: 'grant_mon', userId: a.id, species: 'rattata', level: 19 });
+  const mon = (await db.getProfile(a.id)).vault.find(m => m.sp === 'rattata');
+  const lv = mon.lvl;
+  const u = await profileOp(db, a, { op: 'farm_use', item: 'candy', uid: mon.uid });
+  const after = u.profile.vault.find(m => m.uid === mon.uid);
+  assert.equal(after.lvl, lv + 1);
+  assert.equal(after.sp, 'raticate', 'Doce Raro também evolui');
+  const f = await profileOp(db, a, { op: 'farm_use', item: 'fert' });
+  assert.ok(f.farm.workshop.fert > Date.now());
+  const inc = await profileOp(db, a, { op: 'farm_use', item: 'incense' });
+  assert.equal(inc.farm.workshop.incense, 3);
+  // Grão-Mestre: Master Ball 1×/semana
+  await give({ berry: 99, ore: 99, pearl: 99, ember: 99, crystal: 99, essence: 99, feather: 99 }, { lvl: 7, axp: 5000, jobs: [] });
+  await db.walletAdd(a.id, 0, 50000);
+  await profileOp(db, a, { op: 'farm_craft', recipe: 'master' });
+  await assert.rejects(profileOp(db, a, { op: 'farm_craft', recipe: 'master' }), /1 vez por semana/);
+  // decoração exclusiva
+  await profileOp(db, a, { op: 'farm_craft', recipe: 'statue' });
+  p = await db.getProfile(a.id); const sj = p.stats.farm.jobs.find(j => j.recipe === 'statue'); sj.done = 0; await db.updateProfileIf(a.id, p.rev || 0, { stats: p.stats });
+  const st = await profileOp(db, a, { op: 'farm_claim', id: sj.id });
+  assert.ok(st.farm.ownedDecor.includes('statue'));
+  const dd = await profileOp(db, a, { op: 'farm_decor', decor: [{ k: 'statue', x: 30, y: 30 }] });
+  assert.equal(dd.farm.decor[0].k, 'statue');
 });

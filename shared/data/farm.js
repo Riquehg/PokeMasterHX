@@ -34,7 +34,7 @@ export const biomeMatch = (biome, types) => !!FARM_BIOMES[biome]?.types.some(t =
 // ---- ritmo
 export const XP_PER_HOUR = 30;          // por Pokémon (×1,5 no bioma certo, ×0,5–1,5 pela felicidade)
 export const XP_DAY_CAP = 600;          // por Pokémon por dia
-export const FARM_MAX_LEVEL = 60;       // a Fazenda leva até o Nv. 60; depois, só batalhando
+export const FARM_MAX_LEVEL = 50;       // a Fazenda leva até o Nv. 50; depois, só batalhando ou com 🍬 Doce Raro
 export const RES_PER_HOUR = 0.5;        // 1 recurso a cada 2 h (×1,5 no bioma certo)
 export const RES_CAP = 99;              // por recurso guardado
 export const HAPPY_DECAY_PER_HOUR = 3;
@@ -87,7 +87,10 @@ export function tickFarm(farm, vaultById, typesOf, now = Date.now()) {
       s.dayXp = (s.dayXp || 0) + got;
     }
     const r = resourceOf(types);
-    s.pres = (s.pres || 0) + RES_PER_HOUR * fit * hours;
+    // 🧪 Fertilizante: recursos em dobro dentro da janela
+    const f = farm.fert;
+    const boostH = f ? Math.max(0, (Math.min(now, f.until) - Math.max(t0, f.from)) / 3600000) : 0;
+    s.pres = (s.pres || 0) + RES_PER_HOUR * fit * (hours + boostH);
     s.res = r;
     s.happy = Math.round(h1 * 10) / 10;
     s.t = now;
@@ -135,7 +138,11 @@ export const FARM_DECOR = {
   moon: { name: 'Lua mágica', icon: '🌙', price: 90 },
   star: { name: 'Estrela brilhante', icon: '⭐', price: 90 },
   ferris: { name: 'Roda-gigante', icon: '🎡', price: 200 },
-  castle: { name: 'Castelinho', icon: '🏰', price: 250 }
+  castle: { name: 'Castelinho', icon: '🏰', price: 250 },
+  // só fabricando na 🔨 Oficina (price −1)
+  statue: { name: 'Estátua de Pedra', icon: '🗿', price: -1 },
+  goldstatue: { name: 'Estátua Dourada', icon: '🏅', price: -1 },
+  crown: { name: 'Coroa do Campeão', icon: '👑', price: -1 }
 };
 export const DECOR_IDS = Object.keys(FARM_DECOR);
 export const decorItemId = k => `decor_${k}`;

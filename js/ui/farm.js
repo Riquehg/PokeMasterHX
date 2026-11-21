@@ -7,6 +7,7 @@ import { esc, toast, openModal, closeModal, setModalBody, bindActions } from './
 import { monSprite, avatarUrl } from '../config.js';
 import { canBreed, EGGS_PER_DAY, INCUBATOR_MAX, NATURE_COST, EGG_EVERY_H } from '../../shared/data/daycare.js';
 import { statCard } from './common.js';
+import { RECIPES, FARM_ITEMS, ARTISAN_LEVELS } from '../../shared/data/workshop.js';
 import { natureLabel } from '../../shared/data/natures.js';
 
 const hash = s => { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
@@ -79,6 +80,7 @@ export async function openFarm(ctx, profile, userId = null) {
       <button class="btn" data-act="add" ${farm.slots.length >= farm.slotsMax ? 'disabled' : ''}>➕ Colocar Pokémon</button>
       <button class="btn" data-act="decor">🎨 Decorar</button>
       <button class="btn ${(farm.eggs || []).some(e => e.ready) ? 'primary' : ''}" data-act="tab" data-t="creche">🥚 Creche${(farm.eggs || []).length ? ` (${farm.eggs.length})` : ''}</button>
+      <button class="btn ${(farm.workshop?.jobs || []).some(j => j.ready) ? 'primary' : ''}" data-act="tab" data-t="oficina">🔨 Oficina</button>
       <button class="btn" data-act="tab" data-t="res">📦 Recursos</button>
       <button class="btn" data-act="tab" data-t="visit">👥 Visitar</button></div>`;
   };
@@ -137,9 +139,52 @@ export async function openFarm(ctx, profile, userId = null) {
       <div class="row" style="gap:6px;margin-top:8px"><button class="btn" data-act="tab" data-t="creche">← Voltar</button><button class="btn primary grow" data-act="dc-ok" ${chk?.ok ? '' : 'disabled'}>💞 Colocar na Creche</button></div>`;
   };
 
+  const costChips = (cost, mult = 1) => Object.entries(cost).map(([k, q]) => {
+    if (k === 'gold') return `<span class="ws-c ${(me?.gold || 0) >= q ? '' : 'miss'}">🪙${q}</span>`;
+    const have = farm.res?.[k] || 0;
+    return `<span class="ws-c ${have >= q * mult ? '' : 'miss'}" title="${RESOURCES[k].name}: você tem ${have}">${RESOURCES[k].icon}${q * mult}</span>`;
+  }).join('');
+  const outTxt = R => R.out.bag ? Object.entries(R.out.bag).map(([, q]) => q > 1 ? `${q}×` : '').join('') + ' → 🎒 Mochila' : R.out.farm ? '→ itens da Fazenda' : '→ decoração exclusiva';
+  let candyPick = false;
+  const oficinaView = () => {
+    const W = farm.workshop;
+    const lv = W.level, nx = W.next;
+    const free = W.benches - W.jobs.length;
+    const items = Object.entries(W.items || {}).filter(([, n]) => n > 0);
+    if (candyPick) {
+      const list = (me?.vault || []).filter(m => m.lvl < 60).sort((a, b) => b.lvl - a.lvl);
+      return `<p class="small">🍬 Escolha quem vai comer o Doce Raro (+1 nível, até o Nv. 60, o máximo):</p>
+        <div class="trade-mons" style="max-height:380px">${list.map(m => `<button type="button" class="trade-mon" data-act="candy-go" data-uid="${esc(m.uid)}"><img src="${monSprite(m)}" alt=""><span>${esc(m.nick || getSpecies(m.sp)?.name)}${genderHtml(m.gender)}</span><span class="tiny">Nv.${m.lvl}</span></button>`).join('')}</div>
+        <button class="btn" data-act="candy-cancel" style="margin-top:8px">← Voltar</button>`;
+    }
+    return `<div class="ws-art"><b>🔨 ${esc(lv.name)}</b> <span class="tiny muted">Nível de Artesão ${lv.lvl}${nx ? ` · ${W.axp}/${nx.xp} XP para ${esc(nx.name)}` : ' · máximo!'}</span>
+        <div class="fm-bar small"><i style="width:${nx ? Math.min(100, ((W.axp - lv.xp) / (nx.xp - lv.xp)) * 100) : 100}%"></i></div></div>
+      <h3>🪚 Bancadas (${W.jobs.length}/${W.benches})</h3>
+      <div class="ws-jobs">${W.jobs.map(j => { const R = RECIPES[j.recipe]; return `<div class="ws-job ${j.ready ? 'ready' : ''}"><span class="ws-ic">${R.icon}</span><b>${esc(R.name)}</b>
+          ${j.ready ? `<button class="btn sm primary" data-act="claim" data-id="${j.id}">✨ Pegar</button>` : `<span class="tiny">⏳ ${fmtT(j.done - Date.now())}</span><div class="fm-bar small"><i style="width:${Math.min(100, ((Date.now() - j.start) / (j.done - j.start)) * 100)}%"></i></div>`}</div>`; }).join('')}
+        ${Array.from({ length: Math.max(0, free) }, () => '<div class="ws-job empty"><span class="tiny muted">Bancada livre</span></div>').join('')}</div>
+      <p class="tiny muted">Mais bancadas no Nv. 4 e no Nv. 7 da Fazenda.</p>
+      ${items.length || W.fert || W.incense ? `<h3>🎒 Itens da Fazenda</h3><div class="ws-items">${items.map(([k, n]) => `<div class="ws-item"><span class="ws-ic">${FARM_ITEMS[k].icon}</span><b>${esc(FARM_ITEMS[k].name)} ×${n}</b><span class="tiny muted">${esc(FARM_ITEMS[k].desc)}</span><button class="btn sm green" data-act="use" data-k="${k}">Usar</button></div>`).join('')}
+        ${W.fert ? `<div class="ws-item on"><span class="ws-ic">🧪</span><b>Fertilizante ativo</b><span class="tiny">acaba em ${fmtT(W.fert - Date.now())}</span></div>` : ''}${W.incense ? `<div class="ws-item on"><span class="ws-ic">🕯️</span><b>Incenso ativo</b><span class="tiny">${W.incense} ovo(s) com shiny ×3</span></div>` : ''}</div>` : ''}
+      <h3>📋 Pedidos do dia</h3>
+      <div class="ws-orders">${W.orders.map(o => `<div class="ws-order ${o.done ? 'done' : ''}"><div class="ws-cost">${costChips(o.need)}</div>
+          <span class="tiny">🪙 ${o.gold} · +${o.xp} XP de Artesão${o.bonus ? ` · 🎁 ${Object.entries(o.bonus).map(([k, q]) => `${q}× ${k === 'tm' ? 'TM' : 'Ultra Ball'}`).join('')}` : ''}</span>
+          ${o.done ? '<span class="chip green">✔ Entregue</span>' : `<button class="btn sm primary" data-act="order" data-i="${o.idx}">📦 Entregar</button>`}</div>`).join('')}</div>
+      <p class="tiny muted">Novos pedidos todo dia à meia-noite.</p>
+      <h3>📜 Receitas</h3>
+      ${ARTISAN_LEVELS.map(L => `<div class="ws-tier ${lv.lvl >= L.lvl ? '' : 'locked'}"><div class="ws-tier-h">${lv.lvl >= L.lvl ? '' : '🔒 '}${esc(L.name)}${lv.lvl >= L.lvl ? '' : ` <span class="tiny muted">(${L.xp} XP de Artesão)</span>`}</div>
+        <div class="ws-recipes">${Object.entries(RECIPES).filter(([, R]) => R.lvl === L.lvl).map(([id, R]) => {
+          const weekDone = R.week && W.weekly[id];
+          return `<div class="ws-rec"><span class="ws-ic">${R.icon}</span><div class="grow"><b>${esc(R.name)}</b> <span class="tiny muted">${outTxt(R)}</span>
+            ${R.desc ? `<div class="tiny muted">${esc(R.desc)}</div>` : ''}<div class="ws-cost">${costChips(R.cost)}<span class="ws-c t">⏱️${R.hours}h</span>${R.week ? '<span class="ws-c t">1×/semana</span>' : ''}</div></div>
+            <button class="btn sm ${lv.lvl >= R.lvl && free > 0 && !weekDone ? 'primary' : ''}" data-act="craft" data-id="${id}" ${lv.lvl >= R.lvl && free > 0 && !weekDone ? '' : 'disabled'}>${weekDone ? 'Feita esta semana' : 'Fabricar'}</button></div>`;
+        }).join('')}</div></div>`).join('')}
+      <button class="btn" data-act="tab" data-t="farm" style="margin-top:8px">← Voltar</button>`;
+  };
+
   function render() {
     if (!farm) return;
-    const bodyHtml = head() + (tab === 'res' ? resView() : tab === 'visit' ? visitView() : tab === 'add' ? addView() : tab === 'creche' ? crecheView() : tab === 'pair' ? pairView() : scene() + actions() + monPanel());
+    const bodyHtml = head() + (tab === 'res' ? resView() : tab === 'visit' ? visitView() : tab === 'add' ? addView() : tab === 'creche' ? crecheView() : tab === 'pair' ? pairView() : tab === 'oficina' ? oficinaView() : scene() + actions() + monPanel());
     setModalBody('farm', bodyHtml);
   }
 
@@ -202,6 +247,15 @@ export async function openFarm(ctx, profile, userId = null) {
         <p class="small muted">Foi para a sua Coleção.</p></div>`);
       return r;
     }),
+    craft: d => run(() => api('profile', { op: 'farm_craft', recipe: d.id }), `🔨 ${RECIPES[d.id].name} na bancada!`),
+    claim: d => run(() => api('profile', { op: 'farm_claim', id: d.id }), r => `✨ ${RECIPES[r.got.recipe].icon} ${RECIPES[r.got.recipe].name} pronto! +${RECIPES[r.got.recipe].xp} XP de Artesão`),
+    order: d => run(() => api('profile', { op: 'farm_order', idx: Number(d.i) }), r => `📦 Pedido entregue! 🪙 +${r.reward.gold}${r.reward.bonus ? ' + 🎁 prêmio na Mochila' : ''}`),
+    use: d => {
+      if (d.k === 'candy') { candyPick = true; render(); return; }
+      run(() => api('profile', { op: 'farm_use', item: d.k }), r => r.message);
+    },
+    'candy-go': d => run(async () => { const r = await api('profile', { op: 'farm_use', item: 'candy', uid: d.uid }); candyPick = false; return r; }, r => r.message),
+    'candy-cancel': () => { candyPick = false; render(); },
     like: () => run(() => api('profile', { op: 'farm_like', userId: farm.owner.id }), '❤️ Curtido!'),
     help: () => run(() => api('profile', { op: 'farm_help', userId: farm.owner.id }), '🤝 Você cuidou dos Pokémon! +2 🍓')
   });

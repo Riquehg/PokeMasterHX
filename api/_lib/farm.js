@@ -8,6 +8,8 @@ import {
 import { bad, notFound, mutateProfile, getOrCreateProfile } from './core.js';
 import { canBreed, makeEgg, hatchFromEgg, eggsDue, EGG_EVERY_H, EGGS_PER_DAY, INCUBATOR_MAX, NATURE_COST, daycareDay } from '../../shared/data/daycare.js';
 import { createRng, randomSeed } from '../../shared/rules/rng.js';
+import { RECIPES, FARM_ITEMS, ARTISAN_LEVELS, artisanOf, benchesFor, CANDY_MAX_LEVEL, FERT_HOURS, RATION_HAPPY, INCENSE_EGGS, INCENSE_MULT, dailyOrders, weekId } from '../../shared/data/workshop.js';
+import { addToBag } from './core.js';
 import { myCosmetics } from './shop.js';
 
 const typesOf = mon => getSpecies(mon.sp)?.types || ['normal'];
@@ -35,7 +37,9 @@ function tickDaycare(farm, vm, now) {
     let natureFrom = dc.natureFrom || null;
     if (natureFrom && (farm.res.crystal || 0) >= NATURE_COST.crystal) farm.res.crystal -= NATURE_COST.crystal; else natureFrom = null;
     const rng = createRng(hashStr(`${dc.a}|${dc.b}|${laid}`));
-    farm.eggs.push(makeEgg(rng, chk.mother, chk.father, { natureFrom: natureFrom === 'mother' || natureFrom === 'father' ? natureFrom : null, now: laid }));
+    const shinyMult = farm.incense > 0 ? INCENSE_MULT : 1;
+    if (farm.incense > 0) farm.incense--;
+    farm.eggs.push(makeEgg(rng, chk.mother, chk.father, { natureFrom: natureFrom === 'mother' || natureFrom === 'father' ? natureFrom : null, now: laid, shinyMult }));
     farm.eggCount++;
   }
   // incubadora cheia: o relógio do próximo ovo espera (não acumula)
@@ -81,7 +85,19 @@ function view(prof, farm, viewerId) {
     })() : null,
     eggs: mine ? (farm.eggs || []).map(e => ({ id: e.id, tier: e.tier, readyAt: e.readyAt, ready: e.readyAt <= Date.now(), parentSp: e.parentSp, laid: e.laid })) : undefined,
     eggsToday: mine ? (farm.eggDay === daycareDay() ? farm.eggCount || 0 : 0) : undefined,
-    ownedDecor: mine ? Object.keys(FARM_DECOR).filter(k => FARM_DECOR[k].price === 0 || myCosmetics(prof).owned.includes(decorItemId(k))) : undefined
+    ownedDecor: mine ? Object.keys(FARM_DECOR).filter(k => FARM_DECOR[k].price === 0 || myCosmetics(prof).owned.includes(decorItemId(k)) || (farm.craftedDecor || []).includes(k)) : undefined,
+    workshop: mine ? (() => {
+      const day = brtDay();
+      const art = artisanOf(farm.axp);
+      const next = ARTISAN_LEVELS.find(l => l.lvl === art.lvl + 1);
+      return {
+        axp: farm.axp || 0, level: art, next: next || null, benches: benchesFor(farm.lvl),
+        jobs: (farm.jobs || []).map(j => ({ ...j, ready: j.done <= Date.now() })),
+        items: farm.items || {}, incense: farm.incense || 0, fert: farm.fert && farm.fert.until > Date.now() ? farm.fert.until : 0,
+        orders: dailyOrders(prof.id, day).map(o => ({ ...o, done: (farm.ordersDone?.[day] || []).includes(o.idx) })),
+        weekly: Object.fromEntries(Object.entries(farm.weekly || {}).filter(([, w]) => w === weekId()).map(([k]) => [k, true]))
+      };
+    })() : undefined
   };
 }
 
@@ -231,7 +247,7 @@ export async function farmOp(db, user, body) {
     const owned = new Set(myCosmetics(p).owned);
     const list = (Array.isArray(body.decor) ? body.decor : []).slice(0, DECOR_MAX).map(d => ({
       k: String(d?.k || ''), x: Math.max(2, Math.min(98, Number(d?.x) || 50)), y: Math.max(4, Math.min(96, Number(d?.y) || 50))
-    })).filter(d => FARM_DECOR[d.k] && (FARM_DECOR[d.k].price === 0 || owned.has(decorItemId(d.k))));
+    })).filter(d => FARM_DECOR[d.k] && (FARM_DECOR[d.k].price === 0 || owned.has(decorItemId(d.k)) || (p.stats?.farm?.craftedDecor || []).includes(d.k)));
     const { prof } = await save(db, user.id, farm => { farm.decor = list; return {}; });
     return { farm: view(prof, current(prof, now), user.id) };
   }
@@ -270,6 +286,110 @@ export async function farmOp(db, user, body) {
       return { vault: [...(cur.vault || []), baby], pokedex: [...pd], stats: { ...(cur.stats || {}), farm } };
     });
     return { farm: view(prof, current(prof, now), user.id), profile: prof, baby };
+  }
+
+  // ---------------------------------------------------------------- 🔨 Oficina
+  if (body.op === 'farm_craft') {
+    const id = String(body.recipe || '');
+    const R = RECIPES[id];
+    if (!R) bad('Receita inválida.');
+    const gold = R.cost.gold || 0;
+    const check = farm => {
+      if (artisanOf(farm.axp).lvl < R.lvl) bad(`Precisa ser ${ARTISAN_LEVELS[R.lvl - 1].name} (Nível de Artesão ${R.lvl}).`);
+      if ((farm.jobs || []).length >= benchesFor(farm.lvl)) bad(`Todas as bancadas estão ocupadas (${benchesFor(farm.lvl)}). Suba o nível da Fazenda para ter mais.`);
+      if (R.week && farm.weekly?.[id] === weekId(now)) bad('Essa receita só pode ser feita 1 vez por semana.');
+      for (const [k, q] of Object.entries(R.cost)) if (k !== 'gold' && (farm.res[k] || 0) < q) bad(`Faltam recursos: ${q} ${RESOURCES[k].icon} ${RESOURCES[k].name} (você tem ${farm.res[k] || 0}).`);
+    };
+    check(current(p, now)); // avisa antes de cobrar o ouro
+    if (gold) { const ok = await db.walletAdd(user.id, 0, -gold); if (!ok) bad(`Ouro insuficiente: precisa de 🪙 ${gold}.`); }
+    try {
+      const { prof } = await save(db, user.id, farm => {
+        check(farm);
+        if (artisanOf(farm.axp).lvl < R.lvl) bad(`Precisa ser ${ARTISAN_LEVELS[R.lvl - 1].name} (Nível de Artesão ${R.lvl}).`);
+        farm.jobs ||= [];
+        if (farm.jobs.length >= benchesFor(farm.lvl)) bad(`Todas as bancadas estão ocupadas (${benchesFor(farm.lvl)}). Suba o nível da Fazenda para ter mais.`);
+        if (R.week && farm.weekly?.[id] === weekId(now)) bad('Essa receita só pode ser feita 1 vez por semana.');
+        for (const [k, q] of Object.entries(R.cost)) if (k !== 'gold' && (farm.res[k] || 0) < q) bad(`Faltam recursos: ${q} ${RESOURCES[k].icon} ${RESOURCES[k].name} (você tem ${farm.res[k] || 0}).`);
+        for (const [k, q] of Object.entries(R.cost)) if (k !== 'gold') farm.res[k] -= q;
+        if (R.week) farm.weekly = { ...(farm.weekly || {}), [id]: weekId(now) };
+        farm.jobs.push({ id: 'j' + now.toString(36) + Math.floor(Math.random() * 1e4).toString(36), recipe: id, start: now, done: now + R.hours * 3600000 });
+        return {};
+      });
+      const fresh = (await db.getProfile(user.id)) || prof;
+      return { farm: view(fresh, current(fresh, now), user.id), profile: fresh };
+    } catch (e) {
+      if (gold) await db.walletAdd(user.id, 0, gold); // devolve o ouro se não deu para fabricar
+      throw e;
+    }
+  }
+  if (body.op === 'farm_claim') { // pegar da bancada
+    let got = null;
+    const { prof } = await save(db, user.id, farm => {
+      const j = (farm.jobs || []).find(x => x.id === body.id);
+      if (!j) bad('Bancada vazia.');
+      if (j.done > now) bad('Ainda fabricando.');
+      const R = RECIPES[j.recipe];
+      farm.jobs = farm.jobs.filter(x => x.id !== j.id);
+      farm.axp = (farm.axp || 0) + R.xp;
+      got = { recipe: j.recipe, out: R.out };
+      if (R.out.farm) for (const [k, q] of Object.entries(R.out.farm)) farm.items = { ...(farm.items || {}), [k]: ((farm.items || {})[k] || 0) + q };
+      if (R.out.decor) farm.craftedDecor = [...new Set([...(farm.craftedDecor || []), R.out.decor])];
+      return {};
+    });
+    let final = prof;
+    if (got?.out.bag) final = await mutateProfile(db, user.id, cur => ({ stats: { ...(cur.stats || {}), bag: addToBag(cur.stats?.bag, got.out.bag) } }));
+    return { farm: view(final, current(final, now), user.id), profile: final, got };
+  }
+  if (body.op === 'farm_order') { // 📋 entregar pedido do dia
+    const day = brtDay(now);
+    const o = dailyOrders(user.id, day)[Number(body.idx)];
+    if (!o) bad('Pedido inválido.');
+    const { prof } = await save(db, user.id, farm => {
+      const done = farm.ordersDone?.[day] || [];
+      if (done.includes(o.idx)) bad('Pedido já entregue hoje.');
+      for (const [k, q] of Object.entries(o.need)) if ((farm.res[k] || 0) < q) bad(`Faltam ${q} ${RESOURCES[k].icon} ${RESOURCES[k].name}.`);
+      for (const [k, q] of Object.entries(o.need)) farm.res[k] -= q;
+      farm.ordersDone = { [day]: [...done, o.idx] };
+      farm.axp = (farm.axp || 0) + o.xp;
+      addFarmXp(farm, 10);
+      return {};
+    });
+    await db.walletAdd(user.id, 0, o.gold);
+    let final = prof;
+    if (o.bonus) final = await mutateProfile(db, user.id, cur => ({ stats: { ...(cur.stats || {}), bag: addToBag(cur.stats?.bag, o.bonus) } }));
+    final = await db.getProfile(user.id) || final;
+    return { farm: view(final, current(final, now), user.id), profile: final, reward: { gold: o.gold, xp: o.xp, bonus: o.bonus } };
+  }
+  if (body.op === 'farm_use') { // usar item da Fazenda
+    const it = String(body.item || '');
+    if (!FARM_ITEMS[it]) bad('Item inválido.');
+    let msg = '';
+    const { prof } = await save(db, user.id, (farm, cur) => {
+      if (!((farm.items || {})[it] > 0)) bad(`Você não tem ${FARM_ITEMS[it].name}.`);
+      farm.items[it]--;
+      if (it === 'ration') { for (const s of farm.slots) s.happy = Math.min(100, (s.happy ?? 70) + RATION_HAPPY); msg = '🥣 Todo mundo feliz!'; }
+      if (it === 'fert') { const from = Math.max(now, farm.fert?.until || 0); farm.fert = { from: farm.fert?.until > now ? farm.fert.from : now, until: from + FERT_HOURS * 3600000 }; msg = `🧪 Recursos em dobro por ${FERT_HOURS} h!`; }
+      if (it === 'incense') { farm.incense = (farm.incense || 0) + INCENSE_EGGS; msg = `🕯️ Próximos ${INCENSE_EGGS} ovos com chance de shiny ×3!`; }
+      if (it === 'hatcher') {
+        const egg = (farm.eggs || []).find(e => e.id === body.egg) || (farm.eggs || []).find(e => e.readyAt > now);
+        if (!egg) bad('Nenhum ovo esperando para chocar.');
+        egg.readyAt = now; msg = '🧿 Ovo pronto para chocar!';
+      }
+      if (it === 'candy') {
+        const vault = (cur.vault || []).map(m => ({ ...m }));
+        const mon = vault.find(m => m.uid === body.uid);
+        if (!mon) bad('Escolha um Pokémon da Coleção.');
+        if (mon.lvl >= CANDY_MAX_LEVEL) bad(`O Doce Raro leva até o Nv. ${CANDY_MAX_LEVEL}.`);
+        const hadHp = mon.hp !== undefined; if (!hadHp) mon.hp = 1;
+        mon.xp = 0;
+        const msgs = gainXp(mon, xpToNext(mon.lvl));
+        if (!hadHp) delete mon.hp;
+        msg = `🍬 ${getSpecies(mon.sp).name} subiu para o Nv. ${mon.lvl}!${msgs.filter(x => x.includes('evoluiu')).map(x => ' ' + x).join('')}`;
+        return { vault };
+      }
+      return {};
+    });
+    return { farm: view(prof, current(prof, now), user.id), profile: prof, message: msg };
   }
 
   bad('Operação da Fazenda inválida.');

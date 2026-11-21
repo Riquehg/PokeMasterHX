@@ -54,7 +54,7 @@ export function eggsDue(dc, now, eggsToday, incubatorCount) {
 }
 
 /** Monta um ovo (o filhote já é decidido aqui; só aparece ao chocar). */
-export function makeEgg(rng, mother, father, { natureFrom = null, now = Date.now() } = {}) {
+export function makeEgg(rng, mother, father, { natureFrom = null, now = Date.now(), shinyMult = 1 } = {}) {
   const sp = baseForm(mother.sp === 'ditto' ? father.sp : mother.sp);
   const tier = getSpecies(sp)?.tier || 1;
   const parents = [mother, father];
@@ -66,7 +66,7 @@ export function makeEgg(rng, mother, father, { natureFrom = null, now = Date.now
   for (const k of keys) iv[k] = inherit.has(k) ? (rng.pick(parents).iv?.[k] ?? rng.int(0, IV_MAX)) : rng.int(0, IV_MAX);
   const mut = [];
   const bothShiny = mother.shiny && father.shiny;
-  const shiny = rng.chance(bothShiny ? MUTATION.shinyBothShiny : MUTATION.shiny);
+  const shiny = rng.chance((bothShiny ? MUTATION.shinyBothShiny : MUTATION.shiny) * shinyMult);
   if (shiny) mut.push('shiny');
   if (rng.chance(MUTATION.perfect)) { iv.hp = iv.atk = iv.spe = IV_MAX; mut.push('perfect'); }
   const aura = rng.chance(MUTATION.aura) ? rng.pick(EGG_AURAS) : null;

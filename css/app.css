@@ -1762,3 +1762,21 @@ body.in-game .soc-panel { height: min(520px, calc(100dvh - 80px)); }
 .dc-mut { margin: 8px auto; padding: 8px 12px; border-radius: 12px; font-weight: 900; color: var(--gold); background: rgba(255,210,90,.12); border: 1px solid var(--gold); display: inline-block; }
 .dc-born .pk-card { margin: 0 auto; }
 @keyframes dcWobble { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-14deg); } 75% { transform: rotate(14deg); } }
+/* 🔨 Oficina */
+.ws-art { padding: 8px 10px; border-radius: 10px; background: rgba(0,0,0,.25); margin-bottom: 6px; }
+.ws-jobs, .ws-items, .ws-orders { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
+.ws-job, .ws-item, .ws-order { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 10px; background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.1); }
+.ws-job.ready { border-color: var(--gold); box-shadow: 0 0 12px rgba(255,200,70,.35); }
+.ws-job.empty { border-style: dashed; align-items: center; justify-content: center; min-height: 64px; }
+.ws-item.on { border-color: #4ad07a; }
+.ws-order.done { opacity: .55; }
+.ws-ic { font-size: 26px; line-height: 1; }
+.ws-tier { margin-bottom: 8px; }
+.ws-tier.locked { opacity: .55; }
+.ws-tier-h { font-weight: 900; color: var(--gold); margin: 6px 0 4px; }
+.ws-recipes { display: flex; flex-direction: column; gap: 5px; }
+.ws-rec { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 10px; background: rgba(0,0,0,.22); }
+.ws-cost { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.ws-c { font-size: 11px; font-weight: 800; padding: 1px 6px; border-radius: 99px; background: rgba(74,208,122,.18); }
+.ws-c.miss { background: rgba(239,80,80,.25); color: #ffb3b3; }
+.ws-c.t { background: rgba(255,255,255,.1); }
