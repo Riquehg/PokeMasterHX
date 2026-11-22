@@ -28,7 +28,7 @@ const eloChip = r => { const e = eloOf(r); return `<span class="elo-chip" style=
 
 function chatHtml() {
   return `<div class="soc-msgs" id="soc-msgs">${st.chat.map(m => `<div class="soc-msg ${m.userId === st.myId ? 'me' : ''}">
-      <img src="${avatarUrl(m.avatar, skinOf(m.userId))}" alt="" data-soc="card" data-id="${esc(m.userId)}" style="cursor:pointer"><div><b data-soc="card" data-id="${esc(m.userId)}" style="cursor:pointer">${esc(m.name)}</b> <span class="tiny muted">${new Date(m.at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+      <img src="${avatarUrl(m.avatar, m.skin || skinOf(m.userId))}" alt="" data-soc="card" data-id="${esc(m.userId)}" style="cursor:pointer"><div><b data-soc="card" data-id="${esc(m.userId)}" style="cursor:pointer">${esc(m.name)}</b> <span class="tiny muted">${new Date(m.at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
       <div class="soc-text">${esc(m.text)}</div></div></div>`).join('') || '<p class="muted small center">Ninguém falou nada ainda. Diga oi! 👋</p>'}</div>
     <div class="soc-emojis">${EMOJIS.map(e => `<button data-emoji="${e}">${e}</button>`).join('')}</div>
     <div class="soc-send"><input class="input" id="soc-input" maxlength="240" placeholder="Mensagem para todos online..."><button class="btn primary sm" data-soc="send">Enviar</button></div>`;

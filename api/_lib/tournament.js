@@ -4,6 +4,7 @@ import { createMatch } from '../../shared/engine.js';
 import { randomSeed } from '../../shared/rules/rng.js';
 import { CUP_PRIZE, CUP_MIN_HUMANS_FOR_PRIZE, CUP_ELO_BONUS, DUEL_LEVEL_CAP, nextPow2 } from '../../shared/data/cup.js';
 import { serieFinished } from './series.js';
+import { skinFor, equippedCosmetic } from './shop.js';
 import { bad, notFound, publicMatch, eloDeltas, START_RATING, mutateProfile, leagueStats } from './core.js';
 
 const isCpu = id => String(id).startsWith('cpu_');
@@ -31,6 +32,11 @@ function botTeam(level, seed) {
 
 /** Cria uma partida de duelo já em andamento. */
 export async function createDuelMatch(db, { name, a, b, options, hostId, megas = false }) {
+  // cosméticos (skin, moldura...) de quem é gente: Torneio e Copa não traziam, e o peão aparecia com a foto padrão
+  for (const e of [a, b]) {
+    if (e.cosmetic || e.isBot || String(e.id).startsWith('cpu_')) continue;
+    try { const prof = await db.getProfile(e.id); if (prof) e.cosmetic = await equippedCosmetic(db, prof); } catch { /* sem cosmético */ }
+  }
   const state = createMatch({
     kind: 'duel', id: 'pending', mode: 'online', seed: randomSeed(), now: Date.now(), options: { megas: !!megas },
     players: [a, b].map(e => ({ id: e.id, name: e.name, avatar: e.avatar, isBot: !!e.isBot, teamMons: e.teamMons, cosmetic: e.cosmetic, megaKey: !!e.megaKey }))
@@ -38,7 +44,7 @@ export async function createDuelMatch(db, { name, a, b, options, hostId, megas =
   const finished = state.status === 'finished';
   const row = await db.insertMatch({
     code: 'D' + Math.random().toString(36).slice(2, 7).toUpperCase(), name, host_id: hostId, status: finished ? 'finished' : 'playing',
-    is_public: false, has_pin: false, options, lobby: [a, b].map(e => ({ id: e.id, name: e.name, avatar: e.avatar, isBot: !!e.isBot, ready: true })),
+    is_public: false, has_pin: false, options, lobby: [a, b].map(e => ({ id: e.id, name: e.name, avatar: e.avatar, skin: e.skin || e.cosmetic?.skin || null, isBot: !!e.isBot, ready: true })),
     state: { ...state, id: undefined }, version: 1
   });
   const fixed = { ...state, id: row.id };
@@ -57,7 +63,7 @@ export async function duelQueue(db, user, body, profile) {
   const live = await full(db, mine.find(m => m.options?.mode === 'duel' && m.status === 'playing'));
   if (live) return { match: publicMatch(live, user.id) };
   const waiting = await full(db, mine.find(m => m.options?.mode === 'duel_queue' && m.status === 'lobby'));
-  const entry = { id: user.id, name: profile.trainer_name, avatar: profile.avatar || 1, teamUids: (body.teamUids || []).map(String).slice(0, 6) };
+  const entry = { id: user.id, name: profile.trainer_name, avatar: profile.avatar || 1, skin: await skinFor(db, profile), teamUids: (body.teamUids || []).map(String).slice(0, 6) };
   entry.teamMons = await duelTeam(db, entry);
   if (!entry.teamMons) bad('Sua Coleção está vazia. Capture Pokémon no Treino ou no Online para montar um time.');
 
@@ -126,7 +132,7 @@ export async function startCup(db, row, lobby, userId) {
   const humans = lobby.filter(e => !e.isBot);
   const players = [];
   for (const e of lobby) {
-    const p = { id: e.id, name: e.name, avatar: e.avatar, isBot: !!e.isBot, teamUids: e.teamUids || [] };
+    const p = { id: e.id, name: e.name, avatar: e.avatar, skin: e.skin || null, isBot: !!e.isBot, teamUids: e.teamUids || [] };
     p.teamMons = e.isBot ? null : await duelTeam(db, p, levelCap);
     if (!e.isBot && !p.teamMons) bad(`${e.name} não tem Pokémon na Coleção.`);
     players.push(p);
@@ -145,7 +151,7 @@ export async function startCup(db, row, lobby, userId) {
   }
   const cup = {
     kind: 'cup', status: 'playing', levelCap, humans: humans.length,
-    players: players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar, isBot: p.isBot })),
+    players: players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar, skin: p.skin || null, isBot: p.isBot })),
     teams: Object.fromEntries(players.map(p => [p.id, p.teamMons])),
     rounds: [round], champion: null, runnerUp: null, prize: null, log: [`🏟️ Copa iniciada com ${players.length} treinadores!`]
   };

@@ -40,7 +40,7 @@ export function showFeedBanner(ev) {
   const d = ev.data || {};
   const el = document.createElement('div');
   el.className = `feed-banner ${ev.kind}`;
-  const pic = d.sp ? `<img src="${monSprite(d.sp, d.shiny)}" alt="">` : d.avatar ? `<img src="${avatarUrl(d.avatar)}" alt="">` : '<span style="font-size:30px">👑</span>';
+  const pic = d.sp ? `<img src="${monSprite(d.sp, d.shiny)}" alt="">` : d.avatar ? `<img src="${avatarUrl(d.avatar, d.skin)}" alt="">` : '<span style="font-size:30px">👑</span>';
   el.innerHTML = `${pic}<div><div class="fb-kick">${ev.kind === 'legendary' ? '⚡ CAPTURA LENDÁRIA' : ev.kind === 'shiny' ? '✨ CAPTURA SHINY' : ev.kind === 'champion' ? '👑 NOVO CAMPEÃO' : ev.kind === 'market' ? '🏪 MERCADO GLOBAL' : '📢'}</div><div class="fb-text">${esc(ev.text)}</div></div>`;
   box.appendChild(el);
   if (ev.kind === 'legendary' || ev.kind === 'champion') confetti(60);

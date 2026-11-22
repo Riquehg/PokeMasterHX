@@ -54,6 +54,11 @@ export function myCosmetics(profile) {
 }
 
 /** Skin de treinador equipada (com a vitrine já carregada — para listas com muitos perfis). */
+/** Skin equipada de um perfil, buscando a vitrine (para listas que mostram a foto do treinador). */
+export async function skinFor(db, profile) {
+  try { return equippedSkin(profile, (await getShop(db)).items || []); } catch { return null; }
+}
+
 export function equippedSkin(profile, items) {
   const id = myCosmetics(profile || {}).equipped.skin;
   return sanitizeCosmetic({ skin: id ? items.find(i => i.id === id)?.value : null })?.skin || null;
@@ -271,7 +276,7 @@ export async function feedOp(db, body) {
   // mural do início: últimas capturas de lendários e shinies
   if (body.kinds === 'captures') {
     const rows = db.listFeedKinds ? await db.listFeedKinds(['shiny', 'legendary'], 15) : [];
-    return { captures: rows.map(r => ({ id: r.id, kind: r.kind, text: r.text, sp: r.data?.sp, shiny: !!r.data?.shiny, name: r.data?.name, avatar: r.data?.avatar, at: r.created_at })) };
+    return { captures: rows.map(r => ({ id: r.id, kind: r.kind, text: r.text, sp: r.data?.sp, shiny: !!r.data?.shiny, name: r.data?.name, avatar: r.data?.avatar, skin: r.data?.skin || null, at: r.created_at })) };
   }
   const since = Math.max(0, Number(body.since) || 0);
   const events = await db.listFeed(since, 20);
@@ -292,7 +297,7 @@ export async function publishCaptures(db, state, fxList) {
     await db.insertFeed({
       kind: shiny ? 'shiny' : 'legendary',
       text: `${p.name} ${f.via === 'egg' ? 'chocou' : 'capturou'} ${species.mythical ? 'o MÍTICO ' : species.ultra ? 'a Ultracriatura ' : species.tier >= 5 ? 'o lendário ' : ''}${what}!`,
-      data: { sp, shiny, name: p.name, avatar: p.avatar }
+      data: { sp, shiny, name: p.name, avatar: p.avatar, skin: p.cosmetic?.skin || null }
     });
   }
 }

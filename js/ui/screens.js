@@ -567,7 +567,7 @@ export async function roomScreen(root, ctx, matchId) {
             ${TEAM_MODES.includes(mode) ? `<select class="input" id="o-cap">${[[0, 'Sem limite de nível'], [15, 'Nível máx 15'], [25, 'Nível máx 25'], [35, 'Nível máx 35'], [45, 'Nível máx 45'], [50, 'Nível máx 50']].map(([v, l]) => `<option value="${v}" ${v === (o.levelCap || 0) ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}
           </div>` : ''}
           <div class="list" style="max-height:none">${match.lobby.map(e => `
-            <div class="list-item"><img class="avatar sm" src="${avatarUrl(e.avatar)}" alt="${esc(e.name)}">
+            <div class="list-item"><img class="avatar sm" src="${avatarUrl(e.avatar, e.skin)}" alt="${esc(e.name)}">
               <div class="grow"><b>${esc(e.name)}</b> ${e.id === match.hostId ? '<span class="chip gold">anfitrião</span>' : ''} ${e.isBot ? '<span class="chip">CPU</span>' : e.ready || e.id === match.hostId ? '<span class="chip green">pronto</span>' : '<span class="chip">aguardando</span>'}
                 <div class="tiny muted">${teamTxt(e)}</div></div>
               ${isHost && e.id !== meId ? `<button class="btn sm red" data-act="kick" data-id="${esc(e.id)}">✕</button>` : ''}

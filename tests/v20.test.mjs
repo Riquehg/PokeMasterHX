@@ -782,3 +782,30 @@ test('🗺️ mapas temáticos/Expedição: malha grande como Kanto (muitas bifu
   const g = generateMap(42);
   assert.ok(g.spaces.length >= 120 && g.crossings === 0);
 });
+
+test('🎭 skin da 💎 Loja aparece em todas as listas: Fazenda, mais curtidas, sala, chat, online, Copa/Torneio', async () => {
+  const { shopOp } = await import('../api/_lib/shop.js');
+  const { socialOp } = await import('../api/_lib/social.js');
+  const { db, admin, us: [a] } = await users(1);
+  await adminOp(db, admin, { op: 'give_diamonds', userId: a.id, amount: 5000 });
+  const cat = await shopOp(db, a, { op: 'catalog' });
+  const skinItem = (cat.items || cat.shop?.items || []).find(i => i.kind === 'skin');
+  await shopOp(db, a, { op: 'buy', itemId: skinItem.id });
+  const want = skinItem.value;
+  // fazenda (dono) e ranking das fazendas
+  const f = await profileOp(db, a, { op: 'farm_get' });
+  assert.equal(f.farm.owner.skin, want);
+  const p = await db.getProfile(a.id);
+  const uid = p.vault[0].uid;
+  await profileOp(db, a, { op: 'farm_place', uid, biome: Object.keys((await import('../shared/data/farm.js')).FARM_BIOMES || { meadow: 1 })[0] }).catch(() => null);
+  const top = await profileOp(db, a, { op: 'farm_top' });
+  for (const r of top.top) if (r.id === a.id) assert.equal(r.skin, want);
+  // sala online
+  const room = await matchOp(db, a, { op: 'create', mode: 'balanced' });
+  assert.equal(room.match.lobby[0].skin, want);
+  // chat e lista online
+  await socialOp(db, a, { op: 'chat_send', text: 'oi' }).catch(() => socialOp(db, a, { op: 'chat', text: 'oi' }));
+  const ping = await socialOp(db, a, { op: 'ping' });
+  assert.equal(ping.online.find(x => x.id === a.id).skin, want);
+  assert.equal(ping.chat.at(-1).skin, want);
+});

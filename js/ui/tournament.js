@@ -67,7 +67,7 @@ export function cupScreen(el, ctx, match) {
     const slot = (id, win) => {
       if (!id) return '<div class="cup-slot bye">— passe direto —</div>';
       const p = pl(id);
-      return `<div class="cup-slot ${win === id ? 'win' : win ? 'lose' : ''} ${id === meId ? 'me' : ''}"><img src="${avatarUrl(p.avatar)}" alt=""><span>${esc(p.name)}</span>${win === id ? '<b>✔</b>' : ''}</div>`;
+      return `<div class="cup-slot ${win === id ? 'win' : win ? 'lose' : ''} ${id === meId ? 'me' : ''}"><img src="${avatarUrl(p.avatar, p.skin)}" alt=""><span>${esc(p.name)}</span>${win === id ? '<b>✔</b>' : ''}</div>`;
     };
     const rounds = [];
     for (let r = 0; r < total; r++) {
@@ -85,7 +85,7 @@ export function cupScreen(el, ctx, match) {
     el.innerHTML = `<div class="screen cup-screen"><div class="card">
       <div class="row" style="justify-content:space-between"><h2>🏟️ ${esc(m.name)}</h2><button class="btn" data-act="back">← Menu</button></div>
       <p class="small muted">${prizeTxt} · Nível máx ${cup.levelCap}</p>
-      ${champ ? `<div class="banner-win"><img src="${avatarUrl(champ.avatar)}" class="avatar" alt=""><h2>👑 ${esc(champ.name)} é o campeão!</h2>
+      ${champ ? `<div class="banner-win"><img src="${avatarUrl(champ.avatar, champ.skin)}" class="avatar" alt=""><h2>👑 ${esc(champ.name)} é o campeão!</h2>
         ${cup.prize?.champion ? `<p>Prêmio: ${cup.prize.champion} 💎${cup.prize.runnerUp ? ` · vice: ${cup.prize.runnerUp} 💎` : ''}${cup.prize.elo ? ` · +${cup.prize.elo} Elo` : ''}</p>` : ''}</div>` : ''}
       <div class="cup-bracket">${rounds.join('')}</div>
       <div class="cup-log">${(cup.log || []).slice(-8).reverse().map(l => `<div class="small">${esc(l)}</div>`).join('')}</div>

@@ -56,7 +56,7 @@ function draw() {
       return `<div class="wall-item ${x.shiny ? 'shiny' : ''} ${sp?.tier >= 5 ? 'legend' : ''}">
         <img class="wi-mon" src="${monSprite(x.sp, x.shiny)}" alt="" loading="lazy">
         <div class="grow"><b>${esc(sp?.name || x.sp)}${x.shiny ? ' ✨' : ''}</b>${sp?.tier >= 5 ? ' <span class="chip gold">Lendário</span>' : ''}
-          <div class="tiny"><img class="wi-av" src="${avatarUrl(x.avatar)}" alt=""> ${esc(x.name || '?')} · <span class="muted">${ago(x.at)}</span></div></div></div>`;
+          <div class="tiny"><img class="wi-av" src="${avatarUrl(x.avatar, x.skin)}" alt=""> ${esc(x.name || '?')} · <span class="muted">${ago(x.at)}</span></div></div></div>`;
     }).join('') || '<p class="tiny muted center">Ninguém capturou um lendário ou shiny ainda. Seja o primeiro!</p>'}</div></div>`;
 }
 

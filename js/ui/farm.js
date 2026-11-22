@@ -138,7 +138,7 @@ export async function openFarm(ctx, profile, userId = null) {
   };
 
   const head = () => `<div class="fm-head">
-      <img class="avatar sm" src="${avatarUrl(farm.owner.avatar)}" alt=""><div class="grow"><b>${farm.mine ? 'Minha Fazenda' : `Fazenda de ${esc(farm.owner.name)}`}</b>
+      <img class="avatar sm" src="${avatarUrl(farm.owner.avatar, farm.owner.skin)}" alt=""><div class="grow"><b>${farm.mine ? 'Minha Fazenda' : `Fazenda de ${esc(farm.owner.name)}`}</b>
         <div class="tiny muted">Nv. ${farm.lvl} · ${farm.slots.length}/${farm.slotsMax} vagas · ❤️ ${farm.likes}</div>
         <div class="fm-bar small"><i style="width:${Math.min(100, (farm.xp / farm.xpNext) * 100)}%"></i></div></div>
       ${farm.mine ? `<div class="fm-res">${Object.entries(RESOURCES).map(([k, r]) => `<span title="${r.name}">${r.icon}${farm.res?.[k] || 0}</span>`).join('')}</div>` : ''}</div>`;
@@ -176,7 +176,7 @@ export async function openFarm(ctx, profile, userId = null) {
 
   const visitView = () => {
     if (!visitList) return '<span class="spinner"></span>';
-    const row = f => `<div class="list-item row" style="gap:8px"><img class="avatar sm" src="${avatarUrl(f.avatar)}" alt=""><div class="grow"><b>${esc(f.name)}</b>${f.likes !== undefined ? `<div class="tiny muted">❤️ ${f.likes} · Nv. ${f.lvl} · ${f.mons} Pokémon</div>` : ''}</div><button class="btn sm primary" data-act="visit" data-id="${esc(f.id)}">Visitar</button></div>`;
+    const row = f => `<div class="list-item row" style="gap:8px"><img class="avatar sm" src="${avatarUrl(f.avatar, f.skin)}" alt=""><div class="grow"><b>${esc(f.name)}</b>${f.likes !== undefined ? `<div class="tiny muted">❤️ ${f.likes} · Nv. ${f.lvl} · ${f.mons} Pokémon</div>` : ''}</div><button class="btn sm primary" data-act="visit" data-id="${esc(f.id)}">Visitar</button></div>`;
     return `<h3>👥 Amigos</h3><div class="list">${visitList.friends.map(row).join('') || '<p class="tiny muted">Adicione amigos no 💬 chat para visitar as Fazendas deles.</p>'}</div>
       <h3 style="margin-top:10px">❤️ Fazendas mais curtidas</h3><div class="list">${visitList.top.filter(f => f.id !== me?.id).map(row).join('') || '<p class="tiny muted">Nenhuma ainda.</p>'}</div>
       <button class="btn" data-act="tab" data-t="farm" style="margin-top:8px">← Voltar</button>`;

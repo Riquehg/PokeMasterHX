@@ -12,7 +12,9 @@ import { COMPANIONS, bondLevel } from '../../shared/data/companions.js';
 import { COMPANION_DECAY_MULT, COMPANION_CARE_BOND } from '../../shared/data/farm.js';
 import { RECIPES, FARM_ITEMS, ARTISAN_LEVELS, artisanOf, benchesFor, CANDY_MAX_LEVEL, FERT_HOURS, RATION_HAPPY, INCENSE_EGGS, INCENSE_MULT, dailyOrders, weekId } from '../../shared/data/workshop.js';
 import { addToBag } from './core.js';
-import { myCosmetics } from './shop.js';
+import { myCosmetics, getShop, equippedSkin } from './shop.js';
+
+let shopItems = []; // vitrine (para a skin do treinador nas listas), recarregada a cada chamada
 import { MEGAS, fragItemId } from '../../shared/data/megas.js';
 import { ITEMS } from '../../shared/data/items.js';
 
@@ -73,7 +75,7 @@ function view(prof, farm, viewerId) {
   const mine = prof.id === viewerId;
   const day = brtDay();
   return {
-    owner: { id: prof.id, name: prof.trainer_name, avatar: prof.avatar },
+    owner: { id: prof.id, name: prof.trainer_name, avatar: prof.avatar, skin: equippedSkin(prof, shopItems) },
     mine,
     lvl: farm.lvl, xp: farm.xp, xpNext: farmLevelXp(farm.lvl), slotsMax: slotsFor(farm.lvl),
     slots: farm.slots.map(s => {
@@ -127,6 +129,7 @@ async function save(db, userId, fn) {
 }
 
 export async function farmOp(db, user, body) {
+  try { shopItems = (await getShop(db)).items || []; } catch { shopItems = []; }
   const p = await getOrCreateProfile(db, user);
   const now = Date.now();
 
@@ -141,7 +144,7 @@ export async function farmOp(db, user, body) {
 
   if (body.op === 'farm_top') { // ❤️ Fazendas mais curtidas
     const rows = await db.listProfiles(2000);
-    const top = rows.filter(r => r.stats?.farm?.slots?.length).map(r => ({ id: r.id, name: r.trainer_name, avatar: r.avatar, likes: r.stats.farm.likes || 0, lvl: r.stats.farm.lvl || 1, mons: r.stats.farm.slots.length }))
+    const top = rows.filter(r => r.stats?.farm?.slots?.length).map(r => ({ id: r.id, name: r.trainer_name, avatar: r.avatar, skin: equippedSkin(r, shopItems), likes: r.stats.farm.likes || 0, lvl: r.stats.farm.lvl || 1, mons: r.stats.farm.slots.length }))
       .sort((a, b) => b.likes - a.likes || b.lvl - a.lvl).slice(0, 30);
     return { top };
   }

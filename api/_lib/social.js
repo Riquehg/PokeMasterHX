@@ -44,7 +44,13 @@ async function trainerCard(db, id) {
     }
   };
 }
-const pubChat = c => ({ id: c.id, userId: c.user_id, name: c.name, avatar: c.avatar, text: c.text, at: c.created_at });
+const pubChat = (c, skins = {}) => ({ id: c.id, userId: c.user_id, name: c.name, avatar: c.avatar, skin: skins[c.user_id] || null, text: c.text, at: c.created_at });
+/** Skins de quem falou no chat (a tabela do chat só guarda o avatar). */
+async function chatSkins(db, rows) {
+  const ids = [...new Set(rows.map(r => r.user_id).filter(Boolean))];
+  if (!ids.length || !db.getProfilesByIds) return {};
+  try { const ps = await db.getProfilesByIds(ids); return Object.fromEntries(ps.map(p => [p.id, equippedSkin(p, SHOP_ITEMS)])); } catch { return {}; }
+}
 
 // filtro simples de palavrões/links (o admin pode apagar mensagens)
 const BLOCK = /(https?:\/\/|www\.)/i;
@@ -93,7 +99,7 @@ export async function socialOp(db, user, body) {
       ]);
       return {
         online: online.map(pub), onlineCount: online.length,
-        chat: chat.reverse().map(pubChat),
+        chat: (skins => chat.reverse().map(c => pubChat(c, skins)))(await chatSkins(db, chat)),
         friendRequests: f.filter(r => r.friend_id === user.id && r.status === 'pending').length
       };
     }
@@ -108,7 +114,8 @@ export async function socialOp(db, user, body) {
       if (me?.stats?.muted) bad('Você está silenciado no chat global.');
       const row = await db.insertChat({ user_id: user.id, name: cleanName(me?.trainer_name), avatar: me?.avatar || 1, text });
       await db.touchSeen(user.id);
-      return { message: pubChat(row) };
+      await loadShop(db);
+      return { message: pubChat(row, await chatSkins(db, [row])) };
     }
 
     case 'chat_delete': { // só admin

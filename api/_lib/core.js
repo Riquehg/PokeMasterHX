@@ -18,7 +18,7 @@ import { ITEMS, isKeepable, cleanBring, BAG_MAX_PER_ITEM, STARTING_ITEMS } from 
 import { tmMovesFor, defaultMoveIds, MOVES } from '../../shared/data/moves.js';
 import { MEGAS, megaByStone } from '../../shared/data/megas.js';
 import { bondLevel, bondGain, BOND_MAX, COMPANIONS } from '../../shared/data/companions.js';
-import { equippedCosmetic, equippedSkin, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment } from './shop.js';
+import { equippedCosmetic, equippedSkin, skinFor, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment } from './shop.js';
 
 export class HttpError extends Error {
   constructor(status, message) {
@@ -317,7 +317,7 @@ export async function leaderboard(db) {
   const season = seasonId();
   const league = rows.filter(r => r.stats?.league).map(r => {
     const L = ensureSeason(r.stats.league, season).league;
-    return { name: r.trainer_name, avatar: r.avatar, div: L.div, lp: L.lp, wins: L.wins, losses: L.losses, games: L.games, streak: L.streak, last: L.last || [], shield: L.shield || 0 };
+    return { id: r.id, name: r.trainer_name, avatar: r.avatar, skin: equippedSkin(r, shopItems), div: L.div, lp: L.lp, wins: L.wins, losses: L.losses, games: L.games, streak: L.streak, last: L.last || [], shield: L.shield || 0 };
   }).sort(leagueSort);
   const divisions = LEAGUE_DIVS.map(d => ({ ...d, players: league.filter(x => x.div === d.idx).slice(0, 30) })).filter(d => d.players.length);
   return {
@@ -519,9 +519,9 @@ async function leaveOldLobbies(db, user) {
   }
 }
 
-function lobbyEntry(profile, body) {
+function lobbyEntry(profile, body, skin = null) {
   const starter = SPECIES[body.starter] && STARTERS.includes(body.starter) ? body.starter : 'bulbasaur';
-  return { id: profile.id, name: cleanName(profile.trainer_name), avatar: profile.avatar || 1, starter, teamUids: [], isBot: false, ready: false };
+  return { id: profile.id, name: cleanName(profile.trainer_name), avatar: profile.avatar || 1, skin, starter, teamUids: [], isBot: false, ready: false };
 }
 
 function botEntry(n) {
@@ -759,7 +759,7 @@ async function createRoom(db, user, body) {
   const options = normalizeOptions({ mode: body.mode, maxPlayers: body.maxPlayers, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap, map: body.map, rules: body.rules, hardcore: !!body.hardcore, megas: !!body.megas });
   if (options.mode === 'solo') options.mode = 'balanced';
   const pin = String(body.pin || '').replace(/\D/g, '').slice(0, 6);
-  const row = await insertRoom(db, user, { name, options, isPublic: body.isPublic !== false, pin, lobby: [lobbyEntry(profile, body)] });
+  const row = await insertRoom(db, user, { name, options, isPublic: body.isPublic !== false, pin, lobby: [lobbyEntry(profile, body, await skinFor(db, profile))] });
   return { match: publicMatch(row, user.id) };
 }
 
@@ -788,7 +788,7 @@ async function createSolo(db, user, body) {
   const bots = Math.max(1, Math.min(5, Number(body.bots) || 1));
   const useCollection = Array.isArray(body.teamUids) && body.teamUids.length > 0;
   const options = normalizeOptions({ mode: useCollection ? 'collection' : 'balanced', maxPlayers: bots + 1, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap || 0, map: body.map, rules: body.rules, hardcore: !!body.hardcore, megas: !!body.megas });
-  const entry = lobbyEntry(profile, body);
+  const entry = lobbyEntry(profile, body, await skinFor(db, profile));
   if (useCollection) {
     const owned = new Set((profile.vault || []).map(v => v.uid));
     entry.teamUids = [...new Set(body.teamUids.map(String))].filter(u => owned.has(u)).slice(0, 6);
@@ -819,7 +819,7 @@ async function joinRoom(db, user, body) {
   const lobby = [...(row.lobby || [])];
   if (lobby.length >= (row.options?.maxPlayers || 4)) bad('Sala cheia.');
   const profile = await getOrCreateProfile(db, user);
-  lobby.push(lobbyEntry(profile, body));
+  lobby.push(lobbyEntry(profile, body, await skinFor(db, profile)));
   await db.addMember(row.id, user.id);
   return save(db, row, { lobby }, user.id);
 }
@@ -833,7 +833,7 @@ async function joinLate(db, user, row, body) {
     if (String(body.pin || '') !== pin) forbidden('PIN incorreto.');
   }
   const profile = await getOrCreateProfile(db, user);
-  const e = lobbyEntry(profile, body);
+  const e = lobbyEntry(profile, body, await skinFor(db, profile));
   if (options.mode === 'collection') {
     const owned = new Map((profile.vault || []).map(v => [v.uid, v]));
     let uids = [...new Set((Array.isArray(body.teamUids) ? body.teamUids : []).map(String))].filter(u => owned.has(u)).slice(0, 6);
@@ -1021,7 +1021,7 @@ export async function recordResults(db, state, options = {}) {
     }
     const patch = { stats: st, points: calcPoints(prof.pokedex || [], st) };
     if (p.champion && db.insertFeed) {
-      try { await db.insertFeed({ kind: 'champion', text: `👑 ${p.name} venceu a Liga e se tornou Campeão!`, data: { name: p.name, avatar: p.avatar } }); } catch { /* ok */ }
+      try { await db.insertFeed({ kind: 'champion', text: `👑 ${p.name} venceu a Liga e se tornou Campeão!`, data: { name: p.name, avatar: p.avatar, skin: p.cosmetic?.skin || null } }); } catch { /* ok */ }
     }
     if (ranked) {
       st.ranked = (st.ranked || 0) + 1;

@@ -9,13 +9,13 @@ const svcOwned = (me, v) => (v === 'vault50' ? me.vaultBonus : v === 'nickname' 
 
 const money = v => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-function preview(item, avatar) {
+function preview(item, avatar, mySkin = null) {
   if (item.kind === 'ball_style') return `<div class="cos-prev mon aura-${esc(item.value)}" style="min-height:0;cursor:default"><img src="${monSprite('pikachu')}" alt="Pikachu"></div>`;
   if (item.kind === 'skin') return `<div class="cos-skin"><img src="${avatarUrl(avatar, item.value)}" alt="${esc(item.name)}"></div>`;
-  if (item.kind === 'frame') return `<img class="avatar frame-${esc(item.value)}" src="${avatarUrl(avatar)}" alt="moldura">`;
+  if (item.kind === 'frame') return `<img class="avatar frame-${esc(item.value)}" src="${avatarUrl(avatar, mySkin)}" alt="moldura">`;
   if (item.kind === 'dice') return `<div class="cos-dice dice-${esc(item.value)}"><div class="face f5"><i></i><i></i><i></i><i></i><i></i></div></div>`;
   if (item.kind === 'arena') return `<div class="cos-arena arena arena-${esc(item.value)}"><img src="${monSprite('pikachu')}" alt=""></div>`;
-  if (item.kind === 'card') return `<div class="cos-card tcard-${esc(item.value)}"><img class="avatar" src="${avatarUrl(avatar)}" alt=""><span></span></div>`;
+  if (item.kind === 'card') return `<div class="cos-card tcard-${esc(item.value)}"><img class="avatar" src="${avatarUrl(avatar, mySkin)}" alt=""><span></span></div>`;
   if (item.kind === 'victory') return `<button class="cos-victory" data-act="vic-try" data-v="${esc(item.value)}" title="Ver o efeito">${VIC_ICON[item.value] || '🎉'}<span class="tiny">ver</span></button>`;
   if (item.kind === 'decor') return `<div class="cos-svc" style="font-size:40px">${esc(String(item.name).split(' ')[0])}</div>`;
   if (item.kind === 'service') return `<div class="cos-svc">${item.value === 'vault50' ? '📦+50' : '✏️'}</div>`;
@@ -55,7 +55,7 @@ export async function openShop(profile, onChange, onClose, startTab = 'cosmetics
       return `<h3 style="margin:10px 0 6px">${esc(label)}</h3><div class="cos-grid">${items.map(i => {
         const svc = kind === 'service' || kind === 'decor';
         const owned = kind === 'service' ? svcOwned(me, i.value) : me.owned.includes(i.id), on = me.equipped[kind] === i.id;
-        return `<div class="cos ${on ? 'on' : ''}">${preview(i, profile?.avatar)}
+        return `<div class="cos ${on ? 'on' : ''}">${preview(i, profile?.avatar, profile?.cosmetic?.skin)}
           <b>${esc(i.name)}</b><div class="tiny muted">${esc(i.desc)}</div>
           ${owned && svc ? '<span class="chip green">✔ Liberado</span>' : owned
             ? `<button class="btn sm ${on ? '' : 'green'}" data-act="equip" data-kind="${kind}" data-id="${on ? '' : esc(i.id)}">${on ? 'Desequipar' : 'Equipar'}</button>`
