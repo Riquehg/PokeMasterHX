@@ -30,6 +30,7 @@ import { cardsForTier } from './data/events.js';
 import { proposeTrade, respondTrade } from './rules/trade.js';
 import { initMissions, progressMission, playerCompanionBonus } from './rules/missions.js';
 import { COMPANIONS } from './data/companions.js';
+import { isLegendOrMyth, legendCapBlocked, LEGEND_MATCH_LIMIT } from './rules/battle.js';
 import { pickRaidMega, pickWildMega, makeMegaBoss, grantMegaRewards, MEGA_RAID_CHANCE, MEGA_WILD_CHANCE } from './rules/mega.js';
 import { startGroupRaid, startCatchStage, raidWaiting, raidAction, raidBallChance } from './rules/raid.js';
 import { sanitizeCosmetic, cleanNick } from './data/cosmetics.js';
@@ -475,6 +476,8 @@ function advanceTurn(state, now) {
 }
 
 function checkTurnLimit(state) {
+  // partidas online (salvam na conta) criadas antes da v35 sem limite: terminam no turno 60
+  if (state.mode !== 'local' && !state.options.turnLimit) state.options.turnLimit = 60;
   if (state.status !== 'playing' || !state.options.turnLimit) return;
   if (state.turn > state.options.turnLimit) {
     const r = rulesOf(state);
@@ -926,10 +929,12 @@ function wildEncounter(state, rng, p, sp, tier, opts = {}) {
       log(state, `💎 Uma energia estranha… um ${speciesName(mon.sp)} selvagem apareceu! (não dá para capturar — vença para ganhar fragmentos)`, 'shiny');
     }
     state.board[sp.id] = mon;
+    if (sp.type === 'pokemon' && tier >= 5 && isLegendOrMyth(mon)) mon.yellowLegend = true; // ⚡ conta no limite por partida
   } else {
     log(state, `👀 O ${speciesName(mon.sp)} que já estava aqui continua à espreita (HP ${mon.hp}/${maxHpOf(mon)}).`);
   }
   scaleWildForRoyale(state, rng, p, mon, tier);
+  if (legendCapBlocked(p, mon)) log(state, `⚡ ${p.name} já capturou ${LEGEND_MATCH_LIMIT} lendários das casas Amarelas nesta partida: dá para lutar e ganhar XP, mas este não pode ser capturado.`, 'event');
   if (mon.shiny) fx(state, { k: 'shiny', pid: p.id });
   startBattle(state, { kind: 'wild', pid: p.id, foe: { kind: 'wild', mon, spaceId: sp.id } });
   state.phase = 'battle';

@@ -197,6 +197,7 @@ function validateChoice(state, si, choice) {
     }
     case 'ball': {
       if (b.kind !== 'wild') fail('Só dá para capturar Pokémon selvagens.');
+      if (legendCapBlocked(getPlayer(state, b.sides[si].pid), sideActive(state, b.sides[1 - si]))) fail(`⚡ Você já capturou ${LEGEND_MATCH_LIMIT} lendários das casas Amarelas nesta partida — este não dá para capturar (vença para ganhar XP).`);
       if (sideActive(state, b.sides[1 - si])?.megaBoss) fail('Esse Pokémon está cheio de energia Mega — não dá para capturar. Vença para ganhar fragmentos!');
       const it = getItem(choice.item);
       if (!it || it.kind !== 'ball') fail('Escolha uma Pokébola.');
@@ -695,6 +696,13 @@ function companionAssist(state, rng, si) {
   return false;
 }
 
+// ⚡ Limite de lendários da casa Amarela: 2 capturas por jogador por partida (Raid, eventos e Megas não contam)
+export const LEGEND_MATCH_LIMIT = 2;
+export const isLegendOrMyth = mon => { const sp = getSpecies(mon?.sp); return !!(sp && (sp.legendary || sp.mythical)); };
+export function legendCapBlocked(player, foe) {
+  return !!(foe?.yellowLegend && (player?.legendCaught || 0) >= LEGEND_MATCH_LIMIT);
+}
+
 /** Por que este lado NÃO pode Mega Evoluir agora? (null = pode) */
 export function megaBlock(state, si) {
   const b = state.battle;
@@ -895,6 +903,7 @@ export function deliverCapture(state, pid, mon, ballId) {
   if (ballId && getItem(ballId)?.trust) mon.trust = true; // Bola da Confiança: obedece sem insígnias
   mon.ball = ballId;
   if (ballId) progressMission(state, pid, { k: 'capture', sp: mon.sp });
+  if (mon.yellowLegend) { p.legendCaught = (p.legendCaught || 0) + 1; delete mon.yellowLegend; }
   const where = giveMon(p, mon);
   p.lastPlaced = { uid: mon.uid, where }; // ➕ dá para escolher na hora: equipe ou PC (ação 'place')
   (p.captureLog ||= []).push({ sp: mon.sp, shiny: !!mon.shiny, t: state.turn || 0 });

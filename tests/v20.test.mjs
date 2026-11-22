@@ -732,3 +732,36 @@ test('🔐 admin: ver conta, procurar e-mail, ativar, senha nova, e-mails e tira
   await adminOp(db, admin, { op: 'remove_bracelet', userId: a.id });
   assert.equal((await db.getProfile(a.id)).stats.megaBracelet, undefined);
 });
+
+test('⚡ casa Amarela: no máximo 2 lendários capturados por partida (Raid/evento não contam)', async () => {
+  const { applyAction } = await import('../shared/engine.js');
+  const { deliverCapture, legendCapBlocked, LEGEND_MATCH_LIMIT, startBattle } = await import('../shared/rules/battle.js');
+  const { createMon } = await import('../shared/rules/monsters.js');
+  assert.equal(LEGEND_MATCH_LIMIT, 2);
+  const s = createMatch({ seed: 5, mode: 'online', now: 0, players: [{ id: 'a', name: 'A', starter: 'bulbasaur' }, { id: 'b', name: 'B', starter: 'charmander' }] });
+  const p = s.players[0];
+  const rng = createRng(3);
+  const leg = () => { const m = createMon(rng, 'zapdos', 40); m.yellowLegend = true; m.wild = true; return m; };
+  deliverCapture(s, 'a', leg(), 'ultra_ball');
+  deliverCapture(s, 'a', leg(), 'ultra_ball');
+  assert.equal(p.legendCaught, 2);
+  deliverCapture(s, 'a', createMon(rng, 'moltres', 40), 'ultra_ball'); // de Raid/evento: não conta
+  assert.equal(p.legendCaught, 2);
+  const third = leg();
+  assert.ok(legendCapBlocked(p, third));
+  p.items.ultra_ball = 3;
+  startBattle(s, { kind: 'wild', pid: 'a', foe: { kind: 'wild', mon: third, spaceId: 1 } }); s.phase = 'battle';
+  const r = applyAction(s, 'a', { type: 'battle', move: 'ball', item: 'ultra_ball' }, { now: 0 });
+  assert.match(r.error, /já capturou 2 lendários/);
+  assert.ok(!legendCapBlocked(s.players[1], third), 'o limite é por jogador');
+});
+
+test('⏱️ partidas salvas sempre terminam (20–60 turnos); antigas sem limite param no 60', async () => {
+  const { db, us: [a] } = await users(1);
+  const r = await matchOp(db, a, { op: 'create', mode: 'balanced', turnLimit: 0 });
+  assert.equal(r.match.options.turnLimit, 60);
+  const r2 = await matchOp(db, a, { op: 'create', mode: 'balanced', turnLimit: 200 });
+  assert.equal(r2.match.options.turnLimit, 60);
+  const r3 = await matchOp(db, a, { op: 'create', mode: 'balanced', turnLimit: 30 });
+  assert.equal(r3.match.options.turnLimit, 30);
+});

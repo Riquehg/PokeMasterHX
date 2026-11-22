@@ -11,7 +11,7 @@ import { distancesFrom } from './rules/movement.js';
 import { SPACE_LIST } from './data/board.js';
 const citySpaces = () => SPACE_LIST.filter(s => s.type === 'city').map(s => s.id);
 import { getPlayer, currentPlayer, canUse } from './rules/helpers.js';
-import { sideTeam, sideActive, sideIndexOf, bestMoveSlot, expectedDamage, CAPTURE_TARGET, captureMath, captureProb } from './rules/battle.js';
+import { sideTeam, sideActive, sideIndexOf, bestMoveSlot, expectedDamage, CAPTURE_TARGET, captureMath, captureProb, legendCapBlocked } from './rules/battle.js';
 import { monMoves } from './data/moves.js';
 import { statsOf } from './rules/monsters.js';
 import { rulesOf, stormAt, ownerOf, GARRISON_MAX } from './rules/modes.js';
@@ -130,7 +130,7 @@ function battleAction(state, p) {
     if (myMult <= 0.5 && moveMatchup(cand, foe) >= 2) return { type: 'battle', move: 'switch', index: sw0 };
   }
 
-  if (b.kind === 'wild' && !foe.megaBoss) {
+  if (b.kind === 'wild' && !foe.megaBoss && !legendCapBlocked(p, foe)) {
     const sp = getSpecies(foe.sp);
     const newSpecies = !p.caught.includes(foe.sp);
     const want = newSpecies || foe.shiny || sp.tier >= 3 || p.team.length < TEAM_SIZE;

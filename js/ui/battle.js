@@ -5,7 +5,7 @@ import { ITEMS, ballBonusAgainst } from '../../shared/data/items.js';
 import { monView, maxHpOf } from '../../shared/rules/monsters.js';
 import { canUse, badgesNeeded } from '../../shared/rules/helpers.js';
 import { monMoves } from '../../shared/data/moves.js';
-import { STATUS, CAPTURE_TARGET, captureMath, captureProb, LEGEND_CAPTURE, megaBlock } from '../../shared/rules/battle.js';
+import { STATUS, CAPTURE_TARGET, captureMath, captureProb, LEGEND_CAPTURE, megaBlock, legendCapBlocked, LEGEND_MATCH_LIMIT } from '../../shared/rules/battle.js';
 import { megaFor, BRACELET_ID } from '../../shared/data/megas.js';
 import { bestAttack, against, effectivenessLabel, TYPE_COLORS } from '../../shared/rules/types.js';
 import { whoMustAct } from '../../shared/engine.js';
@@ -145,7 +145,7 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
     controls = `<div class="move-grid">${moveBtns}</div>${megaBar}${formBar}<div class="battle-actions">
         <button class="btn blue" data-act="b-sub" data-sub="switch" ${myTeam.filter(m => m.hp > 0 && canUse(p, m)).length < 2 ? 'disabled' : ''}>🔄 Trocar</button>
         <button class="btn purple" data-act="b-sub" data-sub="item" ${items.length ? '' : 'disabled'}>🎒 Itens</button>
-        <button class="btn green" data-act="b-sub" data-sub="ball" ${b.kind === 'wild' && balls.length && !foeMon.megaBoss ? '' : 'disabled'} ${foeMon.megaBoss ? 'title="Energia Mega: não dá para capturar — vença para ganhar fragmentos"' : ''} ${b.kind === 'raid' ? 'title="Na Raid, vença primeiro: a captura é automática no fim"' : ''}>🔴 Capturar</button>
+        <button class="btn green" data-act="b-sub" data-sub="ball" ${b.kind === 'wild' && balls.length && !foeMon.megaBoss && !legendCapBlocked(p, foeMon) ? '' : 'disabled'} ${foeMon.megaBoss ? 'title="Energia Mega: não dá para capturar — vença para ganhar fragmentos"' : legendCapBlocked(p, foeMon) ? `title="Você já capturou ${LEGEND_MATCH_LIMIT} lendários das casas Amarelas nesta partida"` : ''} ${b.kind === 'raid' ? 'title="Na Raid, vença primeiro: a captura é automática no fim"' : ''}>🔴 Capturar</button>
         <button class="btn" data-act="b-flee" ${official ? 'disabled' : ''}>${b.kind === 'wild' ? '🏃 Fugir' : '🏳️ Desistir'}</button>
       </div>${b.kind === 'raid' ? '<p class="tiny muted center">🔥 Raid: pokébolas bloqueadas durante a luta. Vença o chefe e depois escolha a Pokébola para tentar capturar.</p>' : ''}`;
     if (ui.sub === 'switch') controls += switchList(myTeam, me.active, p, foeMon);

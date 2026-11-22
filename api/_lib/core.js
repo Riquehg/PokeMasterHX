@@ -294,6 +294,8 @@ export async function profileOp(db, user, body) {
   bad('Operação inválida.');
 }
 
+export const MAX_SAVED_TURNS = 60;
+
 export async function leaderboard(db) {
   const rows = await db.listProfiles(500);
   let shopItems = [];
@@ -537,8 +539,9 @@ function normalizeOptions(body, prev = {}) {
   if (body.maxPlayers !== undefined) o.maxPlayers = Math.max(2, Math.min(cap, Number(body.maxPlayers) || 4));
   o.maxPlayers = Math.min(cap, o.maxPlayers || (o.mode === 'cup' ? 8 : 4));
   if (o.mode === 'duel') o.maxPlayers = 2;
-  if (body.turnLimit !== undefined) o.turnLimit = Math.max(0, Math.min(200, Number(body.turnLimit) || 0));
-  o.turnLimit = o.turnLimit ?? 60;
+  if (body.turnLimit !== undefined) o.turnLimit = Number(body.turnLimit) || 0;
+  // partidas que salvam na conta sempre terminam: 20 a 60 turnos ("até o Campeão" saiu — virava farm de lendário)
+  o.turnLimit = Math.max(20, Math.min(MAX_SAVED_TURNS, o.turnLimit || (o.mode === 'ranked' ? 40 : MAX_SAVED_TURNS)));
   if (body.levelCap !== undefined) o.levelCap = Math.max(0, Math.min(60, Number(body.levelCap) || 0));
   if (body.map !== undefined) o.map = isMapId(String(body.map)) && !String(body.map).startsWith('gen:') ? String(body.map) : 'kanto'; // Kanto, Expedição, temas ou mapa do painel
   o.map = o.map || 'kanto';
