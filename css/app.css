@@ -2327,3 +2327,12 @@ img.itm-ic { width: 24px; height: 24px; object-fit: contain; image-rendering: pi
 span.itm-ic.itm-emo { font-size: 20px; vertical-align: middle; }
 img.tw-shop-ic { width: 48px; height: 48px; object-fit: contain; image-rendering: pixelated; }
 span.tw-shop-ic.itm-emo { font-size: 34px; line-height: 48px; height: 48px; display: inline-block; }
+/* v53: coroa da moldura Real colada na cabeça (presa ao personagem, não ao peão inteiro) e companheiro do lado, do mesmo tamanho */
+.token.tf-royal::before { content: none; }
+.token.tf-royal .pin::before {
+  content: '👑'; position: absolute; left: 50%; bottom: 90%; transform: translateX(-50%); font-size: 13px; line-height: 1; z-index: 6;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .6)); animation: crownBob 1.6s ease-in-out infinite; pointer-events: none;
+}
+.tk-comp { left: 58%; bottom: 14%; width: 86%; height: auto; aspect-ratio: 1 / 1.45; max-height: none; object-fit: contain; object-position: 50% 100%; z-index: 1; }
+.token:not(.mine):not(.active) .tk-comp { transform: scale(.88); transform-origin: 50% 100%; }
+@media (prefers-reduced-motion: reduce) { .token.tf-royal .pin::before { animation: none; } }

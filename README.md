@@ -146,6 +146,8 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 
 - **v52 — 🕊️ soltar dá ouro + 🖼️ sprites dos itens:** `shared/data/release.js` (`releaseGold`: por tier 15/30/60/120/200, Lendário 600, Ultra 800, Mítico 900, shiny ×4, +nível%); op `release` paga e anota `paid` na lista "Saíram da Coleção"; `restore` cobra o ouro de volta. `itemIcon(id, emoji)` em `js/config.js`: usa a sprite de `items/` (itens sem `image` tentam `items/<id>.png`) e cai no emoji se não existir — na 🔨 Oficina e na 🛒 Loja PB da Torre.
 
+- **v53 — peão:** coroa da moldura Real presa na cabeça do personagem (`.token.tf-royal .pin::before`) e companheiro colado ao lado, do tamanho do treinador (`.tk-comp`). Só CSS.
+
 ## 3. Publicar (passo a passo, só pelo navegador)
 
 ### 3.1 Supabase
