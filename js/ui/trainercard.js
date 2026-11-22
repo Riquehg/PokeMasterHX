@@ -7,6 +7,7 @@ import { ITEMS } from '../../shared/data/items.js';
 import { SERIES } from '../../shared/data/series.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
 import { genderHtml, genderOf } from '../../shared/data/gender.js';
+import { titleHtml } from './common.js';
 
 const crestHtml = t => `<span class="se-crest" style="--cc:${esc(t?.color || '#3d7fe0')};width:24px;height:24px;font-size:13px">${esc(t?.crest || '⚽')}</span>`;
 
@@ -25,7 +26,7 @@ export function trainerCardHtml(c) {
       <div class="av-wrap"><img class="avatar ${c.cosmetic?.frame ? 'frame-' + esc(c.cosmetic.frame) : ''}" src="${avatarUrl(c.avatar, sk)}" alt="">${c.megaBracelet ? `<img class="tc-mega" src="${itemUrl('mega_bracelet')}" alt="" title="🔗 Bracelete Mega">` : ''}</div>
       <div class="grow">
         <h3>${esc(c.name)} ${c.megaBracelet ? '<span class="chip purple">🔗 Mega</span>' : ''}</h3>
-        ${c.cosmetic?.title ? `<div class="player-title">“${esc(c.cosmetic.title)}”</div>` : ''}
+        ${titleHtml(c.cosmetic)}
         <div class="small"><span class="dot ${c.online ? 'on' : ''}" style="position:static;display:inline-block"></span> ${c.online ? 'online agora' : 'offline'}</div>
         <div class="tcx-chips">
           <span class="chip gold">⭐ ${c.points} pts</span>

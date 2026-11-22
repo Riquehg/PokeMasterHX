@@ -7,6 +7,8 @@ import { MAP_CHOICES, mapChoiceName, BUILTIN_MAPS, setCustomMaps } from '../../s
 import { openMapEditor, templateMap } from './mapeditor.js';
 import { openSeries, openTrophies, checkSeasonResult } from './series.js';
 import { openTrainerCard } from './trainercard.js';
+import { openTitles, checkNewTitles } from './titles.js';
+import { ACH_TITLES, unlockedTitles } from '../../shared/data/titles.js';
 import { megaBySpecies } from '../../shared/data/megas.js';
 import { openDaily, autoDaily, defenseReport } from './daily.js';
 import { openFarm } from './farm.js';
@@ -29,7 +31,7 @@ import { openDuelQueue } from './tournament.js';
 import { promptInstall, isStandalone } from './install.js';
 import { BADGES_TO_USE } from '../../shared/rules/helpers.js';
 import { eloOf } from '../../shared/data/elo.js';
-import { statCard } from './common.js';
+import { statCard, titleHtml } from './common.js';
 import { ivPercent } from '../../shared/rules/monsters.js';
 import { typeChips } from './common.js';
 import { openShop as openDiamondShop } from './shop.js';
@@ -151,7 +153,7 @@ export async function hubScreen(root, ctx) {
         <div class="trainer ${profile?.cosmetic?.card ? 'tcard-' + esc(profile.cosmetic.card) : ''}">
           <div class="av-wrap"><img class="avatar ${profile?.cosmetic?.frame ? 'frame-' + esc(profile.cosmetic.frame) : ''}" src="${avatarUrl(profile?.avatar, profile?.cosmetic?.skin)}" alt="avatar">${profile?.stats?.megaBracelet ? `<img class="tc-mega" src="${itemUrl('mega_bracelet')}" alt="" title="🔗 Bracelete Mega" data-color="#7b4bd6">` : ''}</div>
           <div class="grow"><h3 style="color:var(--gold)">${esc(profile?.trainer_name || 'Treinador')}${profile?.stats?.megaBracelet ? ' <span class="chip purple tc-mega-chip" title="Tem o Bracelete Mega: pode Mega Evoluir">🔗 Mega</span>' : ''}</h3>
-            ${profile?.cosmetic?.title ? `<div class="player-title">“${esc(profile.cosmetic.title)}”</div>` : ''}
+            ${titleHtml(profile?.cosmetic)}
             <div class="small">⭐ ${profile?.points || 0} pts · ${eloOf(profile?.rating ?? 1000).icon} ${eloOf(profile?.rating ?? 1000).name} (${profile?.rating ?? 1000}) · 📖 ${(profile?.pokedex || []).length} · 📦 ${(profile?.vault || []).length}</div></div>
           <div class="col" style="gap:6px;align-items:flex-end">
             <button class="btn sm" data-act="edit" ${profile ? '' : 'disabled'} title="Editar nome e avatar">✏️</button>
@@ -182,6 +184,7 @@ export async function hubScreen(root, ctx) {
 
       <h2 class="hub-h">🎒 Minha conta</h2>
       <div class="acct-tiles">
+        <button class="acct-tile" data-act="titles" ${profile ? '' : 'disabled'}><span>🏅</span><b>Títulos</b><small>${profile ? `${unlockedTitles(profile).length}/${ACH_TITLES.length} conquistados` : 'conquistas com efeito'}</small></button>
         <button class="acct-tile" data-act="vault" ${profile ? '' : 'disabled'}><span>📦</span><b>Coleção</b><small>${(profile?.vault || []).length} Pokémon</small></button>
         <button class="acct-tile" data-act="dex"><span>📖</span><b>Pokédex</b><small>${(profile?.pokedex || []).length} capturados</small></button>
         <button class="acct-tile" data-act="companions" ${profile ? '' : 'disabled'}><span>🤝</span><b>Companheiros</b><small>${(profile?.stats?.companions || []).length}/${Object.keys(COMPANIONS).length}${profile?.stats?.companion && COMPANIONS[profile.stats.companion] ? ` · ${esc(COMPANIONS[profile.stats.companion].name)}${bondLevel(profile?.stats?.companionBond?.[profile.stats.companion] || 0) >= 10 ? ' ❤️' : ''}` : ''}</small></button>
@@ -214,6 +217,7 @@ export async function hubScreen(root, ctx) {
     duel: () => openDuelQueue(ctx, profile),
     series: () => openSeries(ctx, profile),
     trophies: () => openTrophies(profile),
+    titles: () => openTitles(profile, p => { profile = p; rerender(); }),
     daily: () => openDaily(profile, p => rerender(p)),
     farm: () => openFarm({ onProfile: p => { profile = p; } }, profile),
     install: () => promptInstall(),
@@ -234,6 +238,7 @@ export async function hubScreen(root, ctx) {
   });
   // janelas do menu, uma de cada vez: 🎁 diário → 🏁 resultado da temporada → 🛡️ relatório da defesa
   if (profile) setTimeout(async () => {
+    checkNewTitles(profile);
     try { await autoDaily(profile, p => rerender(p)); await checkSeasonResult(profile); await defenseReport(profile); } catch { /* só aviso */ }
   }, 600);
 }

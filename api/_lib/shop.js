@@ -1,3 +1,4 @@
+import { TITLE_BY_ID, unlockedTitles } from '../../shared/data/titles.js';
 // Loja de Diamantes (cosméticos) + pagamento Pix pelo Mercado Pago + feed global + avisos do admin.
 import { createHmac, randomUUID } from 'node:crypto';
 import { HttpError, getOrCreateProfile, mutateProfile } from './core.js';
@@ -69,10 +70,15 @@ export async function equippedCosmetic(db, profile) {
   const { equipped } = myCosmetics(profile);
   const { items } = await getShop(db);
   const find = id => items.find(i => i.id === id);
+  // 🏅 título de conquista ('ach:<id>') — só vale se o perfil ainda cumpre a conquista
+  const ach = String(equipped.title || '').startsWith('ach:') ? TITLE_BY_ID[equipped.title.slice(4)] : null;
+  const achOk = ach && unlockedTitles(profile).includes(ach.id);
   return sanitizeCosmetic({
     aura: find(equipped.ball_style)?.value,
     frame: find(equipped.frame)?.value,
-    title: find(equipped.title)?.value,
+    title: achOk ? ach.text : find(equipped.title)?.value,
+    titleFx: achOk ? ach.fx : undefined,
+    titleColor: achOk ? ach.color : undefined,
     dice: find(equipped.dice)?.value,
     arena: find(equipped.arena)?.value,
     card: find(equipped.card)?.value,

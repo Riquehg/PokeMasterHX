@@ -313,7 +313,7 @@ export class BoardView {
       ${pl.companion && (pl.bond?.[pl.companion] || 0) >= 10 ? `<span class="tk-heart" title="${esc(COMPANIONS[pl.companion]?.name || '')} é íntimo de ${esc(pl.name)}">❤️</span>` : ''}
       ${pl.megaKey ? `<img class="tk-mega" src="${itemUrl('mega_bracelet')}" alt="" title="🔗 Bracelete Mega" draggable="false" data-color="#7b4bd6">` : ''}
       <span class="name">${pl.id === viewerId ? 'Você' : esc(pl.name.split(' ')[0])}</span>
-      ${c.title ? `<span class="ttitle">★ ${esc(c.title)}</span>` : ''}</div>`;
+      ${c.title ? `<span class="ttitle ${c.titleFx ? 'pfx-' + esc(c.titleFx) : ''}" ${c.titleColor ? `style="--tc:${esc(c.titleColor)}"` : ''}>★ ${esc(c.title)}</span>` : ''}</div>`;
   }
 
   /** Anima o peão casa a casa pelo caminho. */

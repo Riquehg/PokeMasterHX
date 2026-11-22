@@ -101,6 +101,14 @@ export function statCard(mon, { owner = null, act = '', index = '', extra = '', 
   </div>`;
 }
 
+/** 🏅 Título do treinador (Loja ou conquista com efeito animado). quotes = com aspas. */
+export function titleHtml(c, quotes = true, tag = 'div') {
+  if (!c?.title) return '';
+  const fx = c.titleFx ? ` tfx tfx-${esc(c.titleFx)}` : '';
+  const col = c.titleColor ? ` style="--tc:${esc(c.titleColor)}"` : '';
+  return `<${tag} class="player-title${fx}"${col}>${quotes && !c.titleFx ? `“${esc(c.title)}”` : esc(c.title)}</${tag}>`;
+}
+
 /** Ícone compacto de Pokémon (PC, listas longas): sprite, nome, nível, HP mínimo e selos. */
 export function miniMon(mon, { act = '', index = '', sel = false, owner = null, extraCls = '' } = {}) {
   const v = monView(mon);

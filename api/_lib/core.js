@@ -17,8 +17,9 @@ import { cleanNick } from '../../shared/data/cosmetics.js';
 import { ITEMS, isKeepable, cleanBring, BAG_MAX_PER_ITEM, STARTING_ITEMS } from '../../shared/data/items.js';
 import { tmMovesFor, defaultMoveIds, MOVES } from '../../shared/data/moves.js';
 import { MEGAS, megaByStone } from '../../shared/data/megas.js';
+import { TITLE_BY_ID, unlockedTitles } from '../../shared/data/titles.js';
 import { bondLevel, bondGain, BOND_MAX, COMPANIONS } from '../../shared/data/companions.js';
-import { equippedCosmetic, equippedSkin, skinFor, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment } from './shop.js';
+import { equippedCosmetic, equippedSkin, skinFor, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment, myCosmetics, refreshCosmeticInMatches } from './shop.js';
 
 export class HttpError extends Error {
   constructor(status, message) {
@@ -214,6 +215,20 @@ export async function profileOp(db, user, body) {
       st.bag = bag;
       return { stats: st, vault: cur.vault.map(x => (x.uid === body.uid ? { ...x, moves: [moves[0], mv] } : x)) };
     })) };
+  }
+  if (body.op === 'title_equip') { // 🏅 equipar/tirar um título de conquista
+    const id = body.id ? String(body.id) : null;
+    if (id && !TITLE_BY_ID[id]) bad('Título inválido.');
+    const p0 = await getOrCreateProfile(db, user);
+    if (id && !unlockedTitles(p0).includes(id)) bad('Você ainda não conquistou esse título.');
+    const p = await mutateProfile(db, user.id, prof => {
+      const c = myCosmetics(prof);
+      const cur = c.equipped.title;
+      if (!id && !String(cur || '').startsWith('ach:')) return null;
+      return { cosmetics: { owned: c.owned, equipped: { ...c.equipped, title: id ? `ach:${id}` : null } } };
+    });
+    await refreshCosmeticInMatches(db, user.id, p);
+    return { profile: await withCosmetic(db, p) };
   }
   if (body.op === 'hold_stone') { // 💎 segurar/tirar a Megapedra de um Pokémon da Coleção (a pedra sai/volta da Mochila)
     const item = body.item ? String(body.item) : null;

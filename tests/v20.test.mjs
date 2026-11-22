@@ -825,3 +825,24 @@ test('⚽ Liga: os 5 ataques renovam no dia seguinte (meia-noite de Brasília)',
   assert.equal(dayId(new Date('2026-11-22T02:59:00Z')), '2026-11-21'); // 23:59 em Brasília
   assert.equal(dayId(new Date('2026-11-22T03:00:00Z')), '2026-11-22'); // 00:00 em Brasília
 });
+
+test('🏅 títulos de conquista: progresso, equipar só se conquistou, efeito vai para o cosmético', async () => {
+  const { ACH_TITLES, unlockedTitles, titleProgress, TITLE_BY_ID } = await import('../shared/data/titles.js');
+  const { COMPANIONS, BOND_XP } = await import('../shared/data/companions.js');
+  assert.ok(ACH_TITLES.length >= 12 + Object.keys(COMPANIONS).length);
+  const fake = { pokedex: Array(120).fill('x'), stats: { shinyDex: ['a'], farm: { likes: 60 }, trophies: [{ season: '2026-10', div: 3, pos: 1 }], companionBond: { misty: BOND_XP[10] } } };
+  const got = unlockedTitles(fake);
+  for (const id of ['dex_100', 'farm_50', 'serie_champ', 'serie_podium', 'bond_misty']) assert.ok(got.includes(id), id);
+  assert.ok(!got.includes('dex_300') && !got.includes('shiny_10') && !got.includes('bond_brock'));
+  assert.deepEqual(titleProgress(TITLE_BY_ID.shiny_10, fake), { cur: 1, need: 10, done: false });
+
+  const { db, us: [a] } = await users(1);
+  await assert.rejects(profileOp(db, a, { op: 'title_equip', id: 'farm_50' }), /ainda não conquistou/);
+  const p = await db.getProfile(a.id);
+  await db.updateProfileIf(a.id, p.rev || 0, { stats: { ...p.stats, farm: { ...(p.stats.farm || {}), likes: 55 } } });
+  const r = await profileOp(db, a, { op: 'title_equip', id: 'farm_50' });
+  assert.equal(r.profile.cosmetic.title, 'Fazendeiro Querido');
+  assert.equal(r.profile.cosmetic.titleFx, 'petals');
+  const r2 = await profileOp(db, a, { op: 'title_equip', id: null });
+  assert.equal(r2.profile.cosmetic?.title, undefined);
+});

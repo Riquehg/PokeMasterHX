@@ -113,12 +113,16 @@ export const DEFAULT_SHOP = {
 };
 
 /** Limpa os cosméticos equipados antes de levar para uma partida. */
+const TITLE_FX_OK = ['rainbow', 'gold', 'silver', 'sparkle', 'crown', 'fire', 'mega', 'petals', 'bond'];
 export function sanitizeCosmetic(c) {
   if (!c || typeof c !== 'object') return null;
   const out = {};
   if (c.aura && AURA_PRESETS[c.aura]) out.aura = c.aura;
   if (c.frame && FRAME_PRESETS[c.frame]) out.frame = c.frame;
   if (c.title) out.title = String(c.title).replace(/[<>"'`]/g, '').slice(0, 30);
+  // 🏅 título de conquista: efeito animado + cor (laço com companheiro)
+  if (c.title && TITLE_FX_OK.includes(c.titleFx)) out.titleFx = c.titleFx;
+  if (out.titleFx && /^#[0-9a-f]{6}$/i.test(String(c.titleColor || ''))) out.titleColor = c.titleColor;
   if (c.dice && DICE_PRESETS[c.dice]) out.dice = c.dice;
   if (c.arena && ARENA_PRESETS[c.arena]) out.arena = c.arena;
   if (c.card && CARD_PRESETS[c.card]) out.card = c.card;
