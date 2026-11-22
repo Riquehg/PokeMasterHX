@@ -301,19 +301,20 @@ export function statusOf(b, si, mon) {
   return mon ? b.sides[si].status?.[mon.uid] || null : null;
 }
 
-function tryInflict(state, rng, defSi, d, move, aSp) {
+function tryInflict(state, rng, defSi, d, move, aSp, a = null) {
   const b = state.battle;
   const id = TYPE_STATUS[move.type];
   if (!id || move.kind !== 'dmg') return;
   const side = b.sides[defSi];
   side.status ||= {};
   if (side.status[d.uid]) return; // já tem uma condição
-  if (IMMUNE[id].some(t => getSpecies(d.sp).types.includes(t))) return;
+  if (statusBlocked(state, d, id, true)) return; // tipo, habilidade (Imunidade, Insônia, Pó Escudo...)
   const tier = (move.id || '').match(/_(q|p|s|x)\d*$/)?.[1] || 's';
   let chance = INFLICT_CHANCE[tier] || 0.15;
   if (id === 'poison') chance += 0.1;
   { const cb = companionBonus(state, 1 - defSi); if (cb?.inflict === move.type) chance += cb.inflictChance || 0.04; } // companheiro (ex.: Koga) aumenta a chance
   chance *= weatherInflict(state, id); // clima (ex.: Tempestade dobra a paralisia)
+  if (a && abilOf(a) === 'serene_grace') chance *= 2; // 🕊️ Graça Serena
   if (!rng.chance(chance)) return;
   side.status[d.uid] = { id, turns: id === 'sleep' ? rng.int(1, 3) : 0 };
   log(state, `${STATUS[id].icon} ${monLabel(state, side)} ficou ${STATUS[id].adj}!`, 'bad');
@@ -367,47 +368,123 @@ function aiChoice(state, si, rng) {
 export const gearOf = m => { const it = m?.held ? getItem(m.held) : null; return it?.kind === 'gear' ? { id: m.held, ...it } : null; };
 export const abilOf = m => abilityOf(m?.sp);
 const SUPPORT = ['heal', 'buff', 'debuff', 'transform'];
-/** Efetividade levando em conta Levitação. */
-function typeMultVs(type, d) {
-  if (type === 'ground' && abilOf(d) === 'levitate') return 0;
+const isDmg = mv => mv && (mv.kind === 'dmg' || mv.kind === 'drain' || !mv.kind);
+/** Habilidade de DEFESA de d, a não ser que o atacante tenha Quebra-Molde. */
+export const defAbil = (a, d) => (a && abilOf(a) === 'mold_breaker' ? null : abilOf(d));
+const AB = k => ABILITIES[k] || null;
+/** O golpe é absorvido/anulado pela habilidade do alvo? (Levitação, Absorve Água, Para-raios...) */
+export function abilityImmune(type, d, a) {
+  const A = AB(defAbil(a, d));
+  return !!A && (A.immune === type || A.absorb === type);
+}
+/** Efetividade levando em conta as imunidades por habilidade. */
+function typeMultVs(type, d, a) {
+  if (abilityImmune(type, d, a)) return 0;
   return against(type, getSpecies(d.sp).types);
 }
-/** Multiplicador de dano vindo da habilidade (Chama/Torrente/Supercrescimento) e do item (Placa, Faixa Escolhida). */
-function gearAbilMult(a, type) {
+/** Multiplicador de dano do ATACANTE: habilidade (aperto, Técnico, Garras Duras, Adaptabilidade, Força Bruta, Fogo Interior) e item. */
+function abilAtkMult(a, move, side) {
+  const type = move.type;
   let m = 1;
-  const ab = ABILITIES[abilOf(a)];
-  if (ab?.pinch === type && a.hp <= maxHpOf(a) / 3) m *= PINCH_MULT;
-  const g = gearOf(a);
-  if (g?.plate === type) m *= PLATE_MULT;
-  if (g?.id === 'choice_band') m *= BAND_MULT;
+  const k = abilOf(a), A = AB(k);
+  if (A?.pinch === type && a.hp <= maxHpOf(a) / 3) m *= PINCH_MULT;
+  if (k === 'technician' && (move.power || 1) <= 1) m *= 1.5;
+  if (k === 'tough_claws') m *= 1.2;
+  if (k === 'sheer_force') m *= 1.3;
+  if (k === 'adaptability' && getSpecies(a.sp).types.includes(type)) m *= 1.5 / STAB;
+  if (k === 'flash_fire' && type === 'fire' && side?.flash?.[a.uid]) m *= 1.5;
   return m;
 }
-/** 😠 Intimidação ao entrar em campo. */
+function gearMult(a, type) {
+  const g = gearOf(a);
+  return (g?.plate === type ? PLATE_MULT : 1) * (g?.id === 'choice_band' ? BAND_MULT : 1);
+}
+const gearAbilMult = (a, move, side) => abilAtkMult(a, move, side) * gearMult(a, move.type);
+/** Multiplicador de dano do DEFENSOR (Gordura Espessa, Multiescamas, Filtro...). */
+function defAbilMult(a, d, type, mult) {
+  const k = defAbil(a, d), A = AB(k);
+  if (!A) return 1;
+  let m = 1;
+  if (k === 'thick_fat' && (type === 'fire' || type === 'ice')) m *= 0.5;
+  if (k === 'heatproof' && type === 'fire') m *= 0.5;
+  if (A.weakTo === type) m *= 1.25;
+  if (k === 'multiscale' && d.hp >= maxHpOf(d)) m *= 0.5;
+  if ((k === 'filter' || k === 'solid_rock' || k === 'prism_armor') && mult >= 2) m *= 0.75;
+  return m;
+}
+/** Condição bloqueada por tipo ou habilidade? (fromMove: veio do golpe do adversário) */
+function statusBlocked(state, mon, id, fromMove = false) {
+  if ((IMMUNE[id] || []).some(t => getSpecies(mon.sp).types.includes(t))) return true;
+  const k = abilOf(mon), A = AB(k);
+  if (A?.blocks?.includes(id)) return true;
+  if (k === 'leaf_guard' && state.weather?.id === 'sun') return true;
+  if (k === 'shield_dust' && fromMove) return true;
+  return false;
+}
+/** Baixar o ataque de um Pokémon (Intimidação ou golpe de debuff). Respeita Corpo Puro & cia e ativa Desafiador/Competitivo. */
+function lowerAtk(state, si, mon, source, viaIntimidate = false) {
+  const side = state.battle.sides[si];
+  side.stage ||= {};
+  const k = abilOf(mon), A = AB(k);
+  if (A?.guard || (viaIntimidate && k === 'inner_focus')) {
+    log(state, `${A.icon} ${A.name} de ${speciesName(mon.sp)}: o ataque dele não cai!`);
+    return false;
+  }
+  const st = side.stage[mon.uid] || 0;
+  if (st <= -2) return false;
+  side.stage[mon.uid] = st - 1;
+  fx(state, { k: 'debuff', side: si, uid: mon.uid, move: source, stage: st - 1 });
+  if (k === 'defiant' || k === 'competitive') {
+    side.stage[mon.uid] = Math.min(2, st - 1 + 2);
+    log(state, `${A.icon} ${A.name}! ${speciesName(mon.sp)} ficou com raiva e o ataque subiu.`, 'good');
+    fx(state, { k: 'buff', side: si, uid: mon.uid, move: A.name, stage: side.stage[mon.uid] });
+  }
+  return true;
+}
+/** Subir o ataque em +1 por habilidade (Ousadia, Para-raios, Justiceiro...). */
+function raiseAtk(state, si, mon, why) {
+  const side = state.battle.sides[si];
+  side.stage ||= {};
+  const st = side.stage[mon.uid] || 0;
+  if (st >= 2) return;
+  side.stage[mon.uid] = st + 1;
+  fx(state, { k: 'buff', side: si, uid: mon.uid, move: why, stage: st + 1 });
+  log(state, `🔺 ${why}: o ataque de ${speciesName(mon.sp)} subiu!`, 'good');
+}
+/** Ao entrar em campo: 😠 Intimidação; marca a rodada de entrada (Início Lento) e zera a Preguiça. */
 function onEnter(state, si) {
   const b = state.battle;
   if (!b || b.over) return;
-  const me = sideActive(state, b.sides[si]);
-  if (!me || me.hp <= 0 || abilOf(me) !== 'intimidate') return;
-  const other = b.sides[1 - si];
-  const foe = sideActive(state, other);
+  const side = b.sides[si];
+  const me = sideActive(state, side);
+  if (!me || me.hp <= 0) return;
+  side.entered = { ...(side.entered || {}), [me.uid]: b.round };
+  if (side.truant) delete side.truant[me.uid];
+  if (abilOf(me) !== 'intimidate') return;
+  const foe = sideActive(state, b.sides[1 - si]);
   if (!foe || foe.hp <= 0) return;
-  other.stage ||= {};
-  const st = other.stage[foe.uid] || 0;
-  if (st <= -2) return;
-  other.stage[foe.uid] = st - 1;
-  fx(state, { k: 'debuff', side: 1 - si, uid: foe.uid, move: 'Intimidação', stage: st - 1 });
-  log(state, `😠 Intimidação de ${speciesName(me.sp)}! O ataque de ${speciesName(foe.sp)} caiu.`, 'battle');
+  const before = (b.sides[1 - si].stage || {})[foe.uid] || 0;
+  log(state, `😠 Intimidação de ${speciesName(me.sp)}!`, 'battle');
+  if (lowerAtk(state, 1 - si, foe, 'Intimidação', true) && before > ((b.sides[1 - si].stage || {})[foe.uid] || 0)) log(state, `O ataque de ${speciesName(foe.sp)} caiu.`, 'battle');
 }
 
 const stageMult = st => (st >= 0 ? 1 + 0.4 * st : 1 - 0.3 * -st);
 
-function atkOf(state, si) {
-  const side = state.battle.sides[si];
+function atkOf(state, si, foeUnaware = false) {
+  const b = state.battle;
+  const side = b.sides[si];
   const a = sideActive(state, side);
-  const st = (side.stage || {})[a.uid] || 0;
-  const burned = side.status?.[a.uid]?.id === 'burn' ? 0.75 : 1;
-  return Math.max(1, (statsOf(a).atk + (side.boost[a.uid] || 0)) * stageMult(st) * burned);
+  let st = (side.stage || {})[a.uid] || 0;
+  if (foeUnaware && st > 0) st = 0; // 😶 Indiferente: ignora o ataque aumentado
+  const k = abilOf(a);
+  const hasStatus = !!side.status?.[a.uid];
+  const burned = side.status?.[a.uid]?.id === 'burn' && k !== 'guts' ? 0.75 : 1;
+  let ab = AB(k)?.atk || 1; // Força Enorme/Pura, Afobação
+  if (k === 'guts' && hasStatus) ab *= 1.5;
+  if (k === 'slow_start' && b.round - ((side.entered || {})[a.uid] ?? 0) < 5) ab *= 0.5;
+  return Math.max(1, (statsOf(a).atk + (side.boost[a.uid] || 0)) * stageMult(st) * burned * ab);
 }
+const unawareVs = (state, si) => { const b = state.battle; const a = sideActive(state, b.sides[si]); const d = sideActive(state, b.sides[1 - si]); return defAbil(a, d) === 'unaware'; };
 
 /** Dano esperado (média do dado) de um golpe do lado si contra o ativo do outro lado. */
 export function expectedDamage(state, si, move) {
@@ -415,10 +492,10 @@ export function expectedDamage(state, si, move) {
   const a = sideActive(state, b.sides[si]);
   const d = sideActive(state, b.sides[1 - si]);
   if (!a || !d || move.kind === 'heal' || move.kind === 'buff' || move.kind === 'debuff' || move.kind === 'transform') return 0;
-  const mult = typeMultVs(move.type, d);
+  const mult = typeMultVs(move.type, d, a);
   const stab = getSpecies(a.sp).types.includes(move.type) ? STAB : 1;
   const hit = 1 - (move.miss || 0) / 6;
-  return (atkOf(state, si) * 0.7 + 3.5) * (move.power || 1) * mult * stab * hit * gearAbilMult(a, move.type) * defFactor(statsOf(d).def);
+  return (atkOf(state, si, unawareVs(state, si)) * 0.7 + 3.5) * (move.power || 1) * mult * stab * hit * gearAbilMult(a, move, b.sides[si]) * defAbilMult(a, d, move.type, mult) * defFactor(statsOf(d).def);
 }
 
 /** Melhor golpe para o lado si (usada pela IA dos NPCs e das CPUs). */
@@ -451,6 +528,12 @@ export function bestMoveSlot(state, si) {
 function doSwitch(state, si, index) {
   const side = state.battle.sides[si];
   const team = sideTeam(state, side);
+  const out = team[side.active];
+  if (out && out.hp > 0) { // ✨ ao sair: Regenerador / Cura Natural
+    const k = abilOf(out);
+    if (k === 'regenerator' && out.hp < maxHpOf(out)) { const h = healMon(out, 1 / 3); if (h) log(state, `♻️ Regenerador: ${speciesName(out.sp)} recuperou ${h} HP ao sair.`, 'good'); }
+    if (k === 'natural_cure' && side.status?.[out.uid]) { delete side.status[out.uid]; log(state, `🌸 Cura Natural: ${speciesName(out.sp)} se curou ao sair.`, 'good'); }
+  }
   side.active = index;
   fx(state, { k: 'switch', side: si, uid: team[index].uid });
   if (!side.seen.includes(team[index].uid)) side.seen.push(team[index].uid);
@@ -592,34 +675,54 @@ function attackDamage(state, rng, si, slot = 0) {
   if (move.kind === 'debuff') {
     const st = defSide.stage[d.uid] || 0;
     if (st <= -2) { log(state, `${who} usou ${move.name}, mas ${speciesName(d.sp)} já está acuado ao máximo.`); return false; }
-    defSide.stage[d.uid] = st - 1;
-    fx(state, { k: 'debuff', side: 1 - si, uid: d.uid, move: move.name, stage: st - 1 });
-    log(state, `🔻 ${who} usou ${move.name}! O ataque de ${speciesName(d.sp)} caiu (−${(1 - st) * 30}%).`, 'battle');
+    log(state, `🔻 ${who} usou ${move.name}!`, 'battle');
+    if (lowerAtk(state, 1 - si, d, move.name) && (defSide.stage[d.uid] || 0) < st) log(state, `O ataque de ${speciesName(d.sp)} caiu (−${(1 - st) * 30}%).`, 'battle');
     return false;
   }
 
-  const atk = atkOf(state, si);
+  const ak = abilOf(a), dk = defAbil(a, d), DA = AB(dk);
   const type = move.type;
-  const mult = typeMultVs(type, d);
+  // ✨ habilidade do alvo absorve o golpe (Absorve Água, Para-raios, Fogo Interior...)
+  if (DA?.absorb === type && isDmg(move)) {
+    let extra = '';
+    if (DA.heal) { const h = healMon(d, DA.heal); extra = h ? ` e recuperou ${h} HP` : ''; if (h) fx(state, { k: 'heal', side: 1 - si, uid: d.uid, amount: h, hpAfter: d.hp, maxHp: maxHpOf(d) }); }
+    log(state, `${who} usou ${move.name}, mas ${DA.icon} ${DA.name} de ${speciesName(d.sp)} absorveu o golpe${extra}!`, 'bad');
+    fx(state, { k: 'hit', side: si, roll: 0, dmg: 0, mult: 0, type, move: move.name, atkUid: a.uid, defUid: d.uid, hpAfter: d.hp, maxHp: maxHpOf(d) });
+    if (DA.boost) raiseAtk(state, 1 - si, d, DA.name);
+    if (DA.flash) defSide.flash = { ...(defSide.flash || {}), [d.uid]: true };
+    return false;
+  }
+  const atk = atkOf(state, si, dk === 'unaware');
+  const mult = typeMultVs(type, d, a);
   const stab = aSp.types.includes(type) ? STAB : 1;
   const roll = rng.d6();
-  if (move.miss && roll <= move.miss) {
+  // 🎲 erro: Afobação (+1), Olhos Compostos (−1), Véu de Areia/Manto de Neve do alvo (+1), Sem Guarda (nunca erra)
+  let missOn = move.miss || 0;
+  if (AB(ak)?.missUp) missOn += AB(ak).missUp;
+  if (ak === 'compound_eyes' && missOn > 0) missOn -= 1;
+  if (DA?.evade && state.weather?.id === DA.evade) missOn += 1;
+  if (ak === 'no_guard' || abilOf(d) === 'no_guard') missOn = 0;
+  if (missOn && roll <= missOn) {
     log(state, `${who} usou ${move.name} (🎲${roll})... e errou!`, 'bad');
     fx(state, { k: 'hit', side: si, roll, dmg: 0, mult, miss: true, type, move: move.name, atkUid: a.uid, defUid: d.uid, hpAfter: d.hp, maxHp: maxHpOf(d) });
     return false;
   }
-  const critMod = roll === 6 ? 1.5 : roll === 1 ? 0.5 : 1;
+  // 🎲 crítico: Sorte Grande (5 ou 6), Atirador (×2), Armadura/Casco do alvo (sem crítico)
+  let crit = roll === 6 || (ak === 'super_luck' && roll === 5);
+  if (crit && DA?.noCrit) crit = false;
+  const critMod = crit ? (ak === 'sniper' ? 2 : 1.5) : roll === 1 ? 0.5 : 1;
   const cb = companionBonus(state, si);
   const compMult = cb?.types?.includes(type) ? 1 + cb.dmg : 1; // bônus do companheiro (ex.: Misty em golpes de Água)
   const wMult = weatherMult(state, type); // clima (ex.: Chuva +30% em Água)
   const cqMult = atkSide.kind === 'player' ? conquestMult(state, atkSide.pid, type, GYMS) : 1; // Conquista: cidades dominadas
-  const gMult = gearAbilMult(a, type); // ⚔️ habilidade de aperto, Placa, Faixa Escolhida
+  const gMult = gearAbilMult(a, move, atkSide); // ⚔️ habilidade do atacante + item
+  const daMult = defAbilMult(a, d, type, mult); // ✨ habilidade de defesa do alvo
   const dMult = defFactor(statsOf(d).def); // 🛡️ DEF de quem recebe
-  let dmg = mult === 0 ? 0 : Math.max(1, Math.round((atk * 0.7 + roll) * (move.power || 1) * stab * mult * critMod * compMult * wMult * cqMult * gMult * dMult));
+  let dmg = mult === 0 ? 0 : Math.max(1, Math.round((atk * 0.7 + roll) * (move.power || 1) * stab * mult * critMod * compMult * wMult * cqMult * gMult * daMult * dMult));
   // 🪨 Robustez / 🎗️ Faixa de Foco: com HP cheio, aguenta o golpe com 1 HP
   let endured = null;
   if (dmg >= d.hp && d.hp > 1 && d.hp >= maxHpOf(d)) {
-    if (abilOf(d) === 'sturdy') endured = 'Robustez';
+    if (dk === 'sturdy') endured = 'Robustez';
     else if (gearOf(d)?.id === 'focus_sash' && !(b.sashUsed || {})[d.uid]) { endured = 'Faixa de Foco'; b.sashUsed = { ...(b.sashUsed || {}), [d.uid]: true }; }
     if (endured) dmg = d.hp - 1;
   }
@@ -630,26 +733,49 @@ function attackDamage(state, rng, si, slot = 0) {
 
   const eff = effectivenessLabel(mult);
   let msg = `${who} usou ${move.name} (🎲${roll})`;
-  if (mult === 0) msg += ` — não afeta ${speciesName(d.sp)}${type === 'ground' && abilOf(d) === 'levitate' ? ' (🎈 Levitação)' : ''}!`;
+  if (mult === 0) msg += ` — não afeta ${speciesName(d.sp)}${DA?.immune === type ? ` (${DA.icon} ${DA.name})` : ''}!`;
   else {
     msg += ` e causou ${dmg} de dano`;
-    if (roll === 6) msg += ' — CRÍTICO!';
+    if (crit) msg += ' — CRÍTICO!';
     else if (roll === 1) msg += ' (golpe fraco)';
-    if (eff) msg += (roll === 6 ? ' ' : '. ') + eff;
-    else if (roll !== 6) msg += '.';
+    if (eff) msg += (crit ? ' ' : '. ') + eff;
+    else if (!crit) msg += '.';
     if (wMult > 1) msg += ` ${weatherOf(state).icon} (clima +${Math.round((wMult - 1) * 100)}%)`;
     else if (wMult < 1) msg += ` ${weatherOf(state).icon} (clima −${Math.round((1 - wMult) * 100)}%)`;
   }
   if (drained) msg += ` 💚 +${drained} HP`;
-  if (gMult > 1 && mult > 0) msg += ` ${ABILITIES[abilOf(a)]?.pinch === type && a.hp <= maxHpOf(a) / 3 ? `${ABILITIES[abilOf(a)].icon} ${ABILITIES[abilOf(a)].name}` : ''}${gearOf(a) ? ` ${gearOf(a).emoji}` : ''}`.trimEnd();
+  if (gMult > 1 && mult > 0) msg += ` ${abilAtkMult(a, move, atkSide) > 1 ? `${AB(ak).icon} ${AB(ak).name}` : ''}${gearMult(a, type) > 1 ? ` ${gearOf(a).emoji}` : ''}`.trimEnd();
+  if (daMult !== 1 && mult > 0) msg += ` ${DA.icon} ${DA.name}`;
   if (endured) msg += ` ${endured === 'Robustez' ? '🪨' : '🎗️'} ${speciesName(d.sp)} aguentou firme com a ${endured}!`;
-  // chance de causar condição (queimadura, veneno, paralisia, sono, congelamento)
-  if (dmg > 0 && d.hp > 0) tryInflict(state, rng, 1 - si, d, move, aSp);
+  // chance de causar condição (queimadura, veneno, paralisia, sono, congelamento) — Força Bruta nunca causa
+  if (dmg > 0 && d.hp > 0 && ak !== 'sheer_force') tryInflict(state, rng, 1 - si, d, move, aSp, a);
   // golpe de fogo descongela
   if (type === 'fire' && defSide.status?.[d.uid]?.id === 'freeze') { delete defSide.status[d.uid]; log(state, `🔥 ${speciesName(d.sp)} descongelou!`, 'good'); }
   log(state, msg, mult >= 2 ? 'good' : mult < 1 ? 'bad' : 'battle');
-  fx(state, { k: 'hit', side: si, roll, dmg, mult, crit: roll === 6, weak: roll === 1, type, move: move.name, atkUid: a.uid, defUid: d.uid, hpAfter: d.hp, maxHp: maxHpOf(d) });
+  fx(state, { k: 'hit', side: si, roll, dmg, mult, crit, weak: roll === 1, type, move: move.name, atkUid: a.uid, defUid: d.uid, hpAfter: d.hp, maxHp: maxHpOf(d) });
   if (drained) fx(state, { k: 'heal', side: si, uid: a.uid, amount: drained, hpAfter: a.hp, maxHp: maxHpOf(a) });
+  // ✨ depois do golpe: Justiceiro, pele que pune (Estática, Corpo Chamejante, Pele Áspera...)
+  if (dmg > 0) {
+    if (dk === 'justified' && type === 'dark' && d.hp > 0) raiseAtk(state, 1 - si, d, 'Justiceiro');
+    const PA = AB(abilOf(d)); // pele que pune vale mesmo contra Quebra-Molde (como nos jogos)
+    if (PA && a.hp > 0) {
+      if (PA.contact && rng.chance(0.3) && !atkSide.status?.[a.uid]) {
+        const id = PA.contact === 'spore' ? rng.pick(['poison', 'paralysis', 'sleep']) : PA.contact;
+        if (!statusBlocked(state, a, id)) {
+          atkSide.status ||= {};
+          atkSide.status[a.uid] = { id, turns: id === 'sleep' ? rng.int(1, 3) : 0 };
+          log(state, `${PA.icon} ${PA.name} de ${speciesName(d.sp)}: ${monLabel(state, atkSide)} ficou ${STATUS[id].adj}!`, 'bad');
+          fx(state, { k: 'status', side: si, uid: a.uid, status: id });
+        }
+      }
+      if (PA.recoil) {
+        const r = Math.min(a.hp, Math.max(1, Math.round(maxHpOf(a) / PA.recoil)));
+        a.hp -= r;
+        log(state, `${PA.icon} ${PA.name} de ${speciesName(d.sp)} machucou ${monLabel(state, atkSide)} (−${r} HP).`, 'bad');
+        fx(state, { k: 'status_dmg', side: si, uid: a.uid, status: 'recoil', dmg: r, hpAfter: a.hp, maxHp: maxHpOf(a) });
+      }
+    }
+  }
   return d.hp <= 0;
 }
 
@@ -837,7 +963,7 @@ function resolveRound(state, rng, choices) {
   // 2) ataques, por velocidade (nível; empate: lado 0)
   const attackers = [0, 1].filter(si => choices[si].move === 'attack');
   // velocidade = nível × natureza (+/-10%); empate: lado 0
-  const speedOf = si => { const m = sideActive(state, b.sides[si]); return statsOf(m).spe * (b.sides[si].status?.[m.uid]?.id === 'paralysis' ? 0.5 : 1); };
+  const speedOf = si => { const m = sideActive(state, b.sides[si]); return statsOf(m).spe * (b.sides[si].status?.[m.uid]?.id === 'paralysis' ? 0.5 : 1) * (AB(abilOf(m))?.fast?.includes(state.weather?.id) ? 2 : 1); };
   // 🐾 Garra Rápida: 20% de chance de agir primeiro
   const claw = {};
   for (const si of attackers) if (gearOf(sideActive(state, b.sides[si]))?.id === 'quick_claw' && rng.chance(QUICK_CLAW)) claw[si] = 1;
@@ -846,13 +972,28 @@ function resolveRound(state, rng, choices) {
   for (const si of attackers) {
     const me = sideActive(state, b.sides[si]);
     if (!me || me.hp <= 0) continue; // desmaiou antes de agir
+    const foeNow = sideActive(state, b.sides[1 - si]);
+    if (!foeNow || foeNow.hp <= 0) continue;
     if (!canActWithStatus(state, rng, si)) continue; // dormindo, congelado ou paralisado
+    if (abilOf(me) === 'truant') { // 🦥 Preguiça: ataca uma rodada sim, outra não
+      const tr = (b.sides[si].truant ||= {});
+      if (tr[me.uid]) { delete tr[me.uid]; log(state, `🦥 ${monLabel(state, b.sides[si])} está com preguiça e não fez nada.`); fx(state, { k: 'status_skip', side: si, uid: me.uid, status: 'truant' }); continue; }
+      tr[me.uid] = true;
+    }
     const fainted = attackDamage(state, rng, si, Number(choices[si].slot || 0));
     if (fainted) {
       const loser = 1 - si;
       awardKO(state, si, loser);
+      const mk = abilOf(me);
+      if ((mk === 'moxie' || mk === 'beast_boost') && me.hp > 0) raiseAtk(state, si, me, ABILITIES[mk].name); // 😈 Ousadia / 🌀 Impulso Bestial
       if (handleFaint(state, rng, loser)) return;
+      if (me.hp <= 0) { awardKO(state, loser, si); if (handleFaint(state, rng, si)) return; }
       break; // quem desmaiou não ataca nesta rodada
+    }
+    if (me.hp <= 0) { // derrubado pela Pele Áspera / Farpas de Ferro do alvo
+      awardKO(state, 1 - si, si);
+      if (handleFaint(state, rng, si)) return;
+      break;
     }
   }
 
@@ -870,6 +1011,23 @@ function resolveRound(state, rng, choices) {
       if (mon.hp <= 0) {
         awardKO(state, 1 - si, si);
         if (handleFaint(state, rng, si)) return;
+      }
+    }
+  }
+
+  // 3a) ✨ Troca de Pele (30% cura), Corpo de Gelo / Prato de Chuva (cura no clima)
+  if (!b.over) {
+    for (let si = 0; si < 2; si++) {
+      const mon = sideActive(state, b.sides[si]);
+      if (!mon || mon.hp <= 0 || b.mustSwitch[si]) continue;
+      const k = abilOf(mon), A = AB(k);
+      if (k === 'shed_skin' && b.sides[si].status?.[mon.uid] && rng.chance(0.3)) {
+        delete b.sides[si].status[mon.uid];
+        log(state, `🐍 Troca de Pele: ${monLabel(state, b.sides[si])} se curou!`, 'good');
+      }
+      if (A?.heals?.includes(state.weather?.id) && mon.hp < maxHpOf(mon)) {
+        const h = healMon(mon, 0, Math.max(1, Math.round(maxHpOf(mon) / 16)));
+        if (h) { log(state, `${A.icon} ${A.name}: ${monLabel(state, b.sides[si])} recuperou ${h} HP.`, 'good'); fx(state, { k: 'heal', side: si, uid: mon.uid, amount: h, hpAfter: mon.hp, maxHp: maxHpOf(mon) }); }
       }
     }
   }

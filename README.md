@@ -126,6 +126,8 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 
 - **v42 — 🛡️ DEF oficial:** `shared/data/basedef.js` (gerado do `pokemon_stats.csv` do PokeAPI: média Defesa + Def. Especial por nº da Pokédex). `computeStats` ganha `def` (sem subir com nível; shiny +5%, Mega ×1.2, natureza, IV). Dano × `defFactor(def)` = √(70/DEF) entre 0,6 e 1,4 (`attackDamage` e `expectedDamage`). IV de DEF: `iv.def` ou valor fixo pelo uid (`defIvOf`) para Pokémon antigos; potencial = média de 4 IVs; Creche herda 3 de 4. Naturezas de Defesa como nos jogos (Bold, Impish, Calm, Careful, Relaxed, Sassy, Lax; −DEF: Lonely, Mild, Gentle, Hasty). Card com barra DEF (escala geral, dica "% do dano recebido").
 
+- **v43 — ✨ habilidades reais:** `shared/data/abilitymap.js` (gerado do `pokemon_abilities.csv` do PokeAPI: por nº da Pokédex, a 1ª habilidade — slot 1, 2, oculta — que funciona no jogo; ~80% das espécies). `ABILITIES` em `battlegear.js` com 72 habilidades e efeito real (aperto, absorção/imunidade, redução de dano, contato, ataque, dado, proteção do ataque, condições, troca, clima, Preguiça/Início Lento, Quebra-Molde). Batalha: `abilityImmune`, `defAbil`, `abilAtkMult`, `defAbilMult`, `statusBlocked`, `lowerAtk`/`raiseAtk`, erro/crítico por habilidade, pele que pune (agressor pode desmaiar), Ousadia, Regenerador/Cura Natural em `doSwitch`, Troca de Pele/Corpo de Gelo/Prato de Chuva no fim da rodada, Nado Veloz & cia na velocidade. Chip da habilidade e do item no painel da batalha.
+
 ## 3. Publicar (passo a passo, só pelo navegador)
 
 ### 3.1 Supabase

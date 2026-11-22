@@ -230,7 +230,7 @@ test('status: golpe pode envenenar e o veneno tira HP no fim da rodada', async (
     const s = game(seed);
     const rng = createRng(seed);
     s.players[0].team = [createMon(rng, 'ekans', 35, { starter: true, moves: ['poison_q', 'poison_x'] })];
-    startBattle(s, { kind: 'wild', pid: 'ash', foe: { kind: 'wild', mon: createMon(rng, 'snorlax', 35) } });
+    startBattle(s, { kind: 'wild', pid: 'ash', foe: { kind: 'wild', mon: createMon(rng, 'machamp', 35) } });
     for (let i = 0; i < 8 && !s.battle.over; i++) {
       s.fx = [];
       submitChoice(s, rng, 'ash', { move: 'attack', slot: 1 });

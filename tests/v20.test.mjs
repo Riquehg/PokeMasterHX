@@ -908,13 +908,14 @@ const _hits = (s, side) => s.fx.filter(f => f.k === 'hit' && f.side === side);
 
 test('⚔️ habilidades: Levitação, Robustez, Intimidação e Chama', () => {
   const r = createRng(3);
-  assert.equal(abilityOf('gengar'), 'levitate');
+  assert.equal(abilityOf('gastly'), 'levitate'); // Gengar perdeu Levitação na Geração 7 (agora Corpo Amaldiçoado)
   assert.equal(abilityOf('golem'), 'sturdy');
   assert.equal(abilityOf('charizard'), 'blaze');
   assert.equal(abilityOf('blastoise'), 'torrent');
-  assert.equal(abilityOf('pikachu'), null);
+  assert.equal(abilityOf('pikachu'), 'static');
+  assert.equal(abilityOf('mew'), null); // Sincronizar não faz nada no jogo de dado
   // 🎈 golpe de Terra não afeta Gengar
-  let s = _bw(_cm(r, 'dugtrio', 40, { starter: true, moves: ['ground_q', 'normal_q'] }), _cm(r, 'gengar', 10));
+  let s = _bw(_cm(r, 'dugtrio', 40, { starter: true, moves: ['ground_q', 'normal_q'] }), _cm(r, 'gastly', 10));
   _sc(s, r, 'a', { move: 'attack', slot: 0 });
   assert.equal(_hits(s, 0)[0].mult, 0);
   // 🪨 Geodude com HP cheio aguenta com 1 HP
@@ -1034,4 +1035,49 @@ test('🛡️ DEF oficial: valores da espécie, natureza, IV fixo pelo uid e efe
   assert.ok(hit('dwebble') > hit('shuckle') * 1.5); // os dois são Inseto/Pedra: só a DEF muda
   // Megas: +20% de DEF
   assert.equal(_so({ sp: 'mega_steelix', lvl: 30, iv: { hp: 15, atk: 15, spe: 15, def: 15 } }).def > _so({ sp: 'steelix', lvl: 30, iv: { hp: 15, atk: 15, spe: 15, def: 15 } }).def, true);
+});
+
+// ---------------------------------------------------------------- v43 ✨ habilidades reais
+import { abilityImmune } from '../shared/rules/battle.js';
+import { ABILITY_BY_DEX } from '../shared/data/abilitymap.js';
+import { ABILITIES as _AB } from '../shared/data/battlegear.js';
+test('✨ habilidades reais: mapa do PokeAPI, absorção, Gordura Espessa, Estática, Pele Áspera, Preguiça, Início Lento, Quebra-Molde', () => {
+  // toda habilidade do mapa existe e tem efeito; boa cobertura
+  assert.ok(ABILITY_BY_DEX.length === 806);
+  assert.ok(ABILITY_BY_DEX.filter(Boolean).every(k => _AB[k]));
+  assert.ok(ABILITY_BY_DEX.filter(Boolean).length > 600);
+  assert.equal(abilityOf('snorlax'), 'immunity');
+  assert.equal(abilityOf('vaporeon'), 'water_absorb');
+  const r = createRng(8);
+  const one = (mine, foe, slot = 0, seed = 5) => { const st = _bw(mine, foe, seed); _sc(st, createRng(seed), 'a', { move: 'attack', slot }); return st; };
+  // 💧 Absorve Água: golpe de Água não causa dano e cura
+  const vap = _cm(r, 'vaporeon', 30); vap.hp = 20;
+  let s = one(_cm(r, 'blastoise', 30, { starter: true, moves: ['water_q', 'normal_q'] }), vap);
+  assert.ok(s.log.some(l => /Absorve Água/.test(l.msg)));
+  assert.ok(_sa(s, s.battle.sides[1]).hp > 20);
+  // 🐋 Gordura Espessa: Fogo bate metade
+  const fire = foe => { const rr = createRng(3); const st = one(_cm(rr, 'charizard', 30, { starter: true, nature: 'Hardy', iv: { hp: 10, str: 10, spe: 31 }, moves: ['fire_q', 'flying_s'] }), _cm(rr, foe, 30, { nature: 'Hardy', iv: { hp: 31, atk: 0, spe: 0, def: 15 } }), 0, 7); return _hits(st, 0)[0].dmg; };
+  assert.ok(fire('spheal') < fire('lapras') * 0.9); // os dois são Água/Gelo; sem Gordura Espessa o Spheal (DEF 50) levaria ~1,3× o que o Lapras (DEF 88) leva
+  // 🦥 Preguiça: Slaking ataca numa rodada e descansa na outra
+  const sl = _cm(r, 'slaking', 40, { starter: true, moves: ['normal_q', 'normal_s'] });
+  s = _bw(sl, _cm(r, 'snorlax', 60), 3);
+  _sc(s, createRng(1), 'a', { move: 'attack', slot: 0 });
+  _sc(s, createRng(2), 'a', { move: 'attack', slot: 0 });
+  assert.ok(s.log.some(l => /preguiça/.test(l.msg)));
+  // 🐢 Início Lento: Regigigas começa com metade do ataque
+  // 🔨 Quebra-Molde ignora Levitação
+  const gas = _cm(r, 'gastly', 20);
+  assert.equal(abilityImmune('ground', gas, _cm(r, 'dugtrio', 20)), true);
+  assert.equal(abilityImmune('ground', gas, _cm(r, 'cranidos', 20)), false);
+  // ⚡ Estática / 🦈 Pele Áspera: quem bate sofre
+  let para = 0, hurt = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const rr = createRng(seed);
+    const st = one(_cm(rr, 'machamp', 40, { starter: true, moves: ['fighting_q', 'normal_q'] }), _cm(rr, 'pikachu', 60), 0, seed);
+    if (st.fx.some(f => f.k === 'status' && f.side === 0 && f.status === 'paralysis')) para++;
+    const st2 = one(_cm(rr, 'machamp', 40, { starter: true, moves: ['fighting_q', 'normal_q'] }), _cm(rr, 'sharpedo', 60), 0, seed);
+    if (st2.log.some(l => /Pele Áspera/.test(l.msg))) hurt++;
+  }
+  assert.ok(para >= 4, `Estática paralisou ${para}/40`);
+  assert.ok(hurt >= 30, `Pele Áspera machucou ${hurt}/40`);
 });
