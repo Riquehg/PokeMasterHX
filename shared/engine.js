@@ -19,7 +19,8 @@ import {
   GYMS, gymAt, ELITE_FOUR, CHAMPION, ELITE_SPACE, CHAMPION_SPACE, ROUTE_TRAINERS, ROCKET, BADGES_TO_LEAGUE, BADGE_REWARDS, ACE_TRAINERS
 } from './data/trainers.js';
 import { createRng } from './rules/rng.js';
-import { createMon, rollWild, hatchEgg, fullHeal, healMon, maxHpOf, levelUp, evolve, TEAM_SIZE, WILD_LEVELS, gainXp, BASE_SHINY_RATE, setLevel } from './rules/monsters.js';
+import { createMon, rollWild, hatchEgg, fullHeal, healMon, maxHpOf, levelUp, evolve, TEAM_SIZE, WILD_LEVELS, gainXp, BASE_SHINY_RATE, setLevel, defIvOf } from './rules/monsters.js';
+import { SHINY_CAKE_MULT, IV_PANCAKE_MIN } from './data/home.js';
 import { destinations, pathTo } from './rules/movement.js';
 import { startBattle, submitChoice, setBattleEndHandler, deliverCapture, sideActive, sideIndexOf } from './rules/battle.js';
 import {
@@ -245,6 +246,12 @@ function newPlayer(rng, cfg, index) {
     const extra = createMon(rng, cfg.extraMon.sp, Math.min(10, cfg.extraMon.lvl || 5), { shiny: !!cfg.extraMon.shiny, ot: p.id, starter: true });
     p.team.push(extra);
     markCaught(p, extra.sp, !!extra.shiny);
+  }
+  // 🍽️ comida da casa: é comida ao começar a partida (some da Mochila) e o efeito vale a partida inteira
+  const mealId = Object.keys(p.items).find(id => ITEMS[id]?.kind === 'meal');
+  if (mealId) {
+    p.meal = { id: ITEMS[mealId].meal, type: ITEMS[mealId].mealType || null, name: ITEMS[mealId].name, emoji: ITEMS[mealId].emoji };
+    for (const id of Object.keys(p.items)) if (ITEMS[id]?.kind === 'meal') delete p.items[id];
   }
   return p;
 }
@@ -920,7 +927,13 @@ function wildEncounter(state, rng, p, sp, tier, opts = {}) {
     // neblina: às vezes aparece um Pokémon de um tier acima
     const rare = weatherRare(state) && rng.chance(weatherRare(state)) ? Math.min(4, tier + 1) : tier;
     const favorTypes = [...(BIOMES[sp.biome]?.spawn || []), ...weatherSpawn(state)];
-    mon = rollWild(rng, rare, { dailyPokemon: state.options.dailyPokemon, shinyCharm: !!p.items.shiny_charm, favorTypes });
+    if (p.meal?.type) favorTypes.push(p.meal.type, p.meal.type); // 🍛 Curry: mais Pokémon desse tipo
+    mon = rollWild(rng, rare, { dailyPokemon: state.options.dailyPokemon, shinyCharm: !!p.items.shiny_charm, shinyMult: p.meal?.id === 'shiny_cake' ? SHINY_CAKE_MULT : 1, favorTypes });
+    if (p.meal?.id === 'iv_pancake' && mon.iv) { // 🥞 Panqueca: potencial mínimo
+      for (const k of ['hp', 'atk', 'spe']) mon.iv[k] = Math.max(IV_PANCAKE_MIN, mon.iv[k] ?? 0);
+      mon.iv.def = Math.max(IV_PANCAKE_MIN, defIvOf(mon));
+      mon.hp = maxHpOf(mon);
+    }
     // 💎 energia Mega (casas de tier 4+): um Pokémon Mega Evoluído selvagem — não dá para capturar, mas vencer dá fragmentos
     if (tier >= 4 && rng.chance(MEGA_WILD_CHANCE)) {
       const m = pickWildMega(rng, tier);

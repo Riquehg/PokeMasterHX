@@ -1166,3 +1166,146 @@ test('🖌️ Ateliê: salvar desenho, usar na decoração, apagar (renumera) e 
   assert.equal(f.art.length, 0);
   assert.equal(f.decor.length, 0);
 });
+
+// ---------------------------------------------------------------- v48 🏵️ Amuleto Lendário + 🏗️ Expansões da Fazenda
+import { legendCapBlocked as _lcb, deliverCapture as _dc, LEGEND_MATCH_LIMIT as _LML } from '../shared/rules/battle.js';
+import { addToBag as _atb } from '../api/_lib/core.js';
+test('🏵️ Amuleto Lendário: sem limite, gasta 1 carga só quando passa do limite (1 por partida)', () => {
+  const s = createMatch({ seed: 3, players: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }] });
+  const p = s.players[0];
+  const legend = () => { const m = _cm(createRng(1), 'articuno', 40); m.yellowLegend = true; return m; };
+  p.legendCaught = _LML;
+  assert.equal(_lcb(p, legend()), true);          // sem amuleto: bloqueado
+  p.items.legend_charm = 1;
+  assert.equal(_lcb(p, legend()), false);         // com amuleto: liberado
+  _dc(s, 'a', legend(), 'ultra_ball');            // 3º lendário → gasta a carga
+  assert.equal(p.items.legend_charm, undefined);
+  assert.equal(p.legendCharmOn, true);
+  assert.equal(_lcb(p, legend()), false);         // continua liberado até o fim da partida
+  _dc(s, 'a', legend(), 'ultra_ball');
+  assert.ok(s.log.filter(l => /Amuleto Lendário brilhou/.test(l.msg)).length === 1);
+  assert.equal(_atb({}, { legend_charm: 5 }).legend_charm, 3); // guarda no máximo 3 cargas
+});
+test('🏗️ Expansões da Fazenda: preço crescente com ouro, aumenta vagas e decoração', async () => {
+  const { db, admin, us: [a] } = await users(1);
+  await adminOp(db, admin, { op: 'give_gold', userId: a.id, amount: 30000 });
+  let r = await profileOp(db, a, { op: 'farm_get' });
+  const base = r.farm.slotsMax;
+  r = await profileOp(db, a, { op: 'farm_expand', k: 'slots' });
+  assert.equal(r.farm.slotsMax, base + 1);
+  assert.equal(r.farm.exp.slots.next, 12000);
+  r = await profileOp(db, a, { op: 'farm_expand', k: 'decor' });
+  assert.equal(r.farm.decorMax, 50);
+  const g = (await db.getProfile(a.id)).gold;
+  await profileOp(db, a, { op: 'farm_expand', k: 'slots' });            // 12000
+  assert.equal((await db.getProfile(a.id)).gold, g - 12000);
+  let err = null;
+  for (let i = 0; i < 6 && !err; i++) await profileOp(db, a, { op: 'farm_expand', k: 'slots' }).catch(e => { err = e; });
+  assert.match(err.message, /ouro|máximo/);                             // acaba o ouro (ou chega no máximo)
+  await assert.rejects(profileOp(db, a, { op: 'farm_expand', k: 'xx' }), /inválida/);
+});
+
+// ---------------------------------------------------------------- v49 🏡 casa por dentro + 🍳 comidas
+import { cleanBring as _cbr } from '../shared/data/items.js';
+test('🏡 casa: comprar móveis com ouro, arrumar, favorito, brincar, cozinhar e pegar o prato', async () => {
+  const { db, admin, us: [a] } = await users(1);
+  await adminOp(db, admin, { op: 'give_gold', userId: a.id, amount: 40000 });
+  await profileOp(db, a, { op: 'farm_get' });
+  let r = await profileOp(db, a, { op: 'home_buy', kind: 'furniture', id: 'stove' });
+  r = await profileOp(db, a, { op: 'home_buy', kind: 'furniture', id: 'chair' });
+  r = await profileOp(db, a, { op: 'home_buy', kind: 'wall', id: 'pastel' });
+  assert.equal(r.farm.home.wall, 'pastel');
+  await assert.rejects(profileOp(db, a, { op: 'home_cook', meal: 'xp_shake' }), /Fogão/);
+  r = await profileOp(db, a, { op: 'home_place', placed: [{ f: 'stove', x: 2, y: 1 }, { f: 'chair', x: 5, y: 4 }, { f: 'chair', x: 6, y: 4 }, { f: 'piano', x: 1, y: 1 }], wall: 'night', floor: 'wood' });
+  assert.deepEqual(r.farm.home.placed.map(x => x.f), ['stove', 'chair']); // só o que tem (1 cadeira, sem piano)
+  assert.equal(r.farm.home.wall, 'pastel');                                 // céu estrelado não foi comprado
+  const uid = (await db.getProfile(a.id)).vault[0].uid;
+  await profileOp(db, a, { op: 'home_fav', uid });
+  r = await profileOp(db, a, { op: 'home_play' });
+  assert.match(r.message, /XP|Nv\. 50/);
+  await assert.rejects(profileOp(db, a, { op: 'home_play' }), /amanhã/);
+  // ingredientes
+  const p = await db.getProfile(a.id);
+  await db.updateProfileIf(a.id, p.rev || 0, { stats: { ...p.stats, farm: { ...p.stats.farm, goods: { leite: 5, sitrus: 5, mel: 2 } } } });
+  r = await profileOp(db, a, { op: 'home_cook', meal: 'xp_shake' });
+  assert.equal(r.farm.home.cook.length, 1);
+  await assert.rejects(profileOp(db, a, { op: 'home_cook', meal: 'xp_shake' }), /ocupado/);
+  const p2 = await db.getProfile(a.id);
+  await db.updateProfileIf(a.id, p2.rev || 0, { stats: { ...p2.stats, farm: { ...p2.stats.farm, home: { ...p2.stats.farm.home, cook: p2.stats.farm.home.cook.map(j => ({ ...j, done: 1 })) } } } });
+  r = await profileOp(db, a, { op: 'home_claim' });
+  assert.equal(r.profile.stats.bag.xp_shake, 1);
+  // só 1 comida por partida
+  assert.deepEqual(_cbr({ xp_shake: 1, shiny_cake: 1 }), { xp_shake: 1 });
+});
+test('🍽️ comida é comida ao começar a partida e o Curry fortalece o tipo', () => {
+  const s = createMatch({ seed: 5, players: [{ id: 'a', name: 'A', bringItems: { curry_fire: 1 } }, { id: 'b', name: 'B' }] });
+  const p = s.players[0];
+  assert.deepEqual([p.meal.id, p.meal.type], ['curry', 'fire']);
+  assert.equal(p.items.curry_fire, undefined); // gasta
+  const dmg = meal => {
+    const st = _bw(_cm(createRng(4), 'charmander', 30, { starter: true, nature: 'Hardy', iv: { hp: 10, str: 10, spe: 31 }, moves: ['fire_q', 'normal_q'] }), _cm(createRng(5), 'snorlax', 20, { nature: 'Hardy' }), 5);
+    if (meal) st.players[0].meal = { id: 'curry', type: 'fire' };
+    _sc(st, createRng(1), 'a', { move: 'attack', slot: 0 });
+    return _hits(st, 0)[0].dmg;
+  };
+  assert.ok(dmg(true) > dmg(false));
+});
+
+// ---------------------------------------------------------------- v50 🌿 Zona Safári
+test('🌿 Zona Safári: entrada com ouro, limite diário, andar, pedra/isca, capturar vai para a Coleção', async () => {
+  const { db, admin, us: [a] } = await users(1);
+  await adminOp(db, admin, { op: 'give_gold', userId: a.id, amount: 20000 });
+  const g0 = (await db.getProfile(a.id)).gold;
+  await assert.rejects(profileOp(db, a, { op: 'safari_step' }), /Entre na Zona/);
+  let r = await profileOp(db, a, { op: 'safari_enter', zone: 'lago' });
+  assert.equal((await db.getProfile(a.id)).gold, g0 - 3000);
+  assert.equal(r.session.balls, 30);
+  await assert.rejects(profileOp(db, a, { op: 'safari_enter', zone: 'lago' }), /já está/);
+  const v0 = (await db.getProfile(a.id)).vault.length;
+  let caught = 0, guard = 0;
+  while (!r.session.over && guard++ < 200) {
+    if (r.session.enc) {
+      r = await profileOp(db, a, { op: guard % 3 === 0 ? 'safari_rock' : 'safari_ball' });
+      if (r.caught) caught++;
+    } else r = await profileOp(db, a, { op: 'safari_step' });
+  }
+  assert.ok(r.session.over);
+  assert.equal((await db.getProfile(a.id)).vault.length, v0 + caught);
+  assert.equal(r.session.caught.length, caught);
+  await profileOp(db, a, { op: 'safari_leave' });
+  await profileOp(db, a, { op: 'safari_enter', zone: 'montanha' }); await profileOp(db, a, { op: 'safari_leave' });
+  await profileOp(db, a, { op: 'safari_enter', zone: 'floresta' }); await profileOp(db, a, { op: 'safari_leave' });
+  await assert.rejects(profileOp(db, a, { op: 'safari_enter', zone: 'planicie' }), /3× hoje/);
+});
+
+// ---------------------------------------------------------------- v51 🗼 Torre de Batalha
+import { towerFinished } from '../api/_lib/tower.js';
+test('🗼 Torre: entrada, duelo contra CPU no Nv. 50 com Megas, sequência, PB e loja', async () => {
+  const { db, admin, us: [a] } = await users(1);
+  await adminOp(db, admin, { op: 'give_gold', userId: a.id, amount: 10000 });
+  for (const sp of ['charizard', 'blastoise', 'venusaur']) await adminOp(db, admin, { op: 'grant_mon', userId: a.id, species: sp, level: 60 }).catch(() => {});
+  const vault = (await db.getProfile(a.id)).vault;
+  await assert.rejects(matchOp(db, a, { op: 'tower_battle' }), /Comece uma série/);
+  await assert.rejects(matchOp(db, a, { op: 'tower_start', teamUids: [vault[0].uid] }), /3 Pokémon/);
+  let r = await matchOp(db, a, { op: 'tower_start', teamUids: vault.slice(0, 3).map(m => m.uid) });
+  assert.equal(r.tower.set.n, 1);
+  const m1 = (await matchOp(db, a, { op: 'tower_battle' })).match;
+  const row = await db.getMatch(m1.id);
+  assert.equal(row.state.options.megas, true);
+  assert.ok(row.state.players[0].team.every(m => m.lvl <= 50));        // Nv. 50
+  assert.equal(row.state.players[1].team.length, 3);
+  await towerFinished(db, { ...row, state: { ...row.state, winner: a.id } });
+  let t = (await matchOp(db, a, { op: 'tower_get' })).tower;
+  assert.deepEqual([t.streak, t.pb, t.set.n], [1, 1, 2]);
+  await towerFinished(db, { ...row, state: { ...row.state, winner: a.id } }); // repetido não conta 2×
+  assert.equal((await matchOp(db, a, { op: 'tower_get' })).tower.pb, 1);
+  const m2 = (await matchOp(db, a, { op: 'tower_battle' })).match;
+  const row2 = await db.getMatch(m2.id);
+  await towerFinished(db, { ...row2, state: { ...row2.state, winner: 'cpu' } });       // perdeu
+  t = (await matchOp(db, a, { op: 'tower_get' })).tower;
+  assert.deepEqual([t.streak, t.best, t.set], [0, 1, null]);
+  // loja
+  await assert.rejects(matchOp(db, a, { op: 'tower_buy', item: 'leftovers' }), /48 PB/);
+  r = await matchOp(db, a, { op: 'tower_buy', item: 'rare_candy' }).catch(e => e);
+  assert.match(String(r.message || r), /8 PB/);
+});

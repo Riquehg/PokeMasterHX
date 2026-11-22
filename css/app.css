@@ -2250,3 +2250,73 @@ details.pk-abil > span { display: block; margin-top: 3px; text-align: center; }
 .art-tools { display: flex; flex-wrap: wrap; gap: 4px; }
 @media (prefers-reduced-motion: reduce) { .fm-decor .fm-dk, .fm-decor i, .fm-fly, .fm-bfly { animation: none !important; } .fm-decor i, .fm-bfly { display: none; } }
 .art-prev { align-items: center; }
+
+/* ================= v49 · 🏡 casa por dentro ================= */
+.hm-room { position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: 62vh; border-radius: 16px; overflow: clip; border: 3px solid #5a3d22; box-shadow: inset 0 0 40px rgba(0, 0, 0, .35); }
+.hm-wall { position: absolute; left: 0; right: 0; top: 0; height: 32%; background: var(--wall); box-shadow: inset 0 -10px 12px -8px rgba(0, 0, 0, .45); }
+.hm-floor { position: absolute; left: 0; right: 0; bottom: 0; top: 32%; background: var(--floor); box-shadow: inset 0 14px 18px -10px rgba(0, 0, 0, .45); }
+.hm-f { position: absolute; transform: translate(-50%, -70%) scaleX(var(--fl, 1)); font-size: clamp(22px, 4.2vw, 46px); filter: drop-shadow(0 4px 3px rgba(0, 0, 0, .4)); cursor: pointer; user-select: none; line-height: 1; }
+.hm-f.flat { transform: translate(-50%, -50%) scaleX(var(--fl, 1)) scaleY(.55); filter: none; opacity: .9; }
+.hm-f.glow { animation: hmGlow 2.6s ease-in-out infinite; }
+@keyframes hmGlow { 50% { filter: drop-shadow(0 0 10px #ffe08a) drop-shadow(0 4px 3px rgba(0, 0, 0, .4)); } }
+.hm-f.tapped { animation: dTap .5s ease-out; }
+.hm-f.sel { outline: 2px dashed #ffd36b; outline-offset: 4px; border-radius: 8px; }
+.hm-cell { position: absolute; width: calc(100% / 12); height: calc(68% / 7); transform: translate(-50%, -50%); border: 1px dashed rgba(255, 255, 255, .18); cursor: pointer; }
+.hm-cell:hover { background: rgba(255, 211, 107, .2); }
+.hm-room.editing .hm-f { z-index: 30 !important; }
+.hm-pal { position: absolute; bottom: 8%; background: none; border: 0; padding: 0; cursor: pointer; z-index: 40; animation: hmWalk 14s ease-in-out infinite; }
+.hm-pal img { width: clamp(48px, 9vw, 90px); height: auto; image-rendering: auto; filter: drop-shadow(0 4px 3px rgba(0, 0, 0, .45)); }
+.hm-comp { left: 18%; } .hm-fav { left: 62%; animation-duration: 10s; animation-direction: alternate-reverse; }
+.hm-fav img { width: clamp(44px, 8vw, 80px); animation: dBob 1.6s ease-in-out infinite; }
+@keyframes hmWalk { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(14vw); } }
+.hm-bubble { position: absolute; top: -10px; right: -10px; font-size: 18px; background: #fff; border-radius: 50%; width: 28px; height: 28px; display: grid; place-items: center; box-shadow: 0 2px 4px rgba(0, 0, 0, .4); animation: dBob 1.8s ease-in-out infinite; }
+.hm-shop { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.hm-shop-it { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .1); text-align: center; }
+.hm-shop-ic { width: 56px; height: 56px; display: grid; place-items: center; font-size: 34px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .15); }
+.fm-dbtn small { position: absolute; right: 2px; bottom: 0; font-size: 10px; font-weight: 800; }
+.fm-dbtn { position: relative; }
+.hb-rec.dim { opacity: .65; } .hb-rec .miss { color: #ff8a8a; text-decoration: underline dotted; }
+@media (prefers-reduced-motion: reduce) { .hm-pal, .hm-fav img, .hm-f.glow, .hm-bubble { animation: none !important; } }
+.hm-f.onwall { transform: translate(-50%, -50%) scaleX(var(--fl, 1)); }
+.hm-f.flat { z-index: 6 !important; }
+.hm-rug { display: block; width: clamp(70px, 14vw, 150px); aspect-ratio: 2.2; border-radius: 50%; background: radial-gradient(ellipse, #c0392b 0 30%, #e8b04a 31% 36%, #a93226 37% 62%, #e8b04a 63% 67%, #922b21 68%); box-shadow: 0 2px 4px rgba(0, 0, 0, .3); }
+.hmf-rug.flat { transform: translate(-50%, -50%) scaleX(var(--fl, 1)); }
+
+/* ================= v50 · 🌿 Zona Safári ================= */
+.sf-zones { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 10px; margin-top: 10px; }
+.sf-zone { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 10px; border-radius: 16px; border: 2px solid rgba(255, 255, 255, .25); background: var(--bg); color: #1b1b1b; cursor: pointer; text-shadow: 0 1px 0 rgba(255, 255, 255, .6); }
+.sf-zone:disabled { opacity: .5; cursor: not-allowed; }
+.sf-zone:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0, 0, 0, .35); }
+.sf-zic { font-size: 34px; } .sf-zone b { font-size: 16px; }
+.sf-stars { display: flex; gap: 2px; min-height: 40px; } .sf-stars img { width: 40px; height: 40px; object-fit: contain; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .3)); }
+.sf-scene { position: relative; min-height: 260px; border-radius: 16px; overflow: clip; background: var(--bg); border: 3px solid rgba(0, 0, 0, .3); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 10px 10px; }
+.sf-hud { position: absolute; top: 8px; left: 8px; right: 8px; display: flex; gap: 6px; justify-content: space-between; flex-wrap: wrap; }
+.sf-hud span { background: rgba(0, 0, 0, .55); color: #fff; padding: 3px 9px; border-radius: 10px; font-size: 13px; }
+.sf-enc { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; max-width: 360px; }
+.sf-mon { width: 140px; height: 140px; object-fit: contain; filter: drop-shadow(0 8px 6px rgba(0, 0, 0, .45)); animation: dBob 2s ease-in-out infinite; }
+.sf-mon.shiny { filter: drop-shadow(0 0 12px #fff6a8) drop-shadow(0 8px 6px rgba(0, 0, 0, .45)); }
+.sf-mon.mood-rock { animation: dShake 1s ease-in-out infinite; } .sf-mon.mood-bait { animation: dBob 3.5s ease-in-out infinite; }
+.sf-scene.appear .sf-mon { animation: sfAppear .5s ease-out, dBob 2s ease-in-out .5s infinite; }
+@keyframes sfAppear { from { transform: scale(.2) translateY(30px); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.sf-tag { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; justify-content: center; background: rgba(0, 0, 0, .6); color: #fff; padding: 4px 10px; border-radius: 12px; }
+.sf-meters { width: 100%; display: flex; flex-direction: column; gap: 3px; background: rgba(0, 0, 0, .55); color: #fff; padding: 6px 10px; border-radius: 12px; }
+.sf-meters > div { display: grid; grid-template-columns: 70px minmax(0, 1fr) 40px; gap: 6px; align-items: center; }
+.sf-bar { height: 9px; border-radius: 6px; background: rgba(255, 255, 255, .2); overflow: clip; } .sf-bar i { display: block; height: 100%; border-radius: 6px; transition: width .3s; }
+.sf-grass { display: flex; gap: 18px; font-size: 52px; } .sf-grass span { animation: dSway 2.4s ease-in-out infinite; } .sf-grass span:nth-child(2) { animation-delay: -.8s; } .sf-grass span:nth-child(3) { animation-delay: -1.6s; }
+.sf-end { background: rgba(0, 0, 0, .6); color: #fff; padding: 14px 20px; border-radius: 14px; text-align: center; }
+.sf-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 10px 0; }
+.sf-actions .btn.big { font-size: 18px; padding: 12px 22px; }
+.sf-log { max-height: 140px; overflow-y: auto; padding: 6px 10px; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .08); }
+.sf-log .small:first-child { font-weight: 700; }
+.sf-caught { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-top: 8px; } .sf-caught img { width: 40px; height: 40px; object-fit: contain; }
+@media (prefers-reduced-motion: reduce) { .sf-mon, .sf-grass span { animation: none !important; } }
+
+/* ================= v51 · 🗼 Torre de Batalha ================= */
+.tw-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
+.chip.purple { background: rgba(179, 139, 255, .2); border-color: rgba(179, 139, 255, .5); }
+.tw-prog { display: flex; justify-content: center; gap: 6px; margin: 10px 0; }
+.tw-dot { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 900; background: rgba(255, 255, 255, .06); border: 2px solid rgba(255, 255, 255, .15); }
+.tw-dot.done { background: linear-gradient(135deg, #3fb76a, #2a8a4c); border-color: #8ff0bd; }
+.tw-dot.now { border-color: #ffd36b; box-shadow: 0 0 10px rgba(255, 211, 107, .6); animation: dBob 1.4s ease-in-out infinite; }
+.tw-picks { display: flex; gap: 8px; justify-content: center; margin: 8px 0; }
+.tw-slot { width: 64px; height: 64px; border-radius: 12px; border: 2px dashed rgba(255, 255, 255, .25); display: grid; place-items: center; font-size: 24px; opacity: .6; }

@@ -645,7 +645,7 @@ export function mountGame(root, session, opts = {}) {
   }
 
   function renderGameOver(s) {
-    if (s.status === 'finished' && ui.overShown && !ui.leagueShown && (s.leagueChanges?.[vid()] || s.bondChanges?.[vid()] || s.bagChanges?.[vid()] || s.serieResult) && document.getElementById('over')) {
+    if (s.status === 'finished' && ui.overShown && !ui.leagueShown && (s.leagueChanges?.[vid()] || s.bondChanges?.[vid()] || s.bagChanges?.[vid()] || s.serieResult || s.towerResult) && document.getElementById('over')) {
       ui.leagueShown = true; closeModal('over'); showOver(s); return; // o resultado da Liga chega logo depois do fim
     }
     if (s.status !== 'finished' || ui.overShown) return;
@@ -670,6 +670,15 @@ export function mountGame(root, session, opts = {}) {
     return `<div class="lg-me" style="--ec:#4ad07a;margin-top:8px"><span class="elo-big">⚽</span><div><div class="small muted">Liga das Séries</div>
       <b>${r.win ? `+${r.pts} pontos` : 'Sem pontos (a defesa segurou)'}</b> · saldo <b style="color:${r.sp >= 0 ? '#8ff0bd' : '#ff9b9e'}">${r.sp >= 0 ? '+' : ''}${r.sp}</b>
       <div class="tiny muted">Derrubou ${r.kos} · perdeu ${r.lost}</div></div></div>`;
+  }
+
+  // 🗼 Torre de Batalha
+  function towerLine(s) {
+    const r = s.towerResult;
+    if (!r) return '';
+    return `<div class="lg-me" style="--ec:#b38bff;margin-top:8px"><span class="elo-big">🗼</span><div><div class="small muted">Torre de Batalha — duelo ${r.n}/7</div>
+      <b>${r.win ? `Vitória! Sequência ${r.streak} · +${r.pb} PB${r.cleared ? ' (série completa! 🏆)' : ''}` : `Fim da sequência (${r.streak} vitórias)`}</b>
+      <div class="tiny muted">${r.win ? (r.cleared ? 'Entre de novo para continuar a sequência.' : 'Abra a 🗼 Torre para o próximo duelo.') : 'Tente de novo — a sequência recomeça do zero.'}</div></div></div>`;
   }
 
   // 💞 laço do companheiro no fim da partida
@@ -697,7 +706,7 @@ export function mountGame(root, session, opts = {}) {
       const ov = openModal('over', w?.id === vid ? '🏆 Vitória!' : '⚔️ Fim do duelo', `
         <div class="banner-win">${w ? avatarImg(w, 'avatar') : ''}<h2>${esc(w ? w.name : '—')} venceu o duelo!</h2>
         <p class="muted">${esc(s.log.filter(l => l.kind === 'win').slice(-1)[0]?.msg || '')}</p></div>
-        ${d !== undefined ? `<p class="center" style="font-size:18px">Seu Elo: <b style="color:${d >= 0 ? '#8ff0bd' : '#ff9b9e'}">${d >= 0 ? '+' : ''}${d}</b></p>` : ''}${leagueLine(s)}${serieLine(s)}${bondLine(s)}
+        ${d !== undefined ? `<p class="center" style="font-size:18px">Seu Elo: <b style="color:${d >= 0 ? '#8ff0bd' : '#ff9b9e'}">${d >= 0 ? '+' : ''}${d}</b></p>` : ''}${leagueLine(s)}${serieLine(s)}${towerLine(s)}${bondLine(s)}
         <button class="btn primary block" data-act="exit" style="margin-top:10px">${esc(opts.backLabel || 'Voltar ao menu')}</button>`);
       bindActions(ov, { exit: () => { closeModal('over'); onExit(); } });
       return;

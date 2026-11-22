@@ -1,6 +1,7 @@
 import { MEGAS } from './megas.js';
 import { SPECIES } from './pokemon.js';
 import { GEAR } from './battlegear.js';
+import { MEAL_ITEMS } from './home.js';
 // Itens. Só entra aqui o que tem efeito implementado no motor (shared/engine.js).
 // minTier: a partir de que tier de cidade o item aparece na loja (0 = não vende).
 // image: arquivo dentro do bucket "sprites/items/" do Supabase (fallback no front se não existir).
@@ -30,6 +31,7 @@ export const ITEMS = {
   // --- Progressão ---
   rare_candy:      { name: 'Rare Candy',      kind: 'candy', price: 900,  minTier: 4, image: 'rare_candy.png',      desc: 'Sobe 1 nível (pode evoluir).' },
   evolution_stone: { name: 'Pedra Evolutiva', kind: 'stone', price: 1200, minTier: 3, image: 'evolution_stone.png', desc: 'Evolui na hora um Pokémon que tenha evolução.' },
+  legend_charm:    { name: 'Amuleto Lendário', kind: 'charm', price: 0, minTier: 0, emoji: '🏵️', desc: 'Leve na partida (🎒 Mochila da conta): tira o limite de lendários das casas Amarelas. Cada unidade é 1 carga — gasta só quando ele libera um lendário além do limite (no máximo 1 por partida). Feito na 🔨 Oficina (vem com 3 cargas); quando acabar, faça outro.' },
   shiny_charm:     { name: 'Amuleto Shiny',   kind: 'charm', price: 0, minTier: 0, image: 'shiny_charm.png',     desc: 'Passivo: triplica a chance de encontrar shinies. Não acumula. Não é vendido nas cidades: vem de Raids lendárias e eventos raros (e fica na Mochila da conta).' },
   tm:              { name: 'TM',              kind: 'tm', price: 0, minTier: 0, image: 'tm.png',                   desc: 'Ensina um novo 2º golpe a um Pokémon (escolha entre os golpes dos tipos dele). Raro: Raids e eventos. Fica na Mochila da conta e pode ser vendido no Mercado.' },
 
@@ -72,7 +74,10 @@ ITEMS.mega_bracelet = { name: 'Bracelete Mega', kind: 'key', price: 0, minTier: 
 // ⚔️ Itens de batalha (segurados): vêm da 🔨 Oficina, ficam na Mochila da conta e vão para o Pokémon pelo botão 🎒 da Coleção.
 for (const [id, g] of Object.entries(GEAR)) ITEMS[id] = { name: g.name, kind: 'gear', price: 0, minTier: 0, emoji: g.emoji, plate: g.plate || null, desc: `Item de batalha (segurado): ${g.desc}` };
 
-export const KEEP_KINDS = ['ball', 'charm', 'tm', 'megastone', 'fragment', 'gear'];
+// 🍽️ comidas da casa (v49): levar 1 por partida; o efeito vale a partida inteira
+for (const [id, m] of Object.entries(MEAL_ITEMS)) ITEMS[id] = { name: m.name, kind: 'meal', price: 0, minTier: 0, emoji: m.emoji, meal: m.meal, mealType: m.type || null, desc: `Comida (leve 1 por partida): ${m.desc}` };
+
+export const KEEP_KINDS = ['ball', 'charm', 'tm', 'megastone', 'fragment', 'gear', 'meal'];
 export const isKeepable = id => !!ITEMS[id] && KEEP_KINDS.includes(ITEMS[id].kind);
 export const BAG_MAX_PER_ITEM = 99;
 /** Quanto de cada item dá para levar para uma partida (modo Coleção). */
@@ -81,6 +86,7 @@ export function bringLimit(id) {
   if (!it || !isKeepable(id) || it.kind === 'megastone' || it.kind === 'fragment' || it.kind === 'gear') return 0;
   if (id === 'master_ball') return 1;
   if (it.kind === 'charm') return 1;
+  if (it.kind === 'meal') return 1;
   if (it.kind === 'tm') return 3;
   return 10; // Pokébolas
 }
@@ -93,6 +99,7 @@ export function cleanBring(bring, bag = null) {
     let q = Math.max(0, Math.min(bringLimit(id), Math.floor(Number(q0) || 0)));
     if (bag) q = Math.min(q, bag[id] || 0);
     if (ITEMS[id]?.kind === 'ball') { q = Math.min(q, BRING_BALLS_MAX - balls); balls += q; }
+    if (ITEMS[id]?.kind === 'meal') { if (Object.keys(out).some(k => ITEMS[k]?.kind === 'meal')) q = 0; else q = Math.min(q, 1); } // 🍽️ só 1 comida por partida
     if (q > 0) out[id] = q;
   }
   return out;

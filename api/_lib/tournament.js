@@ -4,6 +4,7 @@ import { createMatch } from '../../shared/engine.js';
 import { randomSeed } from '../../shared/rules/rng.js';
 import { CUP_PRIZE, CUP_MIN_HUMANS_FOR_PRIZE, CUP_ELO_BONUS, DUEL_LEVEL_CAP, nextPow2 } from '../../shared/data/cup.js';
 import { serieFinished } from './series.js';
+import { towerFinished } from './tower.js';
 import { skinFor, equippedCosmetic } from './shop.js';
 import { bad, notFound, publicMatch, eloDeltas, START_RATING, mutateProfile, leagueStats } from './core.js';
 
@@ -258,6 +259,7 @@ async function payCup(db, cup, prize, cupName) {
 export async function duelFinished(db, row) {
   const st = row.state;
   if (row.options?.serie) return serieFinished(db, row);
+  if (row.options?.tower) return towerFinished(db, row); // 🗼 Torre de Batalha
   const humans = st.players.filter(p => !isCpu(p.id));
   if (row.options?.ranked && humans.length === 2) {
     const deltas = st.ratingChanges || await eloDeltas(db, st, humans);

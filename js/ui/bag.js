@@ -89,14 +89,14 @@ export function bringItemsPicker(profile, current, onSave) {
     const rows = Object.entries(bag).filter(([id]) => KEEP_KINDS.includes(ITEMS[id]?.kind) && bringLimit(id) > 0).map(([id, n]) => {
       const max = Math.min(n, bringLimit(id));
       const q = sel[id] || 0;
-      const full = ITEMS[id].kind === 'ball' && balls() >= BRING_BALLS_MAX;
-      return `<div class="shop-item"><img src="${itemUrl(id)}" alt=""><div><b>${esc(ITEMS[id].name)}</b> <span class="tiny muted">tem ${n} · leva até ${max}</span></div>
+      const full = (ITEMS[id].kind === 'ball' && balls() >= BRING_BALLS_MAX) || (ITEMS[id].kind === 'meal' && Object.keys(sel).some(k => k !== id && ITEMS[k]?.kind === 'meal')); // 🍽️ 1 comida por partida
+      return `<div class="shop-item"><img src="${itemUrl(id)}" alt=""><div><b>${esc(ITEMS[id].name)}</b> <span class="tiny muted">tem ${n} · leva até ${max}</span>${ITEMS[id].kind === 'meal' || id === 'legend_charm' ? `<div class="tiny muted">${esc(ITEMS[id].desc)}</div>` : ''}</div>
         <div class="row" style="gap:4px"><button class="btn sm" data-act="dec" data-item="${id}" ${q ? '' : 'disabled'}>−</button><b style="min-width:22px;text-align:center">${q}</b>
         <button class="btn sm" data-act="inc" data-item="${id}" ${q >= max || full ? 'disabled' : ''}>+</button></div></div>`;
     }).join('');
     return `<p class="small muted">Os itens saem da Mochila da conta quando a partida começa. O que sobrar volta no fim (no ☠️ Hardcore, quem cai perde).</p>
       <div class="col">${rows || '<p class="muted">Sua Mochila está vazia.</p>'}</div>
-      <p class="tiny muted">Pokébolas: ${balls()}/${BRING_BALLS_MAX}</p>
+      <p class="tiny muted">Pokébolas: ${balls()}/${BRING_BALLS_MAX} · 🍽️ comida: 1 por partida (é comida quando a partida começa)</p>
       <div class="grid2"><button class="btn" data-act="clear">Não levar nada</button><button class="btn primary" data-act="ok">✅ Levar estes</button></div>`;
   };
   const ov = openModal('bring', '🎒 Levar itens da Mochila', render());

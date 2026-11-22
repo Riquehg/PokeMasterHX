@@ -10,6 +10,8 @@ import { ensureSeason, applyLeagueResult, leagueSort, seasonId, seasonName, divI
 import { CUP_MAX_PLAYERS, DUEL_LEVEL_CAP } from '../../shared/data/cup.js';
 import { serieOp } from './series.js';
 import { farmOp } from './farm.js';
+import { safariOp } from './safari.js';
+import { towerOp } from './tower.js';
 import { duelQueue, duelQueueStatus, duelQueueCancel, duelTeam, startCup, duelFinished } from './tournament.js';
 import { SPECIES, STARTERS, getSpecies } from '../../shared/data/pokemon.js';
 import { dailyPokemon } from '../../shared/daily.js';
@@ -130,7 +132,8 @@ async function withCosmetic(db, prof) {
 }
 
 export async function profileOp(db, user, body) {
-  if (String(body.op || '').startsWith('farm_')) return farmOp(db, user, body); // 🌾 Fazenda
+  if (/^(farm|home)_/.test(String(body.op || ''))) return farmOp(db, user, body); // 🌾 Fazenda e 🏡 casa
+  if (/^safari_/.test(String(body.op || ''))) return safariOp(db, user, body); // 🌿 Zona Safári
   const p = await getOrCreateProfile(db, user);
   if (body.op === 'get' || !body.op) {
     let cosmetic = null;
@@ -442,6 +445,7 @@ export function addToBag(bag, add) {
   const out = { ...(bag || {}) };
   for (const [id, q] of Object.entries(add || {})) if (isKeepable(id)) out[id] = Math.min(BAG_MAX_PER_ITEM, (out[id] || 0) + q);
   if (out.shiny_charm > 1) out.shiny_charm = 1;
+  if (out.legend_charm > 3) out.legend_charm = 3; // 🏵️ no máximo 3 cargas guardadas
   return out;
 }
 
@@ -590,6 +594,7 @@ export async function matchOp(db, user, body) {
   if (op === 'solo') return createSolo(db, user, body);
   if (op === 'join') return joinRoom(db, user, body);
   if (op === 'serie_get' || op === 'serie_defense' || op === 'serie_challenge' || op === 'serie_team' || op === 'serie_seen' || op === 'serie_def_seen') return serieOp(db, user, body);
+  if (/^tower_/.test(String(op || ''))) return towerOp(db, user, body); // 🗼 Torre de Batalha
   if (op === 'duel_queue') return duelQueue(db, user, body, await getOrCreateProfile(db, user));
   if (op === 'duel_status') return duelQueueStatus(db, user);
   if (op === 'duel_cancel') return duelQueueCancel(db, user);
@@ -1030,7 +1035,7 @@ export async function recordResults(db, state, options = {}) {
     if (p.companion && COMPANIONS[p.companion] && !p.hardcoreLost) {
       const bond = { ...(st.companionBond || {}) };
       const before = bond[p.companion] || 0;
-      const gain = bondGain({ won: state.winner === p.id, badges: p.badges.length, captures: p.stats.captures, battlesWon: p.stats.wins, missions: p.missionsDone || 0, turns: state.turn });
+      const gain = (p.meal?.id === 'bond_pudding' ? 2 : 1) * bondGain({ won: state.winner === p.id, badges: p.badges.length, captures: p.stats.captures, battlesWon: p.stats.wins, missions: p.missionsDone || 0, turns: state.turn }); // 🍮 Pudim da Amizade: laço em dobro
       bond[p.companion] = Math.min(5000, before + gain);
       st.companionBond = bond;
       const lb = bondLevel(before), la = bondLevel(bond[p.companion]);

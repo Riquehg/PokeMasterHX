@@ -8,11 +8,17 @@ export const CROPS = {
   oran:    { name: 'Baga Oran',  icon: '🫐', hours: 4,  yield: [2, 3], cost: 40,  lvl: 1 },
   pecha:   { name: 'Baga Pecha', icon: '🍑', hours: 6,  yield: [2, 3], cost: 60,  lvl: 2 },
   razz:    { name: 'Baga Razz',  icon: '🍇', hours: 8,  yield: [2, 3], cost: 90,  lvl: 4 },
-  abobora: { name: 'Abóbora',    icon: '🎃', hours: 12, yield: [1, 2], cost: 150, lvl: 6 }
+  abobora: { name: 'Abóbora',    icon: '🎃', hours: 12, yield: [1, 2], cost: 150, lvl: 6 },
+  // v49: frutas para a cozinha da casa
+  sitrus:  { name: 'Baga Sitrus', icon: '🍋', hours: 8,  yield: [2, 3], cost: 120, lvl: 3 },
+  lum:     { name: 'Baga Lum',    icon: '🍏', hours: 10, yield: [1, 2], cost: 180, lvl: 5 },
+  starf:   { name: 'Baga Starf',  icon: '⭐', hours: 24, yield: [1, 1], cost: 400, lvl: 8 }
 };
 export const CROP_IDS = Object.keys(CROPS);
 /** Produtos guardados (colheita + farinha) */
-export const GOODS = { ...Object.fromEntries(CROP_IDS.map(k => [k, { name: CROPS[k].name, icon: CROPS[k].icon }])), farinha: { name: 'Farinha', icon: '🥡' } };
+export const GOODS = { ...Object.fromEntries(CROP_IDS.map(k => [k, { name: CROPS[k].name, icon: CROPS[k].icon }])), farinha: { name: 'Farinha', icon: '🥡' },
+  // v49: o que alguns Pokémon dão no ❤️ Carinho
+  leite: { name: 'Leite Moomoo', icon: '🥛' }, ovo: { name: 'Ovo', icon: '🥚' }, mel: { name: 'Mel', icon: '🍯' } };
 export const GOODS_CAP = 99;
 
 /** Canteiros pelo nível da Fazenda: 2 no Nv. 1, +1 a cada 2 níveis, até 8. */

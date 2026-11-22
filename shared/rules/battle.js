@@ -16,6 +16,7 @@ import { GYMS } from '../data/trainers.js';
 import { statsOf, maxHpOf, gainXp, xpReward, healMon, canTransform, transformInto, revertForm, megaEvolveMon, defFactor } from './monsters.js';
 import { megaFor } from '../data/megas.js';
 import { ABILITIES, abilityOf, PINCH_MULT, BAND_MULT, PLATE_MULT, QUICK_CLAW, LEFTOVERS_FRAC } from '../data/battlegear.js';
+import { CURRY_MULT, XP_SHAKE_MULT } from '../data/home.js';
 import {
   fail, getPlayer, log, fx, takeItem, giveMon, markSeen, markMega, healthyIndex, hasHealthy, speciesName, canUse, usableIndex, badgesNeeded
 } from './helpers.js';
@@ -713,7 +714,8 @@ function attackDamage(state, rng, si, slot = 0) {
   const cb = companionBonus(state, si);
   const compMult = cb?.types?.includes(type) ? 1 + cb.dmg : 1; // bônus do companheiro (ex.: Misty em golpes de Água)
   const wMult = weatherMult(state, type); // clima (ex.: Chuva +30% em Água)
-  const cqMult = atkSide.kind === 'player' ? conquestMult(state, atkSide.pid, type, GYMS) : 1; // Conquista: cidades dominadas
+  const cqMult = (atkSide.kind === 'player' ? conquestMult(state, atkSide.pid, type, GYMS) : 1) // Conquista: cidades dominadas
+    * (atkSide.kind === 'player' && getPlayer(state, atkSide.pid)?.meal?.type === type ? CURRY_MULT : 1); // 🍛 Curry do tipo
   const gMult = gearAbilMult(a, move, atkSide); // ⚔️ habilidade do atacante + item
   const daMult = defAbilMult(a, d, type, mult); // ✨ habilidade de defesa do alvo
   const dMult = defFactor(statsOf(d).def); // 🛡️ DEF de quem recebe
@@ -809,7 +811,8 @@ function awardKO(state, winnerSi, loserSi) {
 
   const player = getPlayer(state, winSide.pid);
   const isTrainer = loseSide.kind !== 'wild';
-  let xp = xpReward(foe, isTrainer) * (companionBonus(state, winnerSi)?.xp || 1);
+  let xp = xpReward(foe, isTrainer) * (companionBonus(state, winnerSi)?.xp || 1)
+    * (player?.meal?.id === 'xp_shake' ? XP_SHAKE_MULT : 1); // 🥤 Vitamina Turbo
   if (state.options.dailyPokemon && foe.sp === state.options.dailyPokemon) xp *= 2;
   if (foe.shiny) xp = Math.round(xp * 1.5);
   const team = player.team;
@@ -898,6 +901,7 @@ function companionAssist(state, rng, si) {
 export const LEGEND_MATCH_LIMIT = 2;
 export const isLegendOrMyth = mon => { const sp = getSpecies(mon?.sp); return !!(sp && (sp.legendary || sp.mythical)); };
 export function legendCapBlocked(player, foe) {
+  if (player?.legendCharmOn || (player?.items?.legend_charm || 0) > 0) return false; // 🏵️ Amuleto Lendário: sem limite
   return !!(foe?.yellowLegend && (player?.legendCaught || 0) >= LEGEND_MATCH_LIMIT);
 }
 
@@ -1165,7 +1169,16 @@ export function deliverCapture(state, pid, mon, ballId) {
   if (ballId && getItem(ballId)?.trust) mon.trust = true; // Bola da Confiança: obedece sem insígnias
   mon.ball = ballId;
   if (ballId) progressMission(state, pid, { k: 'capture', sp: mon.sp });
-  if (mon.yellowLegend) { p.legendCaught = (p.legendCaught || 0) + 1; delete mon.yellowLegend; }
+  if (mon.yellowLegend) {
+    p.legendCaught = (p.legendCaught || 0) + 1; delete mon.yellowLegend;
+    // 🏵️ passou do limite graças ao Amuleto Lendário: gasta 1 carga (só 1 por partida)
+    if (p.legendCaught > LEGEND_MATCH_LIMIT && !p.legendCharmOn && (p.items?.legend_charm || 0) > 0) {
+      p.items.legend_charm -= 1;
+      if (!p.items.legend_charm) delete p.items.legend_charm;
+      p.legendCharmOn = true; // continua sem limite até o fim desta partida
+      log(state, `🏵️ O Amuleto Lendário brilhou! 1 carga usada — sem limite de lendários até o fim da partida.`, 'good');
+    }
+  }
   const where = giveMon(p, mon);
   p.lastPlaced = { uid: mon.uid, where }; // ➕ dá para escolher na hora: equipe ou PC (ação 'place')
   (p.captureLog ||= []).push({ sp: mon.sp, shiny: !!mon.shiny, t: state.turn || 0 });

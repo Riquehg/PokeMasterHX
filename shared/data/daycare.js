@@ -47,10 +47,10 @@ export function canBreed(a, b) {
 }
 
 /** Quantos ovos o casal já fez desde `since` (respeita incubadora e limite do dia). */
-export function eggsDue(dc, now, eggsToday, incubatorCount) {
+export function eggsDue(dc, now, eggsToday, incubatorCount, incubMax = INCUBATOR_MAX) {
   if (!dc?.a || !dc?.b || !dc.since) return 0;
   const n = Math.floor((now - dc.since) / (EGG_EVERY_H * 3600000));
-  return Math.max(0, Math.min(n, EGGS_PER_DAY - eggsToday, INCUBATOR_MAX - incubatorCount));
+  return Math.max(0, Math.min(n, EGGS_PER_DAY - eggsToday, incubMax - incubatorCount));
 }
 
 /** Monta um ovo (o filhote já é decidido aqui; só aparece ao chocar). */

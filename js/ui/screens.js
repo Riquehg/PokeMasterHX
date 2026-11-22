@@ -12,6 +12,8 @@ import { ACH_TITLES, unlockedTitles } from '../../shared/data/titles.js';
 import { megaBySpecies } from '../../shared/data/megas.js';
 import { openDaily, autoDaily, defenseReport } from './daily.js';
 import { openFarm } from './farm.js';
+import { openSafari } from './safari.js';
+import { openTower } from './tower.js';
 import { BOX_MAX, BOX_ICONS } from '../../shared/data/boxes.js';
 import { dailyStatus } from '../../shared/data/daily.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
@@ -191,6 +193,8 @@ export async function hubScreen(root, ctx) {
         <button class="acct-tile" data-act="abag" ${profile ? '' : 'disabled'}><span>🎒</span><b>Mochila</b><small>${Object.values(profile?.stats?.bag || {}).reduce((a, b) => a + b, 0)} itens · levar e vender</small></button>
         <button class="acct-tile" data-act="market" ${profile ? '' : 'disabled'}><span>🏪</span><b>Mercado</b><small>Pokémon e itens</small></button>
         <button class="acct-tile" data-act="farm" ${profile ? '' : 'disabled'}><span>🌾</span><b>Fazenda</b><small>${profile?.stats?.farm?.slots?.length ? `${profile.stats.farm.slots.length} Pokémon · Nv. ${profile.stats.farm.lvl || 1}` : 'Solte seus Pokémon para treinar'}</small></button>
+        <button class="acct-tile" data-act="tower" ${profile ? '' : 'disabled'}><span>🗼</span><b>Torre de Batalha</b><small>${profile?.stats?.tower?.set ? `🔥 Sequência ${profile.stats.tower.streak} · duelo ${profile.stats.tower.set.n}/7` : `🏅 ${profile?.stats?.tower?.pb || 0} PB · recorde ${profile?.stats?.tower?.best || 0}`}</small></button>
+        <button class="acct-tile" data-act="safari" ${profile ? '' : 'disabled'}><span>🌿</span><b>Zona Safári</b><small>${profile?.stats?.safari && !profile.stats.safari.over ? '👣 Passeio em andamento!' : 'Capture raros com ouro'}</small></button>
         <button class="acct-tile" data-act="daily" ${profile ? '' : 'disabled'}><span>🎁</span><b>Prêmio diário</b><small>${profile ? (dailyStatus(profile.stats?.login).canClaim ? '🔴 Disponível agora!' : `🔥 ${profile.stats?.login?.streak || 0} dias seguidos`) : ''}</small></button>
         <button class="acct-tile" data-act="trophies" ${profile ? '' : 'disabled'}><span>🏆</span><b>Sala de Troféus</b><small>${(profile?.stats?.trophies || []).length} troféus da Liga das Séries</small></button>
         <button class="acct-tile" data-act="ranking"><span>🏆</span><b>Ranking</b><small>Liga, Elos e pontos</small></button>
@@ -220,6 +224,8 @@ export async function hubScreen(root, ctx) {
     titles: () => openTitles(profile, p => { profile = p; rerender(); }),
     daily: () => openDaily(profile, p => rerender(p)),
     farm: () => openFarm({ onProfile: p => { profile = p; } }, profile),
+    safari: () => openSafari(profile, p => { profile = p; }),
+    tower: () => openTower(ctx, profile, p => { profile = p; }),
     install: () => promptInstall(),
     cup: async () => {
       try {

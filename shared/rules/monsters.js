@@ -264,7 +264,7 @@ export function rollWild(rng, tier, opts = {}) {
 
   const [lo, hi] = WILD_LEVELS[tier];
   const level = rng.int(lo, hi);
-  let shinyRate = BASE_SHINY_RATE * (opts.shinyCharm ? 3 : 1);
+  let shinyRate = BASE_SHINY_RATE * (opts.shinyCharm ? 3 : 1) * (opts.shinyMult || 1); // 🍰 Bolo Brilhante
   if (isDaily) shinyRate = Math.max(shinyRate, DAILY_SHINY_RATE * (opts.shinyCharm ? 3 : 1));
   if (opts.forceShiny) shinyRate = 1;
   const shiny = rng.chance(shinyRate);

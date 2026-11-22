@@ -43,6 +43,7 @@ export const RECIPES = {
   trust: { name: 'Bola da Confiança', icon: '🤝', lvl: 4, hours: 24, xp: 400, week: 1, cost: { berry: 20, pearl: 20, ember: 20, ore: 20, crystal: 20, gold: 6000 }, out: { bag: { trust_ball: 1 } } },
   master: { name: 'Master Ball', icon: '🟣', lvl: 4, hours: 48, xp: 600, week: 1, cost: { berry: 30, pearl: 30, ember: 30, ore: 30, crystal: 30, essence: 30, feather: 30, gold: 12000 }, out: { bag: { master_ball: 1 } } },
   // 💎 Megapedra: escolha qual (precisa de 10 Fragmentos dela, que vêm de Mega Raids/energia Mega)
+  legend_charm: { name: 'Amuleto Lendário', icon: '🏵️', lvl: 4, hours: 72, xp: 700, week: 1, cost: { crystal: 25, essence: 25, feather: 20, pearl: 20, ember: 20, gold: 15000 }, out: { bag: { legend_charm: 3 } }, desc: 'Sai com 3 cargas: leve na partida para não ter limite de lendários das casas Amarelas. Cada carga só é gasta quando libera um lendário além do limite. 1 por semana.' },
   megastone: { name: 'Megapedra', icon: '💎', lvl: 4, hours: 48, xp: 500, week: 1, frags: 10, cost: { crystal: 20, essence: 20, gold: 5000 }, out: { mega: true }, desc: 'Escolha a Mega: gasta 10 Fragmentos dela (da Mochila). 1 por semana.' },
   crown: { name: 'Coroa do Campeão', icon: '👑', lvl: 4, hours: 48, xp: 500, cost: { crystal: 40, essence: 40, gold: 10000 }, out: { decor: 'crown' }, desc: 'Decoração exclusiva e lendária.' }
 };
