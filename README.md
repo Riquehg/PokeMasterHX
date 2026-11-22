@@ -120,6 +120,8 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 - **v38 — Liga: contador claro:** o quadro do topo mostra "X/5 ataques restantes" e, quando zera, "novos em 2h13" (renovam à meia-noite de Brasília). A regra não mudou (ela já renovava; o rótulo antigo "0 ataques hoje" confundia).
 - **v39 — 🏅 títulos de conquista:** `shared/data/titles.js` (`ACH_TITLES`: Pokédex 100/300/todas, shinies 10/50, pódio e campeão da Série A, 10× Campeão, Megas 10/todas, Fazenda 50/200 curtidas, 1 exclusivo por companheiro no laço máximo; `unlockedTitles`, `titleProgress`). Equipar: op `title_equip` (`cosmetics.equipped.title = 'ach:<id>'`, só se conquistou); `equippedCosmetic` manda `title` + `titleFx` + `titleColor`. Efeitos `.tfx-*` (cartão, cartão do treinador, lista da partida) e `.pfx-*` (peão). Tela `js/ui/titles.js` (tile 🏅 Títulos) + aviso de título novo.
 
+- **v40 — 🌾 Fazenda 2.0:** `shared/data/garden.js` (`CROPS`, `GOODS`, `plotsFor`, `BUILDINGS` moinho/cozinha com 3 níveis e fila `queueFor`, `POFFIN_ITEMS`). Ops em `/api/profile`: `farm_plant`, `farm_water`, `farm_harvest`, `farm_build`, `farm_bjob`, `farm_bclaim`; `farm_help` também rega; `farm_use` aceita Poffins/Torta; `farm_decor` aceita `f` (espelhar) e `s` (0.6–1.8). UI: aba 🌱 Horta (canteiros, despensa, construções) e modo ✏️ edição (selecionar, arrastar, virar, tamanho, copiar, guardar, desfazer).
+
 ## 3. Publicar (passo a passo, só pelo navegador)
 
 ### 3.1 Supabase

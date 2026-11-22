@@ -846,3 +846,50 @@ test('🏅 títulos de conquista: progresso, equipar só se conquistou, efeito v
   const r2 = await profileOp(db, a, { op: 'title_equip', id: null });
   assert.equal(r2.profile.cosmetic?.title, undefined);
 });
+
+test('🌱 Fazenda 2.0: plantar, regar, colher, Moinho → farinha, Cozinha → Poffin, usar Poffin, decoração editável', async () => {
+  const { db, admin, us: [a, b] } = await users(2);
+  await adminOp(db, admin, { op: 'give_gold', userId: a.id, amount: 50000 });
+  const pa = await db.getProfile(a.id);
+  await profileOp(db, a, { op: 'farm_place', uid: pa.vault[0].uid });
+  // nível 6 e recursos para construir
+  const set = async patch => { const p = await db.getProfile(a.id); await db.updateProfileIf(a.id, p.rev || 0, { stats: { ...p.stats, farm: { ...p.stats.farm, ...patch } } }); };
+  await set({ lvl: 6, res: { ore: 50, ember: 50, crystal: 20, feather: 20, pearl: 20 } });
+  await assert.rejects(profileOp(db, a, { op: 'farm_plant', plot: 0, crop: 'xx' }), /Semente inválida/);
+  let r = await profileOp(db, a, { op: 'farm_plant', plot: 0, crop: 'trigo' });
+  assert.equal(r.farm.garden.plots[0].crop, 'trigo');
+  await assert.rejects(profileOp(db, a, { op: 'farm_plant', plot: 0, crop: 'oran' }), /já está plantado/);
+  await assert.rejects(profileOp(db, a, { op: 'farm_plant', plot: 7, crop: 'oran' }), /Canteiro inválido/);
+  // amigo que cuida rega a horta
+  const before = (await db.getProfile(a.id)).stats.farm.plots[0].readyAt;
+  await profileOp(db, b, { op: 'farm_help', userId: a.id });
+  const pl = (await db.getProfile(a.id)).stats.farm.plots[0];
+  assert.ok(pl.watered && pl.readyAt < before);
+  await assert.rejects(profileOp(db, a, { op: 'farm_harvest' }), /Nada pronto/);
+  // adianta o relógio do canteiro
+  const p2 = await db.getProfile(a.id);
+  await set({ plots: p2.stats.farm.plots.map(x => x && { ...x, readyAt: 1 }), goods: { trigo: 5, oran: 4 } });
+  r = await profileOp(db, a, { op: 'farm_harvest' });
+  assert.ok(r.farm.garden.goods.trigo >= 8);
+  // construções
+  await assert.rejects(profileOp(db, a, { op: 'farm_bjob', b: 'moinho', recipe: 'farinha' }), /Construa o Moinho/);
+  await profileOp(db, a, { op: 'farm_build', b: 'moinho' });
+  await profileOp(db, a, { op: 'farm_build', b: 'cozinha' });
+  r = await profileOp(db, a, { op: 'farm_bjob', b: 'moinho', recipe: 'farinha' });
+  assert.equal(r.farm.buildings.moinho.jobs.length, 1);
+  await assert.rejects(profileOp(db, a, { op: 'farm_bjob', b: 'moinho', recipe: 'farinha' }), /Fila cheia/);
+  const p3 = await db.getProfile(a.id);
+  await set({ buildings: { ...p3.stats.farm.buildings, moinho: { ...p3.stats.farm.buildings.moinho, jobs: p3.stats.farm.buildings.moinho.jobs.map(j => ({ ...j, done: 1 })) } } });
+  r = await profileOp(db, a, { op: 'farm_bclaim', b: 'moinho' });
+  assert.equal(r.farm.garden.goods.farinha, 1);
+  r = await profileOp(db, a, { op: 'farm_bjob', b: 'cozinha', recipe: 'poffin_oran' });
+  const p4 = await db.getProfile(a.id);
+  await set({ buildings: { ...p4.stats.farm.buildings, cozinha: { ...p4.stats.farm.buildings.cozinha, jobs: p4.stats.farm.buildings.cozinha.jobs.map(j => ({ ...j, done: 1 })) } }, slots: p4.stats.farm.slots.map(s => ({ ...s, happy: 10 })) });
+  await profileOp(db, a, { op: 'farm_bclaim', b: 'cozinha' });
+  r = await profileOp(db, a, { op: 'farm_use', item: 'poffin_oran' });
+  assert.ok(r.farm.slots[0].happy >= 55);
+  // decoração com virar e tamanho
+  r = await profileOp(db, a, { op: 'farm_decor', decor: [{ k: Object.keys((await import('../shared/data/farm.js')).FARM_DECOR).find(k => (r.farm.ownedDecor || []).includes(k)), x: 30, y: 40, f: 1, s: 1.4 }] });
+  assert.equal(r.farm.decor[0].f, 1);
+  assert.equal(r.farm.decor[0].s, 1.4);
+});

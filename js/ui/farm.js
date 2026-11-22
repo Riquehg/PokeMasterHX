@@ -7,7 +7,9 @@ import { esc, toast, openModal, closeModal, setModalBody, bindActions } from './
 import { monSprite, avatarUrl, leaderUrl } from '../config.js';
 import { canBreed, EGGS_PER_DAY, INCUBATOR_MAX, NATURE_COST, EGG_EVERY_H } from '../../shared/data/daycare.js';
 import { statCard } from './common.js';
-import { RECIPES, FARM_ITEMS, ARTISAN_LEVELS } from '../../shared/data/workshop.js';
+import { RECIPES, FARM_ITEMS as FARM_ITEMS0, ARTISAN_LEVELS } from '../../shared/data/workshop.js';
+import { CROPS, GOODS, BUILDINGS, BUILD_MAX, queueFor, POFFIN_ITEMS, plotsFor } from '../../shared/data/garden.js';
+const FARM_ITEMS = { ...FARM_ITEMS0, ...POFFIN_ITEMS };
 import { MEGAS, MEGA_KEYS, fragItemId } from '../../shared/data/megas.js';
 import { natureLabel } from '../../shared/data/natures.js';
 
@@ -43,6 +45,8 @@ export async function openFarm(ctx, profile, userId = null) {
   let pair = [];
   let houseMode = false;
   let farm = null, tab = 'farm', sel = null, decorMode = false, decorPick = null, decorDraft = null, visitList = null;
+  let decorSel = null, decorHist = [], dragMoved = false; // ✏️ edição: selecionado, desfazer, arrasto
+  const snap = () => { decorHist.push(decorDraft.map(x => ({ ...x }))); if (decorHist.length > 30) decorHist.shift(); };
   let me = profile;
   const ov = openModal('farm', '🌾 Fazenda', '<span class="spinner"></span>', { wide: true });
   ov.querySelector('.modal').classList.add('fm-modal');
@@ -83,7 +87,7 @@ export async function openFarm(ctx, profile, userId = null) {
     return `<div class="fm-scene dp-${daypart()} ${decorMode || houseMode ? 'decorating' : ''}">
       ${BIOME_IDS.map(b => { const z = zoneBox(b); return `<div class="fm-zone fm-${b}" style="left:${z.x}%;top:${z.y}%;width:${z.w}%;height:${z.h}%"><div class="fm-amb">${AMBIENT[b] || ''}</div><span class="fm-zlabel">${FARM_BIOMES[b].icon} ${FARM_BIOMES[b].name}</span></div>`; }).join('')}
       <div class="fm-cloud c1"></div><div class="fm-cloud c2"></div>
-      ${decor.map((d, i) => { const v = toView(d.x, d.y); return `<span class="fm-decor" data-di="${i}" style="left:${v.x}%;top:${v.y}%;z-index:${Math.round(v.y)}">${FARM_DECOR[d.k]?.icon || ''}</span>`; }).join('')}
+      ${decor.map((d, i) => { const v = toView(d.x, d.y); return `<span class="fm-decor ${decorMode && decorSel === i ? 'dsel' : ''}" data-di="${i}" style="left:${v.x}%;top:${v.y}%;z-index:${Math.round(v.y)};--ds:${d.s || 1};--df:${d.f ? -1 : 1}">${FARM_DECOR[d.k]?.icon || ''}</span>`; }).join('')}
       ${hs ? (() => { const v = toView(hs.x, hs.y); return `<div class="fm-house" style="left:${v.x}%;top:${v.y}%;z-index:${Math.round(v.y)}" data-act="house-info">`; })() + `<span class="fm-house-ic">🏡</span>
         ${comp ? `<img class="fm-comp" src="${leaderUrl(comp.sprite)}" alt="${esc(comp.name)}" title="${esc(comp.name)} cuidando da Fazenda">` : '<span class="fm-house-tag">vazia</span>'}</div>` : ''}
       ${placeMons().map(({ s, x, y }) => { const h = hash(s.uid); const swim = s.biome === 'lago' && ['water', 'ice'].includes(getSpecies(s.sp)?.types?.[0]);
@@ -146,13 +150,20 @@ export async function openFarm(ctx, profile, userId = null) {
   const actions = () => {
     if (decorMode) {
       const list = ownedDecor();
-      return `<div class="fm-decorbar"><span class="tiny muted">Escolha e toque na Fazenda para colocar (${decorDraft.length}/${DECOR_MAX}). Toque numa decoração para tirar.</span>
+      const cur = decorSel !== null ? decorDraft[decorSel] : null;
+      return `<div class="fm-decorbar"><span class="tiny muted">✏️ <b>Modo edição</b> (${decorDraft.length}/${DECOR_MAX}): escolha um enfeite e toque na Fazenda para colocar. Toque num enfeite para selecionar e <b>arraste</b> para mover.</span>
+        ${cur ? `<div class="fm-dtools"><span class="fm-dsel-ic">${FARM_DECOR[cur.k]?.icon || ''}</span>
+          <button class="btn sm" data-act="dflip" title="Espelhar">↔️ Virar</button>
+          <button class="btn sm" data-act="dsize" data-v="-1" title="Menor">➖</button><span class="tiny">${Math.round((cur.s || 1) * 100)}%</span><button class="btn sm" data-act="dsize" data-v="1" title="Maior">➕</button>
+          <button class="btn sm" data-act="ddup" title="Duplicar">📄 Copiar</button>
+          <button class="btn sm red" data-act="ddel" title="Guardar (tirar da Fazenda)">📦 Guardar</button>
+          <button class="btn sm" data-act="dunsel">OK</button></div>` : ''}
         <div class="fm-palette">${list.map(([k, d]) => `<button class="fm-dbtn ${decorPick === k ? 'on' : ''}" data-act="dpick" data-k="${k}" title="${esc(d.name)}">${d.icon}</button>`).join('')}</div>
-        <div class="row" style="gap:6px"><button class="btn sm" data-act="dcancel">Cancelar</button><button class="btn sm primary" data-act="dsave">💾 Salvar decoração</button>
+        <div class="row" style="gap:6px"><button class="btn sm" data-act="dcancel">Cancelar</button><button class="btn sm" data-act="dundo" ${decorHist.length ? '' : 'disabled'}>↩️ Desfazer</button><button class="btn sm" data-act="dclear" ${decorDraft.length ? '' : 'disabled'}>🧹 Guardar tudo</button><button class="btn sm primary" data-act="dsave">💾 Salvar decoração</button>
         <span class="tiny muted">Mais decorações na 💎 Loja (só visual).</span></div></div>`;
     }
     if (!farm.mine) return `<div class="row fm-actions"><button class="btn ${farm.likedToday ? '' : 'primary'}" data-act="like" ${farm.likedToday ? 'disabled' : ''}>❤️ ${farm.likedToday ? 'Curtido hoje' : 'Curtir'}</button>
-        <button class="btn ${farm.helpedToday ? '' : 'green'}" data-act="help" ${farm.helpedToday ? 'disabled' : ''}>🤝 ${farm.helpedToday ? 'Já cuidou hoje' : 'Cuidar dos Pokémon (+2 🍓)'}</button>
+        <button class="btn ${farm.helpedToday ? '' : 'green'}" data-act="help" ${farm.helpedToday ? 'disabled' : ''}>🤝 ${farm.helpedToday ? 'Já cuidou hoje' : 'Cuidar dos Pokémon e regar a horta (+2 🍓)'}</button>
         <button class="btn" data-act="home">🏠 Voltar para a minha</button></div>`;
     const p = farm.pending || { xp: 0, res: {} };
     const pend = [p.xp ? `+${p.xp} XP` : '', ...Object.entries(p.res).map(([k, n]) => `${RESOURCES[k].icon}${n}`)].filter(Boolean).join(' · ');
@@ -163,9 +174,64 @@ export async function openFarm(ctx, profile, userId = null) {
       <button class="btn" data-act="decor">🎨 Decorar</button>
       <button class="btn" data-act="house">🏡 ${farm.house ? 'Mover casinha' : 'Casinha'}</button>
       <button class="btn ${(farm.eggs || []).some(e => e.ready) ? 'primary' : ''}" data-act="tab" data-t="creche">🥚 Creche${(farm.eggs || []).length ? ` (${farm.eggs.length})` : ''}</button>
+      <button class="btn ${hortaReady() ? 'primary' : ''}" data-act="tab" data-t="horta">🌱 Horta${hortaReady() ? ' ✨' : ''}</button>
       <button class="btn ${(farm.workshop?.jobs || []).some(j => j.ready) ? 'primary' : ''}" data-act="tab" data-t="oficina">🔨 Oficina</button>
       <button class="btn" data-act="tab" data-t="res">📦 Recursos</button>
       <button class="btn" data-act="tab" data-t="visit">👥 Visitar</button></div>`;
+  };
+
+  // ---------------------------------------------------------------- 🌱 Horta e 🏭 Construções
+  const hortaReady = () => (farm.garden?.plots || []).some(p => p?.ready) || Object.values(farm.buildings || {}).some(b => b.jobs.some(j => j.ready));
+  let plantAt = null; // canteiro escolhido para plantar
+  const hortaView = () => {
+    const G = farm.garden || { plots: [] };
+    const goods = G.goods || {};
+    const plot = (pl, i) => {
+      if (!pl) return `<div class="hp-plot empty ${plantAt === i ? 'sel' : ''}" data-act="plot" data-i="${i}"><span class="hp-soil">🟫</span><span class="tiny">Plantar</span></div>`;
+      const C = CROPS[pl.crop];
+      const pct = Math.min(100, ((Date.now() - pl.at) / Math.max(1, pl.readyAt - pl.at)) * 100);
+      const stage = pl.ready ? C.icon : pct < 35 ? '🌱' : pct < 75 ? '🌿' : '🪴';
+      return `<div class="hp-plot ${pl.ready ? 'ready' : ''} ${pl.watered ? 'wet' : ''}"><span class="hp-crop">${stage}</span><b class="tiny">${esc(C.name)}</b>
+        ${pl.ready ? '<span class="tiny hp-ok">Pronto!</span>' : `<span class="tiny">⏳ ${fmtT(pl.readyAt - Date.now())}</span><div class="fm-bar small"><i style="width:${pct}%"></i></div>`}${pl.watered ? '<span class="hp-drop" title="Regado">💧</span>' : ''}</div>`;
+    };
+    const picker = plantAt === null ? '' : `<div class="hp-picker"><b>Plantar no canteiro ${plantAt + 1}:</b><div class="hp-seeds">${Object.entries(CROPS).map(([k, C]) => {
+      const lock = farm.lvl < C.lvl;
+      return `<button class="hp-seed" data-act="plant" data-k="${k}" ${lock || (me?.gold || 0) < C.cost ? 'disabled' : ''} title="${lock ? `Libera no Nv. ${C.lvl}` : ''}"><span>${C.icon}</span><b>${esc(C.name)}</b><span class="tiny">${C.hours}h · 🪙 ${C.cost}</span>${lock ? `<span class="tiny">🔒 Nv. ${C.lvl}</span>` : `<span class="tiny muted">colhe ${C.yield[0]}–${C.yield[1]}</span>`}</button>`;
+    }).join('')}</div><button class="btn sm" data-act="plot-x">Cancelar</button></div>`;
+    const anyReady = G.plots.some(p => p?.ready), anyDry = G.plots.some(p => p && !p.watered && !p.ready);
+    const B = farm.buildings || {};
+    const bcard = (id, Bd) => {
+      const b = B[id] || { lvl: 0, jobs: [] };
+      const cost = Bd.cost[b.lvl];
+      const costTxt = cost ? Object.entries(cost).map(([k, q]) => (k === 'gold' ? `🪙 ${q}` : `${RESOURCES[k].icon} ${q}`)).join(' · ') : '';
+      if (!b.lvl) {
+        return `<div class="hb-card locked"><div class="hb-head"><span class="hb-ic">${Bd.icon}</span><b>${esc(Bd.name)}</b></div>
+          <span class="tiny muted">${farm.lvl < Bd.lvl ? `🔒 Libera no Nv. ${Bd.lvl} da Fazenda` : `Construir: ${costTxt}`}</span>
+          ${farm.lvl >= Bd.lvl ? `<button class="btn sm primary" data-act="build" data-b="${id}">🔨 Construir</button>` : ''}</div>`;
+      }
+      const q = queueFor(b.lvl);
+      return `<div class="hb-card"><div class="hb-head"><span class="hb-ic">${Bd.icon}</span><b>${esc(Bd.name)} Nv.${b.lvl}</b>
+          <span class="tiny ${b.worker ? 'hb-work' : 'muted'}">${b.worker ? `👷 ${Bd.workerName} trabalhando: −25% no tempo` : `Coloque um Pokémon ${Bd.workerName} na Fazenda para ir mais rápido`}</span></div>
+        <div class="hb-jobs">${b.jobs.map(j => { const R = Bd.recipes[j.recipe]; return `<div class="hb-job ${j.ready ? 'ready' : ''}">${R.icon} <b class="tiny">${esc(R.name)}</b> ${j.ready ? '<span class="tiny hp-ok">pronto</span>' : `<span class="tiny">⏳ ${fmtT(j.done - Date.now())}</span>`}</div>`; }).join('')}
+          ${Array.from({ length: Math.max(0, q - b.jobs.length) }, () => '<div class="hb-job empty tiny muted">livre</div>').join('')}</div>
+        ${b.jobs.some(j => j.ready) ? `<button class="btn sm primary" data-act="bclaim" data-b="${id}">✨ Pegar</button>` : ''}
+        <div class="hb-recipes">${Object.entries(Bd.recipes).map(([rk, R]) => {
+          const ok = Object.entries(R.in).every(([g, n]) => (goods[g] || 0) >= n) && b.jobs.length < q;
+          return `<button class="hb-rec" data-act="bjob" data-b="${id}" data-r="${rk}" ${ok ? '' : 'disabled'}><span>${R.icon} <b>${esc(R.name)}</b></span><span class="tiny">${Object.entries(R.in).map(([g, n]) => `${n}x ${GOODS[g].icon}`).join(' + ')} · ${R.hours}h</span>${R.out.item ? `<span class="tiny muted">${esc(POFFIN_ITEMS[R.out.item].desc)}</span>` : ''}</button>`;
+        }).join('')}</div>
+        ${b.lvl < BUILD_MAX ? `<button class="btn sm" data-act="build" data-b="${id}" title="Mais uma vaga na fila de produção">⬆️ Melhorar para Nv.${b.lvl + 1} (${costTxt})</button>` : '<span class="tiny muted">Nível máximo</span>'}</div>`;
+    };
+    return `<p class="small muted">Plante com ouro, espere e colha. 💧 Pokémon de <b>Água</b> na Fazenda regam sozinhos (−25% no tempo); 🌿 de <b>Planta</b> aceleram a horta (−20%). Amigos que cuidam da sua Fazenda também regam. A colheita vira ingrediente no 🌀 Moinho e na 🍳 Cozinha.</p>
+      <div class="hp-tools">${G.waterAuto ? '<span class="chip blue">💧 Rega automática</span>' : ''}${G.grassBoost ? '<span class="chip green">🌿 Planta acelerando</span>' : ''}
+        <button class="btn sm ${anyReady ? 'primary' : ''}" data-act="harvest" ${anyReady ? '' : 'disabled'}>🧺 Colher tudo</button>
+        <button class="btn sm" data-act="water" ${anyDry ? '' : 'disabled'}>💧 Regar</button></div>
+      <div class="hp-grid">${G.plots.map(plot).join('')}</div>
+      <p class="tiny muted">Canteiros: ${G.plots.length}/8 — ganha mais a cada 2 níveis da Fazenda.</p>
+      ${picker}
+      <h3>🧺 Despensa</h3><div class="hp-goods">${Object.entries(GOODS).map(([k, g]) => `<span class="chip">${g.icon} ${esc(g.name)} <b>${goods[k] || 0}</b></span>`).join('')}</div>
+      <h3>🏭 Construções</h3><div class="hb-list">${Object.entries(BUILDINGS).map(([id, Bd]) => bcard(id, Bd)).join('')}</div>
+      <p class="tiny muted">Poffins e Torta vão para os 🎒 Itens da Fazenda (aba 🔨 Oficina) — use quando quiser.</p>
+      <button class="btn" data-act="tab" data-t="farm" style="margin-top:8px">← Voltar</button>`;
   };
 
   const resView = () => `<p class="small muted">Recursos que seus Pokémon produziram. Venda por ouro da conta (na próxima fase viram itens na Oficina).</p>
@@ -276,11 +342,35 @@ export async function openFarm(ctx, profile, userId = null) {
 
   function render() {
     if (!farm) return;
-    const bodyHtml = head() + (tab === 'res' ? resView() : tab === 'visit' ? visitView() : tab === 'add' ? addView() : tab === 'creche' ? crecheView() : tab === 'pair' ? pairView() : tab === 'oficina' ? oficinaView() : scene() + actions() + monPanel());
+    const bodyHtml = head() + (tab === 'res' ? resView() : tab === 'visit' ? visitView() : tab === 'add' ? addView() : tab === 'creche' ? crecheView() : tab === 'pair' ? pairView() : tab === 'oficina' ? oficinaView() : tab === 'horta' ? hortaView() : scene() + actions() + monPanel());
     setModalBody('farm', bodyHtml);
   }
 
   const run = async (fn, okMsg) => { try { const r = await fn(); if (r?.farm) farm = r.farm; if (r?.profile) { me = r.profile; ctx?.onProfile?.(me); } render(); if (okMsg) toast(typeof okMsg === 'function' ? okMsg(r) : okMsg, 'good'); return r; } catch (e) { toast(e.message, 'bad'); } };
+
+  // ✏️ arrastar um enfeite (modo edição)
+  let drag = null;
+  ov.addEventListener('pointerdown', e => {
+    if (!decorMode) return;
+    const d = e.target.closest('.fm-decor');
+    if (!d) return;
+    const i = Number(d.dataset.di);
+    drag = { i, x0: e.clientX, y0: e.clientY, el: d, sc: d.closest('.fm-scene'), started: false };
+    e.preventDefault();
+  });
+  ov.addEventListener('pointermove', e => {
+    if (!drag) return;
+    if (!drag.started && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 6) return;
+    if (!drag.started) { drag.started = true; snap(); decorSel = drag.i; drag.el.classList.add('dsel', 'dragging'); }
+    const r = drag.sc.getBoundingClientRect();
+    const vx = Math.max(1, Math.min(99, ((e.clientX - r.left) / r.width) * 100)), vy = Math.max(2, Math.min(98, ((e.clientY - r.top) / r.height) * 100));
+    drag.el.style.left = vx + '%'; drag.el.style.top = vy + '%';
+    const pos = toStore(vx, vy);
+    decorDraft[drag.i].x = Math.round(pos.x * 10) / 10; decorDraft[drag.i].y = Math.round(pos.y * 10) / 10;
+  });
+  const endDrag = () => { if (!drag) return; if (drag.started) { dragMoved = true; drag = null; render(); } else drag = null; };
+  ov.addEventListener('pointerup', endDrag);
+  ov.addEventListener('pointercancel', endDrag);
 
   // colocar/remover decoração tocando na cena
   ov.addEventListener('click', e => {
@@ -294,14 +384,19 @@ export async function openFarm(ctx, profile, userId = null) {
       return;
     }
     if (!decorMode) return;
+    if (dragMoved) { dragMoved = false; return; }
     const d = e.target.closest('.fm-decor');
-    if (d) { decorDraft.splice(Number(d.dataset.di), 1); render(); return; }
+    if (d) { decorSel = Number(d.dataset.di); render(); return; }
     const sc = e.target.closest('.fm-scene');
-    if (!sc || !decorPick) return;
+    if (!sc) return;
+    if (decorSel !== null) { decorSel = null; render(); return; } // toque fora: tira a seleção
+    if (!decorPick) return;
     if (decorDraft.length >= DECOR_MAX) return toast(`Máximo de ${DECOR_MAX} decorações.`, 'bad');
     const r = sc.getBoundingClientRect();
     const pos = toStore(((e.clientX - r.left) / r.width) * 100, ((e.clientY - r.top) / r.height) * 100);
+    snap();
     decorDraft.push({ k: decorPick, x: Math.round(pos.x * 10) / 10, y: Math.round(pos.y * 10) / 10 });
+    decorSel = decorDraft.length - 1;
     render();
   });
   ov.addEventListener('change', e => {
@@ -334,10 +429,25 @@ export async function openFarm(ctx, profile, userId = null) {
     }); if (res) burst(Object.keys(res.collected?.res || {}).map(k => RESOURCES[k].icon).concat(['✨'])); },
     care: async () => { const r = await run(() => api('profile', { op: 'farm_care' }), r => `❤️ Carinho em ${r.cared} Pokémon!${r.bond ? ` ${r.companion} ajudou: +${r.bond} de laço 💞` : ''}`); if (r) burst(['💖', '💕', '💗']); },
     sell: d => run(() => api('profile', { op: 'farm_sell', res: d.k, qty: Number(d.q) }), r => `🪙 +${r.gold} ouro`),
-    decor: () => { decorMode = true; decorDraft = (farm.decor || []).map(x => ({ ...x })); decorPick = ownedDecor()[0]?.[0] || null; sel = null; render(); },
+    decor: () => { decorMode = true; decorDraft = (farm.decor || []).map(x => ({ ...x })); decorHist = []; decorSel = null; decorPick = ownedDecor()[0]?.[0] || null; sel = null; render(); },
+    dflip: () => { if (decorSel === null) return; snap(); const d = decorDraft[decorSel]; d.f = d.f ? 0 : 1; render(); },
+    dsize: x => { if (decorSel === null) return; snap(); const d = decorDraft[decorSel]; d.s = Math.max(0.6, Math.min(1.8, Math.round(((d.s || 1) + Number(x.v) * 0.2) * 10) / 10)); render(); },
+    ddup: () => { if (decorSel === null || decorDraft.length >= DECOR_MAX) return; snap(); const d = decorDraft[decorSel]; decorDraft.push({ ...d, x: Math.min(97, d.x + 3), y: Math.min(95, d.y + 3) }); decorSel = decorDraft.length - 1; render(); },
+    ddel: () => { if (decorSel === null) return; snap(); decorDraft.splice(decorSel, 1); decorSel = null; render(); },
+    dunsel: () => { decorSel = null; render(); },
+    dundo: () => { if (!decorHist.length) return; decorDraft = decorHist.pop(); decorSel = null; render(); },
+    dclear: () => { if (!confirm('Guardar todas as decorações? (você pode colocar de novo depois)')) return; snap(); decorDraft = []; decorSel = null; render(); },
     dpick: d => { decorPick = d.k; render(); },
-    dcancel: () => { decorMode = false; render(); },
-    dsave: () => run(async () => { const r = await api('profile', { op: 'farm_decor', decor: decorDraft }); decorMode = false; return r; }, '🎨 Fazenda decorada!'),
+    plot: d => { plantAt = Number(d.i); render(); },
+    'plot-x': () => { plantAt = null; render(); },
+    plant: d => { const i = plantAt; plantAt = null; return run(() => api('profile', { op: 'farm_plant', plot: i, crop: d.k }), r => r.message); },
+    water: () => run(() => api('profile', { op: 'farm_water' }), r => r.message),
+    harvest: () => run(() => api('profile', { op: 'farm_harvest' }), r => r.message),
+    build: d => run(() => api('profile', { op: 'farm_build', b: d.b }), r => r.message),
+    bjob: d => run(() => api('profile', { op: 'farm_bjob', b: d.b, recipe: d.r }), r => r.message),
+    bclaim: d => run(() => api('profile', { op: 'farm_bclaim', b: d.b }), r => r.message),
+    dcancel: () => { decorMode = false; decorSel = null; render(); },
+    dsave: () => run(async () => { const r = await api('profile', { op: 'farm_decor', decor: decorDraft }); decorMode = false; decorSel = null; return r; }, '🎨 Fazenda decorada!'),
     visit: d => { tab = 'farm'; sel = null; load(d.id).catch(e => toast(e.message, 'bad')); },
     home: () => { sel = null; load(null).catch(e => toast(e.message, 'bad')); },
     'dc-pick': () => { pair = farm.daycare ? [farm.daycare.a.uid, farm.daycare.b.uid] : []; tab = 'pair'; render(); },
