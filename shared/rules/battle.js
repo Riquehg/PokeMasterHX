@@ -13,7 +13,7 @@ import { getCompanion, isIntimate, ASSIST_CHANCE, ASSIST_MAX } from '../data/com
 import { weatherMult, weatherInflict, weatherChip, weatherOf } from './weather.js';
 import { conquestMult } from './modeBonus.js';
 import { GYMS } from '../data/trainers.js';
-import { statsOf, maxHpOf, gainXp, xpReward, healMon, canTransform, transformInto, revertForm, megaEvolveMon } from './monsters.js';
+import { statsOf, maxHpOf, gainXp, xpReward, healMon, canTransform, transformInto, revertForm, megaEvolveMon, defFactor } from './monsters.js';
 import { megaFor } from '../data/megas.js';
 import { ABILITIES, abilityOf, PINCH_MULT, BAND_MULT, PLATE_MULT, QUICK_CLAW, LEFTOVERS_FRAC } from '../data/battlegear.js';
 import {
@@ -418,7 +418,7 @@ export function expectedDamage(state, si, move) {
   const mult = typeMultVs(move.type, d);
   const stab = getSpecies(a.sp).types.includes(move.type) ? STAB : 1;
   const hit = 1 - (move.miss || 0) / 6;
-  return (atkOf(state, si) * 0.7 + 3.5) * (move.power || 1) * mult * stab * hit * gearAbilMult(a, move.type);
+  return (atkOf(state, si) * 0.7 + 3.5) * (move.power || 1) * mult * stab * hit * gearAbilMult(a, move.type) * defFactor(statsOf(d).def);
 }
 
 /** Melhor golpe para o lado si (usada pela IA dos NPCs e das CPUs). */
@@ -614,7 +614,8 @@ function attackDamage(state, rng, si, slot = 0) {
   const wMult = weatherMult(state, type); // clima (ex.: Chuva +30% em Água)
   const cqMult = atkSide.kind === 'player' ? conquestMult(state, atkSide.pid, type, GYMS) : 1; // Conquista: cidades dominadas
   const gMult = gearAbilMult(a, type); // ⚔️ habilidade de aperto, Placa, Faixa Escolhida
-  let dmg = mult === 0 ? 0 : Math.max(1, Math.round((atk * 0.7 + roll) * (move.power || 1) * stab * mult * critMod * compMult * wMult * cqMult * gMult));
+  const dMult = defFactor(statsOf(d).def); // 🛡️ DEF de quem recebe
+  let dmg = mult === 0 ? 0 : Math.max(1, Math.round((atk * 0.7 + roll) * (move.power || 1) * stab * mult * critMod * compMult * wMult * cqMult * gMult * dMult));
   // 🪨 Robustez / 🎗️ Faixa de Foco: com HP cheio, aguenta o golpe com 1 HP
   let endured = null;
   if (dmg >= d.hp && d.hp > 1 && d.hp >= maxHpOf(d)) {

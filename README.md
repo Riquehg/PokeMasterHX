@@ -124,6 +124,8 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 
 - **v41 — ⚔️ itens de batalha e habilidades:** `shared/data/battlegear.js` (`GEAR`: Restos, Faixa de Foco, Garra Rápida, Faixa Escolhida, 18 Placas; `ABILITIES` + `abilityOf(sp)`: Intimidação, Levitação, Robustez, Chama/Torrente/Supercrescimento). Itens `kind: 'gear'` (ícone emoji via `itemUrl`), feitos na Oficina (receitas `quick_claw`, `focus_sash`, `plate` com `ptype`, `leftovers`, `choice_band`), segurados pela op `hold_stone` (agora aceita qualquer item de batalha) e levados para a partida em `createMatch`. Batalha: `typeMultVs`, `gearAbilMult`, `onEnter` (Intimidação), Robustez/Faixa de Foco no dano, Garra Rápida na ordem, Restos no fim da rodada; Faixa Escolhida bloqueia golpes de suporte.
 
+- **v42 — 🛡️ DEF oficial:** `shared/data/basedef.js` (gerado do `pokemon_stats.csv` do PokeAPI: média Defesa + Def. Especial por nº da Pokédex). `computeStats` ganha `def` (sem subir com nível; shiny +5%, Mega ×1.2, natureza, IV). Dano × `defFactor(def)` = √(70/DEF) entre 0,6 e 1,4 (`attackDamage` e `expectedDamage`). IV de DEF: `iv.def` ou valor fixo pelo uid (`defIvOf`) para Pokémon antigos; potencial = média de 4 IVs; Creche herda 3 de 4. Naturezas de Defesa como nos jogos (Bold, Impish, Calm, Careful, Relaxed, Sassy, Lax; −DEF: Lonely, Mild, Gentle, Hasty). Card com barra DEF (escala geral, dica "% do dano recebido").
+
 ## 3. Publicar (passo a passo, só pelo navegador)
 
 ### 3.1 Supabase

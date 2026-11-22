@@ -48,7 +48,7 @@ test('naturezas: 25 nomes, 5 neutras, +10%/−10% nos status', () => {
   const base = computeStats('machamp', 30, false, 'Hardy');
   const brave = computeStats('machamp', 30, false, 'Adamant'); // +atk −spe
   assert.ok(brave.atk > base.atk && brave.spe < base.spe && brave.maxHp === base.maxHp);
-  assert.equal(natureMult('Bold', 'hp'), 1.1);
+  assert.equal(natureMult('Bold', 'def'), 1.1); // v42: Bold = +Defesa −Ataque (como nos jogos)
   const m = createMon(createRng(1), 'pidgey', 5);
   assert.ok(NATURE_NAMES.includes(m.nature));
 });

@@ -12,6 +12,7 @@ import { CROPS, GOODS, BUILDINGS, BUILD_MAX, queueFor, POFFIN_ITEMS, plotsFor } 
 const FARM_ITEMS = { ...FARM_ITEMS0, ...POFFIN_ITEMS };
 import { MEGAS, MEGA_KEYS, fragItemId } from '../../shared/data/megas.js';
 import { TYPES, TYPE_LABELS } from '../../shared/rules/types.js';
+import { defIvOf, ivPercent } from '../../shared/rules/monsters.js';
 import { natureLabel } from '../../shared/data/natures.js';
 
 const hash = s => { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
@@ -260,13 +261,13 @@ export async function openFarm(ctx, profile, userId = null) {
   const fmtT = ms => { const m = Math.ceil(ms / 60000); return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m} min`; };
   const EGG_COLOR = { 1: '#f39ac2', 2: '#5fd36a', 3: '#4c8ff0', 4: '#ef5050', 5: '#f6d34c' };
   const parentCard = (m, label) => m ? `<div class="dc-parent"><img src="${monSprite(m)}" alt=""><b>${esc(m.nick || getSpecies(m.sp)?.name)}${genderHtml(m.gender)}</b><span class="tiny muted">${label} · Nv.${m.lvl}</span>
-      <span class="tiny">HP ${m.iv?.hp ?? '?'} · ATQ ${m.iv?.atk ?? '?'} · VEL ${m.iv?.spe ?? '?'}</span>${m.nature ? `<span class="tiny muted">${esc(natureLabel(m.nature))}</span>` : ''}</div>`
+      <span class="tiny">HP ${m.iv?.hp ?? '?'} · ATQ ${m.iv?.atk ?? '?'} · DEF ${m.iv ? defIvOf(m) : '?'} · VEL ${m.iv?.spe ?? '?'}</span>${m.nature ? `<span class="tiny muted">${esc(natureLabel(m.nature))}</span>` : ''}</div>`
     : `<div class="dc-parent empty">❔<span class="tiny muted">${label}</span></div>`;
   const crecheView = () => {
     const dc = farm.daycare;
     const eggs = farm.eggs || [];
     const chk = dc ? canBreed(dc.a, dc.b) : null;
-    return `<p class="small muted">Coloque um <b>macho ♂ e uma fêmea ♀</b> da mesma família ou com um tipo em comum (ou um <b>Ditto</b> com qualquer um). A cada ${EGG_EVERY_H} h sai um ovo (até ${EGGS_PER_DAY} por dia). O filhote nasce na forma básica da mãe, herda 2 dos 3 potenciais dos pais e pode vir com <b>mutação</b> rara: ✨ shiny, 🌈 aura ou 💯 potencial máximo. Lendários e Míticos não fazem ovos.</p>
+    return `<p class="small muted">Coloque um <b>macho ♂ e uma fêmea ♀</b> da mesma família ou com um tipo em comum (ou um <b>Ditto</b> com qualquer um). A cada ${EGG_EVERY_H} h sai um ovo (até ${EGGS_PER_DAY} por dia). O filhote nasce na forma básica da mãe, herda 3 dos 4 potenciais dos pais e pode vir com <b>mutação</b> rara: ✨ shiny, 🌈 aura ou 💯 potencial máximo. Lendários e Míticos não fazem ovos.</p>
       <div class="dc-pair">${parentCard(chk?.mother || dc?.a, chk?.ditto ? 'Parceiro' : 'Mãe ♀')}<span class="dc-heart">💞</span>${parentCard(chk?.father || dc?.b, chk?.ditto ? 'Ditto' : 'Pai ♂')}</div>
       ${dc ? `<div class="center small">🥚 Próximo ovo em <b>${fmtT(dc.nextEggIn)}</b> · hoje ${farm.eggsToday}/${EGGS_PER_DAY}</div>
         <div class="row" style="gap:6px;justify-content:center;margin-top:6px;flex-wrap:wrap"><label class="tiny">Herdar natureza:</label>
@@ -285,7 +286,7 @@ export async function openFarm(ctx, profile, userId = null) {
     const [a, b] = pair.map(u => (me?.vault || []).find(m => m.uid === u));
     const chk = a && b ? canBreed(a, b) : null;
     return `<p class="small">Escolha 2 Pokémon (${pair.length}/2). ${chk ? (chk.ok ? '<b style="color:#8ff0bd">✔ Combinam!</b>' : `<b style="color:#ff9b9e">✖ ${esc(chk.why)}</b>`) : ''}</p>
-      <div class="trade-mons" style="max-height:380px">${list.map(m => `<button type="button" class="trade-mon ${pair.includes(m.uid) ? 'on' : ''}" data-act="dc-sel" data-uid="${esc(m.uid)}"><img src="${monSprite(m)}" alt=""><span>${esc(m.nick || getSpecies(m.sp)?.name)}${genderHtml(m.gender)}</span><span class="tiny">Nv.${m.lvl} · ${m.iv ? Math.round(((m.iv.hp + m.iv.atk + m.iv.spe) / 93) * 100) + '%' : ''}</span></button>`).join('')}</div>
+      <div class="trade-mons" style="max-height:380px">${list.map(m => `<button type="button" class="trade-mon ${pair.includes(m.uid) ? 'on' : ''}" data-act="dc-sel" data-uid="${esc(m.uid)}"><img src="${monSprite(m)}" alt=""><span>${esc(m.nick || getSpecies(m.sp)?.name)}${genderHtml(m.gender)}</span><span class="tiny">Nv.${m.lvl} · ${m.iv ? ivPercent(m) + '%' : ''}</span></button>`).join('')}</div>
       <div class="row" style="gap:6px;margin-top:8px"><button class="btn" data-act="tab" data-t="creche">← Voltar</button><button class="btn primary grow" data-act="dc-ok" ${chk?.ok ? '' : 'disabled'}>💞 Colocar na Creche</button></div>`;
   };
 

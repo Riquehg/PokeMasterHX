@@ -1,10 +1,10 @@
 // 🥚 Creche da Fazenda (fase 2): um casal (♂ + ♀ compatíveis, ou Ditto com qualquer um) faz ovos com o tempo.
-// O filhote nasce da forma básica da mãe (ou do parceiro do Ditto), herda 2 dos 3 potenciais (HP/ATQ/VEL) dos pais
+// O filhote nasce da forma básica da mãe (ou do parceiro do Ditto), herda 3 dos 4 potenciais (HP/ATQ/DEF/VEL) dos pais
 // e pode herdar a natureza (gastando 💠 Cristais). Mutações raras: ✨ shiny, 🌈 aura, 💯 potencial máximo.
 // Lendários e Míticos não fazem ovos. Tudo calculado pelo tempo (como o resto da Fazenda).
 import { getSpecies } from './pokemon.js';
 import { genderOf } from './gender.js';
-import { createMon, IV_MAX } from '../rules/monsters.js';
+import { createMon, IV_MAX, defIvOf } from '../rules/monsters.js';
 import { tmMovesFor } from './moves.js';
 
 export const EGG_EVERY_H = 6;           // um ovo a cada 6 h com o casal na Creche
@@ -58,17 +58,18 @@ export function makeEgg(rng, mother, father, { natureFrom = null, now = Date.now
   const sp = baseForm(mother.sp === 'ditto' ? father.sp : mother.sp);
   const tier = getSpecies(sp)?.tier || 1;
   const parents = [mother, father];
-  // 2 dos 3 potenciais vêm dos pais; o outro é sorteado
-  const keys = ['hp', 'atk', 'spe'];
-  const skip = keys[rng.int(0, 2)];
+  // 3 dos 4 potenciais vêm dos pais; o outro é sorteado (DEF dos pais antigos vem do valor fixo deles)
+  const keys = ['hp', 'atk', 'spe', 'def'];
+  const skip = keys[rng.int(0, 3)];
   const inherit = new Set(keys.filter(k => k !== skip));
   const iv = {};
-  for (const k of keys) iv[k] = inherit.has(k) ? (rng.pick(parents).iv?.[k] ?? rng.int(0, IV_MAX)) : rng.int(0, IV_MAX);
+  const ivK = (m, k) => (k === 'def' ? defIvOf(m) : m.iv?.[k]);
+  for (const k of keys) iv[k] = inherit.has(k) ? (ivK(rng.pick(parents), k) ?? rng.int(0, IV_MAX)) : rng.int(0, IV_MAX);
   const mut = [];
   const bothShiny = mother.shiny && father.shiny;
   const shiny = rng.chance((bothShiny ? MUTATION.shinyBothShiny : MUTATION.shiny) * shinyMult);
   if (shiny) mut.push('shiny');
-  if (rng.chance(MUTATION.perfect)) { iv.hp = iv.atk = iv.spe = IV_MAX; mut.push('perfect'); }
+  if (rng.chance(MUTATION.perfect)) { iv.hp = iv.atk = iv.spe = iv.def = IV_MAX; mut.push('perfect'); }
   const aura = rng.chance(MUTATION.aura) ? rng.pick(EGG_AURAS) : null;
   if (aura) mut.push('aura');
   const natureParent = natureFrom === 'mother' ? mother : natureFrom === 'father' ? father : null;

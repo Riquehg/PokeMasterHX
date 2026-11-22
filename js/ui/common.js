@@ -1,7 +1,7 @@
 import { genderOf, genderHtml } from '../../shared/data/gender.js';
 // Componentes visuais reaproveitados (cartas de Pokémon, chips de tipo, etc.).
 import { getSpecies } from '../../shared/data/pokemon.js';
-import { monView, xpToNext, MAX_LEVEL, maxStats, ivPercent, IV_MAX } from '../../shared/rules/monsters.js';
+import { monView, xpToNext, MAX_LEVEL, maxStats, ivPercent, IV_MAX, defIvOf, defFactor } from '../../shared/rules/monsters.js';
 import { monMoves, tmMovesFor as _tmMovesFor, defaultMoveIds as _defMoves } from '../../shared/data/moves.js';
 import { NATURES } from '../../shared/data/natures.js';
 import { TYPE_COLORS, against } from '../../shared/rules/types.js';
@@ -41,7 +41,7 @@ export function monCard(mon, { index, lead = false, act = 'mon', extra = '', own
   </div>`;
 }
 
-const STAT_ROWS = [['hp', 'maxHp', 'HP'], ['atk', 'atk', 'ATQ'], ['spe', 'spe', 'VEL']];
+const STAT_ROWS = [['hp', 'maxHp', 'HP'], ['atk', 'atk', 'ATQ'], ['def', 'def', 'DEF'], ['spe', 'spe', 'VEL']];
 const TIER_TXT = { 1: 'T1', 2: 'T2', 3: 'T3', 4: 'T4', 5: 'LEND' };
 
 /** Estrelas do potencial (IV): 0–5. */
@@ -61,7 +61,7 @@ function moveBox(m, foeTypes) {
 }
 
 /**
- * Card completo de status (estilo "card de coleção"): sprite, natureza, barras de HP/ATQ/VEL, potencial (IV), XP e os 2 golpes.
+ * Card completo de status (estilo "card de coleção"): sprite, natureza, barras de HP/ATQ/DEF/VEL, potencial (IV), XP e os 2 golpes.
  * Funciona com Pokémon da partida e com entradas da Coleção.
  */
 export function statCard(mon, { owner = null, act = '', index = '', extra = '', lead = false, showHp = true } = {}) {
@@ -76,10 +76,12 @@ export function statCard(mon, { owner = null, act = '', index = '', extra = '', 
   const cls = ['pk-card', v.shiny ? 'shiny' : '', sp.legendary ? 'legend' : '', sp.mythical ? 'mythic' : '', sp.ultra ? 'ultra' : '', hp <= 0 && mon.hp !== undefined ? 'fainted' : '', lead ? 'lead' : '', locked ? 'locked' : '', mon.aura ? 'aura-' + mon.aura : ''].join(' ');
   const rows = STAT_ROWS.map(([k, key, label]) => {
     const val = v[key];
-    const pct = Math.max(4, Math.min(100, (val / max[key]) * 100));
+    // 🛡️ DEF: barra na escala geral (as paredes enchem a barra), as outras pela espécie/nível
+    const pct = Math.max(4, Math.min(100, k === 'def' ? (val / 150) * 100 : (val / max[key]) * 100));
     const up = nat && nat[0] === k, down = nat && nat[1] === k;
-    const iv = mon.iv?.[k];
-    return `<div class="pk-stat ${up ? 'up' : down ? 'down' : ''}"><span class="pk-sl">${label}${up ? '▲' : down ? '▼' : ''}</span>
+    const iv = k === 'def' ? defIvOf(mon) : mon.iv?.[k];
+    const tip = k === 'def' ? ` title="Defesa: recebe ${Math.round(defFactor(val) * 100)}% do dano (DEF 70 = 100%)"` : '';
+    return `<div class="pk-stat ${up ? 'up' : down ? 'down' : ''}"${tip}><span class="pk-sl">${label}${up ? '▲' : down ? '▼' : ''}</span>
       <span class="pk-bar"><i style="width:${pct.toFixed(0)}%"></i></span><span class="pk-sv">${val}</span>
       <span class="pk-iv" title="Potencial (IV) de ${label}: ${iv ?? '?'} de ${IV_MAX}">${iv ?? '–'}</span></div>`;
   }).join('');
@@ -188,7 +190,7 @@ export function foeIntelHtml(mon) {
   const moves = monMoves(mon);
   return `<div class="foe-intel">
     <span class="fi-nat" title="${esc(natureLabel(mon.nature))}">❖ ${esc(natureLabel(mon.nature))}</span>
-    <span class="fi-pot" title="Potencial (IVs) HP ${mon.iv?.hp ?? '?'} · ATQ ${mon.iv?.atk ?? '?'} · VEL ${mon.iv?.spe ?? '?'} (de ${IV_MAX})">${pot === null ? '?' : `<b class="pk-stars">${potentialStars(pot)}</b> ${potentialLabel(pot)} ${pot}%`}</span>
+    <span class="fi-pot" title="Potencial (IVs) HP ${mon.iv?.hp ?? '?'} · ATQ ${mon.iv?.atk ?? '?'} · DEF ${mon.iv ? defIvOf(mon) : '?'} · VEL ${mon.iv?.spe ?? '?'} (de ${IV_MAX})">${pot === null ? '?' : `<b class="pk-stars">${potentialStars(pot)}</b> ${potentialLabel(pot)} ${pot}%`}</span>
     <span class="fi-moves">${moves.map(m => `<span class="move-chip" style="--tc:${TYPE_COLORS[m.type]}"><b>${esc(m.name)}</b> <span class="tiny">${esc(typeLabel(m.type))}</span></span>`).join('')}</span>
   </div>`;
 }

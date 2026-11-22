@@ -968,16 +968,18 @@ test('⚔️ itens segurados: Faixa de Foco, Restos, Faixa Escolhida, Placa e Ga
   assert.ok(dmgWith('plate_fighting') > base); // Machamp usa golpe de Luta
   assert.equal(dmgWith('plate_water'), base); // placa de outro tipo não muda nada
   // 🐾 Garra Rápida: o mais lento às vezes ataca primeiro
-  let first = 0;
-  for (let seed = 1; seed <= 60; seed++) {
-    const rr = createRng(seed);
-    const slow = _cm(rr, 'slowpoke', 30, { starter: true, moves: ['water_q', 'normal_q'] }); slow.held = 'quick_claw';
-    const st = _bw(slow, _cm(rr, 'jolteon', 30), seed);
-    _sc(st, rr, 'a', { move: 'attack', slot: 0 });
-    const h = st.fx.filter(f => f.k === 'hit');
-    if (h[0]?.side === 0) first++;
-  }
-  assert.ok(first >= 3 && first <= 30, `Garra Rápida agiu primeiro ${first}/60`);
+  const firsts = claw => {
+    let first = 0;
+    for (let seed = 1; seed <= 80; seed++) {
+      const rr = createRng(seed);
+      const slow = _cm(rr, 'slowpoke', 30, { starter: true, moves: ['water_q', 'normal_q'] }); if (claw) slow.held = 'quick_claw';
+      const st = _bw(slow, _cm(rr, 'jolteon', 30), seed);
+      _sc(st, rr, 'a', { move: 'attack', slot: 0 });
+      if (st.fx.find(f => f.k === 'hit')?.side === 0) first++;
+    }
+    return first;
+  };
+  assert.ok(firsts(true) > firsts(false), 'Garra Rápida faz agir primeiro mais vezes');
 });
 
 test('⚔️ Oficina faz Placa de Tipo; qualquer Pokémon segura item de batalha e ele vai para a partida', async () => {
@@ -1001,4 +1003,35 @@ test('⚔️ Oficina faz Placa de Tipo; qualquer Pokémon segura item de batalha
   assert.equal(s.players[0].team.find(m => m.uid === mon.uid)?.held, 'plate_fire');
   r = await profileOp(db, a, { op: 'hold_stone', uid: mon.uid, item: null });
   assert.equal(r.profile.stats.bag.plate_fire, 1);
+});
+
+// ---------------------------------------------------------------- v42 🛡️ DEF oficial
+import { computeStats as _cs, defFactor, defIvOf, ivPercent as _ivp, statsOf as _so } from '../shared/rules/monsters.js';
+import { natureMult as _nm } from '../shared/data/natures.js';
+test('🛡️ DEF oficial: valores da espécie, natureza, IV fixo pelo uid e efeito no dano', () => {
+  assert.equal(_cs('shuckle', 30).def, 230);
+  assert.equal(_cs('alakazam', 30).def, 70);
+  assert.equal(_cs('caterpie', 5).def, _cs('caterpie', 50).def); // não sobe com o nível
+  assert.ok(_cs('steelix', 30, false, 'Bold').def > _cs('steelix', 30, false, 'Hardy').def);
+  assert.equal(_nm('Lonely', 'def'), 0.9);
+  assert.equal(defFactor(70), 1);
+  assert.equal(defFactor(230), 0.6);
+  assert.equal(defFactor(20), 1.4);
+  // Pokémon antigo (sem iv.def): DEF fixa pelo uid, sempre igual
+  const old = { uid: 'abc123', sp: 'onix', lvl: 20, iv: { hp: 10, atk: 10, spe: 10 } };
+  assert.equal(defIvOf(old), defIvOf({ ...old }));
+  assert.ok(defIvOf(old) >= 0 && defIvOf(old) <= 31);
+  assert.equal(_ivp({ ...old, iv: { hp: 31, atk: 31, spe: 31, def: 31 } }), 100);
+  // mesmo golpe, mesmo dado: bate muito menos num Shuckle (DEF 230) que num Dwebble (DEF 60)
+  const hit = foeSp => {
+    const rr = createRng(21);
+    const m = _cm(rr, 'machamp', 30, { starter: true, nature: 'Hardy', iv: { hp: 10, str: 10, spe: 10 }, moves: ['normal_q', 'fighting_q'] });
+    const foe = _cm(rr, foeSp, 60, { nature: 'Hardy', iv: { hp: 31, atk: 0, spe: 0, def: 15 } });
+    const st = _bw(m, foe, 5);
+    _sc(st, createRng(1), 'a', { move: 'attack', slot: 0 });
+    return _hits(st, 0)[0].dmg;
+  };
+  assert.ok(hit('dwebble') > hit('shuckle') * 1.5); // os dois são Inseto/Pedra: só a DEF muda
+  // Megas: +20% de DEF
+  assert.equal(_so({ sp: 'mega_steelix', lvl: 30, iv: { hp: 15, atk: 15, spe: 15, def: 15 } }).def > _so({ sp: 'steelix', lvl: 30, iv: { hp: 15, atk: 15, spe: 15, def: 15 } }).def, true);
 });

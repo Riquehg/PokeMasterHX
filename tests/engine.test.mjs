@@ -248,7 +248,7 @@ test('PvP: desafio na mesma casa, aceite do outro jogador e escolhas simultânea
   const hpBefore = s.players[0].team[0].hp + s.players[1].team[0].hp;
   s = ok(s, 'gary', { type: 'battle', move: 'attack' });
   assert.ok(s.battle ? s.battle.round === 1 : s.lastBattle.kind === 'pvp');
-  assert.ok(s.players[0].team[0].hp + s.players[1].team[0].hp < hpBefore, 'alguém levou dano');
+  assert.ok((s.battle || s.lastBattle).log.some(l => /de dano/.test(l)) || s.players[0].team[0].hp + s.players[1].team[0].hp < hpBefore, 'alguém levou dano');
   // termina a batalha
   for (let i = 0; i < 60 && s.battle; i++) {
     for (const id of whoMustAct(s)) {

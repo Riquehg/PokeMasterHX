@@ -3,6 +3,7 @@ import { getSpecies, speciesByTier, MYTHICAL_WILD_CHANCE } from '../data/pokemon
 import { genderFor } from '../data/gender.js';
 import { NATURE_NAMES, natureMult } from '../data/natures.js';
 import { MOVES, rollMoveIds } from '../data/moves.js';
+import { baseDefOfDex } from '../data/basedef.js';
 
 export const MAX_LEVEL = 60;
 export const TEAM_SIZE = 6;
@@ -20,6 +21,16 @@ export const IV_MAX = 31;
 export const IV_RANGE = 0.08;
 export const ivMult = iv => 1 + ((Math.max(0, Math.min(IV_MAX, iv ?? 15.5)) / IV_MAX) * 2 - 1) * IV_RANGE;
 
+// 🛡️ DEF (v42): base oficial (média Defesa + Def. Especial), não sobe com o nível — é a "resistência" da espécie.
+// No dano: fator = √(DEF_REF / DEF), limitado entre DEF_MIN_F e DEF_MAX_F (DEF 70 = dano igual ao de antes).
+export const DEF_REF = 70, DEF_MIN_F = 0.6, DEF_MAX_F = 1.4, MEGA_DEF_MULT = 1.2;
+export const baseDefOf = sp => Math.round(baseDefOfDex(sp?.dex) * (sp?.mega ? MEGA_DEF_MULT : 1));
+export const defFactor = def => Math.max(DEF_MIN_F, Math.min(DEF_MAX_F, Math.sqrt(DEF_REF / Math.max(1, def))));
+function hashUid(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+/** IV de DEF: Pokémon antigos (sem iv.def) ganham um valor fixo derivado do uid — não dá para re-sortear. */
+export const defIvOf = mon => (mon?.iv && Number.isFinite(mon.iv.def) ? mon.iv.def : mon?.uid ? hashUid('def|' + mon.uid) % (IV_MAX + 1) : 15.5);
+const ivFull = mon => (mon?.iv ? { ...mon.iv, def: defIvOf(mon) } : mon?.uid ? { def: defIvOf(mon) } : null);
+
 /** Status derivados da espécie + nível + shiny + natureza + potencial (IV). */
 export function computeStats(speciesId, level, shiny = false, nature = null, iv = null) {
   const sp = getSpecies(speciesId);
@@ -30,32 +41,34 @@ export function computeStats(speciesId, level, shiny = false, nature = null, iv 
   return {
     maxHp: Math.max(8, Math.round(sp.hp * (1 + 0.07 * (L - 1)) * s * natureMult(nature, 'hp') * ivMult(v.hp))),
     atk: Math.max(2, Math.round(sp.str * (1 + 0.06 * (L - 1)) * s * natureMult(nature, 'atk') * ivMult(v.atk))),
-    spe: Math.round(L * 10 * (shiny ? 1.1 : 1) * (sp.speMult || 1) * natureMult(nature, 'spe') * ivMult(v.spe))
+    spe: Math.round(L * 10 * (shiny ? 1.1 : 1) * (sp.speMult || 1) * natureMult(nature, 'spe') * ivMult(v.spe)),
+    def: Math.max(5, Math.round(baseDefOf(sp) * (shiny ? 1.05 : 1) * natureMult(nature, 'def') * ivMult(v.def)))
   };
 }
 
 /** Maior valor possível de cada status para a espécie/nível (IV 31 + natureza a favor) — base das barrinhas. */
 export function maxStats(speciesId, level) {
-  const best = { hp: IV_MAX, atk: IV_MAX, spe: IV_MAX };
+  const best = { hp: IV_MAX, atk: IV_MAX, spe: IV_MAX, def: IV_MAX };
   const sp = getSpecies(speciesId);
   const L = Math.max(1, Math.min(MAX_LEVEL, level | 0));
   return {
     maxHp: Math.round(sp.hp * (1 + 0.07 * (L - 1)) * 1.1 * ivMult(best.hp)),
     atk: Math.round(sp.str * (1 + 0.06 * (L - 1)) * 1.1 * ivMult(best.atk)),
-    spe: Math.round(L * 10 * 1.1 * ivMult(best.spe))
+    spe: Math.round(L * 10 * 1.1 * ivMult(best.spe)),
+    def: Math.round(baseDefOf(sp) * 1.1 * ivMult(best.def))
   };
 }
 
-/** Potencial total em % (média dos 3 IVs). */
+/** Potencial total em % (média dos 4 IVs: HP, ATQ, DEF, VEL). */
 export function ivPercent(mon) {
   const v = mon?.iv;
   if (!v) return null;
-  return Math.round(((v.hp + v.atk + v.spe) / (3 * IV_MAX)) * 100);
+  return Math.round(((v.hp + v.atk + v.spe + defIvOf(mon)) / (4 * IV_MAX)) * 100);
 }
 
 function cleanIv(v) {
   const c = x => Math.max(0, Math.min(IV_MAX, Math.round(Number(x) || 0)));
-  return { hp: c(v.hp), atk: c(v.atk), spe: c(v.spe) };
+  return { hp: c(v.hp), atk: c(v.atk), spe: c(v.spe), ...(v.def !== undefined && v.def !== null ? { def: c(v.def) } : {}) };
 }
 
 export function rollIvs(rng) {
@@ -64,7 +77,7 @@ export function rollIvs(rng) {
 
 /** Status de uma instância (inclui natureza e HP extra de chefe de Raid). */
 export function statsOf(mon) {
-  const st = computeStats(mon.sp, mon.lvl, mon.shiny, mon.nature, mon.iv);
+  const st = computeStats(mon.sp, mon.lvl, mon.shiny, mon.nature, ivFull(mon));
   if (mon.bonusHp) st.maxHp += mon.bonusHp;
   if (mon.tf && mon.shiny) st.atk = Math.round(st.atk * TRANSFORM_SHINY_ATK); // Ditto/Mew shiny transformado: cópia mais forte
   return st;
@@ -158,7 +171,7 @@ export function createMon(rng, speciesId, level, opts = {}) {
 export function monView(mon) {
   const sp = getSpecies(mon.sp);
   const st = statsOf(mon);
-  return { ...mon, name: mon.nick || sp.name, species: sp.name, dex: sp.dex, types: sp.types, tier: sp.tier, maxHp: st.maxHp, atk: st.atk, spe: st.spe, potential: ivPercent(mon) };
+  return { ...mon, name: mon.nick || sp.name, species: sp.name, dex: sp.dex, types: sp.types, tier: sp.tier, maxHp: st.maxHp, atk: st.atk, spe: st.spe, def: st.def, potential: ivPercent(mon) };
 }
 
 export function maxHpOf(mon) {
