@@ -55,13 +55,19 @@ export async function openSeries(ctx, profile) {
   const vault = [...(profile?.vault || [])].sort((a, b) => b.lvl - a.lvl);
   const ov = openModal('series', '⚽ Liga das Séries', '<span class="spinner"></span>', { wide: true });
 
+  // quanto falta para a meia-noite de Brasília (UTC−3), quando os ataques renovam
+  const untilReset = () => {
+    const n = Date.now(), brt = n - 3 * 3600000, next = Math.floor(brt / 86400000 + 1) * 86400000;
+    const m = Math.max(1, Math.round((next - brt) / 60000));
+    return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m} min`;
+  };
   const head = () => {
     const S = data.serie, me = data.table.find(r => r.me);
     return `<div class="se-head" style="--sc:${S.info.color}">
       <div class="se-badge">${S.team ? crest(S.team, 44) : S.info.icon}</div>
       <div class="grow">${S.team ? `<b>${esc(S.team.name)}</b> · ` : ''}<b class="se-title">${S.info.icon} ${esc(S.info.name)}</b> <span class="tiny muted">${esc(S.seasonName)}</span>
         <div class="small">${me ? `<b>${me.pos}º</b> de ${data.table.length} · <b>${me.pts}</b> pts · ${me.v}V ${me.d}D · saldo ${me.sp >= 0 ? '+' : ''}${me.sp} · 🛡️ ${me.dv}/${me.dv + me.dd}` : 'Inscreva o seu time de defesa para entrar na tabela.'}</div></div>
-      <div class="se-left" title="Ataques de hoje"><b>${S.left}</b><span class="tiny">ataques hoje</span></div></div>`;
+      <div class="se-left" title="Ataques que ainda dá para fazer hoje. Renovam à meia-noite (horário de Brasília)."><b>${S.left}/${data.rules.daily}</b><span class="tiny">ataques restantes</span>${S.left ? '' : `<span class="tiny se-reset">novos em ${untilReset()}</span>`}</div></div>`;
   };
 
   const tableView = () => {

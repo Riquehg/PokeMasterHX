@@ -809,3 +809,19 @@ test('🎭 skin da 💎 Loja aparece em todas as listas: Fazenda, mais curtidas,
   assert.equal(ping.online.find(x => x.id === a.id).skin, want);
   assert.equal(ping.chat.at(-1).skin, want);
 });
+
+test('⚽ Liga: os 5 ataques renovam no dia seguinte (meia-noite de Brasília)', async () => {
+  const { dayId, SERIE_DAILY } = await import('../shared/data/series.js');
+  const { db, us: [a] } = await users(1);
+  await matchOp(db, a, { op: 'serie_defense', uids: (await db.getProfile(a.id)).vault.map(m => m.uid) });
+  const p = await db.getProfile(a.id);
+  await db.updateProfileIf(a.id, p.rev || 0, { stats: { ...p.stats, serie: { ...p.stats.serie, day: dayId(new Date()), dayCount: SERIE_DAILY, foesToday: [] } } });
+  let v = await matchOp(db, a, { op: 'serie_get' });
+  assert.equal(v.serie.left, 0);
+  const p2 = await db.getProfile(a.id);
+  await db.updateProfileIf(a.id, p2.rev || 0, { stats: { ...p2.stats, serie: { ...p2.stats.serie, day: dayId(new Date(Date.now() - 86400000)) } } });
+  v = await matchOp(db, a, { op: 'serie_get' });
+  assert.equal(v.serie.left, SERIE_DAILY);
+  assert.equal(dayId(new Date('2026-11-22T02:59:00Z')), '2026-11-21'); // 23:59 em Brasília
+  assert.equal(dayId(new Date('2026-11-22T03:00:00Z')), '2026-11-22'); // 00:00 em Brasília
+});
