@@ -6,6 +6,13 @@ export const BIOME_COLORS = {
   city: '#c9b48a', grass: '#7cc35a', forest: '#3e8b3c', jungle: '#2c7a47', coast: '#e8d49a', sea: '#3f8fd0',
   desert: '#e3bf73', mountain: '#9c8b72', cave: '#857565', darkcave: '#4d4560', snow: '#eef3f8', volcano: '#7a3a2a'
 };
+// fundo entre as rotas (map.backdrop dos mapas temáticos)
+const BACKDROPS = {
+  sea:    { id: 'sea', from: '#1d5d99', to: '#2b7bbb', rim: '#e7d39b' },
+  lava:   { id: 'lava', from: '#2a110b', to: '#40180d', rim: '#5a3326', deco: 'volcano', count: 170 },
+  snow:   { id: 'snow', from: '#b9c9da', to: '#dde7f1', rim: '#f7fbff', deco: 'snow', count: 260 },
+  forest: { id: 'forest', from: '#163d1f', to: '#1f4f28', rim: '#2c6a34', deco: 'forest', count: 900 }
+};
 const ROAD = {
   dirt:   { out: '#5b3d22', fill: '#d8b67a', mid: '#f1d9a6' },
   sea:    { out: '#1d5f96', fill: '#9fd6ff', mid: '#e6f6ff', dash: true },
@@ -70,14 +77,31 @@ export function drawTerrain(canvas, map, spaces) {
   const byId = Object.fromEntries(spaces.map(s => [s.id, s]));
   const land = spaces.filter(s => s.biome !== 'sea');
 
-  // 1) mar
-  const sea = ctx.createLinearGradient(0, 0, W, H);
-  sea.addColorStop(0, '#1d5d99'); sea.addColorStop(1, '#2b7bbb');
-  ctx.fillStyle = sea; ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = 'rgba(255,255,255,.10)'; ctx.lineWidth = U * 0.25;
-  for (let i = 0; i < 260; i++) { // ondinhas
-    const x = rng.next() * W, y = rng.next() * H, r = U * (0.8 + rng.next());
-    ctx.beginPath(); ctx.arc(x, y, r, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
+  // 1) fundo do tema: mar (padrão), lava, neve ou mata fechada
+  const bd = BACKDROPS[map.backdrop] || BACKDROPS.sea;
+  const base = ctx.createLinearGradient(0, 0, W, H);
+  base.addColorStop(0, bd.from); base.addColorStop(1, bd.to);
+  ctx.fillStyle = base; ctx.fillRect(0, 0, W, H);
+  if (bd.id === 'sea') {
+    ctx.strokeStyle = 'rgba(255,255,255,.10)'; ctx.lineWidth = U * 0.25;
+    for (let i = 0; i < 260; i++) { // ondinhas
+      const x = rng.next() * W, y = rng.next() * H, r = U * (0.8 + rng.next());
+      ctx.beginPath(); ctx.arc(x, y, r, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
+    }
+  } else if (bd.id === 'lava') { // rios de lava brilhando
+    ctx.save(); ctx.lineCap = 'round';
+    for (let i = 0; i < 26; i++) {
+      const x = rng.next() * W, y = rng.next() * H, len = U * (8 + rng.next() * 16), a = rng.next() * Math.PI * 2;
+      const x2 = x + Math.cos(a) * len, y2 = y + Math.sin(a) * len, cx = (x + x2) / 2 + (rng.next() - 0.5) * len, cy = (y + y2) / 2 + (rng.next() - 0.5) * len;
+      for (const [w, c] of [[U * 2.2, 'rgba(255,90,20,.25)'], [U * 0.9, '#ff6a1f'], [U * 0.35, '#ffd36b']]) {
+        ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(cx, cy, x2, y2); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  } else if (bd.id === 'snow') { // lagos congelados
+    ctx.save(); ctx.filter = `blur(${(U * 0.8).toFixed(1)}px)`;
+    for (let i = 0; i < 14; i++) { ctx.fillStyle = 'rgba(150,200,235,.55)'; ctx.beginPath(); ctx.ellipse(rng.next() * W, rng.next() * H, U * (4 + rng.next() * 7), U * (2.5 + rng.next() * 4), rng.next() * 3, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
   }
 
   // 2) água rasa perto das rotas de Surf
@@ -101,7 +125,7 @@ export function drawTerrain(canvas, map, spaces) {
     for (const s of land) { ctx.fillStyle = colorOf(s); ctx.beginPath(); ctx.arc(X(s), Y(s), r, 0, Math.PI * 2); ctx.fill(); }
     ctx.restore();
   };
-  blob(U * 9.5, () => '#e7d39b', U * 0.8);                      // areia da costa
+  blob(U * 9.5, () => bd.rim, U * 0.8);                         // borda (areia da costa, rocha, gelo, mata)
   blob(U * 8.2, s => BIOME_COLORS[s.biome] || BIOME_COLORS.grass, U * 2.2); // ambiente
   blob(U * 5.5, s => shade(BIOME_COLORS[s.biome] || BIOME_COLORS.grass, 0.06), U * 3);
 
@@ -117,6 +141,16 @@ export function drawTerrain(canvas, map, spaces) {
       const x = X(s) + Math.cos(ang) * dist * 1.25, y = Y(s) + Math.sin(ang) * dist;
       if (x < 0 || y < 0 || x > W || y > H || nearRoad(x, y, U * 2.4)) continue;
       deco(ctx, s.biome, x, y, U * (0.9 + rng.next() * 0.6), rng);
+    }
+  }
+
+  // 4b) enfeites no fundo (fora da terra): vulcões, picos, mata fechada
+  if (bd.deco) {
+    const farLand = (x, y) => land.every(t => Math.hypot(X(t) - x, Y(t) - y) > U * 8.5);
+    for (let i = 0; i < bd.count; i++) {
+      const x = rng.next() * W, y = rng.next() * H;
+      if (!farLand(x, y) || nearRoad(x, y, U * 3)) continue;
+      deco(ctx, bd.deco, x, y, U * (1.1 + rng.next() * 0.9), rng);
     }
   }
 

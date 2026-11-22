@@ -765,3 +765,20 @@ test('⏱️ partidas salvas sempre terminam (20–60 turnos); antigas sem limit
   const r3 = await matchOp(db, a, { op: 'create', mode: 'balanced', turnLimit: 30 });
   assert.equal(r3.match.options.turnLimit, 30);
 });
+
+test('🗺️ mapas temáticos/Expedição: malha grande como Kanto (muitas bifurcações), sem cruzar, ambiente do tema dominando', async () => {
+  const { generateMap, MAP_THEMES, THEME_IDS } = await import('../shared/data/maps/generator.js');
+  for (const t of THEME_IDS) {
+    const m = generateMap(MAP_THEMES[t].seed, t);
+    assert.equal(m.crossings, 0, t);
+    assert.ok(m.spaces.length >= 120, `${t}: ${m.spaces.length} casas`);
+    assert.ok(m.branches >= 30, `${t}: ${m.branches} bifurcações`);
+    const land = m.spaces.filter(s => s.type !== 'city' && !s.gate);
+    const count = {}; land.forEach(s => { count[s.biome] = (count[s.biome] || 0) + 1; });
+    const top = MAP_THEMES[t].weights[0][0];
+    assert.ok(count[top] / land.length >= 0.25, `${t}: ${top} domina (${count[top]}/${land.length})`);
+    assert.ok(['sea', 'lava', 'snow', 'forest'].includes(m.backdrop));
+  }
+  const g = generateMap(42);
+  assert.ok(g.spaces.length >= 120 && g.crossings === 0);
+});
