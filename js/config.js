@@ -93,6 +93,15 @@ export const avatarUrl = (n, skin) => (skin && /^[a-z0-9-]+$/.test(skin) ? `${CF
 /** Avatar de um jogador/perfil (respeita a skin equipada). */
 export const trainerUrl = p => avatarUrl(p?.avatar, p?.cosmetic?.skin);
 const emojiImg = e => `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><text x="32" y="50" font-size="46" text-anchor="middle">${e}</text></svg>`)}`;
+/** URL da sprite de um item (pasta items/ do bucket). Itens sem `image` tentam items/<id>.png. */
+export const itemSpriteUrl = id => `${CFG.sprites}items/${ITEMS[id]?.image || id + '.png'}`;
+const ITEM_MISS = new Set(); // sprites que não existem: mostra o emoji direto nas próximas vezes
+/** Ícone de item: a sprite se existir na pasta, senão o emoji (fb). */
+export const itemIcon = (id, fb = '', cls = 'itm-ic') => {
+  if (!id) return `<span class="${cls} itm-emo">${fb}</span>`;
+  const url = itemSpriteUrl(id);
+  return ITEM_MISS.has(url) ? `<span class="${cls} itm-emo">${fb}</span>` : `<img class="${cls}" src="${url}" alt="" data-fb="${fb}">`;
+};
 export const itemUrl = id => (ITEMS[id]?.emoji && !ITEMS[id]?.image ? emojiImg(ITEMS[id].emoji) : `${CFG.sprites}items/${ITEMS[id]?.image || id + '.png'}`);
 // Sprite de treinador/líder: aceita "pasta/arquivo.png" (ex.: "leaders/Lt. Surge.png") ou só o arquivo (vai para leaders/)
 export const leaderUrl = file => {
@@ -118,6 +127,10 @@ export function placeholder(text, color = '#3b2b1d') {
 if (typeof window !== 'undefined') {
   window.addEventListener('error', e => {
     const el = e.target;
+    if (el && el.tagName === 'IMG' && el.dataset.fb !== undefined) { // ícone de item sem sprite → emoji
+      ITEM_MISS.add(el.src);
+      const s = document.createElement('span'); s.className = `${el.className} itm-emo`; s.textContent = el.dataset.fb; el.replaceWith(s); return;
+    }
     if (el && el.tagName === 'IMG' && trySpriteFallback(el)) return; // sprite de Pokémon: tenta outro formato antes
     if (el && el.tagName === 'IMG' && !el.dataset.fallback) {
       el.dataset.fallback = '1';

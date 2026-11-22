@@ -19,6 +19,7 @@ import { cleanNick } from '../../shared/data/cosmetics.js';
 import { ITEMS, isKeepable, cleanBring, BAG_MAX_PER_ITEM, STARTING_ITEMS } from '../../shared/data/items.js';
 import { tmMovesFor, defaultMoveIds, MOVES } from '../../shared/data/moves.js';
 import { MEGAS, megaByStone } from '../../shared/data/megas.js';
+import { releaseGold } from '../../shared/data/release.js';
 import { TITLE_BY_ID, unlockedTitles } from '../../shared/data/titles.js';
 import { bondLevel, bondGain, BOND_MAX, COMPANIONS } from '../../shared/data/companions.js';
 import { equippedCosmetic, equippedSkin, skinFor, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment, myCosmetics, refreshCosmeticInMatches } from './shop.js';
@@ -255,28 +256,43 @@ export async function profileOp(db, user, body) {
       return { stats: st, vault: cur.vault.map(x => (x.uid === body.uid ? { ...x, held: item || undefined } : x)) };
     })) };
   }
-  if (body.op === 'restore') { // recuperar um Pokémon que saiu por falta de espaço
-    return { profile: await withCosmetic(db, await mutateProfile(db, user.id, prof => {
-      const st = { ...(prof.stats || {}) };
-      const list = st.overflow || [];
-      const m = list.find(x => x.uid === body.uid);
-      if (!m) bad('Esse Pokémon não está mais na lista.');
-      if ((prof.vault || []).length >= collectionMax(prof)) bad(`Sua Coleção está cheia (${collectionMax(prof)}). Solte alguns Pokémon antes de recuperar.`);
-      const { outAt, why, ...mon } = m;
-      st.overflow = list.filter(x => x.uid !== body.uid);
-      return { vault: [...(prof.vault || []), mon], stats: st };
-    })) };
+  if (body.op === 'restore') { // recuperar um Pokémon que saiu por falta de espaço (ou que foi solto — devolve o ouro recebido)
+    const pre = (p.stats?.overflow || []).find(x => x.uid === body.uid);
+    if (!pre) bad('Esse Pokémon não está mais na lista.');
+    const owe = Math.max(0, Number(pre.paid) || 0);
+    if (owe) {
+      if ((p.gold || 0) < owe) bad(`Para recuperar, devolva o ouro que o Professor pagou: 🪙 ${owe}.`);
+      if (!(await db.walletAdd(user.id, 0, -owe))) bad(`Para recuperar, devolva o ouro que o Professor pagou: 🪙 ${owe}.`);
+    }
+    try {
+      return { profile: await withCosmetic(db, await mutateProfile(db, user.id, prof => {
+        const st = { ...(prof.stats || {}) };
+        const list = st.overflow || [];
+        const m = list.find(x => x.uid === body.uid);
+        if (!m || (Number(m.paid) || 0) !== owe) bad('Esse Pokémon não está mais na lista.');
+        if ((prof.vault || []).length >= collectionMax(prof)) bad(`Sua Coleção está cheia (${collectionMax(prof)}). Solte alguns Pokémon antes de recuperar.`);
+        const { outAt, why, paid, ...mon } = m;
+        st.overflow = list.filter(x => x.uid !== body.uid);
+        return { vault: [...(prof.vault || []), mon], stats: st };
+      })), paidBack: owe };
+    } catch (e) { if (owe) await db.walletAdd(user.id, 0, owe); throw e; }
   }
   if (body.op === 'release') {
     // Soltar um Pokémon da Coleção (não afeta partidas em andamento)
     // vai para a lista de recuperação (dá para desfazer se soltou sem querer)
-    return { profile: await withCosmetic(db, await mutateProfile(db, user.id, prof => {
+    // 🪙 o Professor paga ouro pela raridade (v52); o valor fica anotado e é devolvido se recuperar
+    let gold = 0;
+    const prof1 = await mutateProfile(db, user.id, prof => {
+      gold = 0;
       const m = (prof.vault || []).find(x => x.uid === body.uid);
       if (!m) return null;
+      gold = releaseGold(m);
       const st = { ...(prof.stats || {}) };
-      st.overflow = [{ ...m, outAt: new Date().toISOString(), why: 'solto' }, ...(st.overflow || [])].slice(0, OVERFLOW_MAX);
+      st.overflow = [{ ...m, outAt: new Date().toISOString(), why: 'solto', paid: gold || undefined }, ...(st.overflow || [])].slice(0, OVERFLOW_MAX);
       return { vault: (prof.vault || []).filter(x => x.uid !== body.uid), stats: st };
-    })) };
+    });
+    if (gold) await db.walletAdd(user.id, 0, gold);
+    return { profile: await withCosmetic(db, gold ? (await db.getProfile(user.id) || prof1) : prof1), gold };
   }
   if (body.op === 'daily_claim') { // 🎁 prêmio diário com sequência
     const now = new Date();

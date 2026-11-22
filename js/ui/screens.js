@@ -20,6 +20,7 @@ import { COMPANIONS } from '../../shared/data/companions.js';
 import { openCompanionPicker } from './missions.js';
 // Telas fora da partida: login, hub do treinador, lobby online, sala de espera, partida local, coleção, ranking e admin.
 import { STARTERS, getSpecies, SPECIES_LIST } from '../../shared/data/pokemon.js';
+import { releaseGold, releaseLabel } from '../../shared/data/release.js';
 import { dailyPokemon } from '../../shared/daily.js';
 import { esc, toast, bindActions, openModal, closeModal, setModalBody } from './dom.js';
 import { monSprite, avatarUrl, itemUrl } from '../config.js';
@@ -321,13 +322,13 @@ function collectionModal(profile, onChange) {
     return `<details class="info-fold"><summary class="small">ℹ️ Como funciona a Coleção</summary><p class="small muted">Tudo que você captura em partidas salvas na conta (Treino contra CPUs e Online) fica aqui, com o nível atualizado. Use no modo <b>📦 Coleção</b> para levar seu time. Limite: ${cap()}. Se lotar, só os comuns mais fracos saem e ficam em "↩️ Saíram da Coleção" para recuperar (⭐ favoritos, shinies, lendários, Vermelhos/Amarelos, Confiança e com apelido nunca saem).${profile?.stats?.vaultBonus ? '' : ' Dá para ampliar para 350 na 💎 Loja.'}</p></details>
       ${(profile?.stats?.overflow || []).length ? `<details class="vf-out"><summary>↩️ Saíram da Coleção (${profile.stats.overflow.length}) — toque para ver e recuperar</summary>
         <p class="tiny muted">Pokémon que você soltou ou que saíram sozinhos quando a Coleção lotou (só saem os comuns, tier até Azul). Ficam aqui por um tempo (últimos ${40}).</p>
-        <div class="pk-grid">${profile.stats.overflow.map(m => statCard(m, { extra: `<div class="tiny muted">${m.why === 'solto' ? 'Solto por você' : 'Coleção cheia'} · ${new Date(m.outAt).toLocaleDateString('pt-BR')}</div><button class="btn sm green" data-act="restore" data-uid="${esc(m.uid)}">↩️ Recuperar</button>` })).join('')}</div></details>` : ''}
+        <div class="pk-grid">${profile.stats.overflow.map(m => statCard(m, { extra: `<div class="tiny muted">${m.why === 'solto' ? 'Solto por você' : 'Coleção cheia'} · ${new Date(m.outAt).toLocaleDateString('pt-BR')}</div><button class="btn sm green" data-act="restore" data-uid="${esc(m.uid)}">↩️ Recuperar${m.paid ? ` (devolve 🪙 ${m.paid})` : ''}</button>` })).join('')}</div></details>` : ''}
       ${(profile?.vault || []).length > cap() ? `<p class="small" style="color:#ffb35c">⚠️ Sua Coleção passou do limite (${(profile.vault || []).length}/${cap()}). Nada some sozinho além dos comuns; solte alguns para liberar espaço.</p>` : ''}
       <div class="vf-sum tiny muted">⚡ ${n(m => getSpecies(m.sp)?.legendary && !getSpecies(m.sp)?.mythical)} lendários · 🌟 ${n(m => getSpecies(m.sp)?.mythical)} míticos · ✨ ${n(m => m.shiny)} shinies · ⭐ ${n(m => m.fav)} favoritos · 🤝 ${n(m => m.trust)} da Confiança</div>
       ${boxBar()}
       <div class="vf-scope">${vfBar('vault')}
       <div class="pk-grid ${picking ? 'bx-picking' : ''}">${all.map(m => { const bx = boxOf(m.uid); const hide = picking ? !!bx && bx.id === picking.box : view === 'none' ? !!bx : view !== 'all' && bx?.id !== view;
-        return `<div class="vf-cell ${hide ? 'bx-hide' : ''} ${picking?.sel.has(m.uid) ? 'bx-sel' : ''}" data-uid="${esc(m.uid)}" ${vfAttrs(m, recent.get(m.uid) || 0)}>${bx && view === 'all' ? `<span class="bx-tag" title="${esc(bx.name)}">${bx.icon}</span>` : ''}${statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px">${bx && view === bx.id ? `<button class="btn sm" data-act="bx-out" data-uid="${esc(m.uid)}" title="Tirar da box">↩️</button>` : ''}<button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="farm" data-uid="${esc(m.uid)}" title="Mandar para a 🌾 Fazenda (ganha XP com o tempo)">🌾</button><button class="btn sm ${m.held ? 'purple' : ''}" data-act="mstone" data-uid="${esc(m.uid)}" title="🎒 Item segurado (Megapedra ou item de batalha): equipar / trocar / tirar">${megaBySpecies(m.sp).length ? '💎' : '🎒'}</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar">✕</button></div>` })}</div>`; }).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div></div>`;
+        return `<div class="vf-cell ${hide ? 'bx-hide' : ''} ${picking?.sel.has(m.uid) ? 'bx-sel' : ''}" data-uid="${esc(m.uid)}" ${vfAttrs(m, recent.get(m.uid) || 0)}>${bx && view === 'all' ? `<span class="bx-tag" title="${esc(bx.name)}">${bx.icon}</span>` : ''}${statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px">${bx && view === bx.id ? `<button class="btn sm" data-act="bx-out" data-uid="${esc(m.uid)}" title="Tirar da box">↩️</button>` : ''}<button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="farm" data-uid="${esc(m.uid)}" title="Mandar para a 🌾 Fazenda (ganha XP com o tempo)">🌾</button><button class="btn sm ${m.held ? 'purple' : ''}" data-act="mstone" data-uid="${esc(m.uid)}" title="🎒 Item segurado (Megapedra ou item de batalha): equipar / trocar / tirar">${megaBySpecies(m.sp).length ? '💎' : '🎒'}</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar (o Professor paga 🪙 ${releaseGold(m)})">✕</button></div>` })}</div>`; }).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div></div>`;
   };
   const ov = openModal('vault', `📦 Coleção (${(profile?.vault || []).length}/${cap()})`, body(), { wide: true });
   const redraw = () => { setModalBody('vault', body()); vfBind(document.getElementById('vault')); };
@@ -395,8 +396,17 @@ function collectionModal(profile, onChange) {
       };
       bindActions(ov2, { 'ms-hold': x => hold(x.item), 'ms-off': () => hold(null) });
     },
-    rel: d => { if (confirm('Soltar este Pokémon da sua Coleção? Ele fica na lista "Saíram da Coleção" e dá para recuperar depois.')) op('release', d.uid); },
-    restore: d => op('restore', d.uid),
+    rel: async d => {
+      const m = (profile?.vault || []).find(x => x.uid === d.uid);
+      const g = m ? releaseGold(m) : 0;
+      if (!confirm(`Soltar ${m ? (m.nick || getSpecies(m.sp)?.name || 'este Pokémon') : 'este Pokémon'} da sua Coleção?\n\n🪙 O Professor paga ${g} de ouro (${m ? releaseLabel(m) : ''}, Nv. ${m?.lvl || 1}).\n\nEle fica em "Saíram da Coleção": dá para recuperar depois devolvendo o ouro.`)) return;
+      try { const r = await api('profile', { op: 'release', uid: d.uid }); profile = r.profile; redraw(); onChange(profile); if (r.gold) toast(`🕊️ Solto! O Professor te deu 🪙 ${r.gold}.`, 'good'); }
+      catch (e) { toast(e.message, 'bad'); }
+    },
+    restore: async d => {
+      try { const r = await api('profile', { op: 'restore', uid: d.uid }); profile = r.profile; redraw(); onChange(profile); toast(r.paidBack ? `↩️ Recuperado! Devolveu 🪙 ${r.paidBack}.` : '↩️ Recuperado!', 'good'); }
+      catch (e) { toast(e.message, 'bad'); }
+    },
     'bx-view': d => { view = d.id; picking = null; redraw(); },
     'bx-new': () => {
       const name = prompt('Nome da box (até 16 letras):', `Box ${boxes().length + 1}`);

@@ -2320,3 +2320,10 @@ details.pk-abil > span { display: block; margin-top: 3px; text-align: center; }
 .tw-dot.now { border-color: #ffd36b; box-shadow: 0 0 10px rgba(255, 211, 107, .6); animation: dBob 1.4s ease-in-out infinite; }
 .tw-picks { display: flex; gap: 8px; justify-content: center; margin: 8px 0; }
 .tw-slot { width: 64px; height: 64px; border-radius: 12px; border: 2px dashed rgba(255, 255, 255, .25); display: grid; place-items: center; font-size: 24px; opacity: .6; }
+/* v52: sprites dos itens na Oficina (emoji quando não há sprite) */
+img.ws-ic { width: 34px; height: 34px; object-fit: contain; image-rendering: pixelated; flex: none; }
+span.ws-ic.itm-emo { display: inline-block; width: 34px; text-align: center; flex: none; }
+img.itm-ic { width: 24px; height: 24px; object-fit: contain; image-rendering: pixelated; vertical-align: middle; }
+span.itm-ic.itm-emo { font-size: 20px; vertical-align: middle; }
+img.tw-shop-ic { width: 48px; height: 48px; object-fit: contain; image-rendering: pixelated; }
+span.tw-shop-ic.itm-emo { font-size: 34px; line-height: 48px; height: 48px; display: inline-block; }

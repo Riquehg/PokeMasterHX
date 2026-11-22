@@ -4,7 +4,7 @@ import { FARM_BIOMES, BIOME_IDS, RESOURCES, FARM_DECOR, DECOR_MAX, FARM_MAX_LEVE
 import { genderHtml } from '../../shared/data/gender.js';
 import { api } from '../api.js';
 import { esc, toast, openModal, closeModal, setModalBody, bindActions } from './dom.js';
-import { monSprite, avatarUrl, leaderUrl } from '../config.js';
+import { monSprite, avatarUrl, leaderUrl, itemIcon } from '../config.js';
 import { canBreed, EGGS_PER_DAY, INCUBATOR_MAX, NATURE_COST, EGG_EVERY_H } from '../../shared/data/daycare.js';
 import { statCard, miniMon } from './common.js';
 import { RECIPES, FARM_ITEMS as FARM_ITEMS0, ARTISAN_LEVELS } from '../../shared/data/workshop.js';
@@ -474,6 +474,10 @@ export async function openFarm(ctx, profile, userId = null) {
     const have = farm.res?.[k] || 0;
     return `<span class="ws-c ${have >= q * mult ? '' : 'miss'}" title="${RESOURCES[k].name}: você tem ${have}">${RESOURCES[k].icon}${q * mult}</span>`;
   }).join('');
+  // 🖼️ ícone da receita/item: sprite da pasta items/ quando existir (Poké Balls, Doce Raro, TM...), senão o emoji
+  const FARM_SPRITE = { candy: 'rare_candy' };
+  const recipeItem = R => R.out.mega ? null : R.out.plate ? 'plate' : R.out.bag ? (Object.keys(R.out.bag).length === 1 ? Object.keys(R.out.bag)[0] : null) : R.out.farm ? FARM_SPRITE[Object.keys(R.out.farm)[0]] || null : null;
+  const rIcon = (R, j) => itemIcon(j?.mega && MEGAS[j.mega] ? `megastones/${MEGAS[j.mega].stone}` : j?.ptype ? `plate_${j.ptype}` : recipeItem(R), R.icon, 'ws-ic');
   const outTxt = R => R.out.mega || R.out.plate ? '→ 🎒 Mochila' : R.out.bag ? Object.entries(R.out.bag).map(([, q]) => q > 1 ? `${q}×` : '').join('') + ' → 🎒 Mochila' : R.out.farm ? '→ itens da Fazenda' : '→ decoração exclusiva';
   let candyPick = false;
   // 💎 qual Megapedra fabricar: lista as Megas com fragmentos na Mochila
@@ -499,11 +503,11 @@ export async function openFarm(ctx, profile, userId = null) {
     return `<div class="ws-art"><b>🔨 ${esc(lv.name)}</b> <span class="tiny muted">Nível de Artesão ${lv.lvl}${nx ? ` · ${W.axp}/${nx.xp} XP para ${esc(nx.name)}` : ' · máximo!'}</span>
         <div class="fm-bar small"><i style="width:${nx ? Math.min(100, ((W.axp - lv.xp) / (nx.xp - lv.xp)) * 100) : 100}%"></i></div></div>
       <h3>🪚 Bancadas (${W.jobs.length}/${W.benches})</h3>
-      <div class="ws-jobs">${W.jobs.map(j => { const R = RECIPES[j.recipe]; return `<div class="ws-job ${j.ready ? 'ready' : ''}"><span class="ws-ic">${R.icon}</span><b>${esc(j.mega && MEGAS[j.mega] ? MEGAS[j.mega].stoneName : j.ptype ? `Placa ${TYPE_LABELS[j.ptype] || ''}` : R.name)}</b>
+      <div class="ws-jobs">${W.jobs.map(j => { const R = RECIPES[j.recipe]; return `<div class="ws-job ${j.ready ? 'ready' : ''}">${rIcon(R, j)}<b>${esc(j.mega && MEGAS[j.mega] ? MEGAS[j.mega].stoneName : j.ptype ? `Placa ${TYPE_LABELS[j.ptype] || ''}` : R.name)}</b>
           ${j.ready ? `<button class="btn sm primary" data-act="claim" data-id="${j.id}">✨ Pegar</button>` : `<span class="tiny">⏳ ${fmtT(j.done - Date.now())}</span><div class="fm-bar small"><i style="width:${Math.min(100, ((Date.now() - j.start) / (j.done - j.start)) * 100)}%"></i></div>`}</div>`; }).join('')}
         ${Array.from({ length: Math.max(0, free) }, () => '<div class="ws-job empty"><span class="tiny muted">Bancada livre</span></div>').join('')}</div>
       <p class="tiny muted">Mais bancadas no Nv. 4 e no Nv. 7 da Fazenda.</p>
-      ${items.length || W.fert || W.incense ? `<h3>🎒 Itens da Fazenda</h3><div class="ws-items">${items.map(([k, n]) => `<div class="ws-item"><span class="ws-ic">${FARM_ITEMS[k].icon}</span><b>${esc(FARM_ITEMS[k].name)} ×${n}</b><span class="tiny muted">${esc(FARM_ITEMS[k].desc)}</span><button class="btn sm green" data-act="use" data-k="${k}">Usar</button></div>`).join('')}
+      ${items.length || W.fert || W.incense ? `<h3>🎒 Itens da Fazenda</h3><div class="ws-items">${items.map(([k, n]) => `<div class="ws-item">${itemIcon(FARM_SPRITE[k], FARM_ITEMS[k].icon, 'ws-ic')}<b>${esc(FARM_ITEMS[k].name)} ×${n}</b><span class="tiny muted">${esc(FARM_ITEMS[k].desc)}</span><button class="btn sm green" data-act="use" data-k="${k}">Usar</button></div>`).join('')}
         ${W.fert ? `<div class="ws-item on"><span class="ws-ic">🧪</span><b>Fertilizante ativo</b><span class="tiny">acaba em ${fmtT(W.fert - Date.now())}</span></div>` : ''}${W.incense ? `<div class="ws-item on"><span class="ws-ic">🕯️</span><b>Incenso ativo</b><span class="tiny">${W.incense} ovo(s) com shiny ×3</span></div>` : ''}</div>` : ''}
       <h3>📋 Pedidos do dia</h3>
       <div class="ws-orders">${W.orders.map(o => `<div class="ws-order ${o.done ? 'done' : ''}"><div class="ws-cost">${costChips(o.need)}</div>
@@ -514,7 +518,7 @@ export async function openFarm(ctx, profile, userId = null) {
       ${ARTISAN_LEVELS.map(L => `<div class="ws-tier ${lv.lvl >= L.lvl ? '' : 'locked'}"><div class="ws-tier-h">${lv.lvl >= L.lvl ? '' : '🔒 '}${esc(L.name)}${lv.lvl >= L.lvl ? '' : ` <span class="tiny muted">(${L.xp} XP de Artesão)</span>`}</div>
         <div class="ws-recipes">${Object.entries(RECIPES).filter(([, R]) => R.lvl === L.lvl).map(([id, R]) => {
           const weekDone = R.week && W.weekly[id];
-          return `<div class="ws-rec"><span class="ws-ic">${R.icon}</span><div class="grow"><b>${esc(R.name)}</b> <span class="tiny muted">${outTxt(R)}</span>
+          return `<div class="ws-rec">${rIcon(R)}<div class="grow"><b>${esc(R.name)}</b> <span class="tiny muted">${outTxt(R)}</span>
             ${R.desc ? `<div class="tiny muted">${esc(R.desc)}</div>` : ''}<div class="ws-cost">${costChips(R.cost)}<span class="ws-c t">⏱️${R.hours}h</span>${R.week ? '<span class="ws-c t">1×/semana</span>' : ''}</div></div>
             ${R.out.mega ? megaPicker(R) : ''}${R.out.plate ? platePicker() : ''}
             <button class="btn sm ${lv.lvl >= R.lvl && free > 0 && !weekDone ? 'primary' : ''}" data-act="craft" data-id="${id}" ${lv.lvl >= R.lvl && free > 0 && !weekDone ? '' : 'disabled'}>${weekDone ? 'Feita esta semana' : 'Fabricar'}</button></div>`;

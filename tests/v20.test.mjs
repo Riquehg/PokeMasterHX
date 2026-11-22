@@ -1309,3 +1309,27 @@ test('🗼 Torre: entrada, duelo contra CPU no Nv. 50 com Megas, sequência, PB 
   r = await matchOp(db, a, { op: 'tower_buy', item: 'rare_candy' }).catch(e => e);
   assert.match(String(r.message || r), /8 PB/);
 });
+
+// ---------------------------------------------------------------- v52 🕊️ soltar dá ouro
+test('🕊️ Soltar Pokémon: ouro pela raridade; recuperar devolve o ouro', async () => {
+  const { releaseGold } = await import('../shared/data/release.js');
+  assert.ok(releaseGold({ sp: 'pidgey', lvl: 5 }) < releaseGold({ sp: 'dragonite', lvl: 5 }));
+  assert.ok(releaseGold({ sp: 'dragonite', lvl: 50 }) < releaseGold({ sp: 'mewtwo', lvl: 50 }));
+  assert.equal(releaseGold({ sp: 'pidgey', lvl: 1, shiny: true }), Math.round(15 * 4 * 1.01 / 5) * 5);
+  const { db, admin, us: [a] } = await users(1);
+  await adminOp(db, admin, { op: 'grant_mon', userId: a.id, species: 'mewtwo', level: 50 });
+  const m = (await db.getProfile(a.id)).vault.find(x => x.sp === 'mewtwo');
+  const g0 = (await db.getProfile(a.id)).gold || 0;
+  const r = await profileOp(db, a, { op: 'release', uid: m.uid });
+  assert.equal(r.gold, releaseGold(m));
+  assert.equal((await db.getProfile(a.id)).gold, g0 + r.gold);
+  assert.equal(r.profile.stats.overflow[0].paid, r.gold);
+  await adminOp(db, admin, { op: 'give_gold', userId: a.id, amount: -((await db.getProfile(a.id)).gold) }).catch(() => {});
+  if (((await db.getProfile(a.id)).gold || 0) < r.gold) await assert.rejects(profileOp(db, a, { op: 'restore', uid: m.uid }), /devolva/);
+  await adminOp(db, admin, { op: 'give_gold', userId: a.id, amount: r.gold });
+  const before = (await db.getProfile(a.id)).gold;
+  const r2 = await profileOp(db, a, { op: 'restore', uid: m.uid });
+  assert.equal(r2.paidBack, r.gold);
+  assert.equal((await db.getProfile(a.id)).gold, before - r.gold);
+  assert.ok(r2.profile.vault.some(x => x.uid === m.uid && x.paid === undefined));
+});

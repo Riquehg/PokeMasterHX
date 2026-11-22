@@ -144,6 +144,8 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 
 - **v51 — 🗼 Torre de Batalha:** `shared/data/tower.js` (preço 2000, time 3, Nv. 50, série de 7, pools por fase, lendários do Mestre, `TOWER_SHOP` em PB) e `api/_lib/tower.js` (`towerOp`: `tower_get/start/battle/quit/buy`; duelos via `createDuelMatch` com `megas: true` e `options.tower`; `towerFinished` chamado por `duelFinished` → sequência, PB, `state.towerResult`). CPU com itens e Megapedra (fase 3 e Mestre). UI `js/ui/tower.js` + tile no menu + linha no fim do duelo.
 
+- **v52 — 🕊️ soltar dá ouro + 🖼️ sprites dos itens:** `shared/data/release.js` (`releaseGold`: por tier 15/30/60/120/200, Lendário 600, Ultra 800, Mítico 900, shiny ×4, +nível%); op `release` paga e anota `paid` na lista "Saíram da Coleção"; `restore` cobra o ouro de volta. `itemIcon(id, emoji)` em `js/config.js`: usa a sprite de `items/` (itens sem `image` tentam `items/<id>.png`) e cai no emoji se não existir — na 🔨 Oficina e na 🛒 Loja PB da Torre.
+
 ## 3. Publicar (passo a passo, só pelo navegador)
 
 ### 3.1 Supabase
