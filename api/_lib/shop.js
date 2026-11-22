@@ -75,6 +75,8 @@ export async function equippedCosmetic(db, profile) {
   const achOk = ach && unlockedTitles(profile).includes(ach.id);
   return sanitizeCosmetic({
     aura: find(equipped.ball_style)?.value,
+    capfx: find(equipped.capfx)?.value,
+    trail: find(equipped.trail)?.value,
     frame: find(equipped.frame)?.value,
     title: achOk ? ach.text : find(equipped.title)?.value,
     titleFx: achOk ? ach.fx : undefined,

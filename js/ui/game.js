@@ -187,11 +187,11 @@ export function mountGame(root, session, opts = {}) {
           if (f.pid === v) {
             const escaped = fxs.slice(i + 1).some(x => x.k === 'battle_end' && x.result === 'escaped');
             closeModal('battle');
-            await captureAnim(f, { escaped });
+            await captureAnim(f, { escaped, capfx: next.players.find(x => x.id === f.pid)?.cosmetic?.capfx });
           } else if (ui.spectate || f.raid) {
             // assistindo: a mesma animação da Pokébola, com o nome de quem jogou
             const escaped = fxs.slice(i + 1).some(x => x.k === 'battle_end' && x.result === 'escaped');
-            await captureAnim(f, { escaped, who: nameOf(f.pid), ballName: ITEMS[f.ball]?.name });
+            await captureAnim(f, { escaped, who: nameOf(f.pid), ballName: ITEMS[f.ball]?.name, capfx: next.players.find(x => x.id === f.pid)?.cosmetic?.capfx });
           } else miniCapture(f, nameOf(f.pid), ITEMS[f.ball]?.name);
           break;
         case 'turn':

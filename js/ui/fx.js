@@ -180,7 +180,45 @@ function sparkle(box, n = 14) {
 const BALL_COLORS = { poke_ball: '#e33', great_ball: '#2f6fe0', ultra_ball: '#222', master_ball: '#8a3ed8', flame_ball: '#ff7a1a',
   aqua_ball: '#29a3e0', volt_ball: '#f0cf1a', shadow_ball: '#5b2b8a', mystic_ball: '#e05bb7', rainbow_ball: '#ff5f5f' };
 
-export async function captureAnim(f, { escaped, who = null, ballName = '' } = {}) {
+// ✨ v46 — efeito de captura (cosmético): explosão especial quando a captura dá certo
+const CAPFX_SETS = {
+  stars: ['⭐', '🌟', '✨'], lightning: ['⚡', '⚡', '✨'], flames: ['🔥', '🔥', '✨'], bubbles: ['🫧', '💧', '🫧'], sakura: ['🌸', '💮', '🌸'],
+  galaxy: ['🌌', '✨', '💫', '🪐'], hearts: ['💖', '💕', '💗'], shadow: ['🌑', '💜', '🖤'], rainbow: ['🌈', '✨', '💫'], master: ['💜', '✨', 'Ⓜ️'],
+  crown: ['👑', '✨', '🪙'], ice: ['❄️', '🧊', '✨']
+};
+/** Toca o efeito de captura dentro de um palco (el). Também usado na prévia da Loja. */
+export function capFxBurst(stage, id) {
+  if (!stage || !CAPFX_SETS[id]) return;
+  stage.classList.add('cfx-' + id);
+  const ring = document.createElement('div');
+  ring.className = 'cfx-ring cfx-r-' + id;
+  stage.appendChild(ring);
+  const box = document.createElement('div');
+  box.className = 'cfx-parts';
+  const set = CAPFX_SETS[id];
+  for (let i = 0; i < 22; i++) {
+    const b = document.createElement('b');
+    b.textContent = set[i % set.length];
+    const a = (i / 22) * Math.PI * 2 + Math.random() * 0.3, r = 90 + Math.random() * 110;
+    b.style.setProperty('--dx', Math.cos(a) * r + 'px'); b.style.setProperty('--dy', Math.sin(a) * r + 'px');
+    b.style.animationDelay = Math.random() * 0.25 + 's';
+    b.style.fontSize = 16 + Math.random() * 16 + 'px';
+    box.appendChild(b);
+  }
+  stage.appendChild(box);
+  if (id === 'lightning') { const fl = document.createElement('div'); fl.className = 'cfx-flash'; stage.appendChild(fl); }
+}
+/** Prévia do efeito de captura (Loja). */
+export async function capFxDemo(id) {
+  const el = layer('dim');
+  el.innerHTML = `<div class="cap-stage"><div class="pball locked" style="--ball:#e33"></div><div class="sparkles"></div></div>`;
+  await wait(250);
+  capFxBurst(el.querySelector('.cap-stage'), id);
+  await clickOrTimeout(el, 2200);
+  await removeLayer(el);
+}
+
+export async function captureAnim(f, { escaped, who = null, ballName = '', capfx = null } = {}) {
   if (!anim.speed) return;
   const el = layer('dim');
   const name = getSpecies(f.sp).name;
@@ -206,6 +244,7 @@ export async function captureAnim(f, { escaped, who = null, ballName = '' } = {}
   if (f.ok) {
     ball.classList.add('locked');
     sparkle(el.querySelector('.sparkles'), 18);
+    if (capfx) capFxBurst(el.querySelector('.cap-stage'), capfx); // ✨ efeito de captura da Loja
     text.textContent = who ? `🎉 ${who} capturou ${name}${f.shiny ? ' ✨' : ''}!` : `🎉 ${name} foi capturado!`;
     confetti(who ? 30 : 60);
   } else {

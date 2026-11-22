@@ -11,7 +11,21 @@ export const AURA_PRESETS = {
 
 // Molduras: contorno do avatar no hub, na lista de jogadores e no peão do tabuleiro
 export const FRAME_PRESETS = {
-  gold: 'Dourada', rainbow: 'Arco-íris', fire: 'Fogo', ice: 'Gelo', shadow: 'Sombria', neon: 'Neon', leaf: 'Folhas'
+  gold: 'Dourada', rainbow: 'Arco-íris', fire: 'Fogo', ice: 'Gelo', shadow: 'Sombria', neon: 'Neon', leaf: 'Folhas',
+  // v46
+  galaxy: 'Galáxia', sakura: 'Sakura', thunder: 'Trovão', crystal: 'Cristal', dragon: 'Dragão', pokeball: 'Pokébola', ocean: 'Oceano', royal: 'Real'
+};
+
+// ✨ v46 — Efeito de captura: a animação que explode quando VOCÊ captura (todos que assistem veem)
+export const CAPFX_PRESETS = {
+  stars: 'Explosão de Estrelas', lightning: 'Relâmpago', flames: 'Anel de Fogo', bubbles: 'Bolhas', sakura: 'Chuva de Pétalas', galaxy: 'Galáxia',
+  hearts: 'Corações', shadow: 'Fumaça Sombria', rainbow: 'Arco-íris', master: 'Onda Master Ball', crown: 'Coroa Dourada', ice: 'Cristais de Gelo'
+};
+
+// 👣 v46 — Rastro do peão: partículas animadas saindo do seu peão no tabuleiro (todos veem)
+export const TRAIL_PRESETS = {
+  sparkle: 'Brilhos', flame: 'Chamas', bubble: 'Bolhas', leaf: 'Folhas', thunder: 'Faíscas', sakura: 'Sakura',
+  snow: 'Neve', music: 'Notas Musicais', hearts: 'Corações', shadow: 'Sombras', stars: 'Estrelas', coins: 'Moedas de Ouro'
 };
 
 // Dados: visual do dado na rolagem (todos veem o seu dado)
@@ -42,7 +56,9 @@ export const SERVICE_PRESETS = { vault50: '+50 vagas na Coleção', nickname: 'A
 export const VAULT_BONUS = 50;
 
 export const SHOP_KINDS = {
-  ball_style: 'Estilo de captura',
+  ball_style: 'Brilho dos capturados',
+  capfx: 'Efeito de captura',
+  trail: 'Rastro do peão',
   frame: 'Moldura de treinador',
   title: 'Título',
   dice: 'Dado personalizado',
@@ -54,9 +70,9 @@ export const SHOP_KINDS = {
   decor: 'Decoração da Fazenda'
 };
 /** Tipos que se equipam (um por vez). "service" é compra única. */
-export const EQUIP_KINDS = ['skin', 'ball_style', 'frame', 'title', 'dice', 'arena', 'card', 'victory'];
+export const EQUIP_KINDS = ['skin', 'ball_style', 'capfx', 'trail', 'frame', 'title', 'dice', 'arena', 'card', 'victory'];
 export const DECOR_PRESETS = Object.fromEntries(Object.entries(FARM_DECOR).filter(([, d]) => d.price > 0).map(([k, d]) => [k, d.name]));
-export const PRESETS_BY_KIND = { decor: DECOR_PRESETS, skin: SKIN_PRESETS, ball_style: AURA_PRESETS, frame: FRAME_PRESETS, dice: DICE_PRESETS, arena: ARENA_PRESETS, card: CARD_PRESETS, victory: VICTORY_PRESETS, service: SERVICE_PRESETS };
+export const PRESETS_BY_KIND = { decor: DECOR_PRESETS, skin: SKIN_PRESETS, ball_style: AURA_PRESETS, capfx: CAPFX_PRESETS, trail: TRAIL_PRESETS, frame: FRAME_PRESETS, dice: DICE_PRESETS, arena: ARENA_PRESETS, card: CARD_PRESETS, victory: VICTORY_PRESETS, service: SERVICE_PRESETS };
 
 export const DEFAULT_SHOP = {
   items: [
@@ -66,6 +82,19 @@ export const DEFAULT_SHOP = {
     { id: 'style_gold', kind: 'ball_style', value: 'gold', name: 'Captura Dourada', price: 150, active: true, desc: 'Seus Pokémon capturados brilham em ouro.' },
     { id: 'style_sakura', kind: 'ball_style', value: 'sakura', name: 'Captura Sakura', price: 100, active: true, desc: 'Pétalas de cerejeira nas suas capturas.' },
     { id: 'style_neon', kind: 'ball_style', value: 'neon', name: 'Captura Neon', price: 100, active: true, desc: 'Brilho neon nas suas capturas.' },
+    // ✨ v46: os outros brilhos de captura
+    ...[['frost', 120, 'Cristais de gelo eterno nas suas capturas.'], ['inferno', 140, 'Labaredas do inferno nas suas capturas.'], ['flame', 100, 'Chamas suaves nas suas capturas.'], ['aqua', 100, 'Brilho de água nas suas capturas.'],
+      ['volt', 110, 'Faíscas elétricas nas suas capturas.'], ['shadow', 120, 'Névoa sombria nas suas capturas.'], ['mystic', 130, 'Brilho místico rosa nas suas capturas.'], ['rainbow', 180, 'Todas as cores girando nas suas capturas.']]
+      .map(([v, price, desc]) => ({ id: 'style_' + v, kind: 'ball_style', value: v, name: `Brilho ${AURA_PRESETS[v]}`, price, active: true, desc })),
+    // ✨ v46: efeitos de captura (animação)
+    ...[['stars', 100], ['sakura', 100], ['bubbles', 90], ['hearts', 90], ['flames', 120], ['ice', 120], ['lightning', 140], ['shadow', 140], ['galaxy', 160], ['rainbow', 180], ['crown', 200], ['master', 250]]
+      .map(([v, price]) => ({ id: 'capfx_' + v, kind: 'capfx', value: v, name: `Captura: ${CAPFX_PRESETS[v]}`, price, active: true, desc: 'Animação especial quando você captura um Pokémon — quem estiver assistindo também vê.' })),
+    // 👣 v46: rastros do peão
+    ...[['sparkle', 80], ['leaf', 80], ['bubble', 80], ['snow', 90], ['sakura', 90], ['music', 100], ['hearts', 100], ['flame', 120], ['thunder', 120], ['stars', 130], ['shadow', 140], ['coins', 160]]
+      .map(([v, price]) => ({ id: 'trail_' + v, kind: 'trail', value: v, name: `Rastro: ${TRAIL_PRESETS[v]}`, price, active: true, desc: 'Partículas animadas saindo do seu peão no tabuleiro — todos veem.' })),
+    // 🖼️ v46: mais molduras (avatar + peão)
+    ...[['ice', 90], ['leaf', 80], ['neon', 110], ['shadow', 110], ['sakura', 100], ['ocean', 100], ['thunder', 130], ['crystal', 140], ['galaxy', 160], ['pokeball', 150], ['dragon', 200], ['royal', 250]]
+      .map(([v, price]) => ({ id: 'frame_' + v, kind: 'frame', value: v, name: `Moldura ${FRAME_PRESETS[v]}`, price, active: true, desc: 'Contorno animado no seu avatar e um halo no seu peão do tabuleiro.' })),
     { id: 'frame_gold', kind: 'frame', value: 'gold', name: 'Moldura Dourada', price: 80, active: true, desc: 'Contorno dourado no seu avatar e peão.' },
     { id: 'frame_rainbow', kind: 'frame', value: 'rainbow', name: 'Moldura Arco-íris', price: 120, active: true, desc: 'Contorno animado arco-íris.' },
     { id: 'frame_fire', kind: 'frame', value: 'fire', name: 'Moldura de Fogo', price: 90, active: true, desc: 'Seu peão pega fogo (só no visual).' },
@@ -118,6 +147,8 @@ export function sanitizeCosmetic(c) {
   if (!c || typeof c !== 'object') return null;
   const out = {};
   if (c.aura && AURA_PRESETS[c.aura]) out.aura = c.aura;
+  if (c.capfx && CAPFX_PRESETS[c.capfx]) out.capfx = c.capfx;
+  if (c.trail && TRAIL_PRESETS[c.trail]) out.trail = c.trail;
   if (c.frame && FRAME_PRESETS[c.frame]) out.frame = c.frame;
   if (c.title) out.title = String(c.title).replace(/[<>"'`]/g, '').slice(0, 30);
   // 🏅 título de conquista: efeito animado + cor (laço com companheiro)

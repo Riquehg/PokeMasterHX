@@ -303,10 +303,11 @@ export class BoardView {
     const c = pl.cosmetic || {};
     const fr = c.frame ? esc(c.frame) : '';
     const au = c.aura ? esc(c.aura) : '';
-    const cls = ['token', state.current === i ? 'active' : '', fr || au ? 'vip' : '', fr ? 'tf-' + fr : '', au ? 'ta-' + au : '', pl.out ? 'out' : '', n > 1 ? 'stacked' : '', pl.id === viewerId ? 'mine' : ''].join(' ');
+    const tr = c.trail ? esc(c.trail) : '';
+    const cls = ['token', state.current === i ? 'active' : '', fr || au || tr ? 'vip' : '', fr ? 'tf-' + fr : '', au ? 'ta-' + au : '', pl.out ? 'out' : '', n > 1 ? 'stacked' : '', pl.id === viewerId ? 'mine' : ''].join(' ');
     const sparks = au ? `<div class="sparks">${'<i></i>'.repeat(7)}</div>` : '';
     return `<div class="${cls}" data-pid="${esc(pl.id)}" style="left:${sp.x}%;top:${sp.y}%;margin-left:calc(${off}px * var(--ms, 1));--pc:${playerColor(state, pl.id)}" title="${esc(pl.name)}${c.title ? ' — ' + esc(c.title) : ''}">
-      ${fr ? '<div class="halo"></div><div class="halo h2"></div>' : ''}${sparks}
+      ${fr ? '<div class="halo"></div><div class="halo h2"></div>' : ''}${sparks}${tr ? `<div class="trail tr-${tr}">${'<i></i>'.repeat(8)}</div>` : ''}
       <div class="tk-shadow"></div><div class="base ${c.card ? 'tcard-' + esc(c.card) : ''}"></div>
       <div class="pin ${fr ? 'frame-' + fr : ''}"><img src="${avatarUrl(pl.avatar, c.skin)}" alt="${esc(pl.name)}" data-color="${playerColor(state, pl.id)}" draggable="false"></div>
       ${pl.companion && COMPANIONS[pl.companion] ? `<img class="tk-comp" src="${leaderUrl(COMPANIONS[pl.companion].sprite)}" alt="" title="${esc(COMPANIONS[pl.companion].name)}" draggable="false">` : ''}

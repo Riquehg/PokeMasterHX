@@ -781,6 +781,7 @@ async function adminModal() {
         <button class="btn sm" data-act="acc-mail" data-k="recovery">📧 Mandar link de nova senha</button>
         <button class="btn sm primary" data-act="acc-pw">🔑 Definir senha nova</button>
         ${acc.megaBracelet ? '<button class="btn sm red" data-act="acc-bracelet">🔗 Tirar Bracelete Mega</button>' : ''}
+        <button class="btn sm red" data-act="acc-art" title="Se alguém desenhar algo impróprio na Fazenda">🖌️ Apagar desenhos da Fazenda</button>
       </div></div>`;
   }
   const accDraw = () => { const el = ov.querySelector('#a-acc'); if (el) el.innerHTML = accHtml(); };
@@ -830,6 +831,7 @@ async function adminModal() {
       const pw = prompt(`Senha nova para ${acc.trainer || acc.email} (mín. 6). Mande para ele no privado e peça para trocar depois:`);
       if (pw) accRun(() => api('admin', { op: 'account_password', userId: acc.id, password: pw }), '🔑 Senha nova definida.');
     },
+    'acc-art': () => { if (confirm(`Apagar todos os desenhos da Fazenda de ${acc.trainer}?`)) accRun(() => api('admin', { op: 'clear_farm_art', userId: acc.id }), '🖌️ Desenhos apagados.'); },
     'acc-bracelet': () => { if (confirm(`Tirar o Bracelete Mega de ${acc.trainer}?`)) accRun(() => api('admin', { op: 'remove_bracelet', userId: acc.id }), '🔗 Bracelete removido.'); },
     'map-new': d => openMapEditor(templateMap(d.from === 'blank' ? 'blank' : ov.querySelector('#a-mapfrom').value), mapsSaved),
     'map-edit': d => { const m = (data.maps || []).find(x => x.id === d.id); if (m) openMapEditor({ ...structuredClone(m), id: m.id.replace(/^custom:/, '') }, mapsSaved); },

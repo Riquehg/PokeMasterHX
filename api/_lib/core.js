@@ -1205,6 +1205,15 @@ export async function adminOp(db, user, body) {
       if (!ok) notFound('Usuário não encontrado.');
       return { ok: true };
     }
+    case 'clear_farm_art': { // 🖌️ moderação: apaga os desenhos da Fazenda de um jogador (e tira da decoração)
+      const ok = await mutateProfile(db, body.userId, prof => {
+        const st = { ...(prof.stats || {}) };
+        if (st.farm) st.farm = { ...st.farm, art: [], decor: (st.farm.decor || []).filter(d => !/^art\d$/.test(d.k)) };
+        return { stats: st };
+      });
+      if (!ok) notFound('Usuário não encontrado.');
+      return { ok: true };
+    }
     case 'set_admin': {
       await db.upsertProfile(body.userId, { is_admin: !!body.value });
       return { ok: true };

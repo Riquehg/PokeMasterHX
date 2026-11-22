@@ -13,6 +13,7 @@ import { COMPANION_DECAY_MULT, COMPANION_CARE_BOND } from '../../shared/data/far
 import { RECIPES, FARM_ITEMS, ARTISAN_LEVELS, artisanOf, benchesFor, CANDY_MAX_LEVEL, FERT_HOURS, RATION_HAPPY, INCENSE_EGGS, INCENSE_MULT, dailyOrders, weekId } from '../../shared/data/workshop.js';
 import { addToBag } from './core.js';
 import { CROPS, GOODS, GOODS_CAP, plotsFor, WATER_MULT, GRASS_MULT, WORKER_MULT, HARVEST_XP, BUILDINGS, BUILD_MAX, queueFor, POFFIN_ITEMS, POFFIN_HAPPY, POFFIN_XP, POFFIN_BOND, TORTA_FARM_XP, farmHasType } from '../../shared/data/garden.js';
+import { cleanArt, isArtKey, artIndex, ART_MAX } from '../../shared/data/farmart.js';
 import { myCosmetics, getShop, equippedSkin } from './shop.js';
 
 let shopItems = []; // vitrine (para a skin do treinador nas listas), recarregada a cada chamada
@@ -87,6 +88,7 @@ function view(prof, farm, viewerId) {
     res: mine ? farm.res || {} : undefined,
     pending: mine ? pendingOf(farm) : undefined,
     decor: farm.decor || [],
+    art: farm.art || [],
     likes: farm.likes || 0,
     likedToday: !mine && farm.likesBy?.[viewerId] === day,
     helpedToday: !mine && farm.helpsBy?.[viewerId] === day,
@@ -296,9 +298,36 @@ export async function farmOp(db, user, body) {
     const list = (Array.isArray(body.decor) ? body.decor : []).slice(0, DECOR_MAX).map(d => ({
       k: String(d?.k || ''), x: Math.max(2, Math.min(98, Number(d?.x) || 50)), y: Math.max(4, Math.min(96, Number(d?.y) || 50)),
       ...(d?.f ? { f: 1 } : {}), ...(Number(d?.s) && Number(d.s) !== 1 ? { s: Math.max(0.6, Math.min(1.8, Math.round(Number(d.s) * 10) / 10)) } : {})
-    })).filter(d => FARM_DECOR[d.k] && (FARM_DECOR[d.k].price === 0 || owned.has(decorItemId(d.k)) || (p.stats?.farm?.craftedDecor || []).includes(d.k)));
+    })).filter(d => (isArtKey(d.k) ? !!(p.stats?.farm?.art || [])[artIndex(d.k)] : FARM_DECOR[d.k] && (FARM_DECOR[d.k].price === 0 || owned.has(decorItemId(d.k)) || (p.stats?.farm?.craftedDecor || []).includes(d.k))));
     const { prof } = await save(db, user.id, farm => { farm.decor = list; return {}; });
     return { farm: view(prof, current(prof, now), user.id) };
+  }
+
+  if (body.op === 'farm_art_save') { // 🖌️ salvar um desenho (pixel art 16×16) num dos 8 espaços
+    const i = Number(body.i);
+    if (!Number.isInteger(i) || i < 0 || i >= ART_MAX) bad('Espaço inválido.');
+    const art = cleanArt(body.art);
+    if (!art) bad('Desenho vazio ou inválido.');
+    const { prof } = await save(db, user.id, farm => {
+      const list = [...(farm.art || [])];
+      if (i > list.length) bad('Use o próximo espaço livre.');
+      list[i] = art;
+      farm.art = list.slice(0, ART_MAX);
+      return {};
+    });
+    return { farm: view(prof, current(prof, now), user.id), message: `🖌️ "${art.n}" salvo! Use em 🎨 Decorar.` };
+  }
+  if (body.op === 'farm_art_del') { // apaga um desenho (e tira da decoração; os seguintes sobem uma posição)
+    const i = Number(body.i);
+    const { prof } = await save(db, user.id, farm => {
+      const list = [...(farm.art || [])];
+      if (!list[i]) bad('Desenho não encontrado.');
+      list.splice(i, 1);
+      farm.art = list;
+      farm.decor = (farm.decor || []).filter(d => d.k !== `art${i}`).map(d => (isArtKey(d.k) && artIndex(d.k) > i ? { ...d, k: `art${artIndex(d.k) - 1}` } : d));
+      return {};
+    });
+    return { farm: view(prof, current(prof, now), user.id), message: '🗑️ Desenho apagado.' };
   }
 
   if (body.op === 'farm_daycare') { // 🥚 montar o casal da Creche

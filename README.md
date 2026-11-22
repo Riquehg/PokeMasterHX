@@ -132,6 +132,10 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 
 - **v45 — 📖 ficha da Pokédex + card de status:** `js/ui/dexentry.js` (`dexEntryHtml`: arte normal/shiny, status base com barras, habilidade, dano recebido por tipo com imunidade por habilidade, evolução clicável `dx-go`, golpes com `moveFxChips`, Megas, onde aparece). Card de status: cor por status (`.k-hp/.k-atk/.k-def/.k-spe`), destaque da natureza, habilidade em `<details>` (toque para ler), layout mais enxuto no celular; texto da Coleção recolhido em "ℹ️ Como funciona".
 
+- **v46 — 💎 Loja:** novos tipos `capfx` (efeito de captura: `CAPFX_PRESETS`, `capFxBurst`/`capFxDemo` em `js/ui/fx.js`, passado em `captureAnim` pelo `game.js` a partir de `cosmetic.capfx`) e `trail` (rastro do peão: `TRAIL_PRESETS`, `.trail.tr-*` no `tokenHtml`). 8 molduras novas (`FRAME_PRESETS` + `.frame-*`/`.tf-*`) e as que faltavam na vitrine; 8 brilhos de captura que existiam mas não estavam à venda. `equippedCosmetic`/`sanitizeCosmetic` levam `capfx`/`trail` para a partida. Prévias na Loja (`cfx-try`, `.cos-frame`, `.cos-trail`).
+
+- **v47 — 🌾 Fazenda viva + 🖌️ Ateliê:** `DECOR_FX`/`TAP_FX` em `js/ui/farm.js` (animação por enfeite em `.fm-dk`, partículas de água/faísca/fumaça/pétala, toque com `tapDecor`), vagalumes `.fm-fly` à noite e borboletas `.fm-bfly` de dia. Ateliê: `shared/data/farmart.js` (`ART_PALETTE` 16 cores, `cleanArt`, `artSvg` → SVG nítido), `stats.farm.art` (até 8), decoração aceita `k: 'art0'..'art7'`; ops `farm_art_save {i, art:{n,p}}` e `farm_art_del {i}` (renumera a decoração); admin `clear_farm_art` + botão 🖌️ no suporte de contas. Editor com lápis/balde/borracha/conta-gotas/espelho/virar/desfazer e pintura por arraste (pointer events).
+
 ## 3. Publicar (passo a passo, só pelo navegador)
 
 ### 3.1 Supabase

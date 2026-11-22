@@ -1118,3 +1118,51 @@ test('📖 ficha da Pokédex: status, habilidade, fraquezas, evolução e golpes
   assert.match(html, /Charmeleon/);
   assert.match(html, /Mega Charizard/);
 });
+
+// ---------------------------------------------------------------- v46 💎 Loja: efeito de captura, rastro, molduras
+import { DEFAULT_SHOP as _DS, sanitizeCosmetic as _san, EQUIP_KINDS as _EK } from '../shared/data/cosmetics.js';
+test('💎 Loja v46: efeito de captura, rastro do peão e molduras novas equipáveis e levadas para a partida', async () => {
+  assert.ok(_EK.includes('capfx') && _EK.includes('trail'));
+  assert.equal(_DS.items.filter(i => i.kind === 'capfx').length, 12);
+  assert.equal(_DS.items.filter(i => i.kind === 'trail').length, 12);
+  assert.ok(_DS.items.filter(i => i.kind === 'frame').length >= 15);
+  assert.deepEqual(_san({ capfx: 'master', trail: 'coins', frame: 'royal', aura: 'xx' }), { capfx: 'master', trail: 'coins', frame: 'royal' });
+  assert.equal(_san({ capfx: '<script>' }), null);
+  // compra e equipa
+  const { db, admin, us: [a] } = await users(1);
+  const { shopOp, equippedCosmetic: _eqc } = await import('../api/_lib/shop.js');
+  await db.walletAdd(a.id, 2000, 0);
+  for (const [id, slot] of [['capfx_master', 'capfx'], ['trail_coins', 'trail'], ['frame_royal', 'frame']]) {
+    await shopOp(db, a, { op: 'buy', itemId: id });
+    await shopOp(db, a, { op: 'equip', slot, itemId: id });
+  }
+  const c = await _eqc(db, await db.getProfile(a.id));
+  assert.equal(c.capfx, 'master');
+  assert.equal(c.trail, 'coins');
+  assert.equal(c.frame, 'royal');
+});
+
+// ---------------------------------------------------------------- v47 🖌️ Ateliê da Fazenda
+import { artSvg, cleanArt } from '../shared/data/farmart.js';
+test('🖌️ Ateliê: salvar desenho, usar na decoração, apagar (renumera) e moderação do admin', async () => {
+  const { db, admin, us: [a] } = await users(1);
+  const px = '.'.repeat(100) + '4'.repeat(20) + '.'.repeat(136);
+  assert.equal(cleanArt({ p: '.'.repeat(256) }), null);           // vazio não vale
+  assert.equal(cleanArt({ p: 'z'.repeat(256) }), null);           // caractere inválido
+  assert.equal(cleanArt({ n: '<b>x</b>', p: px }).n, 'bx/b');     // nome sem HTML
+  assert.match(artSvg(px), /^data:image\/svg\+xml/);
+  await profileOp(db, a, { op: 'farm_get' });
+  await assert.rejects(profileOp(db, a, { op: 'farm_art_save', i: 1, art: { n: 'A', p: px } }), /próximo espaço/);
+  let r = await profileOp(db, a, { op: 'farm_art_save', i: 0, art: { n: 'Coração', p: px } });
+  r = await profileOp(db, a, { op: 'farm_art_save', i: 1, art: { n: 'Estrela', p: px.replace(/4/g, '6') } });
+  assert.equal(r.farm.art.length, 2);
+  r = await profileOp(db, a, { op: 'farm_decor', decor: [{ k: 'art0', x: 30, y: 40 }, { k: 'art1', x: 60, y: 50 }, { k: 'art5', x: 10, y: 10 }] });
+  assert.deepEqual(r.farm.decor.map(d => d.k), ['art0', 'art1']); // art5 não existe
+  r = await profileOp(db, a, { op: 'farm_art_del', i: 0 });
+  assert.deepEqual(r.farm.decor.map(d => d.k), ['art0']);           // a Estrela virou art0
+  assert.equal(r.farm.art[0].n, 'Estrela');
+  await adminOp(db, admin, { op: 'clear_farm_art', userId: a.id });
+  const f = (await profileOp(db, a, { op: 'farm_get' })).farm;
+  assert.equal(f.art.length, 0);
+  assert.equal(f.decor.length, 0);
+});

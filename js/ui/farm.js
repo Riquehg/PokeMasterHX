@@ -14,6 +14,22 @@ import { MEGAS, MEGA_KEYS, fragItemId } from '../../shared/data/megas.js';
 import { TYPES, TYPE_LABELS } from '../../shared/rules/types.js';
 import { defIvOf, ivPercent } from '../../shared/rules/monsters.js';
 import { natureLabel } from '../../shared/data/natures.js';
+import { ART_PALETTE, ART_SIZE, ART_MAX, artSvg, isArtKey, artIndex } from '../../shared/data/farmart.js';
+
+// ✨ v47 — decoração viva: animação por enfeite + o que acontece ao tocar
+const DECOR_FX = {
+  tree: 'sway', pine: 'sway', flower: 'sway', sakura: 'sway petals', palm: 'sway', tulip: 'sway', sunflower: 'sway', mushroom: 'bob',
+  windmill: 'spin', ferris: 'spin', fountain: 'water', campfire: 'fire', lantern: 'glow', house: 'smoke', barn: 'smoke', well: 'bob',
+  tent: 'breeze', bench: '', mailbox: 'hop', pokeball: 'shake', trophy: 'shine', rainbow: 'shine', moon: 'shine', star: 'shine twinkle',
+  castle: 'shine', statue: '', goldstatue: 'shine', crown: 'shine twinkle', rock: '', fence: ''
+};
+const TAP_FX = {
+  tree: ['🍃', '🍎'], pine: ['🍃', '🌰'], flower: ['🌼', '🐝'], sakura: ['🌸', '🌸'], palm: ['🥥', '🍃'], tulip: ['🌷', '🦋'], sunflower: ['🌻', '🐝'],
+  mushroom: ['✨', '🍄'], windmill: ['💨', '🌾'], ferris: ['🎵', '✨'], fountain: ['💧', '🪙'], campfire: ['🔥', '✨'], lantern: ['✨', '🏮'],
+  house: ['💨', '🏡'], barn: ['🐮', '💨'], well: ['💧', '🪣'], tent: ['💤', '⛺'], mailbox: ['✉️', '💌'], pokeball: ['✨', '⭐'], trophy: ['🏆', '✨'],
+  rainbow: ['🌈', '✨'], moon: ['🌙', '✨'], star: ['⭐', '🌟'], castle: ['🏰', '🎺'], crown: ['👑', '✨'], goldstatue: ['🏅', '✨'], statue: ['🗿', '💤'],
+  bench: ['☕', '📖'], rock: ['🪨', '🐛'], fence: ['🪵', '🐦']
+};
 
 const hash = s => { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
 // zonas da cena (3 × 2), em %
@@ -54,7 +70,15 @@ export async function openFarm(ctx, profile, userId = null) {
   ov.querySelector('.modal').classList.add('fm-modal');
 
   const load = async (uid = userId) => { farm = (await api('profile', uid ? { op: 'farm_get', userId: uid } : { op: 'farm_get' })).farm; userId = farm.mine ? null : farm.owner.id; render(); };
-  const ownedDecor = () => Object.entries(FARM_DECOR).filter(([k, d]) => d.price === 0 || (farm.ownedDecor || []).includes(k));
+  const ownedDecor = () => [
+    ...Object.entries(FARM_DECOR).filter(([k, d]) => d.price === 0 || (farm.ownedDecor || []).includes(k)),
+    ...(farm.art || []).map((a, i) => [`art${i}`, { name: a.n, art: a.p }]) // 🖌️ desenhos do jogador
+  ];
+  /** Ícone de um enfeite: emoji ou o desenho do Ateliê. */
+  const decorIcon = k => {
+    if (isArtKey(k)) { const a = (farm.art || [])[artIndex(k)]; return a ? `<img class="fm-art" src="${artSvg(a.p)}" alt="${esc(a.n)}" draggable="false">` : ''; }
+    return FARM_DECOR[k]?.icon || '';
+  };
 
   // posições fixas por bioma (grade 3×2 dentro de uma área segura → ninguém sai do campo nem fica em cima do outro)
   const SPOTS = [[0.28, 0.55], [0.72, 0.58], [0.5, 0.82], [0.22, 0.86], [0.78, 0.88], [0.5, 0.5]];
@@ -89,7 +113,9 @@ export async function openFarm(ctx, profile, userId = null) {
     return `<div class="fm-scene dp-${daypart()} ${decorMode || houseMode ? 'decorating' : ''}">
       ${BIOME_IDS.map(b => { const z = zoneBox(b); return `<div class="fm-zone fm-${b}" style="left:${z.x}%;top:${z.y}%;width:${z.w}%;height:${z.h}%"><div class="fm-amb">${AMBIENT[b] || ''}</div><span class="fm-zlabel">${FARM_BIOMES[b].icon} ${FARM_BIOMES[b].name}</span></div>`; }).join('')}
       <div class="fm-cloud c1"></div><div class="fm-cloud c2"></div>
-      ${decor.map((d, i) => { const v = toView(d.x, d.y); return `<span class="fm-decor ${decorMode && decorSel === i ? 'dsel' : ''}" data-di="${i}" style="left:${v.x}%;top:${v.y}%;z-index:${Math.round(v.y)};--ds:${d.s || 1};--df:${d.f ? -1 : 1}">${FARM_DECOR[d.k]?.icon || ''}</span>`; }).join('')}
+      ${decor.map((d, i) => { const v = toView(d.x, d.y); const fx = (DECOR_FX[d.k] || (isArtKey(d.k) ? 'bob' : '')).split(' ').filter(Boolean); const h = (i * 37) % 10;
+        return `<span class="fm-decor ${fx.map(c => 'dfx-' + c).join(' ')} ${decorMode && decorSel === i ? 'dsel' : ''}" data-di="${i}" data-k="${esc(d.k)}" style="left:${v.x}%;top:${v.y}%;z-index:${Math.round(v.y)};--ds:${d.s || 1};--df:${d.f ? -1 : 1};--dd:-${h * 0.37}s"><span class="fm-dk">${decorIcon(d.k)}</span>${fx.includes('water') ? '<i class="dw"></i><i class="dw w2"></i><i class="dw w3"></i>' : fx.includes('fire') ? '<i class="df"></i><i class="df f2"></i>' : fx.includes('smoke') ? '<i class="ds"></i><i class="ds s2"></i>' : fx.includes('petals') ? '<i class="dp"></i><i class="dp p2"></i>' : ''}</span>`; }).join('')}
+      ${daypart() === 'night' ? Array.from({ length: 7 }, (_, i) => `<i class="fm-fly" style="left:${8 + i * 13}%;top:${30 + ((i * 29) % 55)}%;--fd:${6 + (i % 4)}s;--fl:-${i * 1.3}s"></i>`).join('') : Array.from({ length: 3 }, (_, i) => `<i class="fm-bfly" style="top:${25 + i * 22}%;--bd:${16 + i * 5}s;--bl:-${i * 6}s">${['🦋', '🦋', '🐝'][i]}</i>`).join('')}
       ${hs ? (() => { const v = toView(hs.x, hs.y); return `<div class="fm-house" style="left:${v.x}%;top:${v.y}%;z-index:${Math.round(v.y)}" data-act="house-info">`; })() + `<span class="fm-house-ic">🏡</span>
         ${comp ? `<img class="fm-comp" src="${leaderUrl(comp.sprite)}" alt="${esc(comp.name)}" title="${esc(comp.name)} cuidando da Fazenda">` : '<span class="fm-house-tag">vazia</span>'}</div>` : ''}
       ${placeMons().map(({ s, x, y }) => { const h = hash(s.uid); const swim = s.biome === 'lago' && ['water', 'ice'].includes(getSpecies(s.sp)?.types?.[0]);
@@ -154,13 +180,14 @@ export async function openFarm(ctx, profile, userId = null) {
       const list = ownedDecor();
       const cur = decorSel !== null ? decorDraft[decorSel] : null;
       return `<div class="fm-decorbar"><span class="tiny muted">✏️ <b>Modo edição</b> (${decorDraft.length}/${DECOR_MAX}): escolha um enfeite e toque na Fazenda para colocar. Toque num enfeite para selecionar e <b>arraste</b> para mover.</span>
-        ${cur ? `<div class="fm-dtools"><span class="fm-dsel-ic">${FARM_DECOR[cur.k]?.icon || ''}</span>
+        ${cur ? `<div class="fm-dtools"><span class="fm-dsel-ic">${decorIcon(cur.k)}</span>
           <button class="btn sm" data-act="dflip" title="Espelhar">↔️ Virar</button>
           <button class="btn sm" data-act="dsize" data-v="-1" title="Menor">➖</button><span class="tiny">${Math.round((cur.s || 1) * 100)}%</span><button class="btn sm" data-act="dsize" data-v="1" title="Maior">➕</button>
           <button class="btn sm" data-act="ddup" title="Duplicar">📄 Copiar</button>
           <button class="btn sm red" data-act="ddel" title="Guardar (tirar da Fazenda)">📦 Guardar</button>
           <button class="btn sm" data-act="dunsel">OK</button></div>` : ''}
-        <div class="fm-palette">${list.map(([k, d]) => `<button class="fm-dbtn ${decorPick === k ? 'on' : ''}" data-act="dpick" data-k="${k}" title="${esc(d.name)}">${d.icon}</button>`).join('')}</div>
+        <div class="fm-palette">${list.map(([k, d]) => `<button class="fm-dbtn ${decorPick === k ? 'on' : ''} ${d.art ? 'art' : ''}" data-act="dpick" data-k="${k}" title="${esc(d.name)}">${decorIcon(k)}</button>`).join('')}
+          <button class="fm-dbtn new-art" data-act="tab" data-t="art" title="Desenhar um enfeite seu">🖌️</button></div>
         <div class="row" style="gap:6px"><button class="btn sm" data-act="dcancel">Cancelar</button><button class="btn sm" data-act="dundo" ${decorHist.length ? '' : 'disabled'}>↩️ Desfazer</button><button class="btn sm" data-act="dclear" ${decorDraft.length ? '' : 'disabled'}>🧹 Guardar tudo</button><button class="btn sm primary" data-act="dsave">💾 Salvar decoração</button>
         <span class="tiny muted">Mais decorações na 💎 Loja (só visual).</span></div></div>`;
     }
@@ -174,6 +201,7 @@ export async function openFarm(ctx, profile, userId = null) {
       <button class="btn green" data-act="care">❤️ Carinho em todos</button>
       <button class="btn" data-act="add" ${farm.slots.length >= farm.slotsMax ? 'disabled' : ''}>➕ Colocar Pokémon</button>
       <button class="btn" data-act="decor">🎨 Decorar</button>
+      <button class="btn" data-act="tab" data-t="art">🖌️ Ateliê</button>
       <button class="btn" data-act="house">🏡 ${farm.house ? 'Mover casinha' : 'Casinha'}</button>
       <button class="btn ${(farm.eggs || []).some(e => e.ready) ? 'primary' : ''}" data-act="tab" data-t="creche">🥚 Creche${(farm.eggs || []).length ? ` (${farm.eggs.length})` : ''}</button>
       <button class="btn ${hortaReady() ? 'primary' : ''}" data-act="tab" data-t="horta">🌱 Horta${hortaReady() ? ' ✨' : ''}</button>
@@ -181,6 +209,77 @@ export async function openFarm(ctx, profile, userId = null) {
       <button class="btn" data-act="tab" data-t="res">📦 Recursos</button>
       <button class="btn" data-act="tab" data-t="visit">👥 Visitar</button></div>`;
   };
+
+  /** ✨ efeitinho ao tocar num enfeite */
+  const tapDecor = el => {
+    const fx = el.closest('.fm-scene')?.querySelector('.fm-fx');
+    if (!fx) return;
+    el.classList.remove('tapped'); void el.offsetWidth; el.classList.add('tapped');
+    const k = el.dataset.k;
+    const set = TAP_FX[k] || (isArtKey(k) ? ['✨', '💖'] : ['✨']);
+    for (let i = 0; i < 6; i++) {
+      const p = document.createElement('i');
+      p.className = 'fm-pop tap';
+      p.textContent = set[i % set.length];
+      p.style.left = el.style.left; p.style.top = el.style.top;
+      p.style.setProperty('--dx', `${(i - 2.5) * 14}px`); p.style.animationDelay = `${i * 0.07}s`;
+      fx.appendChild(p);
+      setTimeout(() => p.remove(), 1800);
+    }
+  };
+
+  // ---------------------------------------------------------------- 🖌️ Ateliê (pixel art 16×16)
+  let artSlot = null, artPx = null, artColor = 0, artTool = 'pen', artMirror = false, artHist = [], artName = '';
+  const blankArt = () => '.'.repeat(ART_SIZE * ART_SIZE);
+  const artOpen = i => { const a = (farm.art || [])[i]; artSlot = i; artPx = a ? a.p : blankArt(); artName = a ? a.n : `Enfeite ${i + 1}`; artHist = []; };
+  const artView = () => {
+    const list = farm.art || [];
+    if (artSlot === null) {
+      return `<p class="small muted">Desenhe seus próprios enfeites em pixel art (16×16) e coloque na Fazenda pelo 🎨 Decorar. Até ${ART_MAX} desenhos. Quem visita a sua Fazenda vê — capriche! (Desenhos impróprios podem ser apagados pela moderação.)</p>
+        <div class="art-slots">${Array.from({ length: ART_MAX }, (_, i) => {
+          const a = list[i];
+          if (a) return `<div class="art-slot"><img src="${artSvg(a.p)}" alt=""><b class="tiny">${esc(a.n)}</b><div class="row" style="gap:4px"><button class="btn sm" data-act="art-edit" data-i="${i}">✏️ Editar</button><button class="btn sm red" data-act="art-del" data-i="${i}">🗑️</button></div></div>`;
+          return i === list.length ? `<button class="art-slot new" data-act="art-edit" data-i="${i}"><span>➕</span><b class="tiny">Novo desenho</b></button>` : `<div class="art-slot empty"><span class="tiny muted">vazio</span></div>`;
+        }).join('')}</div>
+        <button class="btn" data-act="tab" data-t="farm" style="margin-top:8px">← Voltar</button>`;
+    }
+    const cells = Array.from({ length: ART_SIZE * ART_SIZE }, (_, i) => { const c = artPx[i]; return `<i data-px="${i}" style="${c === '.' ? '' : `background:${ART_PALETTE[parseInt(c, 16)]}`}"></i>`; }).join('');
+    return `<div class="art-editor">
+      <div class="art-left"><div class="art-grid" id="art-grid">${cells}</div>
+        <div class="art-prev"><span class="tiny muted">Na Fazenda:</span><img id="art-prev" src="${artSvg(artPx) || ''}" alt=""><img class="big" id="art-prev2" src="${artSvg(artPx) || ''}" alt=""></div></div>
+      <div class="art-side">
+        <input class="input" id="art-name" maxlength="18" value="${esc(artName)}" placeholder="Nome do enfeite">
+        <div class="art-pal">${ART_PALETTE.map((c, i) => `<button class="art-sw ${artColor === i && artTool !== 'erase' ? 'on' : ''}" data-act="art-color" data-c="${i}" style="background:${c}" title="${c}"></button>`).join('')}</div>
+        <div class="art-tools">
+          <button class="btn sm ${artTool === 'pen' ? 'primary' : ''}" data-act="art-tool" data-t="pen">✏️ Lápis</button>
+          <button class="btn sm ${artTool === 'fill' ? 'primary' : ''}" data-act="art-tool" data-t="fill">🪣 Balde</button>
+          <button class="btn sm ${artTool === 'erase' ? 'primary' : ''}" data-act="art-tool" data-t="erase">🧽 Borracha</button>
+          <button class="btn sm ${artTool === 'pick' ? 'primary' : ''}" data-act="art-tool" data-t="pick">💉 Conta-gotas</button>
+          <button class="btn sm ${artMirror ? 'primary' : ''}" data-act="art-mirror" title="Desenha dos dois lados ao mesmo tempo">🪞 Espelho</button>
+          <button class="btn sm" data-act="art-undo" ${artHist.length ? '' : 'disabled'}>↩️ Desfazer</button>
+          <button class="btn sm" data-act="art-flip">↔️ Virar</button>
+          <button class="btn sm red" data-act="art-clear">🧹 Limpar</button>
+        </div>
+        <div class="row" style="gap:6px;margin-top:8px"><button class="btn" data-act="art-cancel">Cancelar</button><button class="btn primary" data-act="art-save">💾 Salvar desenho</button></div>
+        <p class="tiny muted">Dica: arraste o dedo para pintar. O fundo transparente deixa o enfeite "recortado" na Fazenda.</p>
+      </div></div>`;
+  };
+  const artSnap = () => { artHist.push(artPx); if (artHist.length > 40) artHist.shift(); };
+  const artPaintCell = (i, grid) => {
+    const ch = artTool === 'erase' ? '.' : artColor.toString(16);
+    const put = j => { if (artPx[j] === ch) return; artPx = artPx.slice(0, j) + ch + artPx.slice(j + 1); const cell = grid?.children[j]; if (cell) cell.style.background = ch === '.' ? '' : ART_PALETTE[parseInt(ch, 16)]; };
+    put(i);
+    if (artMirror) { const x = i % ART_SIZE, y = Math.floor(i / ART_SIZE); put(y * ART_SIZE + (ART_SIZE - 1 - x)); }
+  };
+  const artFill = i => {
+    const target = artPx[i], ch = artColor.toString(16);
+    if (target === ch) return;
+    const a = artPx.split(''), st = [i];
+    while (st.length) { const j = st.pop(); if (a[j] !== target) continue; a[j] = ch; const x = j % ART_SIZE, y = Math.floor(j / ART_SIZE);
+      if (x > 0) st.push(j - 1); if (x < ART_SIZE - 1) st.push(j + 1); if (y > 0) st.push(j - ART_SIZE); if (y < ART_SIZE - 1) st.push(j + ART_SIZE); }
+    artPx = a.join('');
+  };
+  const artRefreshPrev = () => { const u = artSvg(artPx); ['art-prev', 'art-prev2'].forEach(id => { const im = ov.querySelector('#' + id); if (im) im.src = u; }); };
 
   // ---------------------------------------------------------------- 🌱 Horta e 🏭 Construções
   const hortaReady = () => (farm.garden?.plots || []).some(p => p?.ready) || Object.values(farm.buildings || {}).some(b => b.jobs.some(j => j.ready));
@@ -345,11 +444,37 @@ export async function openFarm(ctx, profile, userId = null) {
 
   function render() {
     if (!farm) return;
-    const bodyHtml = head() + (tab === 'res' ? resView() : tab === 'visit' ? visitView() : tab === 'add' ? addView() : tab === 'creche' ? crecheView() : tab === 'pair' ? pairView() : tab === 'oficina' ? oficinaView() : tab === 'horta' ? hortaView() : scene() + actions() + monPanel());
+    const bodyHtml = head() + (tab === 'res' ? resView() : tab === 'visit' ? visitView() : tab === 'add' ? addView() : tab === 'creche' ? crecheView() : tab === 'pair' ? pairView() : tab === 'oficina' ? oficinaView() : tab === 'horta' ? hortaView() : tab === 'art' ? artView() : scene() + actions() + monPanel());
     setModalBody('farm', bodyHtml);
   }
 
   const run = async (fn, okMsg) => { try { const r = await fn(); if (r?.farm) farm = r.farm; if (r?.profile) { me = r.profile; ctx?.onProfile?.(me); } render(); if (okMsg) toast(typeof okMsg === 'function' ? okMsg(r) : okMsg, 'good'); return r; } catch (e) { toast(e.message, 'bad'); } };
+
+  // 🖌️ pintar no Ateliê (clicar e arrastar)
+  let painting = false;
+  const cellAt = e => { const el = document.elementFromPoint(e.clientX, e.clientY); return el?.dataset?.px !== undefined && el.closest('#art-grid') ? Number(el.dataset.px) : null; };
+  ov.addEventListener('pointerdown', e => {
+    const grid = e.target.closest('#art-grid');
+    if (!grid || artSlot === null) return;
+    const i = cellAt(e);
+    if (i === null) return;
+    e.preventDefault();
+    artName = ov.querySelector('#art-name')?.value || artName;
+    if (artTool === 'pick') { const c = artPx[i]; if (c !== '.') { artColor = parseInt(c, 16); artTool = 'pen'; render(); } return; }
+    artSnap();
+    if (artTool === 'fill') { artFill(i); render(); return; }
+    painting = true;
+    artPaintCell(i, grid);
+    artRefreshPrev();
+  });
+  ov.addEventListener('pointermove', e => {
+    if (!painting) return;
+    const i = cellAt(e);
+    if (i !== null) { artPaintCell(i, ov.querySelector('#art-grid')); artRefreshPrev(); }
+  });
+  const stopPaint = () => { if (painting) { painting = false; const u = ov.querySelector('.art-tools [data-act="art-undo"]'); if (u) u.disabled = false; } };
+  ov.addEventListener('pointerup', stopPaint);
+  ov.addEventListener('pointerleave', stopPaint);
 
   // ✏️ arrastar um enfeite (modo edição)
   let drag = null;
@@ -386,7 +511,11 @@ export async function openFarm(ctx, profile, userId = null) {
       run(() => api('profile', { op: 'farm_house', x: pos.x, y: pos.y }), farm.companion || farm.hasCompanion ? '🏡 Casinha no lugar!' : '🏡 Casinha pronta — equipe um companheiro para morar nela.');
       return;
     }
-    if (!decorMode) return;
+    if (!decorMode) { // ✨ tocar num enfeite: efeitinho (só visual)
+      const dd = e.target.closest('.fm-decor');
+      if (dd) tapDecor(dd);
+      return;
+    }
     if (dragMoved) { dragMoved = false; return; }
     const d = e.target.closest('.fm-decor');
     if (d) { decorSel = Number(d.dataset.di); render(); return; }
@@ -441,6 +570,21 @@ export async function openFarm(ctx, profile, userId = null) {
     dundo: () => { if (!decorHist.length) return; decorDraft = decorHist.pop(); decorSel = null; render(); },
     dclear: () => { if (!confirm('Guardar todas as decorações? (você pode colocar de novo depois)')) return; snap(); decorDraft = []; decorSel = null; render(); },
     dpick: d => { decorPick = d.k; render(); },
+    'art-edit': d => { artOpen(Number(d.i)); tab = 'art'; render(); },
+    'art-del': d => { if (!confirm('Apagar este desenho? Ele sai da decoração também.')) return; return run(() => api('profile', { op: 'farm_art_del', i: Number(d.i) }), r => r.message); },
+    'art-color': d => { artColor = Number(d.c); if (artTool === 'erase' || artTool === 'pick') artTool = 'pen'; render(); },
+    'art-tool': d => { artTool = d.t; render(); },
+    'art-mirror': () => { artMirror = !artMirror; render(); },
+    'art-undo': () => { if (artHist.length) { artPx = artHist.pop(); render(); } },
+    'art-flip': () => { artSnap(); const rows = []; for (let y = 0; y < ART_SIZE; y++) rows.push(artPx.slice(y * ART_SIZE, (y + 1) * ART_SIZE).split('').reverse().join('')); artPx = rows.join(''); render(); },
+    'art-clear': () => { artSnap(); artPx = blankArt(); render(); },
+    'art-cancel': () => { artSlot = null; render(); },
+    'art-save': () => {
+      const n = ov.querySelector('#art-name')?.value || artName;
+      if (!/[0-9a-f]/.test(artPx)) return toast('Desenhe alguma coisa primeiro 🙂', 'bad');
+      const i = artSlot;
+      return run(async () => { const r = await api('profile', { op: 'farm_art_save', i, art: { n, p: artPx } }); artSlot = null; return r; }, r => r.message);
+    },
     plot: d => { plantAt = Number(d.i); render(); },
     'plot-x': () => { plantAt = null; render(); },
     plant: d => { const i = plantAt; plantAt = null; return run(() => api('profile', { op: 'farm_plant', plot: i, crop: d.k }), r => r.message); },
