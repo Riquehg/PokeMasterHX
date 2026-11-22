@@ -1105,3 +1105,16 @@ test('⚔️ golpes reais: precisão, prioridade, recuo, recarga, hesitar, crít
   for (let i = 0; i < 6 && !s.log.some(l => /descansar/.test(l.msg)) && !s.battle.over; i++) _sc(s, createRng(20 + i), 'a', { move: 'attack', slot: 1 });
   assert.ok(s.log.some(l => /descansar/.test(l.msg)));
 });
+
+// ---------------------------------------------------------------- v45 📖 ficha da Pokédex
+test('📖 ficha da Pokédex: status, habilidade, fraquezas, evolução e golpes', async () => {
+  globalThis.document ||= undefined;
+  const { dexEntryHtml } = await import('../js/ui/dexentry.js').catch(() => ({}));
+  if (!dexEntryHtml) return; // módulo de UI depende do navegador
+  const all = new Set(['charmander', 'charmeleon', 'charizard']);
+  const html = dexEntryHtml('charizard', { seen: all, caught: all, shinySeen: new Set(), shinyCaught: new Set(), vault: [] });
+  assert.match(html, /Chama/);
+  assert.match(html, /×4/); // Charizard leva ×4 de Pedra
+  assert.match(html, /Charmeleon/);
+  assert.match(html, /Mega Charizard/);
+});

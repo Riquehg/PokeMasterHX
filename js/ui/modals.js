@@ -1,4 +1,5 @@
 import { tmPickerHtml } from './common.js';
+import { dexEntryHtml } from './dexentry.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
 // Janelas da partida: loja, PC, mochila, voo, Pokédex, ficha do treinador, detalhes do Pokémon e regras.
 import { SPECIES_LIST, getSpecies } from '../../shared/data/pokemon.js';
@@ -281,25 +282,11 @@ export function openDex(session, extraCaught = [], extraSeen = [], extra = {}) {
             <p class="tiny muted">Fragmentos: 💎 Mega Raids e encontros com energia Mega. A pedra sai na 🔨 Oficina (Grão-Mestre).</p></div></div>`);
     },
     'dex-open': d => {
-      const sp = getSpecies(d.id);
-      if (!seen.has(sp.id)) return;
-      const evo = sp.evolvesTo ? `${getSpecies(sp.evolvesTo).name} (${sp.evolutionLevel ? 'Nv. ' + sp.evolutionLevel : 'Pedra Evolutiva'})` : 'não evolui';
-      const from = sp.evolvesFrom ? getSpecies(sp.evolvesFrom).name : null;
-      const ss = shinySeen.has(sp.id), sc = shinyCaught.has(sp.id);
-      const mine = vault.filter(m => m.sp === sp.id);
-      const conds = [...new Set(movesOf(sp.id).map(m => m.st).filter(Boolean))]; // v44: só o que o golpe causa nos jogos
-      const badges = BADGES_TO_USE[sp.tier] || 0;
-      openModal('dex-entry', `#${String(sp.dex).padStart(3, '0')} ${esc(sp.name)}`, `<div class="row" style="align-items:flex-start">
-          <div class="dex-arts"><div><img src="${monSprite(sp.id)}" alt=""><span class="tiny">Normal</span></div>
-            <div class="${ss ? '' : 'locked'}"><img src="${monSprite(sp.id, true)}" alt=""><span class="tiny">${sc ? '✨ Shiny capturado' : ss ? '✧ Shiny visto' : '✨ Shiny: ainda não viu'}</span></div></div>
-          <div class="grow"><div>${typeChips(sp.types)} <span class="chip">Tier ${sp.tier} · ${TIER_NAMES[sp.tier]}</span> ${sp.mythical ? '<span class="chip mythic">🌟 Mítico</span>' : sp.ultra ? '<span class="chip ultra">🌀 Ultracriatura</span>' : sp.legendary ? '<span class="chip gold">⚡ Lendário</span>' : ''}</div>
-          <div class="small" style="margin-top:6px">${caught.has(sp.id) ? '🔴 Capturado' : '👁️ Só visto'} · HP base ${sp.hp} · Força ${sp.str}${mine.length ? ` · 📦 ${mine.length} na Coleção${mine.some(m => m.shiny) ? ' (✨)' : ''}` : ''}</div>
-          <div class="small">📍 Onde aparece: ${esc(WHERE_TIER[sp.tier])}</div>
-          <div class="small">🎖️ Obedece: ${badges ? `com ${badges} insígnias (se capturado neste tier)` : 'sempre'}</div>
-          <div class="small">Evolução: ${from ? esc(from) + ' → ' : ''}<b>${esc(sp.name)}</b> → ${esc(evo)}</div>
-          ${conds.length ? `<div class="small">Pode causar: ${conds.map(c => `<span class="st-chip" style="--sc:${STATUS[c].color}">${STATUS[c].icon} ${esc(STATUS[c].name)}</span>`).join(' ')}</div>` : ''}
-          ${movesHtml(sp.id)}<div class="tiny muted">Variações do 2º golpe: ${possibleSecondMoves(sp.id).map(m => esc(m.name)).join(', ')}</div>
-          <div class="tiny muted">Cada um nasce com natureza e potencial (IV) próprios — capture de novo para achar um melhor.</div></div></div>`);
+      if (!seen.has(d.id)) return;
+      // 📖 v45: ficha completa (tocar na evolução abre a ficha dela)
+      const ctx = { seen, caught, shinySeen, shinyCaught, vault, where: WHERE_TIER, badges: BADGES_TO_USE, tierNames: TIER_NAMES };
+      const show = id => { const sp = getSpecies(id); const o = openModal('dex-entry', `📖 #${String(sp.dex).padStart(3, '0')} ${esc(sp.name)}`, dexEntryHtml(id, ctx), { wide: true }); bindActions(o, { 'dx-go': x => show(x.id) }); };
+      show(d.id);
     }
   });
 }
@@ -368,6 +355,7 @@ export function openHelp() {
       <p><b>Turno:</b> role o dado e escolha uma das casas piscando. Casas <b>coloridas</b> têm Pokémon do tier da cor (Rosa → Verde → Azul → Vermelha → Amarela). Casas <b>?</b> são eventos (ouro, itens, treinadores, Equipe Rocket, atalhos...). Nas casas de evento <b>Azuis e Vermelhas</b> pode surgir uma <b>RAID</b> contra um lendário: <b>solo</b> ou <b>em grupo</b> (todos escolhem 1 Pokémon e lutam juntos; o HP do lendário cresce com o grupo). Durante a luta em grupo dá para usar Potion/Super Potion ou X Attack no lugar do golpe. Pokébolas só depois de vencer: aí cada um escolhe a bola e tenta capturar, na ordem de quem causou mais dano. As casas de evento <b>Amarelas</b> só têm <b>eventos especiais</b>: Santuário Lendário, Ás da Liga, Chuva de Estrelas (shiny garantido), Tesouro da Liga, Bênção de Mew e Ovo Ancestral. <b>Cidades</b> têm Centro Pokémon (cura grátis), Loja, PC e ginásio.</p>
       <p><b>Batalha:</b> cada rodada os dois lados agem. Dano = ataque × 0,7 + 🎲, multiplicado pela vantagem de tipo (tabela oficial de 18 tipos; tipo duplo multiplica: x4, x2, x0,5, x0,25 ou x0). 🎲6 = crítico (x1,5); 🎲1 = golpe fraco (x0,5). Quem tem mais <b>Velocidade</b> (nível × natureza) ataca primeiro.</p>
       <p><b>Golpes:</b> cada Pokémon tem 2 golpes. O 1º é um golpe rápido do 1º tipo (nunca erra). O 2º é um golpe forte do 2º tipo (ou do mesmo tipo) com 140% de poder, mas erra no 🎲1. Golpe do mesmo tipo do Pokémon ganha +20%. Pokémon de suporte trocam o golpe forte por <b>Recover</b> (cura 40%), <b>Swords Dance</b> (+40% de ataque), <b>Intimidate</b> (−30% no ataque do rival) ou <b>Giga Drain</b> (dano que cura). Escolher o golpe certo para o tipo do rival faz toda a diferença.</p>
+      <p><b>📖 Ficha da Pokédex:</b> toque num Pokémon que você já viu para abrir a ficha completa: arte normal e shiny, status base (HP, ATQ, DEF oficial, VEL), habilidade (passiva), dano recebido por tipo (fraquezas ×2/×4, resistências e imunidades — inclusive por habilidade), linha evolutiva (toque para abrir a ficha da evolução), golpes com todos os efeitos, Megas e onde aparece.</p>
       <p><b>⚔️ Golpes com dados reais:</b> cada golpe usa a precisão, a prioridade e os efeitos oficiais dos jogos. Precisão 95–100% nunca erra; 85–90% erra no 🎲1; 70–80% erra no 🎲1–2; 50–60% erra no 🎲1–3. O poder segue a categoria (rápido, preciso, forte, pesado) e varia um pouco conforme o poder oficial. Efeitos: ⚡ prioridade (Quick Attack, Aqua Jet, Mach Punch... atacam primeiro), 🔥/⚡/🧊/☠️ chance oficial de condição (ex.: Ember 10% de queimar, Thunder 30% de paralisar — golpes que não causam condição nos jogos também não causam aqui), 😵 hesitar (Bite, Waterfall, Rock Slide... se atacar antes, o alvo pode perder a vez), 🎯 crítico alto (Karate Chop, Stone Edge, Night Slash: crítico no 🎲5 ou 6), ↩️ recuo (Double-Edge, Brave Bird, Wild Charge, Head Smash), 🔻 o próprio ataque cai (Overheat, Leaf Storm, Draco Meteor) e 😮‍💨 recarga (Hydro Cannon, Giga Impact: descansa na rodada seguinte). Os chips aparecem no card e nos botões da batalha.</p>
       <p><b>Condições:</b> golpes podem deixar o rival 🔥 <b>Queimado</b> (Fogo: perde HP e ataca mais fraco), ☠️ <b>Envenenado</b> (Veneno: perde 1/8 do HP por rodada), ⚡ <b>Paralisado</b> (Elétrico: 25% de não agir, mais lento), 💤 <b>Dormindo</b> (Planta/Fantasma: perde 1–3 rodadas) ou 🧊 <b>Congelado</b> (Gelo: não age até descongelar). Golpes fortes e pesados têm mais chance. Pokémon do mesmo tipo são imunes. <b>Full Heal</b> (loja) cura qualquer condição durante a luta; ao fim da batalha as condições somem.</p>
       <p><b>🎯 Missões e 🤝 Companheiros:</b> na aba Metas ficam 3 missões fixas (capturar tipos, derrotar tipos, vencer treinadores, Raids...). Ao completar você ganha ouro, itens ou um <b>companheiro</b> (fica na sua conta). O companheiro anda ao lado do seu peão e dá um bônus (Misty em golpes de Água, Blaine chance de queimar, Prof. Oak XP, Enfermeira Joy poções, Jessie &amp; James ouro...). Troque na aba Metas ou no 🤝 do início.</p>

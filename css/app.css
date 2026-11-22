@@ -2044,3 +2044,76 @@ body.in-game .soc-panel { height: min(520px, calc(100dvh - 80px)); }
 /* v44 · ⚔️ efeitos reais dos golpes */
 .pk-move-fx { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; margin-top: 3px; }
 .pk-move-fx span { font-size: 10px; line-height: 1.4; padding: 0 5px; border-radius: 6px; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .12); white-space: nowrap; cursor: help; }
+
+/* ================= v45 · 📖 ficha da Pokédex ================= */
+.dx { display: flex; flex-direction: column; gap: 10px; }
+.dx-head { display: flex; gap: 12px; align-items: center; padding: 10px; border-radius: 16px; overflow: clip;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--t1) 35%, transparent), color-mix(in srgb, var(--t2) 25%, transparent)); border: 1px solid rgba(255, 255, 255, .12); }
+.dx-arts { display: flex; gap: 6px; flex-shrink: 0; }
+.dx-art { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px; border-radius: 12px; background: rgba(0, 0, 0, .25); }
+.dx-art img { width: 96px; height: 96px; object-fit: contain; image-rendering: auto; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .4)); }
+.dx-art span { font-size: 10px; opacity: .85; }
+.dx-art.locked img { filter: brightness(0) opacity(.35); }
+.dx-art.shiny { box-shadow: inset 0 0 0 1px rgba(255, 215, 90, .6); }
+.dx-id { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.dx-id h3 { margin: 0; font-size: 22px; }
+.dx-num { font-size: 12px; opacity: .7; font-weight: 800; }
+.dx-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.dx-sec { padding: 10px; border-radius: 14px; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .08); }
+.dx-sec h4 { margin: 0 0 6px; font-size: 13px; letter-spacing: .3px; }
+.dx-stat { display: grid; grid-template-columns: 40px minmax(0, 1fr) 46px; align-items: center; gap: 8px; margin: 3px 0; font-size: 12px; }
+.dx-sl { font-weight: 800; opacity: .85; }
+.dx-bar { height: 10px; border-radius: 6px; background: rgba(255, 255, 255, .08); overflow: clip; }
+.dx-bar i { display: block; height: 100%; border-radius: 6px; transition: width .4s ease; }
+.dx-stat b { text-align: right; }
+.dx-abil { display: flex; gap: 10px; align-items: center; }
+.dx-abil-ic { font-size: 30px; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: rgba(124, 196, 255, .14); border: 1px solid rgba(124, 196, 255, .35); flex-shrink: 0; }
+.dx-mu { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 3px 0; }
+.dx-mul { width: 30px; font-weight: 900; font-size: 12px; }
+.dx-mu.bad4 .dx-mul { color: #ff5a5a; } .dx-mu.bad .dx-mul { color: #ff9a6b; } .dx-mu.good .dx-mul { color: #8be38b; } .dx-mu.good4 .dx-mul { color: #4fe0a0; } .dx-mu.imm .dx-mul { color: #9ab; }
+.dx-ty { display: inline-block; padding: 1px 7px; border-radius: 6px; font-size: 11px; font-weight: 800; color: #fff; text-shadow: 0 1px 1px rgba(0, 0, 0, .5); }
+.dx-evo { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.dx-evo-mon { display: flex; flex-direction: column; align-items: center; padding: 4px 6px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .12); background: rgba(0, 0, 0, .2); color: inherit; cursor: pointer; font-size: 11px; }
+.dx-evo-mon img { width: 56px; height: 56px; object-fit: contain; }
+.dx-evo-mon.on { border-color: #ffd36b; box-shadow: 0 0 8px rgba(255, 211, 107, .4); }
+.dx-evo-mon.unseen img { filter: brightness(0) opacity(.35); }
+.dx-arrow { display: flex; flex-direction: column; align-items: center; font-weight: 900; opacity: .7; }
+.dx-arrow small { font-size: 9px; font-weight: 600; }
+.dx-moves { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 4px; }
+.dx-move { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding: 5px 7px; border-radius: 10px; background: rgba(0, 0, 0, .2); border-left: 3px solid var(--tc); }
+.dx-move .pk-move-fx { margin: 0; justify-content: flex-start; }
+.dx-megas { display: flex; flex-direction: column; gap: 6px; }
+.dx-mega { display: flex; gap: 8px; align-items: center; }
+.dx-mega img { width: 56px; height: 56px; object-fit: contain; }
+.dx-info > div { margin: 2px 0; }
+@media (max-width: 560px) {
+  .dx-head { flex-direction: column; text-align: center; }
+  .dx-id { align-items: center; }
+  .dx-tags { justify-content: center; }
+  .dx-art img { width: 84px; height: 84px; }
+}
+
+/* ================= v45 · 📊 card de status mais legível (cores por status, celular) ================= */
+.pk-stat.k-hp .pk-bar i { background: linear-gradient(90deg, #2fa65a, #6be38a); }
+.pk-stat.k-atk .pk-bar i { background: linear-gradient(90deg, #e2672f, #ffad6b); }
+.pk-stat.k-def .pk-bar i { background: linear-gradient(90deg, #7b4fd6, #b59bff); }
+.pk-stat.k-spe .pk-bar i { background: linear-gradient(90deg, #d6a12f, #ffe07a); }
+.pk-stat.up .pk-bar { box-shadow: 0 0 0 1px #ff7d7d, 0 0 6px rgba(255, 125, 125, .5); }
+.pk-stat.down .pk-bar { box-shadow: 0 0 0 1px #7db4ff; opacity: .85; }
+.pk-stat.k-hp .pk-sl { color: #8be3a0; } .pk-stat.k-atk .pk-sl { color: #ffb98a; } .pk-stat.k-def .pk-sl { color: #c7b3ff; } .pk-stat.k-spe .pk-sl { color: #ffe38a; }
+.pk-stat.up .pk-sl, .pk-stat.down .pk-sl { font-weight: 900; }
+details.pk-abil { width: 100%; text-align: left; cursor: pointer; }
+details.pk-abil summary { list-style: none; display: flex; align-items: center; gap: 4px; justify-content: center; }
+details.pk-abil summary::-webkit-details-marker { display: none; }
+details.pk-abil summary::after { content: 'ⓘ'; font-size: 10px; opacity: .6; margin-left: 2px; }
+details.pk-abil[open] summary::after { content: '▴'; }
+details.pk-abil > span { display: block; margin-top: 3px; text-align: center; }
+@media (max-width: 520px) {
+  .pk-art { height: 78px; } .pk-art img { max-height: 78px; max-width: 92px; }
+  .pk-card { gap: 3px; }
+  .pk-move { padding: 4px 3px; } .pk-move-name { font-size: 10px; }
+  .pk-move-fx span { font-size: 9px; padding: 0 3px; }
+  .pk-stat { font-size: 9px; }
+  .pk-abil { font-size: 11px; }
+}
+.info-fold { margin: 0 0 6px; } .info-fold summary { cursor: pointer; opacity: .85; } .info-fold[open] summary { margin-bottom: 4px; }

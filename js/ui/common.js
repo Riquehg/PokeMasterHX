@@ -96,7 +96,7 @@ export function statCard(mon, { owner = null, act = '', index = '', extra = '', 
     const up = nat && nat[0] === k, down = nat && nat[1] === k;
     const iv = k === 'def' ? defIvOf(mon) : mon.iv?.[k];
     const tip = k === 'def' ? ` title="Defesa: recebe ${Math.round(defFactor(val) * 100)}% do dano (DEF 70 = 100%)"` : '';
-    return `<div class="pk-stat ${up ? 'up' : down ? 'down' : ''}"${tip}><span class="pk-sl">${label}${up ? '▲' : down ? '▼' : ''}</span>
+    return `<div class="pk-stat k-${k} ${up ? 'up' : down ? 'down' : ''}"${tip}><span class="pk-sl">${label}${up ? '▲' : down ? '▼' : ''}</span>
       <span class="pk-bar"><i style="width:${pct.toFixed(0)}%"></i></span><span class="pk-sv">${val}</span>
       <span class="pk-iv" title="Potencial (IV) de ${label}: ${iv ?? '?'} de ${IV_MAX}">${iv ?? '–'}</span></div>`;
   }).join('');
@@ -157,7 +157,8 @@ function heldLine(mon) {
 /** ✨ Habilidade da espécie (v41). */
 export function abilityLine(mon) {
   const A = ABILITIES[abilityOf(mon?.sp)];
-  return A ? `<div class="pk-abil" title="${esc(A.desc)}">${A.icon} <b>${esc(A.name)}</b> <span class="tiny muted">${esc(A.desc)}</span></div>` : '';
+  // v45: compacta — toque para ler o que faz (cabe melhor no celular)
+  return A ? `<details class="pk-abil" title="${esc(A.desc)}"><summary>${A.icon} <b>${esc(A.name)}</b></summary><span class="tiny">${esc(A.desc)}</span></details>` : '';
 }
 
 export function speciesName(id) {

@@ -130,6 +130,8 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 
 - **v44 — ⚔️ golpes reais:** `shared/data/movedata.js` (gerado do `moves.csv`: poder, precisão, prioridade, condição/chance, hesitar, recuo, crítico alto, queda do próprio ataque, recarga, nunca erra). `moves.js` aplica em cima da categoria (poder ×0,85–1,2 pelo poder oficial; erro por precisão via `missFromAcc`; `desc` gerada). Batalha: ordem por prioridade → Garra Rápida → velocidade; `b.acted`/`b.flinch`; `side.recharge`; condição só pelo `move.st` oficial. UI: `moveFxChips` no card e nos botões da batalha.
 
+- **v45 — 📖 ficha da Pokédex + card de status:** `js/ui/dexentry.js` (`dexEntryHtml`: arte normal/shiny, status base com barras, habilidade, dano recebido por tipo com imunidade por habilidade, evolução clicável `dx-go`, golpes com `moveFxChips`, Megas, onde aparece). Card de status: cor por status (`.k-hp/.k-atk/.k-def/.k-spe`), destaque da natureza, habilidade em `<details>` (toque para ler), layout mais enxuto no celular; texto da Coleção recolhido em "ℹ️ Como funciona".
+
 ## 3. Publicar (passo a passo, só pelo navegador)
 
 ### 3.1 Supabase
