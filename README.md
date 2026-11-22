@@ -128,6 +128,8 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 
 - **v43 — ✨ habilidades reais:** `shared/data/abilitymap.js` (gerado do `pokemon_abilities.csv` do PokeAPI: por nº da Pokédex, a 1ª habilidade — slot 1, 2, oculta — que funciona no jogo; ~80% das espécies). `ABILITIES` em `battlegear.js` com 72 habilidades e efeito real (aperto, absorção/imunidade, redução de dano, contato, ataque, dado, proteção do ataque, condições, troca, clima, Preguiça/Início Lento, Quebra-Molde). Batalha: `abilityImmune`, `defAbil`, `abilAtkMult`, `defAbilMult`, `statusBlocked`, `lowerAtk`/`raiseAtk`, erro/crítico por habilidade, pele que pune (agressor pode desmaiar), Ousadia, Regenerador/Cura Natural em `doSwitch`, Troca de Pele/Corpo de Gelo/Prato de Chuva no fim da rodada, Nado Veloz & cia na velocidade. Chip da habilidade e do item no painel da batalha.
 
+- **v44 — ⚔️ golpes reais:** `shared/data/movedata.js` (gerado do `moves.csv`: poder, precisão, prioridade, condição/chance, hesitar, recuo, crítico alto, queda do próprio ataque, recarga, nunca erra). `moves.js` aplica em cima da categoria (poder ×0,85–1,2 pelo poder oficial; erro por precisão via `missFromAcc`; `desc` gerada). Batalha: ordem por prioridade → Garra Rápida → velocidade; `b.acted`/`b.flinch`; `side.recharge`; condição só pelo `move.st` oficial. UI: `moveFxChips` no card e nos botões da batalha.
+
 ## 3. Publicar (passo a passo, só pelo navegador)
 
 ### 3.1 Supabase

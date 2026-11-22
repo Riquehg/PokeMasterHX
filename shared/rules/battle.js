@@ -294,7 +294,6 @@ export const STATUS = {
 };
 // tipo do golpe → condição que pode causar
 export const TYPE_STATUS = { fire: 'burn', poison: 'poison', electric: 'paralysis', ice: 'freeze', grass: 'sleep', ghost: 'sleep' };
-const INFLICT_CHANCE = { q: 0.08, p: 0.1, s: 0.15, x: 0.25 };
 const IMMUNE = { burn: ['fire'], poison: ['poison', 'steel'], paralysis: ['electric'], freeze: ['ice'], sleep: [] };
 
 export function statusOf(b, si, mon) {
@@ -303,15 +302,13 @@ export function statusOf(b, si, mon) {
 
 function tryInflict(state, rng, defSi, d, move, aSp, a = null) {
   const b = state.battle;
-  const id = TYPE_STATUS[move.type];
+  const id = move.st; // ⚔️ v44: só golpes que causam condição nos jogos (ex.: Ember 10% queimar, Thunder 30% paralisar)
   if (!id || move.kind !== 'dmg') return;
   const side = b.sides[defSi];
   side.status ||= {};
   if (side.status[d.uid]) return; // já tem uma condição
   if (statusBlocked(state, d, id, true)) return; // tipo, habilidade (Imunidade, Insônia, Pó Escudo...)
-  const tier = (move.id || '').match(/_(q|p|s|x)\d*$/)?.[1] || 's';
-  let chance = INFLICT_CHANCE[tier] || 0.15;
-  if (id === 'poison') chance += 0.1;
+  let chance = move.stChance || 0.1;
   { const cb = companionBonus(state, 1 - defSi); if (cb?.inflict === move.type) chance += cb.inflictChance || 0.04; } // companheiro (ex.: Koga) aumenta a chance
   chance *= weatherInflict(state, id); // clima (ex.: Tempestade dobra a paralisia)
   if (a && abilOf(a) === 'serene_grace') chance *= 2; // 🕊️ Graça Serena
@@ -459,6 +456,7 @@ function onEnter(state, si) {
   const me = sideActive(state, side);
   if (!me || me.hp <= 0) return;
   side.entered = { ...(side.entered || {}), [me.uid]: b.round };
+  if (side.recharge) delete side.recharge[me.uid];
   if (side.truant) delete side.truant[me.uid];
   if (abilOf(me) !== 'intimidate') return;
   const foe = sideActive(state, b.sides[1 - si]);
@@ -495,7 +493,7 @@ export function expectedDamage(state, si, move) {
   const mult = typeMultVs(move.type, d, a);
   const stab = getSpecies(a.sp).types.includes(move.type) ? STAB : 1;
   const hit = 1 - (move.miss || 0) / 6;
-  return (atkOf(state, si, unawareVs(state, si)) * 0.7 + 3.5) * (move.power || 1) * mult * stab * hit * gearAbilMult(a, move, b.sides[si]) * defAbilMult(a, d, move.type, mult) * defFactor(statsOf(d).def);
+  return (atkOf(state, si, unawareVs(state, si)) * 0.7 + 3.5) * (move.power || 1) * mult * stab * hit * gearAbilMult(a, move, b.sides[si]) * defAbilMult(a, d, move.type, mult) * defFactor(statsOf(d).def) * (move.recharge ? 0.6 : 1) * (move.selfDrop ? 0.9 : 1) * (move.highCrit ? 1.05 : 1);
 }
 
 /** Melhor golpe para o lado si (usada pela IA dos NPCs e das CPUs). */
@@ -708,7 +706,8 @@ function attackDamage(state, rng, si, slot = 0) {
     return false;
   }
   // 🎲 crítico: Sorte Grande (5 ou 6), Atirador (×2), Armadura/Casco do alvo (sem crítico)
-  let crit = roll === 6 || (ak === 'super_luck' && roll === 5);
+  const critFrom = 6 - (ak === 'super_luck' ? 1 : 0) - (move.highCrit ? 1 : 0); // Sorte Grande e golpes de crítico alto
+  let crit = roll >= critFrom;
   if (crit && DA?.noCrit) crit = false;
   const critMod = crit ? (ak === 'sniper' ? 2 : 1.5) : roll === 1 ? 0.5 : 1;
   const cb = companionBonus(state, si);
@@ -754,6 +753,24 @@ function attackDamage(state, rng, si, slot = 0) {
   log(state, msg, mult >= 2 ? 'good' : mult < 1 ? 'bad' : 'battle');
   fx(state, { k: 'hit', side: si, roll, dmg, mult, crit, weak: roll === 1, type, move: move.name, atkUid: a.uid, defUid: d.uid, hpAfter: d.hp, maxHp: maxHpOf(d) });
   if (drained) fx(state, { k: 'heal', side: si, uid: a.uid, amount: drained, hpAfter: a.hp, maxHp: maxHpOf(a) });
+  // ⚔️ efeitos do golpe (v44): recuo, baixar o próprio ataque, recarga, hesitar
+  if (dmg > 0) {
+    if (move.recoil && a.hp > 0 && ak !== 'rock_head') {
+      const r = Math.min(a.hp, Math.max(1, Math.round(dmg / move.recoil)));
+      a.hp -= r;
+      log(state, `↩️ ${monLabel(state, atkSide)} sofreu ${r} de recuo.`, 'bad');
+      fx(state, { k: 'status_dmg', side: si, uid: a.uid, status: 'recoil', dmg: r, hpAfter: a.hp, maxHp: maxHpOf(a) });
+    }
+    if (move.selfDrop && a.hp > 0) {
+      atkSide.stage ||= {};
+      const st = atkSide.stage[a.uid] || 0;
+      if (st > -2) { atkSide.stage[a.uid] = st - 1; log(state, `🔻 O ataque de ${speciesName(a.sp)} caiu depois do ${move.name}.`); fx(state, { k: 'debuff', side: si, uid: a.uid, move: move.name, stage: st - 1 }); }
+    }
+    if (move.recharge && a.hp > 0) atkSide.recharge = { ...(atkSide.recharge || {}), [a.uid]: true };
+    if (move.flinch && d.hp > 0 && !(b.acted || {})[1 - si] && ak !== 'sheer_force' && abilOf(d) !== 'inner_focus' && rng.chance(move.flinch * (ak === 'serene_grace' ? 2 : 1))) {
+      b.flinch = { ...(b.flinch || {}), [1 - si]: true };
+    }
+  }
   // ✨ depois do golpe: Justiceiro, pele que pune (Estática, Corpo Chamejante, Pele Áspera...)
   if (dmg > 0) {
     if (dk === 'justified' && type === 'dark' && d.hp > 0) raiseAtk(state, 1 - si, d, 'Justiceiro');
@@ -967,13 +984,28 @@ function resolveRound(state, rng, choices) {
   // 🐾 Garra Rápida: 20% de chance de agir primeiro
   const claw = {};
   for (const si of attackers) if (gearOf(sideActive(state, b.sides[si]))?.id === 'quick_claw' && rng.chance(QUICK_CLAW)) claw[si] = 1;
-  attackers.sort((x, y) => (claw[y] || 0) - (claw[x] || 0) || speedOf(y) - speedOf(x) || x - y);
+  // ⚡ prioridade do golpe (Quick Attack, Aqua Jet, Mach Punch...) vem antes de tudo
+  const prioOf = si => monMoves(sideActive(state, b.sides[si]))[Number(choices[si].slot || 0)]?.prio || 0;
+  attackers.sort((x, y) => prioOf(y) - prioOf(x) || (claw[y] || 0) - (claw[x] || 0) || speedOf(y) - speedOf(x) || x - y);
+  b.acted = {}; b.flinch = {};
   for (const si of attackers) if (claw[si]) log(state, `🐾 A Garra Rápida de ${speciesName(sideActive(state, b.sides[si]).sp)} fez ele agir primeiro!`);
   for (const si of attackers) {
     const me = sideActive(state, b.sides[si]);
     if (!me || me.hp <= 0) continue; // desmaiou antes de agir
     const foeNow = sideActive(state, b.sides[1 - si]);
     if (!foeNow || foeNow.hp <= 0) continue;
+    b.acted[si] = true;
+    if (b.sides[si].recharge?.[me.uid]) { // 😮‍💨 golpe de recarga na rodada anterior
+      delete b.sides[si].recharge[me.uid];
+      log(state, `😮‍💨 ${monLabel(state, b.sides[si])} precisa descansar depois do golpe pesado.`);
+      fx(state, { k: 'status_skip', side: si, uid: me.uid, status: 'recharge' });
+      continue;
+    }
+    if (b.flinch[si]) { // 😵 hesitou (o adversário agiu antes com um golpe que faz hesitar)
+      log(state, `😵 ${monLabel(state, b.sides[si])} hesitou e não atacou!`, 'bad');
+      fx(state, { k: 'status_skip', side: si, uid: me.uid, status: 'flinch' });
+      continue;
+    }
     if (!canActWithStatus(state, rng, si)) continue; // dormindo, congelado ou paralisado
     if (abilOf(me) === 'truant') { // 🦥 Preguiça: ataca uma rodada sim, outra não
       const tr = (b.sides[si].truant ||= {});

@@ -11,7 +11,7 @@ import { bestAttack, against, effectivenessLabel, TYPE_COLORS } from '../../shar
 import { whoMustAct } from '../../shared/engine.js';
 import { esc, hpClass } from './dom.js';
 import { monSprite, itemUrl, leaderUrl, typeLabel } from '../config.js';
-import { typeChips, edgeBadge, foeIntelHtml } from './common.js';
+import { typeChips, edgeBadge, foeIntelHtml , moveFxChips } from './common.js';
 import { canTransform } from '../../shared/rules/monsters.js';
 import { ABILITIES, abilityOf } from '../../shared/data/battlegear.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
@@ -129,7 +129,7 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
         : mult === 0 ? '<span class="mv-tag bad">Não afeta</span>' : mult >= 2 ? `<span class="mv-tag good">Super efetivo x${mult}</span>` : mult < 1 ? `<span class="mv-tag bad">Pouco efetivo x${mult}</span>` : '<span class="mv-tag">Normal</span>';
       return `<button class="btn move-btn" style="--tc:${TYPE_COLORS[m.type]}" data-act="b-attack" data-slot="${i}" title="${esc(banned ? '🎀 Faixa Escolhida: só golpes de ataque' : m.desc)}" ${banned ? 'disabled' : ''}>
         <span class="mv-name">${esc(m.name)}</span>
-        <span class="mv-meta">${esc(typeLabel(m.type))}${dmg ? ` · poder ${Math.round((m.power || 1) * (stab ? 1.2 : 1) * 100)}%` : ''}${m.miss ? ` · erra no 🎲${m.miss === 1 ? '1' : '1–2'}` : ''}</span>${tag}</button>`;
+        <span class="mv-meta">${esc(typeLabel(m.type))}${dmg ? ` · poder ${Math.round((m.power || 1) * (stab ? 1.2 : 1) * 100)}%` : ''}${m.miss ? ` · erra no 🎲${m.miss === 1 ? '1' : `1–${m.miss}`}` : ''}</span>${tag}${dmg ? moveFxChips(m) : ''}</button>`;
     }).join('');
     // 🧬 Ditto/Mew: voltar à forma, guardar a forma e usar formas guardadas (até 3)
     const formBar = canTransform(myMon) ? `<div class="form-bar">

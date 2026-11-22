@@ -2040,3 +2040,7 @@ body.in-game .soc-panel { height: min(520px, calc(100dvh - 80px)); }
 
 /* v43 · ✨ habilidade no painel da batalha */
 .abil-chip { background: rgba(124, 196, 255, .14); border: 1px solid rgba(124, 196, 255, .35); font-size: 11px; cursor: help; }
+
+/* v44 · ⚔️ efeitos reais dos golpes */
+.pk-move-fx { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; margin-top: 3px; }
+.pk-move-fx span { font-size: 10px; line-height: 1.4; padding: 0 5px; border-radius: 6px; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .12); white-space: nowrap; cursor: help; }

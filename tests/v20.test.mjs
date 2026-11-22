@@ -932,7 +932,7 @@ test('⚔️ habilidades: Levitação, Robustez, Intimidação e Chama', () => {
     const rr = createRng(77);
     const c = _cm(rr, 'charmeleon', 30, { starter: true, nature: 'Hardy', iv: { hp: 10, str: 10, spe: 10 }, moves: ['fire_q', 'normal_q'] });
     if (lowHp) c.hp = 2;
-    const st = _bw(c, _cm(rr, 'snorlax', 60, { nature: 'Hardy' }), 5);
+    const st = _bw(c, _cm(rr, 'snorlax', 20, { nature: 'Hardy' }), 5); // Snorlax mais lento: o Charmeleon ataca antes
     _sc(st, createRng(1), 'a', { move: 'attack', slot: 0 });
     return _hits(st, 0)[0].dmg;
   };
@@ -1080,4 +1080,28 @@ test('✨ habilidades reais: mapa do PokeAPI, absorção, Gordura Espessa, Está
   }
   assert.ok(para >= 4, `Estática paralisou ${para}/40`);
   assert.ok(hurt >= 30, `Pele Áspera machucou ${hurt}/40`);
+});
+
+// ---------------------------------------------------------------- v44 ⚔️ golpes reais
+import { MOVES as _MV, missFromAcc } from '../shared/data/moves.js';
+test('⚔️ golpes reais: precisão, prioridade, recuo, recarga, hesitar, crítico alto e condição oficial', () => {
+  assert.equal(_MV.fire_s.miss, 0);            // Flamethrower: 100% de precisão
+  assert.equal(_MV.electric_x.miss, 2);        // Thunder: 70%
+  assert.equal(_MV.flying_p.miss, 0);          // Aerial Ace: nunca erra
+  assert.equal(missFromAcc(50), 3);
+  assert.equal(_MV.fire_q.st, 'burn');
+  assert.equal(_MV.grass_q.st, undefined);     // Razor Leaf não faz dormir
+  assert.ok(_MV.normal_p.prio > 0 && _MV.water_x2.recharge && _MV.normal_x.recoil === 3 && _MV.fire_x2.selfDrop && _MV.fighting_q.highCrit);
+  // ⚡ prioridade: Quick Attack de um Rattata lento acerta antes do Jolteon
+  let s = _bw(_cm(createRng(1), 'rattata', 10, { starter: true, moves: ['normal_q', 'normal_p'] }), _cm(createRng(2), 'jolteon', 50), 4);
+  _sc(s, createRng(3), 'a', { move: 'attack', slot: 1 });
+  assert.equal(s.fx.find(f => f.k === 'hit')?.side, 0);
+  // ↩️ recuo do Double-Edge
+  s = _bw(_cm(createRng(1), 'tauros', 40, { starter: true, moves: ['normal_q', 'normal_x'] }), _cm(createRng(2), 'snorlax', 20), 4);
+  for (let i = 0; i < 4 && !s.log.some(l => /recuo/.test(l.msg)); i++) _sc(s, createRng(10 + i), 'a', { move: 'attack', slot: 1 });
+  assert.ok(s.log.some(l => /recuo/.test(l.msg)));
+  // 😮‍💨 Hydro Cannon: descansa na rodada seguinte
+  s = _bw(_cm(createRng(1), 'blastoise', 50, { starter: true, moves: ['water_q', 'water_x2'] }), _cm(createRng(2), 'snorlax', 60), 4);
+  for (let i = 0; i < 6 && !s.log.some(l => /descansar/.test(l.msg)) && !s.battle.over; i++) _sc(s, createRng(20 + i), 'a', { move: 'attack', slot: 1 });
+  assert.ok(s.log.some(l => /descansar/.test(l.msg)));
 });

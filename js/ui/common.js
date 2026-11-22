@@ -57,7 +57,22 @@ function moveBox(m, foeTypes) {
   return `<div class="pk-move" style="--tc:${TYPE_COLORS[m.type]}" title="${esc(m.desc)}">
     <div class="pk-move-name">${esc(m.name)}</div>
     <div class="pk-move-meta"><span class="pk-type" style="background:${typeColor(m.type)}">${esc(typeLabel(m.type))}</span><span class="pk-pwr">${pwr}</span>
-      ${m.miss ? `<span class="pk-miss" title="Erra no dado ${m.miss === 1 ? '1' : '1 ou 2'}">🎲${m.miss === 1 ? '1' : '1-2'}✗</span>` : ''}</div></div>`;
+      ${m.miss ? `<span class="pk-miss" title="Erra no dado ${m.miss === 1 ? '1' : `1 a ${m.miss}`}">🎲${m.miss === 1 ? '1' : `1-${m.miss}`}✗</span>` : ''}</div>
+    ${moveFxChips(m)}</div>`;
+}
+const ST_IC = { burn: '🔥', freeze: '🧊', paralysis: '⚡', poison: '☠️', sleep: '💤' };
+/** ⚔️ v44: efeitos reais do golpe em chips pequenos (prioridade, condição, hesitar, crítico alto, recuo, queda, recarga). */
+export function moveFxChips(m) {
+  const c = [];
+  if (m.prio) c.push(['⚡', 'Prioridade: ataca primeiro']);
+  if (m.st) c.push([`${ST_IC[m.st] || ''}${Math.round(m.stChance * 100)}%`, `Chance de causar condição`]);
+  if (m.flinch) c.push([`😵${Math.round(m.flinch * 100)}%`, 'Chance de fazer o alvo hesitar (se atacar antes)']);
+  if (m.highCrit) c.push(['🎯5-6', 'Crítico alto: crítico no dado 5 ou 6']);
+  if (m.recoil) c.push([`↩️1/${m.recoil}`, `Recuo: perde 1/${m.recoil} do dano causado`]);
+  if (m.selfDrop) c.push(['🔻ATQ', 'Depois do golpe, o próprio ataque cai']);
+  if (m.recharge) c.push(['😮‍💨', 'Precisa descansar na rodada seguinte']);
+  if (m.real?.pw) c.push([`${m.real.pw}`, `Poder oficial nos jogos: ${m.real.pw}${m.real.acc ? ` · precisão ${m.real.acc}%` : ' · nunca erra'}`]);
+  return c.length ? `<div class="pk-move-fx">${c.map(([t, tip]) => `<span title="${tip}">${t}</span>`).join('')}</div>` : '';
 }
 
 /**

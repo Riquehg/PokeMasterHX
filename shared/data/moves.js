@@ -6,6 +6,7 @@
 // Ex.: dois Pikachu: um com Thunder Shock + Thunderbolt, outro com Thunder Shock + Thunder, outro com Iron Tail.
 // Nomes oficiais em inglês (como aparecem nos jogos).
 import { getSpecies } from './pokemon.js';
+import { MOVE_DATA } from './movedata.js';
 
 export const QUICK_POWER = 1.0;
 export const STRONG_POWER = 1.4;
@@ -87,6 +88,40 @@ for (const [type, [p, s2, x2]] of Object.entries(EXTRA_BY_TYPE)) {
   MOVES[`${type}_x2`] = { id: `${type}_x2`, name: x2, kind: 'dmg', type, power: HEAVY_POWER, miss: 2, risky: true, desc: 'Pesado: erra no 🎲1–2' };
 }
 for (const m of Object.values(SUPPORT)) MOVES[m.id] = { ...m, miss: 0 };
+
+// ⚔️ v44 — poder, precisão, prioridade e efeitos REAIS (moves.csv do PokeAPI) em cima da categoria do jogo.
+// O poder continua na faixa da categoria (rápido/preciso/forte/pesado) e varia até −15%/+20% conforme o poder oficial.
+const tierOf = id => (id.match(/_(q|p|s|x)\d*$/) || [])[1];
+const TIER_REF = {};
+for (const [id, d] of Object.entries(MOVE_DATA)) { const t = tierOf(id); if (t && d.pw) (TIER_REF[t] ||= []).push(d.pw); }
+for (const t in TIER_REF) TIER_REF[t] = TIER_REF[t].reduce((a, b) => a + b, 0) / TIER_REF[t].length;
+export const missFromAcc = (acc, nm) => (nm || !acc || acc >= 95 ? 0 : acc >= 85 ? 1 : acc >= 70 ? 2 : 3);
+const STATUS_TXT = { burn: 'queimar', freeze: 'congelar', paralysis: 'paralisar', poison: 'envenenar', sleep: 'adormecer' };
+for (const [id, d] of Object.entries(MOVE_DATA)) {
+  const m = MOVES[id];
+  if (!m) continue;
+  const t = tierOf(id);
+  if (t && d.pw && TIER_REF[t]) m.power = Math.round(m.power * Math.max(0.85, Math.min(1.2, Math.pow(d.pw / TIER_REF[t], 0.6))) * 100) / 100;
+  if (m.kind === 'dmg' || m.kind === 'drain') m.miss = missFromAcc(d.acc, d.nm);
+  m.real = d; // dados oficiais (para a Pokédex/cards)
+  if (d.prio > 0) m.prio = d.prio;
+  if (d.st) { m.st = d.st; m.stChance = (d.ch || 10) / 100; }
+  if (d.fl) m.flinch = d.fl / 100;
+  if (d.rc) m.recoil = d.rc;
+  if (d.hc) m.highCrit = true;
+  if (d.sd) m.selfDrop = true;
+  if (d.rch) m.recharge = true;
+  m.risky = m.miss > 0;
+  const fx = [];
+  if (m.prio) fx.push('⚡ prioridade: ataca primeiro');
+  if (m.st) fx.push(`${Math.round(m.stChance * 100)}% de ${STATUS_TXT[m.st]}`);
+  if (m.flinch) fx.push(`${Math.round(m.flinch * 100)}% de fazer hesitar`);
+  if (m.highCrit) fx.push('crítico no 🎲5 ou 6');
+  if (m.recoil) fx.push(`recuo: perde 1/${m.recoil} do dano`);
+  if (m.selfDrop) fx.push('depois o próprio ataque cai');
+  if (m.recharge) fx.push('precisa descansar na rodada seguinte');
+  m.desc = `${m.miss ? `Erra no 🎲${m.miss === 1 ? '1' : `1–${m.miss}`}` : 'Nunca erra'}${fx.length ? ' · ' + fx.join(' · ') : ''}`;
+}
 // Transformação (Ditto e Mew): vira uma cópia do adversário — tipos, força e golpes — até o fim da batalha
 MOVES.transform = { id: 'transform', name: 'Transform', kind: 'transform', type: 'normal', power: 0, miss: 0, desc: 'Vira uma cópia do adversário (tipos, força e golpes) até o fim da batalha' };
 /** Quem pode se transformar. */
