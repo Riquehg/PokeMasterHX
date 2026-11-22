@@ -11,6 +11,7 @@ import { natureLabel } from '../../shared/data/natures.js';
 import { monSprite, typeLabel, typeColor, avatarUrl, PLAYER_COLORS, itemUrl } from '../config.js';
 import { ITEMS } from '../../shared/data/items.js';
 import { MEGAS } from '../../shared/data/megas.js';
+import { ABILITIES, abilityOf } from '../../shared/data/battlegear.js';
 
 export function typeChips(types) {
   return types.map(t => `<span class="chip type" style="background:${typeColor(t)}">${esc(typeLabel(t))}</span>`).join(' ');
@@ -96,6 +97,7 @@ export function statCard(mon, { owner = null, act = '', index = '', extra = '', 
     <div class="pk-moves">${monMoves(mon).map(m => moveBox(m)).join('')}</div>
     ${locked ? `<div class="lock-tag">🔒 precisa de ${badgesNeeded(mon)} insígnia${badgesNeeded(mon) > 1 ? 's' : ''}</div>` : ''}
     ${mon.trust ? '<div class="tiny"><span class="trust-chip" title="Capturado na Bola da Confiança: obedece sem insígnias">🤝 Confiança</span></div>' : ''}
+    ${abilityLine(mon)}
     ${heldLine(mon)}
     ${extra}
   </div>`;
@@ -126,14 +128,19 @@ export function heldBadge(mon) {
   const it = mon?.held && ITEMS[mon.held];
   if (!it) return '';
   const m = MEGAS[it.mega];
-  return `<span class="held-badge" title="Segurando: ${esc(it.name)}${m ? ` — pode virar ${esc(m.name)}` : ''}"><img src="${itemUrl(mon.held)}" alt="">💎</span>`;
+  return `<span class="held-badge" title="Segurando: ${esc(it.name)}${m ? ` — pode virar ${esc(m.name)}` : ''}"><img src="${itemUrl(mon.held)}" alt="">${m ? '💎' : ''}</span>`;
 }
 function heldLine(mon) {
   const it = mon?.held && ITEMS[mon.held];
   if (!it) return '';
   const m = MEGAS[it.mega];
   const active = mon.mega;
-  return `<div class="pk-held"><img src="${itemUrl(mon.held)}" alt=""><span>Segura <b>${esc(it.name)}</b>${m ? ` · ${active ? '💎 Mega Evoluído' : `pode virar <b>${esc(m.name)}</b>`}` : ''}</span></div>`;
+  return `<div class="pk-held" title="${esc(it.desc || '')}"><img src="${itemUrl(mon.held)}" alt=""><span>Segura <b>${esc(it.name)}</b>${m ? ` · ${active ? '💎 Mega Evoluído' : `pode virar <b>${esc(m.name)}</b>`}` : ''}</span></div>`;
+}
+/** ✨ Habilidade da espécie (v41). */
+export function abilityLine(mon) {
+  const A = ABILITIES[abilityOf(mon?.sp)];
+  return A ? `<div class="pk-abil" title="${esc(A.desc)}">${A.icon} <b>${esc(A.name)}</b> <span class="tiny muted">${esc(A.desc)}</span></div>` : '';
 }
 
 export function speciesName(id) {

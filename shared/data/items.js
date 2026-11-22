@@ -1,5 +1,6 @@
 import { MEGAS } from './megas.js';
 import { SPECIES } from './pokemon.js';
+import { GEAR } from './battlegear.js';
 // Itens. Só entra aqui o que tem efeito implementado no motor (shared/engine.js).
 // minTier: a partir de que tier de cidade o item aparece na loja (0 = não vende).
 // image: arquivo dentro do bucket "sprites/items/" do Supabase (fallback no front se não existir).
@@ -68,13 +69,16 @@ for (const m of Object.values(MEGAS)) {
 }
 ITEMS.mega_bracelet = { name: 'Bracelete Mega', kind: 'key', price: 0, minTier: 0, image: 'mega-bracelet.png', desc: 'Permite Mega Evoluir. Só cai em Mega Raids (raríssimo) e não pode ser trocado.' };
 
-export const KEEP_KINDS = ['ball', 'charm', 'tm', 'megastone', 'fragment'];
+// ⚔️ Itens de batalha (segurados): vêm da 🔨 Oficina, ficam na Mochila da conta e vão para o Pokémon pelo botão 🎒 da Coleção.
+for (const [id, g] of Object.entries(GEAR)) ITEMS[id] = { name: g.name, kind: 'gear', price: 0, minTier: 0, emoji: g.emoji, plate: g.plate || null, desc: `Item de batalha (segurado): ${g.desc}` };
+
+export const KEEP_KINDS = ['ball', 'charm', 'tm', 'megastone', 'fragment', 'gear'];
 export const isKeepable = id => !!ITEMS[id] && KEEP_KINDS.includes(ITEMS[id].kind);
 export const BAG_MAX_PER_ITEM = 99;
 /** Quanto de cada item dá para levar para uma partida (modo Coleção). */
 export function bringLimit(id) {
   const it = ITEMS[id];
-  if (!it || !isKeepable(id) || it.kind === 'megastone' || it.kind === 'fragment') return 0;
+  if (!it || !isKeepable(id) || it.kind === 'megastone' || it.kind === 'fragment' || it.kind === 'gear') return 0;
   if (id === 'master_ball') return 1;
   if (it.kind === 'charm') return 1;
   if (it.kind === 'tm') return 3;

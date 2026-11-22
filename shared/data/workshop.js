@@ -27,12 +27,18 @@ export const RECIPES = {
   ultra3: { name: '3 Ultra Balls', icon: '🟡', lvl: 2, hours: 4, xp: 50, cost: { ore: 6, crystal: 3, ember: 3, gold: 500 }, out: { bag: { ultra_ball: 3 } } },
   candy: { name: 'Doce Raro', icon: '🍬', lvl: 2, hours: 6, xp: 60, cost: { berry: 4, pearl: 4, ember: 4, ore: 4, feather: 4 }, out: { farm: { candy: 1 } }, desc: '+1 nível num Pokémon da Coleção (até o Nv. 60).' },
   hatcher: { name: 'Amuleto de Incubação', icon: '🧿', lvl: 2, hours: 6, xp: 60, cost: { ember: 6, crystal: 4, essence: 4, gold: 800 }, out: { farm: { hatcher: 1 } }, desc: 'Choca um ovo na hora.' },
+  // ⚔️ itens de batalha (segurados) — v41
+  quick_claw: { name: 'Garra Rápida', icon: '🐾', lvl: 2, hours: 8, xp: 70, cost: { feather: 10, ore: 8, gold: 1500 }, out: { bag: { quick_claw: 1 } }, desc: 'Item de batalha: 20% de chance de agir primeiro.' },
+  focus_sash: { name: 'Faixa de Foco', icon: '🎗️', lvl: 2, hours: 8, xp: 70, cost: { pearl: 8, essence: 8, gold: 1500 }, out: { bag: { focus_sash: 1 } }, desc: 'Item de batalha: com HP cheio, aguenta um golpe fatal com 1 HP.' },
+  plate: { name: 'Placa de Tipo', icon: '🔷', lvl: 2, hours: 12, xp: 90, cost: { crystal: 8, ore: 8, gold: 2000 }, out: { plate: true }, desc: 'Item de batalha: escolha o tipo — +20% de dano nos golpes dele.' },
   statue: { name: 'Estátua de Pedra', icon: '🗿', lvl: 2, hours: 8, xp: 70, cost: { ore: 15, essence: 5 }, out: { decor: 'statue' }, desc: 'Decoração exclusiva da Oficina.' },
   // ⚒️ Mestre
   tm: { name: 'TM', icon: '💿', lvl: 3, hours: 12, xp: 150, cost: { crystal: 10, essence: 10, feather: 10, gold: 2000 }, out: { bag: { tm: 1 } } },
   rainbow: { name: 'Rainbow Ball', icon: '🌈', lvl: 3, hours: 12, xp: 150, cost: { pearl: 8, ember: 8, crystal: 8, feather: 8, gold: 1500 }, out: { bag: { rainbow_ball: 1 } } },
   incense: { name: 'Incenso Brilhante', icon: '🕯️', lvl: 3, hours: 24, xp: 250, cost: { crystal: 15, essence: 15, pearl: 10, gold: 3000 }, out: { farm: { incense: 1 } }, desc: 'Os próximos 3 ovos têm chance de shiny ×3.' },
   goldstatue: { name: 'Estátua Dourada', icon: '🏅', lvl: 3, hours: 24, xp: 200, cost: { ore: 30, crystal: 10, gold: 5000 }, out: { decor: 'goldstatue' }, desc: 'Decoração exclusiva da Oficina.' },
+  leftovers: { name: 'Restos', icon: '🍎', lvl: 3, hours: 24, xp: 220, week: 1, cost: { berry: 20, pearl: 10, essence: 10, gold: 4000 }, out: { bag: { leftovers: 1 } }, desc: 'Item de batalha: recupera 1/12 do HP por rodada. 1 por semana.' },
+  choice_band: { name: 'Faixa Escolhida', icon: '🎀', lvl: 3, hours: 24, xp: 220, week: 1, cost: { ember: 15, feather: 10, crystal: 10, gold: 4000 }, out: { bag: { choice_band: 1 } }, desc: 'Item de batalha: +25% de dano, só golpes de ataque. 1 por semana.' },
   // 👑 Grão-Mestre (limite por semana)
   trust: { name: 'Bola da Confiança', icon: '🤝', lvl: 4, hours: 24, xp: 400, week: 1, cost: { berry: 20, pearl: 20, ember: 20, ore: 20, crystal: 20, gold: 6000 }, out: { bag: { trust_ball: 1 } } },
   master: { name: 'Master Ball', icon: '🟣', lvl: 4, hours: 48, xp: 600, week: 1, cost: { berry: 30, pearl: 30, ember: 30, ore: 30, crystal: 30, essence: 30, feather: 30, gold: 12000 }, out: { bag: { master_ball: 1 } } },

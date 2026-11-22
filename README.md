@@ -122,6 +122,8 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 
 - **v40 — 🌾 Fazenda 2.0:** `shared/data/garden.js` (`CROPS`, `GOODS`, `plotsFor`, `BUILDINGS` moinho/cozinha com 3 níveis e fila `queueFor`, `POFFIN_ITEMS`). Ops em `/api/profile`: `farm_plant`, `farm_water`, `farm_harvest`, `farm_build`, `farm_bjob`, `farm_bclaim`; `farm_help` também rega; `farm_use` aceita Poffins/Torta; `farm_decor` aceita `f` (espelhar) e `s` (0.6–1.8). UI: aba 🌱 Horta (canteiros, despensa, construções) e modo ✏️ edição (selecionar, arrastar, virar, tamanho, copiar, guardar, desfazer).
 
+- **v41 — ⚔️ itens de batalha e habilidades:** `shared/data/battlegear.js` (`GEAR`: Restos, Faixa de Foco, Garra Rápida, Faixa Escolhida, 18 Placas; `ABILITIES` + `abilityOf(sp)`: Intimidação, Levitação, Robustez, Chama/Torrente/Supercrescimento). Itens `kind: 'gear'` (ícone emoji via `itemUrl`), feitos na Oficina (receitas `quick_claw`, `focus_sash`, `plate` com `ptype`, `leftovers`, `choice_band`), segurados pela op `hold_stone` (agora aceita qualquer item de batalha) e levados para a partida em `createMatch`. Batalha: `typeMultVs`, `gearAbilMult`, `onEnter` (Intimidação), Robustez/Faixa de Foco no dano, Garra Rápida na ordem, Restos no fim da rodada; Faixa Escolhida bloqueia golpes de suporte.
+
 ## 3. Publicar (passo a passo, só pelo navegador)
 
 ### 3.1 Supabase

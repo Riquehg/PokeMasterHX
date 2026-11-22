@@ -92,7 +92,8 @@ export function installSpriteFallback() {
 export const avatarUrl = (n, skin) => (skin && /^[a-z0-9-]+$/.test(skin) ? `${CFG.sprites}skins/${skin}.png` : `${CFG.sprites}player_${String(Math.max(1, Math.min(8, Number(n) || 1))).padStart(2, '0')}.png`);
 /** Avatar de um jogador/perfil (respeita a skin equipada). */
 export const trainerUrl = p => avatarUrl(p?.avatar, p?.cosmetic?.skin);
-export const itemUrl = id => `${CFG.sprites}items/${ITEMS[id]?.image || id + '.png'}`;
+const emojiImg = e => `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><text x="32" y="50" font-size="46" text-anchor="middle">${e}</text></svg>`)}`;
+export const itemUrl = id => (ITEMS[id]?.emoji && !ITEMS[id]?.image ? emojiImg(ITEMS[id].emoji) : `${CFG.sprites}items/${ITEMS[id]?.image || id + '.png'}`);
 // Sprite de treinador/líder: aceita "pasta/arquivo.png" (ex.: "leaders/Lt. Surge.png") ou só o arquivo (vai para leaders/)
 export const leaderUrl = file => {
   if (!file) return '';

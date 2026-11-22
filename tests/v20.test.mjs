@@ -893,3 +893,112 @@ test('🌱 Fazenda 2.0: plantar, regar, colher, Moinho → farinha, Cozinha → 
   assert.equal(r.farm.decor[0].f, 1);
   assert.equal(r.farm.decor[0].s, 1.4);
 });
+
+// ---------------------------------------------------------------- v41 ⚔️ itens de batalha e habilidades
+import { createMon as _cm, maxHpOf as _mhp } from '../shared/rules/monsters.js';
+import { startBattle as _sb, submitChoice as _sc, sideActive as _sa } from '../shared/rules/battle.js';
+import { abilityOf } from '../shared/data/battlegear.js';
+const _bw = (mine, foe, seed = 9) => {
+  const s = createMatch({ seed, players: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }] });
+  s.players[0].team = [mine];
+  _sb(s, { kind: 'wild', pid: 'a', foe: { kind: 'wild', mon: foe } });
+  return s;
+};
+const _hits = (s, side) => s.fx.filter(f => f.k === 'hit' && f.side === side);
+
+test('⚔️ habilidades: Levitação, Robustez, Intimidação e Chama', () => {
+  const r = createRng(3);
+  assert.equal(abilityOf('gengar'), 'levitate');
+  assert.equal(abilityOf('golem'), 'sturdy');
+  assert.equal(abilityOf('charizard'), 'blaze');
+  assert.equal(abilityOf('blastoise'), 'torrent');
+  assert.equal(abilityOf('pikachu'), null);
+  // 🎈 golpe de Terra não afeta Gengar
+  let s = _bw(_cm(r, 'dugtrio', 40, { starter: true, moves: ['ground_q', 'normal_q'] }), _cm(r, 'gengar', 10));
+  _sc(s, r, 'a', { move: 'attack', slot: 0 });
+  assert.equal(_hits(s, 0)[0].mult, 0);
+  // 🪨 Geodude com HP cheio aguenta com 1 HP
+  s = _bw(_cm(r, 'mewtwo', 60, { starter: true, moves: ['water_q', 'normal_q'] }), _cm(r, 'geodude', 3));
+  _sc(s, r, 'a', { move: 'attack', slot: 0 });
+  const geo = _sa(s, s.battle.sides[1]);
+  assert.equal(geo.hp, 1);
+  assert.ok(s.log.some(l => /Robustez/.test(l.msg)));
+  // 😠 Gyarados intimida ao entrar
+  s = _bw(_cm(r, 'gyarados', 30, { starter: true }), _cm(r, 'rattata', 10));
+  assert.equal(s.battle.sides[1].stage[_sa(s, s.battle.sides[1]).uid], -1);
+  // 🔥 Chama: com pouco HP o golpe de Fogo bate mais forte (mesma semente)
+  const dmgAt = lowHp => {
+    const rr = createRng(77);
+    const c = _cm(rr, 'charmeleon', 30, { starter: true, nature: 'Hardy', iv: { hp: 10, str: 10, spe: 10 }, moves: ['fire_q', 'normal_q'] });
+    if (lowHp) c.hp = 2;
+    const st = _bw(c, _cm(rr, 'snorlax', 60, { nature: 'Hardy' }), 5);
+    _sc(st, createRng(1), 'a', { move: 'attack', slot: 0 });
+    return _hits(st, 0)[0].dmg;
+  };
+  assert.ok(dmgAt(true) > dmgAt(false) * 1.3);
+});
+
+test('⚔️ itens segurados: Faixa de Foco, Restos, Faixa Escolhida, Placa e Garra Rápida', () => {
+  const r = createRng(4);
+  // 🎗️ Faixa de Foco: 1 vez por batalha
+  const rat = _cm(r, 'rattata', 3); rat.held = 'focus_sash';
+  let s = _bw(_cm(r, 'mewtwo', 60, { starter: true, moves: ['water_q', 'normal_q'] }), rat);
+  _sc(s, r, 'a', { move: 'attack', slot: 0 });
+  assert.equal(_sa(s, s.battle.sides[1]).hp, 1);
+  assert.ok(s.battle.sashUsed);
+  // 🍎 Restos cura no fim da rodada
+  const sn = _cm(r, 'snorlax', 40, { starter: true, moves: ['normal_q', 'normal_s'] }); sn.held = 'leftovers'; sn.hp = 20;
+  s = _bw(sn, _cm(r, 'caterpie', 2));
+  _sc(s, r, 'a', { move: 'attack', slot: 0 });
+  assert.ok(s.log.some(l => /Restos/.test(l.msg)) || s.battle.over);
+  // 🎀 Faixa Escolhida: bloqueia golpe de suporte e aumenta o dano
+  const bl = _cm(r, 'blissey', 30, { starter: true, moves: ['normal_q', 'recover'] }); bl.held = 'choice_band';
+  s = _bw(bl, _cm(r, 'magikarp', 5));
+  assert.throws(() => _sc(s, r, 'a', { move: 'attack', slot: 1 }), /Faixa Escolhida/);
+  const dmgWith = held => {
+    const rr = createRng(11);
+    const m = _cm(rr, 'machamp', 30, { starter: true, nature: 'Hardy', iv: { hp: 10, str: 10, spe: 10 }, moves: ['fire_q', 'normal_q'] });
+    if (held) m.held = held;
+    const st = _bw(m, _cm(rr, 'snorlax', 60, { nature: 'Hardy' }), 5);
+    _sc(st, createRng(1), 'a', { move: 'attack', slot: 0 });
+    return _hits(st, 0)[0].dmg;
+  };
+  const base = dmgWith(null);
+  assert.ok(dmgWith('choice_band') > base);
+  assert.ok(dmgWith('plate_fighting') > base); // Machamp usa golpe de Luta
+  assert.equal(dmgWith('plate_water'), base); // placa de outro tipo não muda nada
+  // 🐾 Garra Rápida: o mais lento às vezes ataca primeiro
+  let first = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const rr = createRng(seed);
+    const slow = _cm(rr, 'slowpoke', 30, { starter: true, moves: ['water_q', 'normal_q'] }); slow.held = 'quick_claw';
+    const st = _bw(slow, _cm(rr, 'jolteon', 30), seed);
+    _sc(st, rr, 'a', { move: 'attack', slot: 0 });
+    const h = st.fx.filter(f => f.k === 'hit');
+    if (h[0]?.side === 0) first++;
+  }
+  assert.ok(first >= 3 && first <= 30, `Garra Rápida agiu primeiro ${first}/60`);
+});
+
+test('⚔️ Oficina faz Placa de Tipo; qualquer Pokémon segura item de batalha e ele vai para a partida', async () => {
+  const { db, admin, us: [a] } = await users(1);
+  await adminOp(db, admin, { op: 'give_gold', userId: a.id, amount: 50000 });
+  const set = async patch => { const p = await db.getProfile(a.id); await db.updateProfileIf(a.id, p.rev || 0, { stats: { ...p.stats, farm: { ...(p.stats.farm || {}), ...patch } } }); };
+  await profileOp(db, a, { op: 'farm_get' });
+  await set({ lvl: 5, axp: 400, res: { crystal: 20, ore: 20 } });
+  await assert.rejects(profileOp(db, a, { op: 'farm_craft', recipe: 'plate' }), /tipo da Placa/);
+  let r = await profileOp(db, a, { op: 'farm_craft', recipe: 'plate', ptype: 'fire' });
+  const job = r.farm.workshop.jobs[0];
+  const p1 = await db.getProfile(a.id);
+  await set({ jobs: p1.stats.farm.jobs.map(j => ({ ...j, done: 1 })) });
+  r = await profileOp(db, a, { op: 'farm_claim', id: job.id });
+  assert.equal(r.profile.stats.bag.plate_fire, 1);
+  const mon = r.profile.vault[0];
+  r = await profileOp(db, a, { op: 'hold_stone', uid: mon.uid, item: 'plate_fire' });
+  assert.equal(r.profile.vault.find(x => x.uid === mon.uid).held, 'plate_fire');
+  assert.ok(!r.profile.stats.bag.plate_fire);
+  const s = createMatch({ seed: 2, players: [{ id: 'a', name: 'A', teamMons: [r.profile.vault.find(x => x.uid === mon.uid)] }, { id: 'b', name: 'B' }] });
+  assert.equal(s.players[0].team.find(m => m.uid === mon.uid)?.held, 'plate_fire');
+  r = await profileOp(db, a, { op: 'hold_stone', uid: mon.uid, item: null });
+  assert.equal(r.profile.stats.bag.plate_fire, 1);
+});

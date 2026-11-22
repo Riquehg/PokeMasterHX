@@ -321,7 +321,7 @@ function collectionModal(profile, onChange) {
       ${boxBar()}
       <div class="vf-scope">${vfBar('vault')}
       <div class="pk-grid ${picking ? 'bx-picking' : ''}">${all.map(m => { const bx = boxOf(m.uid); const hide = picking ? !!bx && bx.id === picking.box : view === 'none' ? !!bx : view !== 'all' && bx?.id !== view;
-        return `<div class="vf-cell ${hide ? 'bx-hide' : ''} ${picking?.sel.has(m.uid) ? 'bx-sel' : ''}" data-uid="${esc(m.uid)}" ${vfAttrs(m, recent.get(m.uid) || 0)}>${bx && view === 'all' ? `<span class="bx-tag" title="${esc(bx.name)}">${bx.icon}</span>` : ''}${statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px">${bx && view === bx.id ? `<button class="btn sm" data-act="bx-out" data-uid="${esc(m.uid)}" title="Tirar da box">↩️</button>` : ''}<button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="farm" data-uid="${esc(m.uid)}" title="Mandar para a 🌾 Fazenda (ganha XP com o tempo)">🌾</button>${megaBySpecies(m.sp).length ? `<button class="btn sm ${m.held ? 'purple' : ''}" data-act="mstone" data-uid="${esc(m.uid)}" title="💎 Megapedra: equipar / trocar / tirar">💎</button>` : ''}<button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar">✕</button></div>` })}</div>`; }).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div></div>`;
+        return `<div class="vf-cell ${hide ? 'bx-hide' : ''} ${picking?.sel.has(m.uid) ? 'bx-sel' : ''}" data-uid="${esc(m.uid)}" ${vfAttrs(m, recent.get(m.uid) || 0)}>${bx && view === 'all' ? `<span class="bx-tag" title="${esc(bx.name)}">${bx.icon}</span>` : ''}${statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px">${bx && view === bx.id ? `<button class="btn sm" data-act="bx-out" data-uid="${esc(m.uid)}" title="Tirar da box">↩️</button>` : ''}<button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="farm" data-uid="${esc(m.uid)}" title="Mandar para a 🌾 Fazenda (ganha XP com o tempo)">🌾</button><button class="btn sm ${m.held ? 'purple' : ''}" data-act="mstone" data-uid="${esc(m.uid)}" title="🎒 Item segurado (Megapedra ou item de batalha): equipar / trocar / tirar">${megaBySpecies(m.sp).length ? '💎' : '🎒'}</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar">✕</button></div>` })}</div>`; }).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div></div>`;
   };
   const ov = openModal('vault', `📦 Coleção (${(profile?.vault || []).length}/${cap()})`, body(), { wide: true });
   const redraw = () => { setModalBody('vault', body()); vfBind(document.getElementById('vault')); };
@@ -369,15 +369,22 @@ function collectionModal(profile, onChange) {
       if (!m) return;
       const bag = profile?.stats?.bag || {};
       const opts = megaBySpecies(m.sp);
-      const ov2 = openModal('mstone', `💎 Megapedra — ${esc(m.nick || getSpecies(m.sp).name)}`, `<div class="ms-pick">
+      const gear = Object.keys(ALL_ITEMS).filter(id => ALL_ITEMS[id].kind === 'gear' && ((bag[id] || 0) > 0 || m.held === id));
+      const ov2 = openModal('mstone', `🎒 Item segurado — ${esc(m.nick || getSpecies(m.sp).name)}`, `<div class="ms-pick">
+          <p class="tiny muted">Cada Pokémon segura <b>1 item</b>: uma Megapedra <i>ou</i> um item de batalha. Trocar devolve o anterior para a Mochila.</p>
           ${opts.map(x => { const id = `ms_${x.key}`, n = bag[id] || 0, on = m.held === id;
             return `<div class="ms-opt ${on ? 'on' : ''}"><img class="ms-st" src="${itemUrl(id)}" alt=""><img class="ms-mon" src="${monSprite({ sp: x.sp, shiny: m.shiny })}" alt="">
               <div class="grow"><b>${esc(ALL_ITEMS[id].name)}</b><div class="tiny muted">vira <b>${esc(x.name)}</b> · você tem ${n} na Mochila</div></div>
               ${on ? '<span class="chip purple">Segurando</span>' : `<button class="btn sm primary" data-act="ms-hold" data-item="${id}" ${n > 0 ? '' : 'disabled'}>Equipar</button>`}</div>`; }).join('')}
-          ${m.held ? '<button class="btn sm" data-act="ms-off">↩️ Tirar a pedra (volta para a Mochila)</button>' : ''}
-          <p class="tiny muted">O Pokémon que segura a pedra é quem pode Mega Evoluir (precisa também do 🔗 Bracelete Mega na conta). Pedras vêm da 🔨 Oficina (10 fragmentos), de Mega Raids e do 🏪 Mercado.</p></div>`);
+          ${gear.length ? '<h4 style="margin:6px 0 2px">⚔️ Itens de batalha</h4>' : ''}
+          ${gear.map(id => { const n = bag[id] || 0, on = m.held === id;
+            return `<div class="ms-opt ${on ? 'on' : ''}"><img class="ms-st" src="${itemUrl(id)}" alt=""><div class="grow"><b>${esc(ALL_ITEMS[id].name)}</b><div class="tiny muted">${esc(ALL_ITEMS[id].desc.replace(/^Item de batalha \(segurado\): /, ''))} · você tem ${n}</div></div>
+              ${on ? '<span class="chip purple">Segurando</span>' : `<button class="btn sm primary" data-act="ms-hold" data-item="${id}" ${n > 0 ? '' : 'disabled'}>Equipar</button>`}</div>`; }).join('')}
+          ${!gear.length ? '<p class="tiny muted">⚔️ Itens de batalha (Garra Rápida, Faixa de Foco, Placas, Restos, Faixa Escolhida) são feitos na 🔨 Oficina da Fazenda.</p>' : ''}
+          ${m.held ? '<button class="btn sm" data-act="ms-off">↩️ Tirar o item (volta para a Mochila)</button>' : ''}
+          ${opts.length ? `<p class="tiny muted">O Pokémon que segura a pedra é quem pode Mega Evoluir (precisa também do 🔗 Bracelete Mega na conta). Pedras vêm da 🔨 Oficina (10 fragmentos), de Mega Raids e do 🏪 Mercado.</p>` : ''}</div>`);
       const hold = async item => {
-        try { profile = (await api('profile', { op: 'hold_stone', uid: m.uid, item })).profile; closeModal('mstone'); redraw(); onChange(profile); toast(item ? '💎 Megapedra equipada!' : 'A pedra voltou para a Mochila.', 'good'); }
+        try { profile = (await api('profile', { op: 'hold_stone', uid: m.uid, item })).profile; closeModal('mstone'); redraw(); onChange(profile); toast(item ? `${ALL_ITEMS[item]?.kind === 'gear' ? '⚔️' : '💎'} ${ALL_ITEMS[item]?.name} equipado!` : 'O item voltou para a Mochila.', 'good'); }
         catch (e) { toast(e.message, 'bad'); }
       };
       bindActions(ov2, { 'ms-hold': x => hold(x.item), 'ms-off': () => hold(null) });

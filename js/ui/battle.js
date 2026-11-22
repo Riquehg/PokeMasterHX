@@ -5,7 +5,7 @@ import { ITEMS, ballBonusAgainst } from '../../shared/data/items.js';
 import { monView, maxHpOf } from '../../shared/rules/monsters.js';
 import { canUse, badgesNeeded } from '../../shared/rules/helpers.js';
 import { monMoves } from '../../shared/data/moves.js';
-import { STATUS, CAPTURE_TARGET, captureMath, captureProb, LEGEND_CAPTURE, megaBlock, legendCapBlocked, LEGEND_MATCH_LIMIT } from '../../shared/rules/battle.js';
+import { STATUS, CAPTURE_TARGET, captureMath, captureProb, LEGEND_CAPTURE, megaBlock, legendCapBlocked, LEGEND_MATCH_LIMIT, gearOf, abilOf } from '../../shared/rules/battle.js';
 import { megaFor, BRACELET_ID } from '../../shared/data/megas.js';
 import { bestAttack, against, effectivenessLabel, TYPE_COLORS } from '../../shared/rules/types.js';
 import { whoMustAct } from '../../shared/engine.js';
@@ -121,11 +121,12 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
     const items = Object.entries(p.items).filter(([id, n]) => ['heal', 'revive', 'boost', 'cure'].includes(ITEMS[id]?.kind) && n > 0);
     const moveBtns = monMoves(myMon).map((m, i) => {
       const dmg = m.kind === 'dmg' || m.kind === 'drain';
-      const mult = dmg ? against(m.type, getSpecies(foeMon.sp).types) : 1;
+      const mult = dmg ? (m.type === 'ground' && abilOf(foeMon) === 'levitate' ? 0 : against(m.type, getSpecies(foeMon.sp).types)) : 1;
+      const banned = !dmg && gearOf(myMon)?.id === 'choice_band';
       const stab = dmg && getSpecies(myMon.sp).types.includes(m.type);
       const tag = !dmg ? `<span class="mv-tag sup">${esc(m.desc)}</span>`
         : mult === 0 ? '<span class="mv-tag bad">Não afeta</span>' : mult >= 2 ? `<span class="mv-tag good">Super efetivo x${mult}</span>` : mult < 1 ? `<span class="mv-tag bad">Pouco efetivo x${mult}</span>` : '<span class="mv-tag">Normal</span>';
-      return `<button class="btn move-btn" style="--tc:${TYPE_COLORS[m.type]}" data-act="b-attack" data-slot="${i}" title="${esc(m.desc)}">
+      return `<button class="btn move-btn" style="--tc:${TYPE_COLORS[m.type]}" data-act="b-attack" data-slot="${i}" title="${esc(banned ? '🎀 Faixa Escolhida: só golpes de ataque' : m.desc)}" ${banned ? 'disabled' : ''}>
         <span class="mv-name">${esc(m.name)}</span>
         <span class="mv-meta">${esc(typeLabel(m.type))}${dmg ? ` · poder ${Math.round((m.power || 1) * (stab ? 1.2 : 1) * 100)}%` : ''}${m.miss ? ` · erra no 🎲${m.miss === 1 ? '1' : '1–2'}` : ''}</span>${tag}</button>`;
     }).join('');

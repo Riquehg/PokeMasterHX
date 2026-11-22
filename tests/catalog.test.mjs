@@ -74,11 +74,12 @@ test('batalha: golpe escolhido define tipo; suporte cura, fortalece e intimida',
   submitChoice(s, rng, 'a', { move: 'attack', slot: 1 });
   assert.equal(s.battle.sides[0].stage[s.players[0].team[0].uid], 1);
 
-  // Arcanine intimida (estágio −1 no rival)
+  // Arcanine intimida: a habilidade 😠 Intimidação já tira 1 estágio ao entrar; o golpe tira mais 1
   s = battleWith(createMon(rng, 'arcanine', 30, { starter: true, moves: ['fire_q', 'intimidate'] }), createMon(rng, 'rattata', 10));
-  submitChoice(s, rng, 'a', { move: 'attack', slot: 1 });
   const foe = sideActive(s, s.battle.sides[1]);
   assert.equal(s.battle.sides[1].stage[foe.uid], -1);
+  submitChoice(s, rng, 'a', { move: 'attack', slot: 1 });
+  assert.equal(s.battle.sides[1].stage[foe.uid], -2);
 });
 
 test('raridade: shiny raríssimo e lendário difícil de capturar', () => {

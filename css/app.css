@@ -2033,3 +2033,7 @@ body.in-game .soc-panel { height: min(520px, calc(100dvh - 80px)); }
 .hb-rec:disabled { opacity: .5; cursor: not-allowed; }
 .hb-rec:not(:disabled):hover { border-color: #ffd36b; }
 @media (prefers-reduced-motion: reduce) { .hp-crop { animation: none !important; } }
+
+/* ================= v41 · ⚔️ itens de batalha e habilidades ================= */
+.pk-abil { font-size: 12px; margin-top: 4px; padding: 3px 6px; border-radius: 8px; background: rgba(124, 196, 255, .08); border: 1px solid rgba(124, 196, 255, .25); line-height: 1.3; }
+.pk-abil .tiny { display: block; }

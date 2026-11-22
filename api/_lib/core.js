@@ -238,11 +238,13 @@ export async function profileOp(db, user, body) {
       const m = (cur.vault || []).find(x => x.uid === body.uid);
       if (!m) bad('Pokémon não encontrado na Coleção.');
       if (item) {
-        const mg = megaByStone(ITEMS[item]?.kind === 'megastone' ? MEGAS[ITEMS[item].mega]?.stone : null);
-        if (!mg) bad('Isso não é uma Megapedra.');
-        if (mg.base !== m.sp) bad(`A ${ITEMS[item].name} só funciona com ${getSpecies(mg.base)?.name || mg.base}.`);
-        if (m.held === item) bad('Ele já está segurando essa pedra.');
-        if (!(bag[item] > 0)) bad('Você não tem essa Megapedra na Mochila.');
+        if (ITEMS[item]?.kind !== 'gear') { // ⚔️ item de batalha: qualquer Pokémon pode segurar
+          const mg = megaByStone(ITEMS[item]?.kind === 'megastone' ? MEGAS[ITEMS[item].mega]?.stone : null);
+          if (!mg) bad('Esse item não pode ser segurado.');
+          if (mg.base !== m.sp) bad(`A ${ITEMS[item].name} só funciona com ${getSpecies(mg.base)?.name || mg.base}.`);
+        }
+        if (m.held === item) bad('Ele já está segurando esse item.');
+        if (!(bag[item] > 0)) bad(`Você não tem ${ITEMS[item].name} na Mochila.`);
         bag[item] -= 1; if (!bag[item]) delete bag[item];
       } else if (!m.held) bad('Ele não está segurando nada.');
       if (m.held) bag[m.held] = Math.min(BAG_MAX_PER_ITEM, (bag[m.held] || 0) + 1); // a pedra antiga volta para a Mochila

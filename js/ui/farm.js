@@ -11,6 +11,7 @@ import { RECIPES, FARM_ITEMS as FARM_ITEMS0, ARTISAN_LEVELS } from '../../shared
 import { CROPS, GOODS, BUILDINGS, BUILD_MAX, queueFor, POFFIN_ITEMS, plotsFor } from '../../shared/data/garden.js';
 const FARM_ITEMS = { ...FARM_ITEMS0, ...POFFIN_ITEMS };
 import { MEGAS, MEGA_KEYS, fragItemId } from '../../shared/data/megas.js';
+import { TYPES, TYPE_LABELS } from '../../shared/rules/types.js';
 import { natureLabel } from '../../shared/data/natures.js';
 
 const hash = s => { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
@@ -293,9 +294,10 @@ export async function openFarm(ctx, profile, userId = null) {
     const have = farm.res?.[k] || 0;
     return `<span class="ws-c ${have >= q * mult ? '' : 'miss'}" title="${RESOURCES[k].name}: você tem ${have}">${RESOURCES[k].icon}${q * mult}</span>`;
   }).join('');
-  const outTxt = R => R.out.mega ? '→ 🎒 Mochila' : R.out.bag ? Object.entries(R.out.bag).map(([, q]) => q > 1 ? `${q}×` : '').join('') + ' → 🎒 Mochila' : R.out.farm ? '→ itens da Fazenda' : '→ decoração exclusiva';
+  const outTxt = R => R.out.mega || R.out.plate ? '→ 🎒 Mochila' : R.out.bag ? Object.entries(R.out.bag).map(([, q]) => q > 1 ? `${q}×` : '').join('') + ' → 🎒 Mochila' : R.out.farm ? '→ itens da Fazenda' : '→ decoração exclusiva';
   let candyPick = false;
   // 💎 qual Megapedra fabricar: lista as Megas com fragmentos na Mochila
+  const platePicker = () => `<div class="ws-mega"><select class="input sm" id="ws-plate">${TYPES.map(t => `<option value="${t}">${esc(TYPE_LABELS[t])}</option>`).join('')}</select></div>`;
   const megaPicker = R => {
     const bag = me?.stats?.bag || {};
     const opts = MEGA_KEYS.map(k => MEGAS[k]).map(m => ({ m, n: bag[fragItemId(m)] || 0 })).sort((a, b) => b.n - a.n);
@@ -317,7 +319,7 @@ export async function openFarm(ctx, profile, userId = null) {
     return `<div class="ws-art"><b>🔨 ${esc(lv.name)}</b> <span class="tiny muted">Nível de Artesão ${lv.lvl}${nx ? ` · ${W.axp}/${nx.xp} XP para ${esc(nx.name)}` : ' · máximo!'}</span>
         <div class="fm-bar small"><i style="width:${nx ? Math.min(100, ((W.axp - lv.xp) / (nx.xp - lv.xp)) * 100) : 100}%"></i></div></div>
       <h3>🪚 Bancadas (${W.jobs.length}/${W.benches})</h3>
-      <div class="ws-jobs">${W.jobs.map(j => { const R = RECIPES[j.recipe]; return `<div class="ws-job ${j.ready ? 'ready' : ''}"><span class="ws-ic">${R.icon}</span><b>${esc(j.mega && MEGAS[j.mega] ? MEGAS[j.mega].stoneName : R.name)}</b>
+      <div class="ws-jobs">${W.jobs.map(j => { const R = RECIPES[j.recipe]; return `<div class="ws-job ${j.ready ? 'ready' : ''}"><span class="ws-ic">${R.icon}</span><b>${esc(j.mega && MEGAS[j.mega] ? MEGAS[j.mega].stoneName : j.ptype ? `Placa ${TYPE_LABELS[j.ptype] || ''}` : R.name)}</b>
           ${j.ready ? `<button class="btn sm primary" data-act="claim" data-id="${j.id}">✨ Pegar</button>` : `<span class="tiny">⏳ ${fmtT(j.done - Date.now())}</span><div class="fm-bar small"><i style="width:${Math.min(100, ((Date.now() - j.start) / (j.done - j.start)) * 100)}%"></i></div>`}</div>`; }).join('')}
         ${Array.from({ length: Math.max(0, free) }, () => '<div class="ws-job empty"><span class="tiny muted">Bancada livre</span></div>').join('')}</div>
       <p class="tiny muted">Mais bancadas no Nv. 4 e no Nv. 7 da Fazenda.</p>
@@ -334,7 +336,7 @@ export async function openFarm(ctx, profile, userId = null) {
           const weekDone = R.week && W.weekly[id];
           return `<div class="ws-rec"><span class="ws-ic">${R.icon}</span><div class="grow"><b>${esc(R.name)}</b> <span class="tiny muted">${outTxt(R)}</span>
             ${R.desc ? `<div class="tiny muted">${esc(R.desc)}</div>` : ''}<div class="ws-cost">${costChips(R.cost)}<span class="ws-c t">⏱️${R.hours}h</span>${R.week ? '<span class="ws-c t">1×/semana</span>' : ''}</div></div>
-            ${R.out.mega ? megaPicker(R) : ''}
+            ${R.out.mega ? megaPicker(R) : ''}${R.out.plate ? platePicker() : ''}
             <button class="btn sm ${lv.lvl >= R.lvl && free > 0 && !weekDone ? 'primary' : ''}" data-act="craft" data-id="${id}" ${lv.lvl >= R.lvl && free > 0 && !weekDone ? '' : 'disabled'}>${weekDone ? 'Feita esta semana' : 'Fabricar'}</button></div>`;
         }).join('')}</div></div>`).join('')}
       <button class="btn" data-act="tab" data-t="farm" style="margin-top:8px">← Voltar</button>`;
@@ -464,7 +466,8 @@ export async function openFarm(ctx, profile, userId = null) {
     }),
     craft: d => {
       const mega = RECIPES[d.id]?.out.mega ? document.getElementById('ws-mega')?.value : undefined;
-      return run(() => api('profile', { op: 'farm_craft', recipe: d.id, mega }), `🔨 ${mega && MEGAS[mega] ? MEGAS[mega].stoneName : RECIPES[d.id].name} na bancada!`);
+      const ptype = RECIPES[d.id]?.out.plate ? document.getElementById('ws-plate')?.value : undefined;
+      return run(() => api('profile', { op: 'farm_craft', recipe: d.id, mega, ptype }), `🔨 ${mega && MEGAS[mega] ? MEGAS[mega].stoneName : ptype ? `Placa ${TYPE_LABELS[ptype]}` : RECIPES[d.id].name} na bancada!`);
     },
     claim: d => run(() => api('profile', { op: 'farm_claim', id: d.id }), r => `✨ ${RECIPES[r.got.recipe].icon} ${RECIPES[r.got.recipe].name} pronto! +${RECIPES[r.got.recipe].xp} XP de Artesão`),
     order: d => run(() => api('profile', { op: 'farm_order', idx: Number(d.i) }), r => `📦 Pedido entregue! 🪙 +${r.reward.gold}${r.reward.bonus ? ' + 🎁 prêmio na Mochila' : ''}`),

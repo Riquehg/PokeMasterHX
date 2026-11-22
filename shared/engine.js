@@ -188,7 +188,7 @@ function newPlayer(rng, cfg, index) {
       mon.brought = true; // veio da Coleção (segue a regra das insígnias como qualquer outro)
       if (m.uid) mon.uid = String(m.uid);
       if (m.aura) mon.aura = m.aura;
-      if (m.held && ITEMS[m.held]?.kind === 'megastone') mon.held = m.held; // 💎 Megapedra segurada
+      if (m.held && ['megastone', 'gear'].includes(ITEMS[m.held]?.kind)) mon.held = m.held; // 💎 Megapedra ou ⚔️ item de batalha segurado
       if (m.trust) mon.trust = true; // capturado na Bola da Confiança
       if (m.nick) { const n = cleanNick(m.nick); if (n) mon.nick = n; } // apelido (Loja de Diamantes)
       if (Array.isArray(m.forms)) mon.forms = m.forms.filter(f => f && getSpecies(f.sp)).slice(0, 3).map(f => ({ sp: f.sp, moves: Array.isArray(f.moves) ? f.moves.slice(0, 2) : null })); // 🧬 formas guardadas

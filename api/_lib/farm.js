@@ -354,6 +354,8 @@ export async function farmOp(db, user, body) {
     // 💎 Megapedra: qual Mega + 10 fragmentos dela na Mochila
     const mg = R.out.mega ? MEGAS[String(body.mega || '')] : null;
     if (R.out.mega && !mg) bad('Escolha qual Megapedra fabricar.');
+    const ptype = R.out.plate ? String(body.ptype || '') : null; // 🔷 Placa: qual tipo
+    if (R.out.plate && !ITEMS[`plate_${ptype}`]) bad('Escolha o tipo da Placa.');
     const fragId = mg ? fragItemId(mg) : null;
     const checkFrags = bag => { if (mg && ((bag || {})[fragId] || 0) < R.frags) bad(`Faltam fragmentos: precisa de ${R.frags}x ${ITEMS[fragId].name} (você tem ${(bag || {})[fragId] || 0}).`); };
     checkFrags(p.stats?.bag);
@@ -375,7 +377,7 @@ export async function farmOp(db, user, body) {
         for (const [k, q] of Object.entries(R.cost)) if (k !== 'gold' && (farm.res[k] || 0) < q) bad(`Faltam recursos: ${q} ${RESOURCES[k].icon} ${RESOURCES[k].name} (você tem ${farm.res[k] || 0}).`);
         for (const [k, q] of Object.entries(R.cost)) if (k !== 'gold') farm.res[k] -= q;
         if (R.week) farm.weekly = { ...(farm.weekly || {}), [id]: weekId(now) };
-        farm.jobs.push({ id: 'j' + now.toString(36) + Math.floor(Math.random() * 1e4).toString(36), recipe: id, start: now, done: now + R.hours * 3600000, ...(mg ? { mega: mg.key } : {}) });
+        farm.jobs.push({ id: 'j' + now.toString(36) + Math.floor(Math.random() * 1e4).toString(36), recipe: id, start: now, done: now + R.hours * 3600000, ...(mg ? { mega: mg.key } : {}), ...(ptype ? { ptype } : {}) });
         if (mg) { // gasta os fragmentos da Mochila
           const bag = { ...(cur.stats?.bag || {}) };
           checkFrags(bag);
@@ -400,7 +402,7 @@ export async function farmOp(db, user, body) {
       const R = RECIPES[j.recipe];
       farm.jobs = farm.jobs.filter(x => x.id !== j.id);
       farm.axp = (farm.axp || 0) + R.xp;
-      got = { recipe: j.recipe, out: R.out.mega ? { bag: { [`ms_${j.mega}`]: 1 } } : R.out };
+      got = { recipe: j.recipe, out: R.out.mega ? { bag: { [`ms_${j.mega}`]: 1 } } : R.out.plate ? { bag: { [`plate_${j.ptype}`]: 1 } } : R.out };
       if (R.out.farm) for (const [k, q] of Object.entries(R.out.farm)) farm.items = { ...(farm.items || {}), [k]: ((farm.items || {})[k] || 0) + q };
       if (R.out.decor) farm.craftedDecor = [...new Set([...(farm.craftedDecor || []), R.out.decor])];
       return {};

@@ -15,6 +15,7 @@ import { conquestMult } from './modeBonus.js';
 import { GYMS } from '../data/trainers.js';
 import { statsOf, maxHpOf, gainXp, xpReward, healMon, canTransform, transformInto, revertForm, megaEvolveMon } from './monsters.js';
 import { megaFor } from '../data/megas.js';
+import { ABILITIES, abilityOf, PINCH_MULT, BAND_MULT, PLATE_MULT, QUICK_CLAW, LEFTOVERS_FRAC } from '../data/battlegear.js';
 import {
   fail, getPlayer, log, fx, takeItem, giveMon, markSeen, markMega, healthyIndex, hasHealthy, speciesName, canUse, usableIndex, badgesNeeded
 } from './helpers.js';
@@ -133,6 +134,7 @@ export function startBattle(state, cfg) {
   if (sides[1].kind === 'player') { const mm = sideActive(state, sides[0]); markSeen(getPlayer(state, sides[1].pid), mm.sp, !!mm.shiny); }
 
   const foeSide = sides[1];
+  const announce = () => { onEnter(state, 0); onEnter(state, 1); };
   fx(state, {
     k: 'battle', kind: cfg.kind, pid: p.id,
     foe: foeSide.kind === 'player'
@@ -148,6 +150,7 @@ export function startBattle(state, cfg) {
   } else {
     log(state, `⚔️ PvP: ${p.name} x ${getPlayer(state, foeSide.pid).name}!`, 'battle');
   }
+  announce(); // 😠 Intimidação de quem começa em campo
   return state.battle;
 }
 
@@ -173,6 +176,9 @@ function validateChoice(state, si, choice) {
     case 'attack': {
       const slot = Number(choice.slot || 0);
       if (![0, 1].includes(slot)) fail('Golpe inválido.');
+      const me = team[side.active];
+      const mv = monMoves(me)[slot];
+      if (mv && SUPPORT.includes(mv.kind) && gearOf(me)?.id === 'choice_band') fail('🎀 Com a Faixa Escolhida só dá para usar golpes de ataque.');
       return;
     }
     case 'switch': {
@@ -357,6 +363,42 @@ function aiChoice(state, si, rng) {
 }
 
 // ---------------------------------------------------------------- golpes
+// ⚔️ v41 — itens de batalha segurados e habilidades
+export const gearOf = m => { const it = m?.held ? getItem(m.held) : null; return it?.kind === 'gear' ? { id: m.held, ...it } : null; };
+export const abilOf = m => abilityOf(m?.sp);
+const SUPPORT = ['heal', 'buff', 'debuff', 'transform'];
+/** Efetividade levando em conta Levitação. */
+function typeMultVs(type, d) {
+  if (type === 'ground' && abilOf(d) === 'levitate') return 0;
+  return against(type, getSpecies(d.sp).types);
+}
+/** Multiplicador de dano vindo da habilidade (Chama/Torrente/Supercrescimento) e do item (Placa, Faixa Escolhida). */
+function gearAbilMult(a, type) {
+  let m = 1;
+  const ab = ABILITIES[abilOf(a)];
+  if (ab?.pinch === type && a.hp <= maxHpOf(a) / 3) m *= PINCH_MULT;
+  const g = gearOf(a);
+  if (g?.plate === type) m *= PLATE_MULT;
+  if (g?.id === 'choice_band') m *= BAND_MULT;
+  return m;
+}
+/** 😠 Intimidação ao entrar em campo. */
+function onEnter(state, si) {
+  const b = state.battle;
+  if (!b || b.over) return;
+  const me = sideActive(state, b.sides[si]);
+  if (!me || me.hp <= 0 || abilOf(me) !== 'intimidate') return;
+  const other = b.sides[1 - si];
+  const foe = sideActive(state, other);
+  if (!foe || foe.hp <= 0) return;
+  other.stage ||= {};
+  const st = other.stage[foe.uid] || 0;
+  if (st <= -2) return;
+  other.stage[foe.uid] = st - 1;
+  fx(state, { k: 'debuff', side: 1 - si, uid: foe.uid, move: 'Intimidação', stage: st - 1 });
+  log(state, `😠 Intimidação de ${speciesName(me.sp)}! O ataque de ${speciesName(foe.sp)} caiu.`, 'battle');
+}
+
 const stageMult = st => (st >= 0 ? 1 + 0.4 * st : 1 - 0.3 * -st);
 
 function atkOf(state, si) {
@@ -373,10 +415,10 @@ export function expectedDamage(state, si, move) {
   const a = sideActive(state, b.sides[si]);
   const d = sideActive(state, b.sides[1 - si]);
   if (!a || !d || move.kind === 'heal' || move.kind === 'buff' || move.kind === 'debuff' || move.kind === 'transform') return 0;
-  const mult = against(move.type, getSpecies(d.sp).types);
+  const mult = typeMultVs(move.type, d);
   const stab = getSpecies(a.sp).types.includes(move.type) ? STAB : 1;
   const hit = 1 - (move.miss || 0) / 6;
-  return (atkOf(state, si) * 0.7 + 3.5) * (move.power || 1) * mult * stab * hit;
+  return (atkOf(state, si) * 0.7 + 3.5) * (move.power || 1) * mult * stab * hit * gearAbilMult(a, move.type);
 }
 
 /** Melhor golpe para o lado si (usada pela IA dos NPCs e das CPUs). */
@@ -399,6 +441,7 @@ export function bestMoveSlot(state, si) {
     if (m.kind === 'debuff') score = foeStage > -2 && me.hp > foeHit * 1.8 ? foeHit * 0.9 : 0;
     if (m.kind === 'drain') score += Math.min(myMax - me.hp, score / 2) * 0.6;
     if (m.kind === 'transform') score = me.tf || foe.sp === 'ditto' ? -1 : 9999; // Ditto/Mew da CPU copia logo no começo
+    if (gearOf(me)?.id === 'choice_band' && SUPPORT.includes(m.kind)) score = -2; // 🎀 só ataca
     if (score > bestScore) { bestScore = score; best = i; }
   });
   return best;
@@ -414,6 +457,7 @@ function doSwitch(state, si, index) {
   log(state, `🔄 ${sideName(state, side)} enviou ${speciesName(team[index].sp)}!`);
   const other = state.battle.sides[1 - si];
   if (other.kind === 'player') markSeen(getPlayer(state, other.pid), team[index].sp, !!team[index].shiny);
+  onEnter(state, si);
 }
 
 function useBattleItem(state, si, choice) {
@@ -556,7 +600,7 @@ function attackDamage(state, rng, si, slot = 0) {
 
   const atk = atkOf(state, si);
   const type = move.type;
-  const mult = against(type, dSp.types);
+  const mult = typeMultVs(type, d);
   const stab = aSp.types.includes(type) ? STAB : 1;
   const roll = rng.d6();
   if (move.miss && roll <= move.miss) {
@@ -569,7 +613,15 @@ function attackDamage(state, rng, si, slot = 0) {
   const compMult = cb?.types?.includes(type) ? 1 + cb.dmg : 1; // bônus do companheiro (ex.: Misty em golpes de Água)
   const wMult = weatherMult(state, type); // clima (ex.: Chuva +30% em Água)
   const cqMult = atkSide.kind === 'player' ? conquestMult(state, atkSide.pid, type, GYMS) : 1; // Conquista: cidades dominadas
-  let dmg = mult === 0 ? 0 : Math.max(1, Math.round((atk * 0.7 + roll) * (move.power || 1) * stab * mult * critMod * compMult * wMult * cqMult));
+  const gMult = gearAbilMult(a, type); // ⚔️ habilidade de aperto, Placa, Faixa Escolhida
+  let dmg = mult === 0 ? 0 : Math.max(1, Math.round((atk * 0.7 + roll) * (move.power || 1) * stab * mult * critMod * compMult * wMult * cqMult * gMult));
+  // 🪨 Robustez / 🎗️ Faixa de Foco: com HP cheio, aguenta o golpe com 1 HP
+  let endured = null;
+  if (dmg >= d.hp && d.hp > 1 && d.hp >= maxHpOf(d)) {
+    if (abilOf(d) === 'sturdy') endured = 'Robustez';
+    else if (gearOf(d)?.id === 'focus_sash' && !(b.sashUsed || {})[d.uid]) { endured = 'Faixa de Foco'; b.sashUsed = { ...(b.sashUsed || {}), [d.uid]: true }; }
+    if (endured) dmg = d.hp - 1;
+  }
   dmg = Math.min(dmg, d.hp);
   d.hp -= dmg;
   let drained = 0;
@@ -577,7 +629,7 @@ function attackDamage(state, rng, si, slot = 0) {
 
   const eff = effectivenessLabel(mult);
   let msg = `${who} usou ${move.name} (🎲${roll})`;
-  if (mult === 0) msg += ` — não afeta ${speciesName(d.sp)}!`;
+  if (mult === 0) msg += ` — não afeta ${speciesName(d.sp)}${type === 'ground' && abilOf(d) === 'levitate' ? ' (🎈 Levitação)' : ''}!`;
   else {
     msg += ` e causou ${dmg} de dano`;
     if (roll === 6) msg += ' — CRÍTICO!';
@@ -588,6 +640,8 @@ function attackDamage(state, rng, si, slot = 0) {
     else if (wMult < 1) msg += ` ${weatherOf(state).icon} (clima −${Math.round((1 - wMult) * 100)}%)`;
   }
   if (drained) msg += ` 💚 +${drained} HP`;
+  if (gMult > 1 && mult > 0) msg += ` ${ABILITIES[abilOf(a)]?.pinch === type && a.hp <= maxHpOf(a) / 3 ? `${ABILITIES[abilOf(a)].icon} ${ABILITIES[abilOf(a)].name}` : ''}${gearOf(a) ? ` ${gearOf(a).emoji}` : ''}`.trimEnd();
+  if (endured) msg += ` ${endured === 'Robustez' ? '🪨' : '🎗️'} ${speciesName(d.sp)} aguentou firme com a ${endured}!`;
   // chance de causar condição (queimadura, veneno, paralisia, sono, congelamento)
   if (dmg > 0 && d.hp > 0) tryInflict(state, rng, 1 - si, d, move, aSp);
   // golpe de fogo descongela
@@ -783,7 +837,11 @@ function resolveRound(state, rng, choices) {
   const attackers = [0, 1].filter(si => choices[si].move === 'attack');
   // velocidade = nível × natureza (+/-10%); empate: lado 0
   const speedOf = si => { const m = sideActive(state, b.sides[si]); return statsOf(m).spe * (b.sides[si].status?.[m.uid]?.id === 'paralysis' ? 0.5 : 1); };
-  attackers.sort((x, y) => speedOf(y) - speedOf(x) || x - y);
+  // 🐾 Garra Rápida: 20% de chance de agir primeiro
+  const claw = {};
+  for (const si of attackers) if (gearOf(sideActive(state, b.sides[si]))?.id === 'quick_claw' && rng.chance(QUICK_CLAW)) claw[si] = 1;
+  attackers.sort((x, y) => (claw[y] || 0) - (claw[x] || 0) || speedOf(y) - speedOf(x) || x - y);
+  for (const si of attackers) if (claw[si]) log(state, `🐾 A Garra Rápida de ${speciesName(sideActive(state, b.sides[si]).sp)} fez ele agir primeiro!`);
   for (const si of attackers) {
     const me = sideActive(state, b.sides[si]);
     if (!me || me.hp <= 0) continue; // desmaiou antes de agir
@@ -812,6 +870,18 @@ function resolveRound(state, rng, choices) {
         awardKO(state, 1 - si, si);
         if (handleFaint(state, rng, si)) return;
       }
+    }
+  }
+
+  // 3b) 🍎 Restos: recupera um pouco de HP
+  if (!b.over) {
+    for (let si = 0; si < 2; si++) {
+      const mon = sideActive(state, b.sides[si]);
+      if (!mon || mon.hp <= 0 || b.mustSwitch[si] || gearOf(mon)?.id !== 'leftovers' || mon.hp >= maxHpOf(mon)) continue;
+      const healed = healMon(mon, 0, Math.max(1, Math.round(maxHpOf(mon) / LEFTOVERS_FRAC)));
+      if (!healed) continue;
+      log(state, `🍎 ${monLabel(state, b.sides[si])} comeu Restos e recuperou ${healed} HP.`, 'good');
+      fx(state, { k: 'heal', side: si, uid: mon.uid, amount: healed, hpAfter: mon.hp, maxHp: maxHpOf(mon) });
     }
   }
 
@@ -874,6 +944,7 @@ function handleFaint(state, rng, si) {
     log(state, `➡️ ${sideName(state, side)} enviou ${speciesName(m.sp)} (Nv. ${m.lvl})!`);
     const other = b.sides[1 - si];
     if (other.kind === 'player') markSeen(getPlayer(state, other.pid), m.sp, !!m.shiny);
+    onEnter(state, si);
   }
   return false;
 }
