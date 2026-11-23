@@ -159,8 +159,9 @@ export function watchMatch(matchId, onPing) {
     return () => es.close();
   }
   if (net.mode === 'prod') {
+    // 💸 v55: escuta a tabela leve match_pings (só id + versão), não a linha de matches (que mandava o estado inteiro a cada jogada)
     const ch = net.sb.channel('match-' + matchId)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${matchId}` }, () => onPing())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_pings', filter: `match_id=eq.${matchId}` }, () => onPing())
       .subscribe();
     return () => net.sb.removeChannel(ch);
   }

@@ -21,6 +21,7 @@ import { tmMovesFor, defaultMoveIds, MOVES } from '../../shared/data/moves.js';
 import { MEGAS, megaByStone } from '../../shared/data/megas.js';
 import { releaseGold } from '../../shared/data/release.js';
 import { levelEvoTarget, variantAfter, itemEvoTarget } from '../../shared/data/evolution.js';
+import { GMAX } from '../../shared/data/gmax.js';
 import { TITLE_BY_ID, unlockedTitles } from '../../shared/data/titles.js';
 import { bondLevel, bondGain, BOND_MAX, COMPANIONS } from '../../shared/data/companions.js';
 import { equippedCosmetic, equippedSkin, skinFor, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment, myCosmetics, refreshCosmeticInMatches } from './shop.js';
@@ -106,7 +107,7 @@ export async function mutateProfile(db, id, fn) {
     if (!prof) return null;
     const patch = await fn(prof);
     if (!patch) return prof;
-    const r = await db.updateProfileIf(id, prof.rev || 0, patch);
+    const r = await db.updateProfileIf(id, prof.rev || 0, patch, prof);
     if (r) return r;
   }
   throw new Error('Muitas alterações ao mesmo tempo na sua conta. Tente de novo.');
@@ -260,6 +261,21 @@ export async function profileOp(db, user, body) {
       return { stats: st, vault: cur.vault.map(x => (x.uid === body.uid ? { ...x, held: item || undefined } : x)) };
     })) };
   }
+  if (body.op === 'max_soup') { // 🍲 Sopa Max: dá o ✨ Fator Gigantamax a um Pokémon da Coleção (v55)
+    const prof = await mutateProfile(db, user.id, prof => {
+      const bag = { ...(prof.stats?.bag || {}) };
+      if (!(bag.max_soup > 0)) bad('Você não tem 🍲 Sopa Max (cozinhe no 🍳 Fogão da casa com Cogumelos Max).');
+      const vault = [...(prof.vault || [])];
+      const i = vault.findIndex(m => m.uid === body.uid);
+      if (i < 0) bad('Pokémon não encontrado.');
+      if (!GMAX[vault[i].sp]) bad(`${getSpecies(vault[i].sp)?.name || 'Esse Pokémon'} não tem forma Gigantamax.`);
+      if (vault[i].gx) bad('Ele já tem o Fator Gigantamax.');
+      vault[i] = { ...vault[i], gx: true };
+      bag.max_soup -= 1; if (bag.max_soup <= 0) delete bag.max_soup;
+      return { vault, stats: { ...(prof.stats || {}), bag } };
+    });
+    return { profile: await withCosmetic(db, prof) };
+  }
   if (body.op === 'evo_item') { // ✨ usar pedra / item de evolução da Mochila num Pokémon da Coleção (v54)
     const item = String(body.item || '');
     if (ITEMS[item]?.kind !== 'stone') bad('Item inválido.');
@@ -365,7 +381,7 @@ export async function profileOp(db, user, body) {
 export const MAX_SAVED_TURNS = 60;
 
 export async function leaderboard(db) {
-  const rows = await db.listProfiles(500);
+  const rows = await db.listProfiles(500, { stats: ['ranked', 'rankedWins', 'wins', 'champion', 'shinies', 'league'], pokedex: true });
   let shopItems = [];
   try { shopItems = (await getShop(db)).items || []; } catch { /* sem loja */ }
   const map = r => ({
@@ -400,7 +416,7 @@ export async function leaderboard(db) {
 function collectionEntry(mon, matchId) {
   const sp = mon.tf ? mon.tf.sp : mon.sp; // 🧬 transformado: salva a forma original
   const moves = mon.tf ? mon.tf.moves : mon.moves;
-  return { uid: mon.uid, sp, lvl: mon.lvl, forms: Array.isArray(mon.forms) && mon.forms.length ? mon.forms : undefined, shiny: !!mon.shiny, aura: mon.aura || null, nature: mon.nature || null, iv: mon.iv || null, moves: moves || null, capTier: mon.capTier || null, nick: mon.nick || null, trust: !!mon.trust || undefined, from: matchId, at: new Date().toISOString() };
+  return { uid: mon.uid, sp, lvl: mon.lvl, forms: Array.isArray(mon.forms) && mon.forms.length ? mon.forms : undefined, shiny: !!mon.shiny, aura: mon.aura || null, nature: mon.nature || null, iv: mon.iv || null, moves: moves || null, capTier: mon.capTier || null, nick: mon.nick || null, trust: !!mon.trust || undefined, v: mon.v || null, gx: !!mon.gx || undefined, from: matchId, at: new Date().toISOString() };
 }
 
 /**
@@ -449,7 +465,7 @@ function collectionPatch(prof, p, state) {
       const e = collectionEntry(mon, state.id);
       if (idx.has(mon.uid)) {
         const old = vault[idx.get(mon.uid)];
-        vault[idx.get(mon.uid)] = { ...old, sp: e.sp, lvl: Math.max(old.lvl || 1, e.lvl), shiny: e.shiny, aura: e.aura || old.aura || null, nature: old.nature || e.nature || null, iv: old.iv || e.iv || null, moves: e.moves || old.moves || null, ...(e.forms ? { forms: e.forms } : {}), capTier: old.capTier || e.capTier || null, nick: old.nick || null, ...(old.trust || e.trust ? { trust: true } : {}) };
+        vault[idx.get(mon.uid)] = { ...old, sp: e.sp, lvl: Math.max(old.lvl || 1, e.lvl), shiny: e.shiny, aura: e.aura || old.aura || null, nature: old.nature || e.nature || null, iv: old.iv || e.iv || null, moves: e.moves || old.moves || null, ...(e.forms ? { forms: e.forms } : {}), capTier: old.capTier || e.capTier || null, nick: old.nick || null, ...(old.trust || e.trust ? { trust: true } : {}), v: e.v, ...(old.gx || e.gx ? { gx: true } : {}) };
       } else {
         idx.set(mon.uid, vault.length);
         vault.push(e);
@@ -647,6 +663,16 @@ export async function matchOp(db, user, body) {
   if (op === 'duel_status') return duelQueueStatus(db, user);
   if (op === 'duel_cancel') return duelQueueCancel(db, user);
   if (op === 'get') {
+    // 💸 v55: o cliente diz qual versão já tem; se nada mudou, responde só "igual" (sem baixar o estado inteiro do Supabase)
+    if (Number.isFinite(Number(body.since)) && db.getMatchVersion) {
+      const v = await db.getMatchVersion(body.matchId);
+      if (!v) notFound('Sala não encontrada.');
+      if (v.version === Number(body.since) && v.status !== 'lobby') {
+        const members = await db.listMembers(v.id);
+        if (!members.includes(user.id)) forbidden();
+        return { same: true, version: v.version };
+      }
+    }
     const row = await db.getMatch(body.matchId);
     if (!row) notFound('Sala não encontrada.');
     const members = await db.listMembers(row.id);
@@ -746,6 +772,7 @@ async function playerCfg(db, e, options) {
   const prof = e.isBot ? null : await db.getProfile(e.id);
   if (prof) { try { p.cosmetic = await equippedCosmetic(db, prof); } catch { /* sem cosmético */ } }
   if (prof?.stats?.megaBracelet) p.megaKey = true; // 🔗 Bracelete Mega (ícone no peão; Mega só se a sala permitir)
+  if (prof?.stats?.dynamaxBand) p.dynaKey = true; // 🔴 Pulseira Dynamax (Gigantamax, mesmas regras da Mega)
   if (prof) { // companheiros da conta + nível de laço de cada um
     p.companions = prof.stats?.companions || []; p.companion = prof.stats?.companion || null;
     p.companionBond = Object.fromEntries(Object.entries(prof.stats?.companionBond || {}).map(([id, pts]) => [id, bondLevel(pts)]));
@@ -1115,7 +1142,8 @@ export async function recordResults(db, state, options = {}) {
         shinyDex: base.shinyDex || fresh.shinyDex, shinySeen: base.shinySeen || fresh.shinySeen, megaDex: base.megaDex || fresh.megaDex, overflow: base.overflow || fresh.overflow,
         vaultBonus: base.vaultBonus || fresh.vaultBonus, nicknames: base.nicknames || fresh.nicknames, bag: addToBag(base.bag, keep),
         serie: base.serie ?? fresh.serie, trophies: base.trophies ?? fresh.trophies,
-        ...(base.megaBracelet || (p.items?.mega_bracelet > 0 && !p.hardcoreLost) ? { megaBracelet: true } : {}) }; // 🔗 Bracelete Mega (só cai em Mega Raid)
+        ...(base.megaBracelet || (p.items?.mega_bracelet > 0 && !p.hardcoreLost) ? { megaBracelet: true } : {}), // 🔗 Bracelete Mega (só cai em Mega Raid)
+        ...(base.dynamaxBand || (p.items?.dynamax_band > 0 && !p.hardcoreLost) ? { dynamaxBand: true } : {}) }; // 🔴 Pulseira Dynamax (só cai em Raid Gigantamax)
       return { ...patch, stats: merged, points: calcPoints(cur.pokedex || [], merged) };
     });
     // Hardcore: quem caiu não leva nada (nem o ouro trazido); quem sobreviveu ganha o dobro de ouro da conta
@@ -1206,8 +1234,9 @@ export async function adminOp(db, user, body) {
       return { ok: true };
     }
     case 'grant_item': { // 🎒 prêmio de evento: item na Mochila da conta
-      if (body.item === 'mega_bracelet') { // 🔗 Bracelete Mega (prêmio de evento do admin)
-        const ok = await mutateProfile(db, body.userId, prof => ({ stats: { ...(prof.stats || {}), megaBracelet: true } }));
+      if (body.item === 'mega_bracelet' || body.item === 'dynamax_band') { // 🔗 Bracelete Mega / 🔴 Pulseira Dynamax (prêmio de evento do admin)
+        const key = body.item === 'mega_bracelet' ? 'megaBracelet' : 'dynamaxBand';
+        const ok = await mutateProfile(db, body.userId, prof => ({ stats: { ...(prof.stats || {}), [key]: true } }));
         if (!ok) notFound('Usuário não encontrado.');
         return { ok: true };
       }
@@ -1222,7 +1251,7 @@ export async function adminOp(db, user, body) {
       const info = await db.authInfo(String(body.userId || ''));
       if (!info) notFound('Conta não encontrada.');
       const p = await db.getProfile(info.id);
-      return { account: { ...info, trainer: p?.trainer_name || null, megaBracelet: !!p?.stats?.megaBracelet } };
+      return { account: { ...info, trainer: p?.trainer_name || null, megaBracelet: !!p?.stats?.megaBracelet, dynamaxBand: !!p?.stats?.dynamaxBand } };
     }
     case 'account_find': { // procurar pelo e-mail (para quem não lembra o nome de treinador)
       const q = String(body.q || '').trim();
@@ -1252,7 +1281,7 @@ export async function adminOp(db, user, body) {
     case 'remove_bracelet': {
       const ok = await mutateProfile(db, body.userId, prof => {
         const st = { ...(prof.stats || {}) };
-        delete st.megaBracelet;
+        if (body.item === 'dynamax_band') delete st.dynamaxBand; else delete st.megaBracelet;
         return { stats: st };
       });
       if (!ok) notFound('Usuário não encontrado.');
@@ -1286,7 +1315,7 @@ export async function adminOp(db, user, body) {
     }
     case 'get_admin_data': {
       const [shop, announcement, payments] = [await getShop(db), await db.getConfig('announcement'), await db.listPayments(100)];
-      const profiles = await db.listProfiles(500);
+      const profiles = await db.listProfiles(500, { stats: [] });
       const names = Object.fromEntries(profiles.map(p => [p.id, p.trainer_name]));
       return { shop, announcement, payments: payments.map(p => ({ ...p, user: names[p.user_id] || p.user_id })) };
     }

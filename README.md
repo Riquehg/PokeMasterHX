@@ -150,6 +150,8 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 
 - **v54 — 📖 Pokédex completa (Gen 1–9) + evoluções fiéis:** `scripts/build-dex.mjs` gera `shared/data/dexdata.js` a partir dos CSVs do PokeAPI (`scripts/data/pokeapi/`) e da lista de sprites do HOME (`scripts/data/sprites-home.txt`); os 806 antigos mantêm id/tier/HP/força. 1.025 espécies + 98 formas (regionais e de batalha) com DEF, habilidade, sexo e sprite próprios. `shared/data/evolution.js` (`levelEvoTarget`, `itemEvoTarget`, ramos por sexo/hora/forma visual); 45 itens de evolução em `EVO_ITEMS` (`items.js`, kind `stone`, guardam na Mochila da conta); op `evo_item` na Coleção. Variações visuais (`mon.v`, `variantFor`) e sprites novas em `pokemon/<arquivo>.png` e `pokemon/shiny/<arquivo>.png` (com reserva nos formatos antigos).
 
+- **v55 — 💸 economia de egress do Supabase:** o Realtime agora escuta `match_pings` (id + versão) em vez da linha de `matches` (rodar o bloco "v55" do `supabase/schema.sql`); `op: 'get'` com `since` responde `{ same: true }` sem baixar o estado; perfis gravados sem `select('*')` de volta; `listProfiles(limit, { stats: [...] })` nunca traz a Coleção (Liga guarda `serie.defView`); chat/amigos sem `stats`.
+
 ## 3. Publicar (passo a passo, só pelo navegador)
 
 ### 3.1 Supabase

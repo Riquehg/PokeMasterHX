@@ -298,3 +298,23 @@ end $$;
 
 -- Faz a API do Supabase enxergar as colunas/tabelas novas na hora (evita "could not find ... in the schema cache")
 notify pgrst, 'reload schema';
+
+-- ============================================================ 💸 v55: aviso leve de partida (economia de egress)
+-- O Realtime mandava a linha inteira de "matches" (com o estado do jogo) para cada jogador a cada jogada.
+-- Agora o servidor grava só (id, versão) em match_pings e o app escuta essa tabela.
+create table if not exists public.match_pings (
+  match_id uuid primary key references public.matches(id) on delete cascade,
+  version  int not null default 0,
+  at       timestamptz not null default now()
+);
+alter table public.match_pings enable row level security;
+drop policy if exists "ver pings" on public.match_pings;
+create policy "ver pings" on public.match_pings for select to authenticated using (true);
+do $$ begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'match_pings') then
+    alter publication supabase_realtime add table public.match_pings;
+  end if;
+  if exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'matches') then
+    alter publication supabase_realtime drop table public.matches;
+  end if;
+end $$;

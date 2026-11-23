@@ -14,6 +14,8 @@ const CPU_PREFIX = 'cpu_s_';
 const full = (db, m) => (m ? db.getMatch(m.id) : null);
 
 /** Copia da Coleção com nível limitado (para ataque/defesa). */
+/** 💸 v55: resumo do time de defesa (só espécie/nível/shiny) guardado na Liga — a tabela não precisa baixar a Coleção de ninguém. */
+const defViewOf = (vault, uids) => teamFrom(vault, uids).map(m => ({ sp: m.sp, lvl: m.lvl, shiny: !!m.shiny }));
 function teamFrom(vault, uids) {
   const out = uids.map(u => vault.find(v => v.uid === u)).filter(Boolean).slice(0, SERIE_TEAM);
   return out.map(v => ({ ...v, lvl: Math.min(SERIE_LEVEL_CAP, v.lvl), tf: undefined }));
@@ -41,7 +43,7 @@ async function closeSeason(db, season, now = new Date()) {
   const hist = (await db.getConfig('serie_history')) || { closed: {} };
   hist.closed ||= {};
   if (hist.closed[season]) return hist.closed[season];
-  const rows = await db.listProfiles(2000);
+  const rows = await db.listProfiles(2000, { stats: ['serie'] });
   const humans = rows.filter(r => r.stats?.serie?.season === season && (r.stats.serie.defense || []).length);
   const result = { moves: {}, final: {}, podium: [], champions: {}, at: now.toISOString() };
   hist.closed[season] = result; // marca antes de pagar (evita pagar duas vezes)
@@ -156,7 +158,7 @@ export async function serieOp(db, user, body) {
 
   if (body.op === 'serie_team') { // ⚽ nome e escudo do time
     const team = cleanTeam(body.team, `${prof.trainer_name} FC`);
-    const rows = await db.listProfiles(2000);
+    const rows = await db.listProfiles(2000, { stats: ['serie'] });
     if (rows.some(r => r.id !== user.id && r.stats?.serie?.team?.name?.toLowerCase() === team.name.toLowerCase())) bad('Já existe um time com esse nome. Escolha outro.');
     serie = { ...serie, team };
     await saveSerie(db, user.id, serie);
@@ -165,7 +167,7 @@ export async function serieOp(db, user, body) {
   if (body.op === 'serie_defense') {
     const uids = [...new Set((body.uids || []).map(String))].filter(u => vault.some(v => v.uid === u)).slice(0, SERIE_TEAM);
     if (uids.length < Math.min(SERIE_TEAM, vault.length) || !uids.length) bad(`O time de defesa precisa ter ${SERIE_TEAM} Pokémon da Coleção.`);
-    serie = { ...serie, defense: uids, team: serie.team || cleanTeam(null, `${prof.trainer_name} FC`) };
+    serie = { ...serie, defense: uids, defView: defViewOf(vault, uids), team: serie.team || cleanTeam(null, `${prof.trainer_name} FC`) };
     if (serie.start === undefined) { const st = lateStartPoints(serie.div, serie.season, now); serie.start = st; serie.pts = (serie.pts | 0) + st; }
     await saveSerie(db, user.id, serie);
     return serieView(db, user.id, serie, vault, now);
@@ -175,7 +177,7 @@ export async function serieOp(db, user, body) {
 }
 
 async function serieView(db, userId, serie, vault, now) {
-  const rows = await db.listProfiles(2000);
+  const rows = await db.listProfiles(2000, { stats: ['serie', 'trophies'] });
   const season = serie.season;
   const humans = [];
   let shopItems = [];
@@ -183,7 +185,14 @@ async function serieView(db, userId, serie, vault, now) {
   for (const r of rows) {
     const s = r.stats?.serie;
     if (!s || s.season !== season || (s.div | 0) !== serie.div || !(s.defense || []).length) continue;
-    const def = teamFrom(r.vault || [], s.defense);
+    // o meu: da Coleção (sempre atual); os outros: do resumo salvo (quem ainda não tem resumo: lê o perfil uma vez só)
+    let def = r.id === userId ? defViewOf(vault, s.defense) : s.defView;
+    if (!def) {
+      try {
+        const full = await db.getProfile(r.id); def = defViewOf(full?.vault || [], s.defense);
+        await mutateProfile(db, r.id, p => (p.stats?.serie?.defense ? { stats: { ...p.stats, serie: { ...p.stats.serie, defView: def } } } : null)); // guarda o resumo (só na 1ª vez)
+      } catch { def = def || []; }
+    }
     humans.push({ id: r.id, name: r.trainer_name, avatar: r.avatar, skin: equippedSkin(r, shopItems), club: s.team || cleanTeam(null, `${r.trainer_name} FC`), trophies: (r.stats?.trophies || []).length, pts: s.pts | 0, j: s.j | 0, v: s.v | 0, d: s.d | 0, sp: s.sp | 0, dv: s.dv | 0, dd: s.dd | 0,
       defense: def.map(m => ({ sp: m.sp, lvl: m.lvl, shiny: !!m.shiny })), me: r.id === userId });
   }
@@ -234,19 +243,19 @@ async function challenge(db, user, prof, serie, body, now) {
   const bot = botById(target);
   if (bot) {
     if (bot.div !== serie.div) bad('Esse treinador não está na sua série nesta temporada.');
-    foe = { id: `${CPU_PREFIX}${bot.id}`, name: `${bot.club.name} (${bot.name})`, avatar: bot.avatar, cosmetic: bot.skin ? { skin: bot.skin } : null, isBot: true, teamMons: botTeam(bot), ref: bot.id, megaKey: bot.div >= MEGA_SERIE };
+    foe = { id: `${CPU_PREFIX}${bot.id}`, name: `${bot.club.name} (${bot.name})`, avatar: bot.avatar, cosmetic: bot.skin ? { skin: bot.skin } : null, isBot: true, teamMons: botTeam(bot), ref: bot.id, megaKey: bot.div >= MEGA_SERIE, dynaKey: bot.div >= MEGA_SERIE };
   } else {
     const other = await db.getProfile(target);
     const os = other?.stats?.serie;
     if (!other || os?.season !== serie.season || (os.div | 0) !== serie.div) bad('Esse treinador não está na sua série nesta temporada.');
     const team = teamFrom(other.vault || [], os.defense || []);
     if (!team.length) bad('Esse treinador está sem time de defesa.');
-    foe = { id: `${CPU_PREFIX}${other.id.slice(0, 12)}`, name: `${os.team?.name || other.trainer_name + ' FC'} (${other.trainer_name})`, avatar: other.avatar || 1, cosmetic: await equippedCosmetic(db, other).catch(() => null), isBot: true, teamMons: team, ref: other.id, megaKey: !!other.stats?.megaBracelet };
+    foe = { id: `${CPU_PREFIX}${other.id.slice(0, 12)}`, name: `${os.team?.name || other.trainer_name + ' FC'} (${other.trainer_name})`, avatar: other.avatar || 1, cosmetic: await equippedCosmetic(db, other).catch(() => null), isBot: true, teamMons: team, ref: other.id, megaKey: !!other.stats?.megaBracelet, dynaKey: !!other.stats?.dynamaxBand };
   }
   // gasta o ataque ao começar (sair no meio não devolve)
   serie = { ...serie, dayCount: serie.dayCount + 1, foesToday: [...(serie.foesToday || []), target] };
   await saveSerie(db, user.id, serie);
-  const me = { id: user.id, name: serie.team?.name || prof.trainer_name, avatar: prof.avatar || 1, cosmetic: await equippedCosmetic(db, prof).catch(() => null), teamMons: myTeam, megaKey: !!prof.stats?.megaBracelet };
+  const me = { id: user.id, name: serie.team?.name || prof.trainer_name, avatar: prof.avatar || 1, cosmetic: await equippedCosmetic(db, prof).catch(() => null), teamMons: myTeam, megaKey: !!prof.stats?.megaBracelet, dynaKey: !!prof.stats?.dynamaxBand };
   const row = await createDuelMatch(db, { megas: serie.div >= MEGA_SERIE, // 💎 Megas liberadas nas Séries A e B
     name: `⚽ ${serieInfo(serie.div).name}: ${me.name} x ${foe.name}`, a: me, b: foe, hostId: user.id,
     options: { mode: 'duel', serie: { season: serie.season, div: serie.div, attacker: user.id, defender: foe.ref } }

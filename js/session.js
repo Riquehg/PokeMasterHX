@@ -91,8 +91,11 @@ export class OnlineSession extends Emitter {
     this.chat = match.chat || [];
     this.me = meId;
     this.busy = false;
-    this.unwatch = watchMatch(match.id, () => this.refresh());
-    this.poll = setInterval(() => this.refresh(), 8000);
+    // 💓 aviso em tempo real (match_pings) + consulta leve de reserva: a cada 3 s pergunta só "mudou?" (sem baixar o estado);
+    // quando o aviso em tempo real está funcionando, a reserva cai para a cada 9 s
+    this.rtOk = false; this.lastRefresh = 0;
+    this.unwatch = watchMatch(match.id, () => { this.rtOk = true; this.refresh(); });
+    this.poll = setInterval(() => { if (!this.rtOk || Date.now() - this.lastRefresh > 9000) this.refresh(); }, 3000);
     document.addEventListener('visibilitychange', this._vis = () => { if (!document.hidden) this.refresh(); });
   }
 
@@ -110,9 +113,11 @@ export class OnlineSession extends Emitter {
   }
 
   async refresh() {
+    this.lastRefresh = Date.now();
     try {
-      const { match } = await api('match', { op: 'get', matchId: this.match.id });
-      this.apply(match);
+      const r = await api('match', { op: 'get', matchId: this.match.id, since: this.match.version });
+      if (r.same) return; // 💸 nada mudou: não baixa o estado de novo
+      this.apply(r.match);
     } catch (e) {
       if (e.status === 403 || e.status === 404) this.emit(null, null, e);
     }

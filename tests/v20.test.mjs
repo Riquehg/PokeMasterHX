@@ -580,7 +580,7 @@ test('💎 Mega na batalha: ação grátis, 1 por batalha, precisa de Bracelete 
   assert.equal(g.tf.sp, 'gengar');
   assert.equal(s.battle.round, 0, 'não gastou a rodada');
   assert.ok(s.fx.some(f => f.k === 'mega'));
-  assert.match(applyAction(s, 'a', { type: 'battle', move: 'mega' }, { now: 0 }).error, /1 vez/);
+  assert.match(applyAction(s, 'a', { type: 'battle', move: 'mega' }, { now: 0 }).error, /1 Mega Evolução ou Gigantamax/);
   assert.match(applyAction(megaDuel({ megas: false }), 'a', { type: 'battle', move: 'mega' }, { now: 0 }).error, /não está liberada/);
   assert.match(applyAction(megaDuel({ key: false }), 'a', { type: 'battle', move: 'mega' }, { now: 0 }).error, /Bracelete/);
   assert.match(applyAction(megaDuel({ held: null }), 'a', { type: 'battle', move: 'mega' }, { now: 0 }).error, /Megapedra/);
@@ -1391,4 +1391,15 @@ test('✨ Coleção: usar item de evolução da Mochila', async () => {
   assert.equal(p.vault.find(x => x.uid === m.uid).sp, 'ninetales');
   assert.ok(!(p.stats.bag.fire_stone > 0));
   assert.ok(p.pokedex.includes('ninetales'));
+});
+
+// ---------------------------------------------------------------- v55 💸 economia de egress
+test('💸 Partida: "mudou?" responde só a versão quando nada mudou; listas de perfis sem a Coleção', async () => {
+  const { db, us: [a] } = await users(1);
+  const { match } = await matchOp(db, a, { op: 'solo', bots: 1, starter: 'charmander' });
+  const r1 = await matchOp(db, a, { op: 'get', matchId: match.id, since: match.version });
+  assert.equal(r1.same, true);
+  assert.equal(r1.match, undefined);
+  const r2 = await matchOp(db, a, { op: 'get', matchId: match.id, since: match.version - 1 });
+  assert.ok(r2.match?.state);
 });

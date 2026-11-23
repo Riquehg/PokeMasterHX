@@ -127,6 +127,7 @@ export function createMemoryDb() {
       return [...profiles.values()].sort((a, b) => (b.points || 0) - (a.points || 0)).slice(0, limit).map(copy);
     },
 
+    async getMatchVersion(id) { const m = matches.get(id); return m ? { id: m.id, version: m.version, status: m.status, host_id: m.host_id, is_public: m.is_public } : null; },
     async getMatch(id) { return copy(matches.get(id) || null); },
     async getMatchByCode(code) {
       return copy([...matches.values()].find(m => m.code === code && ['lobby', 'playing'].includes(m.status)) || null);

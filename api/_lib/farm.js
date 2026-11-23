@@ -179,7 +179,7 @@ export async function farmOp(db, user, body) {
   }
 
   if (body.op === 'farm_top') { // ❤️ Fazendas mais curtidas
-    const rows = await db.listProfiles(2000);
+    const rows = await db.listProfiles(2000, { stats: ['farm'] });
     const top = rows.filter(r => r.stats?.farm?.slots?.length).map(r => ({ id: r.id, name: r.trainer_name, avatar: r.avatar, skin: equippedSkin(r, shopItems), likes: r.stats.farm.likes || 0, lvl: r.stats.farm.lvl || 1, mons: r.stats.farm.slots.length }))
       .sort((a, b) => b.likes - a.likes || b.lvl - a.lvl).slice(0, 30);
     return { top };
@@ -422,9 +422,16 @@ export async function farmOp(db, user, body) {
     if (!M) bad('Receita inválida.');
     const item = M.type ? `curry_${String(body.ptype || '')}` : String(body.meal);
     if (!MEAL_ITEMS[item]) bad('Escolha o tipo do Curry.');
-    const { prof } = await save(db, user.id, farm => {
+    const { prof } = await save(db, user.id, (farm, cur) => {
       const h = (farm.home = { ...(farm.home || {}) });
       if (!hasPlaced(h, 'stove')) bad('Coloque um 🍳 Fogão na casa primeiro.');
+      let bagOut = null;
+      if (M.bagIn) { // 🍄 ingredientes que vêm da Mochila da conta (ex.: Cogumelo Max das Raids Gigantamax)
+        const bag = { ...(cur.stats?.bag || {}) };
+        for (const [it, n] of Object.entries(M.bagIn)) if ((bag[it] || 0) < n) bad(`Falta ingrediente: ${n}× ${ITEMS[it]?.name || it} (vem de Raids Gigantamax).`);
+        for (const [it, n] of Object.entries(M.bagIn)) { bag[it] -= n; if (bag[it] <= 0) delete bag[it]; }
+        bagOut = bag;
+      }
       h.cook = [...(h.cook || [])];
       if (h.cook.length >= cookQueue(h)) bad('O fogão está ocupado.');
       const goods = { ...(farm.goods || {}) };
@@ -432,7 +439,7 @@ export async function farmOp(db, user, body) {
       for (const [g, n] of Object.entries(M.in)) goods[g] -= n;
       farm.goods = goods;
       h.cook.push({ id: `c${now.toString(36)}`, item, done: now + M.hours * 3600000 });
-      return {};
+      return bagOut ? { bag: bagOut } : {};
     });
     return { farm: view(prof, current(prof, now), user.id), message: `🍳 ${MEAL_ITEMS[item].name} no fogo!` };
   }

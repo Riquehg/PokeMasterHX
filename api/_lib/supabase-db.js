@@ -27,6 +27,16 @@ function check({ data, error }) {
   return data;
 }
 
+// 💓 v55: aviso leve de "a partida mudou" (tabela match_pings no Realtime, em vez da linha inteira de matches com o estado).
+// Se a tabela ainda não existir (SQL não rodado), só ignora: o cliente continua consultando de tempos em tempos.
+let noPings = false;
+async function pingMatch(matchId, version) {
+  if (noPings) return;
+  try {
+    const { error } = await admin().from('match_pings').upsert({ match_id: matchId, version: version | 0, at: new Date().toISOString() });
+    if (error && /match_pings|does not exist|schema cache/i.test(error.message)) noPings = true;
+  } catch { /* aviso é opcional */ }
+}
 const MATCH_COLS = 'id, code, name, host_id, status, is_public, has_pin, options, lobby, state, chat, version, created_at, updated_at';
 
 export const supabaseDb = {
@@ -84,14 +94,16 @@ export const supabaseDb = {
     return res;
   },
   /** Grava só se ninguém mexeu no perfil desde a leitura (rev igual). Devolve o perfil novo ou null. */
-  async updateProfileIf(id, rev, patch) {
+  // 💸 v55 (cota de egress): a gravação NÃO devolve o perfil inteiro (vault + stats); o perfil novo é montado aqui
+  // a partir do que acabou de ser lido (`base`) + o patch. Ouro/diamantes mudam só pelo wallet_add (que relê o perfil).
+  async updateProfileIf(id, rev, patch, base = null) {
     if (noRevColumn) return updateWithRevFallback(id, { ...patch, updated_at: new Date().toISOString() }, 0);
-    const { data, error } = await admin().from('profiles')
-      .update({ ...patch, rev: (rev || 0) + 1, updated_at: new Date().toISOString() })
-      .eq('id', id).eq('rev', rev || 0).select('*');
+    const upd = { ...patch, rev: (rev || 0) + 1, updated_at: new Date().toISOString() };
+    const { data, error } = await admin().from('profiles').update(upd).eq('id', id).eq('rev', rev || 0).select(base ? 'id' : '*');
     if (error && isMissingRev(error)) { noRevColumn = true; return updateWithRevFallback(id, { ...patch, updated_at: new Date().toISOString() }, 0); }
     if (error) throw new Error(error.message);
-    return data?.[0] || null;
+    if (!data?.[0]) return null;
+    return base ? { ...base, ...upd } : data[0];
   },
   /** Soma ouro e diamantes atomicamente (null se ficaria negativo). */
   async walletAdd(id, dDiamonds, dGold) {
@@ -137,10 +149,25 @@ export const supabaseDb = {
     return check(await q);
   },
 
-  async listProfiles(limit) {
-    return check(await admin().from('profiles').select('id, trainer_name, avatar, points, rating, diamonds, gold, stats, pokedex, vault, is_admin, last_seen, cosmetics').order('points', { ascending: false }).limit(limit));
+  /**
+   * Lista de perfis para rankings/Liga/Fazendas. 💸 v55: nunca traz a Coleção (vault) e, com `opts.stats`,
+   * traz só os pedaços do stats pedidos (ex.: ['serie']) — antes vinha tudo de todo mundo a cada tela aberta.
+   * opts.pokedex: inclui a lista da Pokédex (só o ranking usa).
+   */
+  async listProfiles(limit, opts = {}) {
+    const keys = Array.isArray(opts.stats) ? opts.stats.filter(k => /^[a-zA-Z]+$/.test(k)) : null;
+    const cols = ['id, trainer_name, avatar, points, rating, is_admin, last_seen, cosmetics', opts.pokedex ? 'pokedex' : null,
+      keys ? keys.map(k => `s_${k}:stats->${k}`).join(', ') : 'stats'].filter(Boolean).join(', ');
+    const rows = check(await admin().from('profiles').select(cols).order('points', { ascending: false }).limit(limit));
+    if (!keys) return rows;
+    return rows.map(r => { const o = { ...r, stats: {} }; for (const k of keys) { if (r[`s_${k}`] != null) o.stats[k] = r[`s_${k}`]; delete o[`s_${k}`]; } return o; });
   },
 
+  /** 💸 v55: só a versão (para o "tem novidade?" do cliente, sem baixar o estado inteiro). */
+  async getMatchVersion(id) {
+    if (!id) return null;
+    return check(await admin().from('matches').select('id, version, status, host_id, is_public').eq('id', id).maybeSingle());
+  },
   async getMatch(id) {
     if (!id) return null;
     return check(await admin().from('matches').select(MATCH_COLS).eq('id', id).maybeSingle());
@@ -166,6 +193,7 @@ export const supabaseDb = {
   async updateMatch(id, expectedVersion, patch) {
     const data = check(await admin().from('matches').update({ ...patch, updated_at: new Date().toISOString() })
       .eq('id', id).eq('version', expectedVersion).select('id'));
+    if (data.length > 0) await pingMatch(id, patch.version ?? expectedVersion + 1);
     return data.length > 0;
   },
 
@@ -239,7 +267,7 @@ export const supabaseDb = {
   },
   async getProfilesByIds(ids) {
     if (!ids.length) return [];
-    return check(await admin().from('profiles').select('id, trainer_name, avatar, rating, points, stats, cosmetics, last_seen').in('id', ids));
+    return check(await admin().from('profiles').select('id, trainer_name, avatar, rating, points, cosmetics, last_seen').in('id', ids)); // 💸 v55: sem stats (chat e amigos só usam o visual)
   },
   async listFriendships(userId) {
     return check(await admin().from('friendships').select('*').or(`user_id.eq.${userId},friend_id.eq.${userId}`));
