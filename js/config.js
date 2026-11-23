@@ -2,6 +2,9 @@
 import { getSpecies } from '../shared/data/pokemon.js';
 import { ITEMS } from '../shared/data/items.js';
 import { MEGAS } from '../shared/data/megas.js';
+import '../shared/data/gmax.js'; // registra as formas Gigantamax (gmax_<espécie>)
+import { variantFor } from '../shared/rules/monsters.js';
+import { genderFor } from '../shared/data/gender.js';
 import { TYPE_LABELS, TYPE_COLORS } from '../shared/rules/types.js';
 
 export const CFG = {
@@ -41,7 +44,7 @@ export function spriteCandidates(spId, shiny, look = null) {
   }
   const v = look?.v && (s.variants || []).includes(look.v) ? `${s.file}-${look.v}` : look?.sex === 'f' && s.fem ? `${s.file}-f` : s.file;
   const out = [`${HOME_DIR(shiny)}${v}.png`, `${HOME_DIR(shiny)}${s.file}.png`];
-  if (s.form) return [...out, ...spriteCandidates(s.form, shiny).slice(2)]; // forma sem sprite antiga → a da espécie base
+  if (s.form || s.gmaxOf) return [...out, ...spriteCandidates(s.form || s.gmaxOf, shiny)]; // forma/Gigantamax sem sprite → a da espécie base
   const dirs = shiny ? SHINY_DIRS : NORMAL_DIRS;
   for (const d of dirs) out.push(`${d}${pad(s.dex)}.png`);
   for (const d of dirs) for (const n of nameVariants(s)) out.push(`${d}${n}.png`);
@@ -61,7 +64,7 @@ function rememberFormat(shiny, idx) {
 export function monSprite(spOrMon, shiny) {
   const id = typeof spOrMon === 'string' ? spOrMon : spOrMon.sp;
   const isShiny = !!(typeof spOrMon === 'string' ? shiny : spOrMon.shiny);
-  const look = typeof spOrMon === 'string' ? null : { v: spOrMon.v, sex: spOrMon.gender === 'F' ? 'f' : undefined };
+  const look = typeof spOrMon === 'string' ? null : { v: spOrMon.v !== undefined ? spOrMon.v : spOrMon.uid ? variantFor(id, spOrMon.uid) : undefined, sex: (spOrMon.gender || (spOrMon.uid ? genderFor(id, spOrMon.uid, getSpecies(id)) : null)) === 'F' ? 'f' : undefined };
   const list = spriteCandidates(id, isShiny, look);
   if (!list.length) return '';
   const i = String(id).startsWith('mega_') ? 0 : Math.min(preferred(isShiny), list.length - 1);

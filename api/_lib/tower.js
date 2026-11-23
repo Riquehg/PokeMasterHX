@@ -3,6 +3,7 @@
 import { TOWER_PRICE, TOWER_TEAM, TOWER_LEVEL, TOWER_SET, pbForWin, SET_CLEAR_BONUS, TOWER_POOLS, BOSS_LEGENDS, BOSS_NAME, TOWER_NAMES, tierOfStreak, TOWER_SHOP } from '../../shared/data/tower.js';
 import { GEAR } from '../../shared/data/battlegear.js';
 import { MEGAS, stoneItemId } from '../../shared/data/megas.js';
+import { GMAX } from '../../shared/data/gmax.js';
 import { ITEMS } from '../../shared/data/items.js';
 import { TYPES } from '../../shared/rules/types.js';
 import { createRng, randomSeed } from '../../shared/rules/rng.js';
@@ -33,7 +34,10 @@ function foeTeam(streak, n, seed) {
     const megaAble = team.map(m => Object.values(MEGAS).find(x => x.base === m.sp)).filter(Boolean);
     if (megaAble.length) { const mg = rng.pick(megaAble); const mon = team.find(m => m.sp === mg.base); mon.held = stoneItemId(mg); megaKey = true; }
   }
-  return { team, megaKey, boss };
+  // 🔴 sem Mega: quem tem forma Gigantamax pode vir com o Fator (o Mestre e a fase 3)
+  let dynaKey = false;
+  if ((boss || tier >= 2) && !megaKey) { const g = team.find(m => GMAX[m.sp]); if (g) { g.gx = true; dynaKey = true; } }
+  return { team, megaKey, dynaKey, boss };
 }
 
 export async function towerOp(db, user, body) {
@@ -69,8 +73,8 @@ export async function towerOp(db, user, body) {
     const seed = randomSeed();
     const f = foeTeam(t.streak, t.set.n, seed);
     const foeName = f.boss ? BOSS_NAME : TOWER_NAMES[seed % TOWER_NAMES.length];
-    const me = { id: user.id, name: prof.trainer_name, avatar: prof.avatar || 1, cosmetic: await equippedCosmetic(db, prof).catch(() => null), teamMons: mine, megaKey: !!prof.stats?.megaBracelet };
-    const foe = { id: `${CPU}${seed}`, name: foeName, avatar: f.boss ? 8 : 1 + (seed % 7), isBot: true, teamMons: f.team, megaKey: f.megaKey, cosmetic: f.boss ? { frame: 'royal', title: 'Mestre da Torre' } : null };
+    const me = { id: user.id, name: prof.trainer_name, avatar: prof.avatar || 1, cosmetic: await equippedCosmetic(db, prof).catch(() => null), teamMons: mine, megaKey: !!prof.stats?.megaBracelet, dynaKey: !!prof.stats?.dynamaxBand };
+    const foe = { id: `${CPU}${seed}`, name: foeName, avatar: f.boss ? 8 : 1 + (seed % 7), isBot: true, teamMons: f.team, megaKey: f.megaKey, dynaKey: f.dynaKey, cosmetic: f.boss ? { frame: 'royal', title: 'Mestre da Torre' } : null };
     const row = await createDuelMatch(db, { megas: true, name: `🗼 Torre — duelo ${t.set.n}/${TOWER_SET}${f.boss ? ' (👑 Mestre)' : ''}: ${me.name} x ${foe.name}`, a: me, b: foe, hostId: user.id,
       options: { mode: 'duel', tower: { player: user.id, n: t.set.n, boss: f.boss } } });
     await mutateProfile(db, user.id, cur => ({ stats: { ...(cur.stats || {}), tower: { ...TW(cur.stats), matchId: row.id } } }));

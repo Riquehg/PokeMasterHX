@@ -152,6 +152,8 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 
 - **v55 — 💸 economia de egress do Supabase:** o Realtime agora escuta `match_pings` (id + versão) em vez da linha de `matches` (rodar o bloco "v55" do `supabase/schema.sql`); `op: 'get'` com `since` responde `{ same: true }` sem baixar o estado; perfis gravados sem `select('*')` de volta; `listProfiles(limit, { stats: [...] })` nunca traz a Coleção (Liga guarda `serie.defView`); chat/amigos sem `stats`.
 
+- **v56 — 🔴 Gigantamax:** `shared/data/gmax.js` (34 formas `gmax_<id>`: HP ×1,5, força ×1,2, 3 rodadas) e `shared/rules/gmax.js` (Raid Gigantamax 15% quando o chefe não é Mega; 🍄 Cogumelo Max; 🔴 Pulseira Dynamax 1%). Batalha: `gmaxBlock`/`doGmax`/`endGmax` (ação grátis, divide o "1 por batalha" com a Mega, acaba ao sair de campo). `player.dynaKey` ← `stats.dynamaxBand`; Fator `mon.gx` (captura de Raid Gmax, 1% na natureza, 🍲 Sopa Max — receita da casa, op `max_soup`). Salas: "Megas e Gigantamax".
+
 ## 3. Publicar (passo a passo, só pelo navegador)
 
 ### 3.1 Supabase

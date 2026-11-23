@@ -104,7 +104,7 @@ export function statCard(mon, { owner = null, act = '', index = '', extra = '', 
     ${v.shiny ? '<span class="pk-ribbon">★ Shiny +15%</span>' : ''}<span class="pk-tier t${sp.tier}">${TIER_TXT[sp.tier]}</span>${sp.mythical ? '<span class="pk-cat mythic" title="Mítico: não aparece solto, só em aparições raras, Raids e prêmios">🌟 Mítico</span>' : sp.ultra ? '<span class="pk-cat ultra">🌀 Ultra</span>' : ''}
     <div class="pk-art"><img src="${monSprite(mon)}" alt="${esc(v.name)}" loading="lazy"></div>
     <div class="pk-nature" title="${esc(natureLabel(mon.nature))}">❖ ${esc(mon.nature || 'Sem natureza')}</div>
-    <div class="pk-name">${esc(v.name)}${genderHtml(genderOf(mon, getSpecies(mon.sp)))}${mon.nick ? `<span class="pk-sp">${esc(v.species)}</span>` : ''}</div>
+    <div class="pk-name">${esc(v.name)}${genderHtml(genderOf(mon, getSpecies(mon.sp)))}${mon.gx ? '<span class="gx-chip" title="Fator Gigantamax">🔴</span>' : ''}${mon.nick ? `<span class="pk-sp">${esc(v.species)}</span>` : ''}</div>
     <div class="pk-lv">Nv. ${v.lvl}</div>
     <div class="pk-types">${v.types.map(t => `<span class="pk-type" style="background:${typeColor(t)}">${esc(typeLabel(t))}</span>`).join('')}</div>
     ${showHp && mon.hp !== undefined ? `<div class="pk-hpline">${hpBar(hp, v.maxHp)}<span>${hp}/${v.maxHp}</span></div>` : ''}

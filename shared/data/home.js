@@ -58,14 +58,16 @@ export const MEALS = {
   iv_pancake: { name: 'Panqueca do Potencial', emoji: '🥞', hours: 8, in: { farinha: 2, ovo: 1, leite: 2, lum: 2 }, desc: 'Nesta partida: os selvagens nascem com potencial melhor (cada IV no mínimo 12 de 31).' },
   curry: { name: 'Curry de Tipo', emoji: '🍛', hours: 6, in: { oran: 3, razz: 2, sitrus: 2 }, type: true, desc: 'Escolha o tipo. Nesta partida: golpes desse tipo +15% e mais Pokémon desse tipo aparecem.' },
   bond_pudding: { name: 'Pudim da Amizade', emoji: '🍮', hours: 6, in: { leite: 2, ovo: 2, mel: 1, pecha: 2 }, desc: 'Nesta partida: o laço com o companheiro cresce em dobro.' },
-  xp_shake: { name: 'Vitamina Turbo', emoji: '🥤', hours: 4, in: { leite: 2, sitrus: 2, mel: 1 }, desc: 'Nesta partida: +30% de XP nas batalhas.' }
+  xp_shake: { name: 'Vitamina Turbo', emoji: '🥤', hours: 4, in: { leite: 2, sitrus: 2, mel: 1 }, desc: 'Nesta partida: +30% de XP nas batalhas.' },
+  // 🍲 v55: não é comida de partida — dá o ✨ Fator Gigantamax a um Pokémon da Coleção. Cogumelos Max vêm de Raids Gigantamax.
+  max_soup: { name: 'Sopa Max', emoji: '🍲', hours: 24, in: { leite: 2, ovo: 2, mel: 2, lum: 2 }, bagIn: { max_mushroom: 3 }, soup: true, desc: 'Dê a um Pokémon com forma Gigantamax (Coleção → 🎒): ele ganha o ✨ Fator Gigantamax para sempre.' }
 };
 export const CURRY_MULT = 1.15, XP_SHAKE_MULT = 1.3, IV_PANCAKE_MIN = 12, SHINY_CAKE_MULT = 2;
 /** Ids dos itens de comida (curry vira curry_<tipo>). */
 export const MEAL_ITEMS = {};
 for (const [id, m] of Object.entries(MEALS)) {
   if (m.type) for (const t of TYPES) MEAL_ITEMS[`curry_${t}`] = { meal: id, type: t, name: `Curry ${TYPE_LABELS[t]}`, emoji: m.emoji, desc: `Nesta partida: golpes do tipo ${TYPE_LABELS[t]} +15% e mais Pokémon ${TYPE_LABELS[t]} aparecem.` };
-  else MEAL_ITEMS[id] = { meal: id, name: m.name, emoji: m.emoji, desc: m.desc };
+  else MEAL_ITEMS[id] = { meal: id, name: m.name, emoji: m.emoji, desc: m.desc, ...(m.soup ? { soup: true } : {}) };
 }
 export const TALK_BOND = 5, PLAY_XP = 300;
 export const cookQueue = home => 1 + (home?.placed?.some(p => p.f === 'fridge') ? 1 : 0);

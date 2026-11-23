@@ -2,6 +2,7 @@ import { MEGAS } from './megas.js';
 import { SPECIES } from './pokemon.js';
 import { GEAR } from './battlegear.js';
 import { MEAL_ITEMS } from './home.js';
+import { BAND_ID, SOUP_ID, MUSHROOM_ID } from './gmax.js';
 // Itens. Só entra aqui o que tem efeito implementado no motor (shared/engine.js).
 // minTier: a partir de que tier de cidade o item aparece na loja (0 = não vende).
 // image: arquivo dentro do bucket "sprites/items/" do Supabase (fallback no front se não existir).
@@ -71,11 +72,16 @@ for (const m of Object.values(MEGAS)) {
 }
 ITEMS.mega_bracelet = { name: 'Bracelete Mega', kind: 'key', price: 0, minTier: 0, image: 'mega-bracelet.png', desc: 'Permite Mega Evoluir. Só cai em Mega Raids (raríssimo) e não pode ser trocado.' };
 
+// 🔴 Gigantamax (v55)
+ITEMS[BAND_ID] = { name: 'Pulseira Dynamax', kind: 'key', price: 0, minTier: 0, image: 'dynamax_band.png', emoji: '🔴', desc: 'Permite Gigantamax (no lugar da Mega, 1 vez por batalha). Só cai em Raids Gigantamax (raríssimo) e não pode ser trocada.' };
+ITEMS[MUSHROOM_ID] = { name: 'Cogumelo Max', kind: 'ingredient', price: 0, minTier: 0, image: 'max_mushroom.png', emoji: '🍄', desc: 'Ingrediente da 🍲 Sopa Max (🍳 cozinha da casa). Vem de Raids Gigantamax.' };
+ITEMS[SOUP_ID] = { name: 'Sopa Max', kind: 'soup', price: 0, minTier: 0, image: 'max_soup.png', emoji: '🍲', desc: 'Dê a um Pokémon da Coleção que tenha forma Gigantamax: ele ganha o ✨ Fator Gigantamax para sempre.' };
+
 // ⚔️ Itens de batalha (segurados): vêm da 🔨 Oficina, ficam na Mochila da conta e vão para o Pokémon pelo botão 🎒 da Coleção.
 for (const [id, g] of Object.entries(GEAR)) ITEMS[id] = { name: g.name, kind: 'gear', price: 0, minTier: 0, emoji: g.emoji, plate: g.plate || null, desc: `Item de batalha (segurado): ${g.desc}` };
 
 // 🍽️ comidas da casa (v49): levar 1 por partida; o efeito vale a partida inteira
-for (const [id, m] of Object.entries(MEAL_ITEMS)) ITEMS[id] = { name: m.name, kind: 'meal', price: 0, minTier: 0, emoji: m.emoji, meal: m.meal, mealType: m.type || null, desc: `Comida (leve 1 por partida): ${m.desc}` };
+for (const [id, m] of Object.entries(MEAL_ITEMS)) if (!m.soup) ITEMS[id] = { name: m.name, kind: 'meal', price: 0, minTier: 0, emoji: m.emoji, meal: m.meal, mealType: m.type || null, desc: `Comida (leve 1 por partida): ${m.desc}` };
 
 // ✨ Itens de evolução (v54) — cada um evolui só os Pokémon certos, como nos jogos. image = items/<id>.png
 // grupo: 'stone' (pedras elementais, lojas Azuis+), 'trade' (itens de troca e Cabo de Conexão, lojas Vermelhas+), 'rare' (Gen 8–9, lojas Amarelas)
@@ -112,13 +118,13 @@ export function pickEvoItem(rng, useful = []) {
   return rng.weighted(Object.entries(EVO_ITEMS).map(([id, [, g]]) => [id, w[g] * (useful.includes(id) ? 4 : 1)]));
 }
 
-export const KEEP_KINDS = ['ball', 'charm', 'tm', 'megastone', 'fragment', 'gear', 'meal', 'stone'];
+export const KEEP_KINDS = ['ball', 'charm', 'tm', 'megastone', 'fragment', 'gear', 'meal', 'stone', 'ingredient', 'soup'];
 export const isKeepable = id => !!ITEMS[id] && KEEP_KINDS.includes(ITEMS[id].kind);
 export const BAG_MAX_PER_ITEM = 99;
 /** Quanto de cada item dá para levar para uma partida (modo Coleção). */
 export function bringLimit(id) {
   const it = ITEMS[id];
-  if (!it || !isKeepable(id) || it.kind === 'megastone' || it.kind === 'fragment' || it.kind === 'gear') return 0;
+  if (!it || !isKeepable(id) || ['megastone', 'fragment', 'gear', 'ingredient', 'soup'].includes(it.kind)) return 0;
   if (id === 'master_ball') return 1;
   if (it.kind === 'charm') return 1;
   if (it.kind === 'meal') return 1;

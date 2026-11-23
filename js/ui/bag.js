@@ -27,6 +27,9 @@ export function openAccountBag(profile, onChange, openMarket) {
     const megaBox = `<div class="mega-box"><div class="row" style="gap:8px;align-items:center"><img class="bracelet-ic ${profile?.stats?.megaBracelet ? '' : 'off'}" src="${itemUrl(BRACELET_ID)}" alt="">
         <div><b>🔗 Bracelete Mega</b> ${profile?.stats?.megaBracelet ? '<span class="chip green">Você tem!</span>' : '<span class="chip">ainda não</span>'}
         <div class="tiny muted">Só cai em 💎 Mega Raids (raríssimo) e não pode ser trocado. Com ele e a Megapedra segurada, o Pokémon Mega Evolui 1 vez por batalha (salas Coleção com Megas e Liga Séries A/B).</div></div></div>
+      <div class="row" style="gap:8px;align-items:center;margin-top:6px"><img class="bracelet-ic ${profile?.stats?.dynamaxBand ? '' : 'off'}" src="${itemUrl('dynamax_band')}" alt="">
+        <div><b>🔴 Pulseira Dynamax</b> ${profile?.stats?.dynamaxBand ? '<span class="chip green">Você tem!</span>' : '<span class="chip">ainda não</span>'}
+        <div class="tiny muted">Só cai em 🔴 Raids Gigantamax (raríssimo). Com ela, um Pokémon com o ✨ Fator Gigantamax fica gigante por 3 rodadas — no lugar da Mega (1 dos dois por batalha). ${(profile?.vault || []).filter(m => m.gx).length} Pokémon seus têm o Fator.</div></div></div>
       ${holders.length ? `<div class="row wrap" style="gap:6px;margin-top:6px">${holders.map(m => `<span class="chip"><img class="chip-ic" src="${itemUrl(m.held)}" alt="">${esc(m.nick || getSpecies(m.sp)?.name)} <button class="btn sm x" data-act="unhold" data-uid="${esc(m.uid)}" title="Tirar a pedra (volta para a Mochila)">✕</button></span>`).join('')}</div>` : ''}</div>`;
     if (stoneFor) {
       const mg = MEGAS[ITEMS[stoneFor]?.mega];

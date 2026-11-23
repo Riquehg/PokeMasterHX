@@ -289,6 +289,7 @@ export function rollWild(rng, tier, opts = {}) {
   const shiny = rng.chance(shinyRate);
   const mon = createMon(rng, speciesId, level, { shiny });
   mon.wild = true;
+  if (getSpecies(speciesId)?.gmax && rng.chance(opts.factorChance ?? 0.01)) mon.gx = true; // 🔴 Fator Gigantamax (raro)
   return mon;
 }
 

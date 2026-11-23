@@ -40,7 +40,7 @@ export async function createDuelMatch(db, { name, a, b, options, hostId, megas =
   }
   const state = createMatch({
     kind: 'duel', id: 'pending', mode: 'online', seed: randomSeed(), now: Date.now(), options: { megas: !!megas },
-    players: [a, b].map(e => ({ id: e.id, name: e.name, avatar: e.avatar, isBot: !!e.isBot, teamMons: e.teamMons, cosmetic: e.cosmetic, megaKey: !!e.megaKey }))
+    players: [a, b].map(e => ({ id: e.id, name: e.name, avatar: e.avatar, isBot: !!e.isBot, teamMons: e.teamMons, cosmetic: e.cosmetic, megaKey: !!e.megaKey, dynaKey: !!e.dynaKey }))
   });
   const finished = state.status === 'finished';
   const row = await db.insertMatch({

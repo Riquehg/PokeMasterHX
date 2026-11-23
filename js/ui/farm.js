@@ -17,6 +17,7 @@ import { natureLabel } from '../../shared/data/natures.js';
 import { ART_PALETTE, ART_SIZE, ART_MAX, artSvg, isArtKey, artIndex } from '../../shared/data/farmart.js';
 import { EXPANSIONS } from '../../shared/data/expansions.js';
 import { FURNITURE, WALLS, FLOORS, ROOM_W, ROOM_H, HOME_MAX, MEALS, MEAL_ITEMS, TALK_BOND, PLAY_XP } from '../../shared/data/home.js';
+import { ITEMS as ALL_ITEMS } from '../../shared/data/items.js';
 
 // ✨ v47 — decoração viva: animação por enfeite + o que acontece ao tocar
 const DECOR_FX = {
@@ -279,8 +280,9 @@ export async function openFarm(ctx, profile, userId = null) {
         <h4>🔥 No fogão (${jobs.length}/${h.cookMax || 1})</h4>
         <div class="hb-jobs">${jobs.map(j => `<div class="hb-job ${j.ready ? 'ready' : ''}">${MEAL_ITEMS[j.item]?.emoji} <b class="tiny">${esc(MEAL_ITEMS[j.item]?.name || '')}</b> ${j.ready ? '<span class="tiny hp-ok">pronto</span>' : `<span class="tiny">⏳ ${fmtT(j.done - Date.now())}</span>`}</div>`).join('') || '<span class="tiny muted">vazio</span>'}</div>
         ${jobs.some(j => j.ready) ? '<button class="btn sm primary" data-act="hm-claim">🍽️ Pegar pratos</button>' : ''}
-        <div class="hb-recipes" style="margin-top:8px">${Object.entries(MEALS).map(([id, M]) => { const ok = Object.entries(M.in).every(([g, n]) => (goods[g] || 0) >= n) && jobs.length < (h.cookMax || 1);
-          return `<div class="hb-rec ${ok ? '' : 'dim'}"><span>${M.emoji} <b>${esc(M.name)}</b> <span class="tiny">· ${M.hours}h</span></span><span class="tiny">${Object.entries(M.in).map(([g, n]) => `<span class="${(goods[g] || 0) >= n ? '' : 'miss'}">${n}× ${GOODS[g].icon}</span>`).join(' + ')}</span><span class="tiny muted">${esc(M.desc)}</span>
+        <div class="hb-recipes" style="margin-top:8px">${Object.entries(MEALS).map(([id, M]) => { const bag = me?.stats?.bag || {};
+          const ok = Object.entries(M.in).every(([g, n]) => (goods[g] || 0) >= n) && Object.entries(M.bagIn || {}).every(([g, n]) => (bag[g] || 0) >= n) && jobs.length < (h.cookMax || 1);
+          return `<div class="hb-rec ${ok ? '' : 'dim'}"><span>${M.emoji} <b>${esc(M.name)}</b> <span class="tiny">· ${M.hours}h</span></span><span class="tiny">${Object.entries(M.in).map(([g, n]) => `<span class="${(goods[g] || 0) >= n ? '' : 'miss'}">${n}× ${GOODS[g].icon}</span>`).join(' + ')}${Object.entries(M.bagIn || {}).map(([g, n]) => ` + <span class="${(bag[g] || 0) >= n ? '' : 'miss'}" title="${esc(ALL_ITEMS[g]?.name || g)} (Mochila)">${n}× ${ALL_ITEMS[g]?.emoji || '🎒'}</span>`).join('')}</span><span class="tiny muted">${esc(M.desc)}</span>
             <div class="row" style="gap:4px">${M.type ? `<select class="input sm" id="hm-ctype">${TYPES.map(t => `<option value="${t}">${esc(TYPE_LABELS[t])}</option>`).join('')}</select>` : ''}<button class="btn sm ${ok ? 'primary' : ''}" data-act="hm-cook" data-m="${id}" ${ok ? '' : 'disabled'}>🍳 Cozinhar</button></div></div>`; }).join('')}</div>${back}`;
     }
     // sala

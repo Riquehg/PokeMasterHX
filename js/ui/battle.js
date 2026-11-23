@@ -5,8 +5,9 @@ import { ITEMS, ballBonusAgainst } from '../../shared/data/items.js';
 import { monView, maxHpOf } from '../../shared/rules/monsters.js';
 import { canUse, badgesNeeded } from '../../shared/rules/helpers.js';
 import { monMoves } from '../../shared/data/moves.js';
-import { STATUS, CAPTURE_TARGET, captureMath, captureProb, LEGEND_CAPTURE, megaBlock, legendCapBlocked, LEGEND_MATCH_LIMIT, gearOf, abilityImmune } from '../../shared/rules/battle.js';
+import { STATUS, CAPTURE_TARGET, captureMath, captureProb, LEGEND_CAPTURE, megaBlock, gmaxBlock, legendCapBlocked, LEGEND_MATCH_LIMIT, gearOf, abilityImmune } from '../../shared/rules/battle.js';
 import { megaFor, BRACELET_ID } from '../../shared/data/megas.js';
+import { gmaxFor, BAND_ID } from '../../shared/data/gmax.js';
 import { bestAttack, against, effectivenessLabel, TYPE_COLORS } from '../../shared/rules/types.js';
 import { whoMustAct } from '../../shared/engine.js';
 import { esc, hpClass } from './dom.js';
@@ -104,8 +105,8 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
       ${foe.kind === 'npc' && foe.sprite ? `<img class="foe-trainer" src="${leaderUrl(foe.sprite)}" alt="${esc(foe.name)}">` : ''}
       <div class="platform foe"></div><div class="platform me"></div>
       ${foeMon.aura ? `<div class="aura-fx foe aura-${esc(foeMon.aura)}"></div>` : ''}${myMon.aura ? `<div class="aura-fx me aura-${esc(myMon.aura)}"></div>` : ''}
-      <img class="mon-sprite foe ${foeMon.shiny ? 'shiny' : ''} ${foeMon.raid ? 'raid-boss' : ''} ${foeMon.mega ? 'mega' : ''} ${foeMon.aura ? 'aura-' + esc(foeMon.aura) : ''}" data-uid="${esc(foeMon.uid)}" src="${monSprite(foeMon)}" alt="${esc(getSpecies(foeMon.sp).name)}">
-      <img class="mon-sprite me ${myMon.shiny ? 'shiny' : ''} ${myMon.mega ? 'mega' : ''} ${myMon.aura ? 'aura-' + esc(myMon.aura) : ''}" data-uid="${esc(myMon.uid)}" src="${monSprite(myMon)}" alt="${esc(getSpecies(myMon.sp).name)}">
+      <img class="mon-sprite foe ${foeMon.shiny ? 'shiny' : ''} ${foeMon.raid ? 'raid-boss' : ''} ${foeMon.mega ? 'mega' : ''} ${getSpecies(foeMon.sp)?.gmaxOf ? 'gmax' : ''} ${foeMon.aura ? 'aura-' + esc(foeMon.aura) : ''}" data-uid="${esc(foeMon.uid)}" src="${monSprite(foeMon)}" alt="${esc(getSpecies(foeMon.sp).name)}">
+      <img class="mon-sprite me ${myMon.shiny ? 'shiny' : ''} ${myMon.mega ? 'mega' : ''} ${getSpecies(myMon.sp)?.gmaxOf ? 'gmax' : ''} ${myMon.aura ? 'aura-' + esc(myMon.aura) : ''}" data-uid="${esc(myMon.uid)}" src="${monSprite(myMon)}" alt="${esc(getSpecies(myMon.sp).name)}">
       ${hpBox(state, foe, foeMon, 'foe')}
       ${hpBox(state, me, myMon, 'me', participant ? foeMon : null)}
     </div>`;
@@ -144,7 +145,12 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
     const megaBar = state.options?.megas && p.megaKey && !me.megaUsed && megaInfo
       ? `<div class="mega-bar"><button class="btn mega-btn" data-act="b-mega" ${megaOk ? '' : 'disabled'} title="Não gasta a rodada · 1 vez por batalha"><img src="${itemUrl(BRACELET_ID)}" alt="">💎 Mega Evoluir → ${esc(megaInfo.name)}</button></div>`
       : me.megaUsed && myMon.mega ? '<div class="mega-bar"><span class="chip purple">💎 Mega Evoluído</span></div>' : '';
-    controls = `<div class="move-grid">${moveBtns}</div>${megaBar}${formBar}<div class="battle-actions">
+    // 🔴 Gigantamax (ação grátis, divide o "1 por batalha" com a Mega)
+    const gmaxInfo = gmaxFor(myMon);
+    const gmaxBar = state.options?.megas && p.dynaKey && !me.megaUsed && gmaxInfo
+      ? `<div class="mega-bar"><button class="btn gmax-btn" data-act="b-gmax" ${!gmaxBlock(state, mySi) ? '' : 'disabled'} title="Não gasta a rodada · dura 3 rodadas · 1 Mega OU Gigantamax por batalha"><img src="${itemUrl(BAND_ID)}" alt="">🔴 Gigantamax → ${esc(gmaxInfo.name)}</button></div>`
+      : myMon.gmaxLeft ? `<div class="mega-bar"><span class="chip red">🔴 Gigantamax · ${myMon.gmaxLeft} rodada${myMon.gmaxLeft > 1 ? 's' : ''}</span></div>` : '';
+    controls = `<div class="move-grid">${moveBtns}</div>${megaBar}${gmaxBar}${formBar}<div class="battle-actions">
         <button class="btn blue" data-act="b-sub" data-sub="switch" ${myTeam.filter(m => m.hp > 0 && canUse(p, m)).length < 2 ? 'disabled' : ''}>🔄 Trocar</button>
         <button class="btn purple" data-act="b-sub" data-sub="item" ${items.length ? '' : 'disabled'}>🎒 Itens</button>
         <button class="btn green" data-act="b-sub" data-sub="ball" ${b.kind === 'wild' && balls.length && !foeMon.megaBoss && !legendCapBlocked(p, foeMon) ? '' : 'disabled'} ${foeMon.megaBoss ? 'title="Energia Mega: não dá para capturar — vença para ganhar fragmentos"' : legendCapBlocked(p, foeMon) ? `title="Você já capturou ${LEGEND_MATCH_LIMIT} lendários das casas Amarelas nesta partida"` : ''} ${b.kind === 'raid' ? 'title="Na Raid, vença primeiro: a captura é automática no fim"' : ''}>🔴 Capturar</button>
@@ -436,6 +442,16 @@ export async function playBattleFx(fxList) {
       float(arena, el, '💎 MEGA!', 'heal');
       setHp(box(f.uid), f.hpAfter, f.maxHp);
       await wait(900);
+    } else if (f.k === 'gmax' || f.k === 'gmax_end') { // 🔴 Gigantamax: nuvem vermelha e o Pokémon cresce (ou volta ao normal)
+      const el = sprite(f.uid);
+      if (el) {
+        if (f.k === 'gmax') { const C = center(arena, el); const orb = document.createElement('div'); orb.className = 'fx-gmax'; orb.style.cssText = `left:${C.x}px;top:${C.y}px`; arena.appendChild(orb); setTimeout(() => orb.remove(), 1600); await wait(700); }
+        el.classList.remove('morph'); void el.offsetWidth; el.classList.add('morph'); el.classList.toggle('gmax', f.k === 'gmax');
+        el.src = monSprite({ sp: f.to, shiny: el.classList.contains('shiny') });
+      }
+      float(arena, el, f.k === 'gmax' ? '🔴 GIGANTAMAX!' : '↩️', 'heal');
+      setHp(box(f.uid), f.hpAfter, f.maxHp);
+      await wait(f.k === 'gmax' ? 900 : 600);
     } else if (f.k === 'transform') {
       const el = sprite(f.uid);
       if (el) { el.classList.remove('morph'); void el.offsetWidth; el.classList.add('morph'); el.src = monSprite({ sp: f.to, shiny: el.classList.contains('shiny') }); }

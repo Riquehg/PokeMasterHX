@@ -1403,3 +1403,80 @@ test('💸 Partida: "mudou?" responde só a versão quando nada mudou; listas de
   const r2 = await matchOp(db, a, { op: 'get', matchId: match.id, since: match.version - 1 });
   assert.ok(r2.match?.state);
 });
+
+// ---------------------------------------------------------------- v56 🔴 Gigantamax
+import { GMAX, GMAX_ROUNDS, gmaxFor } from '../shared/data/gmax.js';
+function gmaxDuel({ megas = true, key = true, gx = true, mega = false } = {}) {
+  return createMatch({ kind: 'duel', seed: 9, mode: 'online', now: 0, options: { megas },
+    players: [
+      { id: 'a', name: 'A', dynaKey: key, megaKey: mega, teamMons: [{ uid: 'c1', sp: 'gengar', lvl: 40, gx, held: mega ? 'ms_gengar' : undefined }, { uid: 'c2', sp: 'pikachu', lvl: 40 }] },
+      { id: 'b', name: 'B', teamMons: [{ uid: 'h1', sp: 'snorlax', lvl: 40 }, { uid: 'h2', sp: 'snorlax', lvl: 40 }] }] });
+}
+test('🔴 Gigantamax: dados, travas, 3 rodadas, divide o "1 por batalha" com a Mega', async () => {
+  const { applyAction } = await import('../shared/engine.js');
+  assert.ok(Object.keys(GMAX).length >= 30);
+  assert.ok(GMAX.charizard && GMAX.urshifu_rapid_strike && GMAX.toxtricity_low_key);
+  assert.equal(SPECIES.gmax_charizard.file, 'charizard-gmax');
+  assert.ok(SPECIES.gmax_snorlax.hp > SPECIES.snorlax.hp);
+  assert.equal(gmaxFor({ sp: 'gengar', gx: true }).sp, 'gmax_gengar');
+  assert.equal(gmaxFor({ sp: 'gengar' }), null);
+  assert.equal(gmaxFor({ sp: 'pidgey', gx: true }), null);
+  // travas
+  assert.match(applyAction(gmaxDuel({ megas: false }), 'a', { type: 'battle', move: 'gmax' }, { now: 0 }).error, /liberados/);
+  assert.match(applyAction(gmaxDuel({ key: false }), 'a', { type: 'battle', move: 'gmax' }, { now: 0 }).error, /Pulseira/);
+  assert.match(applyAction(gmaxDuel({ gx: false }), 'a', { type: 'battle', move: 'gmax' }, { now: 0 }).error, /Fator/);
+  // usa: grátis, vira gigante, mantém a % de HP
+  let s = gmaxDuel();
+  const before = s.players[0].team[0].hp;
+  let r = applyAction(s, 'a', { type: 'battle', move: 'gmax' }, { now: 0 });
+  assert.equal(r.error, undefined, r.error);
+  s = r.state;
+  const g = s.players[0].team[0];
+  assert.equal(g.sp, 'gmax_gengar');
+  assert.equal(g.gmaxLeft, GMAX_ROUNDS);
+  assert.ok(g.hp > before);
+  assert.equal(s.battle.round, 0, 'não gastou a rodada');
+  assert.match(applyAction(s, 'a', { type: 'battle', move: 'gmax' }, { now: 0 }).error, /1 Mega Evolução ou Gigantamax/);
+  // depois de 3 rodadas volta ao normal
+  for (let i = 0; i < GMAX_ROUNDS && s.battle && !s.battle.over; i++) {
+    r = applyAction(s, 'a', { type: 'battle', move: 'attack', slot: 0 }, { now: 0 });
+    if (r.error) break;
+    s = r.state;
+    r = applyAction(s, 'b', { type: 'battle', move: 'attack', slot: 0 }, { now: 0 });
+    if (!r.error) s = r.state;
+    if (s.battle?.mustSwitch?.[1]) { r = applyAction(s, 'b', { type: 'battle', move: 'switch', index: 1 }, { now: 0 }); if (!r.error) s = r.state; }
+  }
+  const after = s.players[0].team[0];
+  if (after.hp > 0 && s.battle && !s.battle.over) { assert.equal(after.sp, 'gengar'); assert.equal(after.gmaxLeft, undefined); }
+  // quem tem Mega e Gigantamax: depois da Mega não dá Gigantamax
+  let s2 = gmaxDuel({ mega: true });
+  s2 = applyAction(s2, 'a', { type: 'battle', move: 'mega' }, { now: 0 }).state;
+  assert.match(applyAction(s2, 'a', { type: 'battle', move: 'gmax' }, { now: 0 }).error, /1 Mega Evolução ou Gigantamax|Fator|forma/);
+});
+test('🔴 Raid Gigantamax: Cogumelos Max, Pulseira rara; 🍲 Sopa Max dá o Fator', async () => {
+  const { grantGmaxRewards, makeGmaxBoss } = await import('../shared/rules/gmax.js');
+  const { createMon } = await import('../shared/rules/monsters.js');
+  const s = createMatch({ seed: 3, mode: 'online', now: 0, players: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }] });
+  const p = s.players[0];
+  grantGmaxRewards(s, { int: (x, y) => y, chance: () => true }, p);
+  assert.equal(p.items.max_mushroom, 2);
+  assert.equal(p.items.dynamax_band, 1);
+  assert.equal(p.dynaKey, true);
+  const boss = makeGmaxBoss(createMon({ int: () => 1, pick: a => a[0], chance: () => false, next: () => 0.5 }, 'lapras', 30), GMAX.lapras);
+  assert.equal(boss.sp, 'gmax_lapras'); assert.equal(boss.gmaxBoss, 'lapras');
+  // Sopa Max na Coleção
+  const { db, admin, us: [a] } = await users(1);
+  await adminOp(db, admin, { op: 'grant_mon', userId: a.id, species: 'lapras', level: 20 });
+  await adminOp(db, admin, { op: 'grant_mon', userId: a.id, species: 'pidgey', level: 20 });
+  const v = (await db.getProfile(a.id)).vault;
+  const lap = v.find(m => m.sp === 'lapras'), pid = v.find(m => m.sp === 'pidgey');
+  await assert.rejects(profileOp(db, a, { op: 'max_soup', uid: lap.uid }), /Sopa Max/);
+  await adminOp(db, admin, { op: 'grant_item', userId: a.id, item: 'max_soup', qty: 2 });
+  await assert.rejects(profileOp(db, a, { op: 'max_soup', uid: pid.uid }), /forma Gigantamax/);
+  const r = await profileOp(db, a, { op: 'max_soup', uid: lap.uid });
+  assert.ok(r.profile.vault.find(m => m.uid === lap.uid).gx);
+  await assert.rejects(profileOp(db, a, { op: 'max_soup', uid: lap.uid }), /já tem/);
+  // Pulseira pelo admin
+  await adminOp(db, admin, { op: 'grant_item', userId: a.id, item: 'dynamax_band' });
+  assert.equal((await db.getProfile(a.id)).stats.dynamaxBand, true);
+});

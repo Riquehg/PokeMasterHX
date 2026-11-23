@@ -21,6 +21,7 @@ import { openCompanionPicker } from './missions.js';
 // Telas fora da partida: login, hub do treinador, lobby online, sala de espera, partida local, coleção, ranking e admin.
 import { STARTERS, getSpecies, SPECIES_LIST } from '../../shared/data/pokemon.js';
 import { evoSummary, evoItemsFor, itemEvoTarget } from '../../shared/data/evolution.js';
+import { GMAX } from '../../shared/data/gmax.js';
 import { releaseGold, releaseLabel } from '../../shared/data/release.js';
 import { dailyPokemon } from '../../shared/daily.js';
 import { esc, toast, bindActions, openModal, closeModal, setModalBody } from './dom.js';
@@ -266,7 +267,7 @@ function soloModal(profile, ctx) {
       <div class="bring-gold"><b>🪙 Levar ouro da conta</b> <span class="tiny muted">(você tem ${profile?.gold || 0}; o que sobrar volta no fim)</span>
                 <div class="row" style="gap:4px;margin-top:4px">${[0, 300, 600, 1000, 2000].map(v => `<button class="btn sm ${(st.bring) === v ? 'primary' : ''}" data-act="s-bring" data-v="${v}" ${v > (profile?.gold || 0) ? 'disabled' : ''}>${v ? v : 'Nada'}</button>`).join('')}</div></div>
       <div class="bring-gold"><b>🎒 Levar itens da Mochila</b> <span class="tiny muted">${esc(bringSummary(st.items))}</span> <button class="btn sm" data-act="s-items">Escolher</button></div>
-      <div class="bring-gold"><b>💎 Mega Evolução</b> <select class="input sm" id="s-megas" style="width:auto;display:inline-block"><option value="0" ${!st.megas ? 'selected' : ''}>Sem Megas</option><option value="1" ${st.megas ? 'selected' : ''}>Megas liberadas</option></select> <span class="tiny muted">${profile?.stats?.megaBracelet ? '🔗 você tem o Bracelete Mega' : 'precisa do 🔗 Bracelete Mega (cai em Mega Raids)'}</span></div>` : starterPicker(st.starter)}
+      <div class="bring-gold"><b>💎 Mega / 🔴 Gigantamax</b> <select class="input sm" id="s-megas" style="width:auto;display:inline-block"><option value="0" ${!st.megas ? 'selected' : ''}>Desligado</option><option value="1" ${st.megas ? 'selected' : ''}>Megas e Gigantamax liberados</option></select> <span class="tiny muted">${[profile?.stats?.megaBracelet ? '🔗 Bracelete Mega' : '', profile?.stats?.dynamaxBand ? '🔴 Pulseira Dynamax' : ''].filter(Boolean).join(' + ') || 'precisa do 🔗 Bracelete Mega ou da 🔴 Pulseira Dynamax (caem em Raids)'}</span></div>` : starterPicker(st.starter)}
     <button class="btn primary block" data-act="go" style="margin-top:10px">▶ Começar treino</button>`;
   const ov = openModal('solo', '🤖 Treino contra CPUs', body(), { wide: true });
   const keep = () => { st.bots = Number(ov.querySelector('#s-bots').value); st.turnLimit = Number(ov.querySelector('#s-turns').value); st.map = ov.querySelector('#s-map').value; st.rules = ov.querySelector('#s-rules').value; st.hardcore = ov.querySelector('#s-hc').value === '1'; if (ov.querySelector('#s-megas')) st.megas = ov.querySelector('#s-megas').value === '1'; };
@@ -393,6 +394,9 @@ function collectionModal(profile, onChange) {
           ${!gear.length ? '<p class="tiny muted">⚔️ Itens de batalha (Garra Rápida, Faixa de Foco, Placas, Restos, Faixa Escolhida) são feitos na 🔨 Oficina da Fazenda.</p>' : ''}
           ${m.held ? '<button class="btn sm" data-act="ms-off">↩️ Tirar o item (volta para a Mochila)</button>' : ''}
           ${opts.length ? `<p class="tiny muted">O Pokémon que segura a pedra é quem pode Mega Evoluir (precisa também do 🔗 Bracelete Mega na conta). Pedras vêm da 🔨 Oficina (10 fragmentos), de Mega Raids e do 🏪 Mercado.</p>` : ''}
+          ${GMAX[m.sp] ? `<h4 style="margin:6px 0 2px">🔴 Gigantamax</h4><div class="ms-opt ${m.gx ? 'on' : ''}"><img class="ms-st" src="${itemUrl('max_soup')}" alt=""><img class="ms-mon" src="${monSprite({ sp: GMAX[m.sp].sp, shiny: m.shiny })}" alt="">
+            <div class="grow"><b>${m.gx ? '✨ Tem o Fator Gigantamax' : 'Sem o Fator Gigantamax'}</b><div class="tiny muted">${m.gx ? `Com a 🔴 Pulseira Dynamax, vira ${esc(GMAX[m.sp].name)} por 3 rodadas (no lugar da Mega).` : `🍲 Sopa Max dá o Fator para sempre · você tem ${bag.max_soup || 0}`}</div></div>
+            ${m.gx ? '<span class="chip red">🔴 Fator</span>' : `<button class="btn sm red" data-act="ms-soup" ${(bag.max_soup || 0) > 0 ? '' : 'disabled'}>🍲 Dar Sopa</button>`}</div>` : ''}
           ${(() => { // ✨ v54: evoluir com pedra / item de evolução da Mochila
             const evoIds = [...new Set([...evoItemsFor(m), ...((bag.evolution_stone || 0) > 0 && getSpecies(m.sp).evos?.length ? ['evolution_stone'] : [])])];
             if (!evoIds.length) return '';
@@ -409,7 +413,11 @@ function collectionModal(profile, onChange) {
         try { const r = await api('profile', { op: 'evo_item', uid: m.uid, item }); profile = r.profile; closeModal('mstone'); redraw(); onChange(profile); toast(`✨ ${r.evolved.from} evoluiu para ${r.evolved.to}!`, 'good'); }
         catch (e) { toast(e.message, 'bad'); }
       };
-      bindActions(ov2, { 'ms-hold': x => hold(x.item), 'ms-off': () => hold(null), 'ms-evo': x => evoUse(x.item) });
+      const soup = async () => {
+        try { profile = (await api('profile', { op: 'max_soup', uid: m.uid })).profile; closeModal('mstone'); redraw(); onChange(profile); toast(`🔴 ${m.nick || getSpecies(m.sp).name} ganhou o Fator Gigantamax!`, 'good'); }
+        catch (e) { toast(e.message, 'bad'); }
+      };
+      bindActions(ov2, { 'ms-hold': x => hold(x.item), 'ms-off': () => hold(null), 'ms-evo': x => evoUse(x.item), 'ms-soup': soup });
     },
     rel: async d => {
       const m = (profile?.vault || []).find(x => x.uid === d.uid);
@@ -525,7 +533,7 @@ export async function lobbyScreen(root, ctx) {
           <div class="field"><label>Mapa</label><select class="input" id="c-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === ('kanto') ? 'selected' : ''} title="${esc(m.desc)}">${m.icon || '🗺️'} ${esc(m.name)}</option>`).join('')}</select></div>
         </div>
         <div class="field"><label>Dificuldade</label><select class="input" id="c-hc"><option value="0">Normal</option><option value="1">☠️ Hardcore — perdeu a equipe, está fora e perde tudo</option></select></div>
-        <div class="field hidden" id="c-megas-f"><label>Mega Evolução</label><select class="input" id="c-megas" title="Mega Evolução: precisa do 🔗 Bracelete Mega e da Megapedra segurada"><option value="0" >💎 Sem Megas</option><option value="1" >💎 Megas liberadas</option></select><div class="tiny muted">Só no modo Coleção: quem tem o 🔗 Bracelete Mega e um Pokémon segurando a Megapedra pode Mega Evoluir 1 vez por batalha.</div></div>
+        <div class="field hidden" id="c-megas-f"><label>Mega / Gigantamax</label><select class="input" id="c-megas" title="Mega: 🔗 Bracelete + Megapedra · Gigantamax: 🔴 Pulseira Dynamax + Fator Gigantamax"><option value="0" >💎 Desligado</option><option value="1" >💎🔴 Megas e Gigantamax liberados</option></select><div class="tiny muted">Só no modo Coleção: 1 Mega Evolução OU 1 Gigantamax por batalha (Mega: 🔗 Bracelete + Megapedra segurada · Gigantamax: 🔴 Pulseira Dynamax + Pokémon com o Fator, dura 3 rodadas).</div></div>
         <div class="field hidden" id="c-cap-f"><label>Nível máximo dos Pokémon levados</label><select class="input" id="c-cap"><option value="0">Sem limite</option><option value="15">15</option><option value="25">25</option><option value="35">35</option><option value="45">45</option></select></div>
         <div class="grid2">
           <div class="field"><label>PIN (opcional)</label><input class="input" id="c-pin" inputmode="numeric" maxlength="6" placeholder="só números"></div>
@@ -551,7 +559,7 @@ export async function lobbyScreen(root, ctx) {
     try {
       const { rooms } = await api('rooms', null, 'GET');
       root.querySelector('#rooms').innerHTML = rooms.length ? rooms.map(r => `
-        <div class="list-item"><div class="grow"><b>${esc(r.name)}</b> ${r.hasPin ? '🔒' : ''} ${modeChip(r.mode, r.levelCap)}${r.rules && r.rules !== 'classic' ? ` <span class="chip">${GAME_RULES[r.rules].icon} ${GAME_RULES[r.rules].name}</span>` : ''}${r.hardcore ? ' <span class="chip red">☠️ Hardcore</span>' : ''}${r.megas ? ' <span class="chip purple">💎 Megas</span>' : ''}${r.status === 'playing' ? ' <span class="chip green">▶ em andamento</span>' : ''}<div class="tiny muted">Anfitrião: ${esc(r.host)} · ${r.players}/${r.maxPlayers} · ${r.turnLimit || 60} turnos · código ${esc(r.code)}</div></div>
+        <div class="list-item"><div class="grow"><b>${esc(r.name)}</b> ${r.hasPin ? '🔒' : ''} ${modeChip(r.mode, r.levelCap)}${r.rules && r.rules !== 'classic' ? ` <span class="chip">${GAME_RULES[r.rules].icon} ${GAME_RULES[r.rules].name}</span>` : ''}${r.hardcore ? ' <span class="chip red">☠️ Hardcore</span>' : ''}${r.megas ? ' <span class="chip purple">💎🔴 Mega/Gmax</span>' : ''}${r.status === 'playing' ? ' <span class="chip green">▶ em andamento</span>' : ''}<div class="tiny muted">Anfitrião: ${esc(r.host)} · ${r.players}/${r.maxPlayers} · ${r.turnLimit || 60} turnos · código ${esc(r.code)}</div></div>
         <button class="btn sm ${r.status === 'playing' ? 'green' : 'blue'}" data-act="join" data-id="${r.id}" data-pin="${r.hasPin ? '1' : ''}" data-late="${r.status === 'playing' ? '1' : ''}" ${r.players >= r.maxPlayers ? 'disabled' : ''}>${r.status === 'playing' ? 'Entrar no meio' : 'Entrar'}</button></div>`).join('')
         : '<p class="muted small">Nenhuma sala aberta. Crie uma!</p>';
     } catch (e) { root.querySelector('#rooms').innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
@@ -597,7 +605,7 @@ export async function roomScreen(root, ctx, matchId) {
       <div class="hub-grid">
         <div class="card col">
           <div class="spread"><h3>🏟️ ${esc(match.name)}</h3><span class="chip gold" style="font-size:14px">Código: ${esc(match.code)}</span></div>
-          <div class="row">${modeChip(mode, o.levelCap)}${o.hardcore ? '<span class="chip red">☠️ Hardcore</span>' : ''}${o.megas ? '<span class="chip purple">💎 Megas</span>' : ''}<span class="small muted">${o.maxPlayers} jogadores · ${o.turnLimit || 60} turnos · ${o.rules === 'royale' ? '⚔️ Arena Royale' : mapChoiceName(o.map || 'kanto')} · ${GAME_RULES[o.rules || 'classic'].icon} ${GAME_RULES[o.rules || 'classic'].name} ${match.hasPin ? '· 🔒 PIN' : ''}</span></div>
+          <div class="row">${modeChip(mode, o.levelCap)}${o.hardcore ? '<span class="chip red">☠️ Hardcore</span>' : ''}${o.megas ? '<span class="chip purple">💎🔴 Mega/Gmax</span>' : ''}<span class="small muted">${o.maxPlayers} jogadores · ${o.turnLimit || 60} turnos · ${o.rules === 'royale' ? '⚔️ Arena Royale' : mapChoiceName(o.map || 'kanto')} · ${GAME_RULES[o.rules || 'classic'].icon} ${GAME_RULES[o.rules || 'classic'].name} ${match.hasPin ? '· 🔒 PIN' : ''}</span></div>
           <div class="tiny muted">${esc(MODE_INFO[mode]?.desc || '')}${o.rules && o.rules !== 'classic' ? ' · ' + esc(GAME_RULES[o.rules].desc) : ''}</div>
           ${isHost ? `<div class="grid2">
             <select class="input" id="o-mode">${Object.entries(MODE_INFO).map(([k, m]) => `<option value="${k}" ${k === mode ? 'selected' : ''}>${m.icon} ${m.name}</option>`).join('')}</select>
@@ -784,7 +792,7 @@ async function adminModal() {
         <div class="row"><select class="input grow" id="a-sp">${SPECIES_LIST.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select>
           <input class="input" id="a-lv" type="number" min="1" max="60" value="5" style="width:80px"><label class="small"><input type="checkbox" id="a-shiny"> shiny</label>
           <button class="btn" data-act="grant">🎁 Dar Pokémon (vai para a Coleção)</button></div>
-        <div class="row"><select class="input grow" id="a-item">${Object.entries(ALL_ITEMS).filter(([id]) => isKeepable(id) || id === 'mega_bracelet').map(([id, it]) => `<option value="${id}">${esc(it.name)}</option>`).join('')}</select>
+        <div class="row"><select class="input grow" id="a-item">${Object.entries(ALL_ITEMS).filter(([id]) => isKeepable(id) || id === 'mega_bracelet' || id === 'dynamax_band').map(([id, it]) => `<option value="${id}">${esc(it.name)}</option>`).join('')}</select>
           <input class="input" id="a-iq" type="number" min="1" max="99" value="1" style="width:80px">
           <button class="btn" data-act="grant-item">🎒 Dar item (vai para a Mochila)</button></div></div>
       <div class="card col" style="margin-top:10px"><h3>🔐 Conta do jogador (suporte)</h3>
@@ -812,6 +820,7 @@ async function adminModal() {
         <button class="btn sm" data-act="acc-mail" data-k="recovery">📧 Mandar link de nova senha</button>
         <button class="btn sm primary" data-act="acc-pw">🔑 Definir senha nova</button>
         ${acc.megaBracelet ? '<button class="btn sm red" data-act="acc-bracelet">🔗 Tirar Bracelete Mega</button>' : ''}
+        ${acc.dynamaxBand ? '<button class="btn sm red" data-act="acc-band">🔴 Tirar Pulseira Dynamax</button>' : ''}
         <button class="btn sm red" data-act="acc-art" title="Se alguém desenhar algo impróprio na Fazenda">🖌️ Apagar desenhos da Fazenda</button>
       </div></div>`;
   }
@@ -863,6 +872,7 @@ async function adminModal() {
       if (pw) accRun(() => api('admin', { op: 'account_password', userId: acc.id, password: pw }), '🔑 Senha nova definida.');
     },
     'acc-art': () => { if (confirm(`Apagar todos os desenhos da Fazenda de ${acc.trainer}?`)) accRun(() => api('admin', { op: 'clear_farm_art', userId: acc.id }), '🖌️ Desenhos apagados.'); },
+    'acc-band': () => { if (confirm(`Tirar a Pulseira Dynamax de ${acc.trainer}?`)) accRun(() => api('admin', { op: 'remove_bracelet', item: 'dynamax_band', userId: acc.id }), '🔴 Pulseira removida.'); },
     'acc-bracelet': () => { if (confirm(`Tirar o Bracelete Mega de ${acc.trainer}?`)) accRun(() => api('admin', { op: 'remove_bracelet', userId: acc.id }), '🔗 Bracelete removido.'); },
     'map-new': d => openMapEditor(templateMap(d.from === 'blank' ? 'blank' : ov.querySelector('#a-mapfrom').value), mapsSaved),
     'map-edit': d => { const m = (data.maps || []).find(x => x.id === d.id); if (m) openMapEditor({ ...structuredClone(m), id: m.id.replace(/^custom:/, '') }, mapsSaved); },

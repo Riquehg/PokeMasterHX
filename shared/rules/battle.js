@@ -15,6 +15,7 @@ import { conquestMult } from './modeBonus.js';
 import { GYMS } from '../data/trainers.js';
 import { statsOf, maxHpOf, gainXp, xpReward, healMon, canTransform, transformInto, revertForm, megaEvolveMon, defFactor } from './monsters.js';
 import { megaFor } from '../data/megas.js';
+import { gmaxFor, GMAX_ROUNDS } from '../data/gmax.js';
 import { ABILITIES, abilityOf, PINCH_MULT, BAND_MULT, PLATE_MULT, QUICK_CLAW, LEFTOVERS_FRAC } from '../data/battlegear.js';
 import { CURRY_MULT, XP_SHAKE_MULT } from '../data/home.js';
 import {
@@ -219,6 +220,11 @@ function validateChoice(state, si, choice) {
       if (why) fail(why);
       return;
     }
+    case 'gmax': { // 🔴 Gigantamax (v55)
+      const why = gmaxBlock(state, si);
+      if (why) fail(why);
+      return;
+    }
     case 'form': { // 🧬 Ditto/Mew: voltar à forma, usar uma forma guardada ou guardar a forma atual
       const me = team[side.active];
       if (!canTransform(me)) fail('Esse Pokémon não se transforma.');
@@ -261,6 +267,7 @@ export function submitChoice(state, rng, pid, choice) {
 
   // 💎 Mega Evolução: ação grátis (não gasta a rodada), 1 por batalha
   if (choice.move === 'mega') { doMega(state, si); return; }
+  if (choice.move === 'gmax') { doGmax(state, si); return; }
 
   // guardar/esquecer forma não gasta a rodada
   if (choice.move === 'form' && (choice.op === 'store' || choice.op === 'forget')) {
@@ -528,6 +535,7 @@ function doSwitch(state, si, index) {
   const side = state.battle.sides[si];
   const team = sideTeam(state, side);
   const out = team[side.active];
+  if (out?.gmaxLeft !== undefined) endGmax(state, si, out, 'acabou ao sair de campo');
   if (out && out.hp > 0) { // ✨ ao sair: Regenerador / Cura Natural
     const k = abilOf(out);
     if (k === 'regenerator' && out.hp < maxHpOf(out)) { const h = healMon(out, 1 / 3); if (h) log(state, `♻️ Regenerador: ${speciesName(out.sp)} recuperou ${h} HP ao sair.`, 'good'); }
@@ -913,11 +921,46 @@ export function megaBlock(state, si) {
   if (!state.options?.megas) return 'Mega Evolução não está liberada nesta partida.';
   const player = getPlayer(state, side.pid);
   if (!player?.megaKey) return 'Você precisa do 🔗 Bracelete Mega (cai em Mega Raids).';
-  if (side.megaUsed) return 'Só dá para Mega Evoluir 1 vez por batalha.';
+  if (side.megaUsed) return 'Só dá para usar 1 Mega Evolução ou Gigantamax por batalha.';
   const me = sideTeam(state, side)[side.active];
   if (!me || me.hp <= 0) return 'Pokémon inválido.';
   if (!megaFor(me)) return 'Esse Pokémon não está segurando a Megapedra dele.';
   return null;
+}
+/** Por que este lado NÃO pode dar Gigantamax agora? (null = pode) — mesmas travas da Mega, e divide o "1 por batalha" com ela. */
+export function gmaxBlock(state, si) {
+  const b = state.battle;
+  const side = b?.sides[si];
+  if (!side || side.kind !== 'player') return 'Só treinadores usam Gigantamax.';
+  if (!state.options?.megas) return 'Mega e Gigantamax não estão liberados nesta partida.';
+  const player = getPlayer(state, side.pid);
+  if (!player?.dynaKey) return 'Você precisa da 🔴 Pulseira Dynamax (cai em Raids Gigantamax).';
+  if (side.megaUsed) return 'Só dá para usar 1 Mega Evolução ou Gigantamax por batalha.';
+  const me = sideTeam(state, side)[side.active];
+  if (!me || me.hp <= 0) return 'Pokémon inválido.';
+  if (!gmaxFor(me)) return me?.gx ? 'Esse Pokémon não tem forma Gigantamax.' : 'Esse Pokémon não tem o ✨ Fator Gigantamax.';
+  return null;
+}
+function doGmax(state, si) {
+  const b = state.battle;
+  const side = b.sides[si];
+  const me = sideTeam(state, side)[side.active];
+  const g = gmaxFor(me);
+  const from = speciesName(me.sp);
+  transformInto(me, g.sp, Array.isArray(me.moves) ? me.moves : null);
+  if (!Array.isArray(me.tf.moves)) me.moves = null;
+  me.gmaxLeft = GMAX_ROUNDS;
+  side.megaUsed = true;
+  log(state, `🔴 ${getPlayer(state, side.pid).name}: ${from} ficou GIGANTE — ${speciesName(me.sp)} por ${GMAX_ROUNDS} rodadas!`, 'shiny');
+  fx(state, { k: 'gmax', side: si, uid: me.uid, from: g.base, to: me.sp, hpAfter: me.hp, maxHp: maxHpOf(me) });
+}
+/** Fim do Gigantamax (rodadas acabaram ou saiu de campo). */
+function endGmax(state, si, mon, why = 'acabou') {
+  if (mon?.gmaxLeft === undefined) return;
+  delete mon.gmaxLeft;
+  revertForm(mon);
+  log(state, `🔴 O Gigantamax de ${speciesName(mon.sp)} ${why} — voltou ao tamanho normal.`);
+  fx(state, { k: 'gmax_end', side: si, uid: mon.uid, to: mon.sp, hpAfter: mon.hp, maxHp: maxHpOf(mon) });
 }
 function doMega(state, si) {
   const b = state.battle;
@@ -942,6 +985,7 @@ function resolveRound(state, rng, choices) {
   for (let si = 0; si < 2; si++) {
     const sd = b.sides[si];
     if (sd.kind === 'player' && getPlayer(state, sd.pid)?.isBot && !megaBlock(state, si)) doMega(state, si);
+    else if (sd.kind === 'player' && getPlayer(state, sd.pid)?.isBot && !gmaxBlock(state, si)) doGmax(state, si); // 🔴 CPU com Pulseira
   }
 
   // 1) ações rápidas (troca, item, bola, fuga) — na ordem dos lados
@@ -1080,6 +1124,16 @@ function resolveRound(state, rng, choices) {
     }
   }
 
+  // 3c) 🔴 Gigantamax: conta as rodadas
+  if (!b.over) {
+    for (let si = 0; si < 2; si++) {
+      const mon = sideActive(state, b.sides[si]);
+      if (!(mon?.gmaxLeft > 0)) continue;
+      mon.gmaxLeft -= 1;
+      if (mon.gmaxLeft <= 0) endGmax(state, si, mon);
+    }
+  }
+
   // 4) clima: Nevasca e Tempestade de areia tiram um pouco de HP de quem não é imune
   if (!b.over && weatherOf(state).chip) {
     for (let si = 0; si < 2; si++) {
@@ -1154,7 +1208,7 @@ export function setBattleEndHandler(fn) {
 function endBattle(state, rng, outcome) {
   const b = state.battle;
   // 🧬 a transformação dura só a batalha
-  for (const side of b.sides) for (const m of sideTeam(state, side) || []) if (m?.tf) revertForm(m);
+  for (const side of b.sides) for (const m of sideTeam(state, side) || []) { if (m) delete m.gmaxLeft; if (m?.tf) revertForm(m); }
   b.over = true;
   b.outcome = outcome;
   if (onBattleEnd) onBattleEnd(state, rng, b, outcome);

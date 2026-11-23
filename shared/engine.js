@@ -20,7 +20,7 @@ import {
   GYMS, gymAt, ELITE_FOUR, CHAMPION, ELITE_SPACE, CHAMPION_SPACE, ROUTE_TRAINERS, ROCKET, BADGES_TO_LEAGUE, BADGE_REWARDS, ACE_TRAINERS
 } from './data/trainers.js';
 import { createRng } from './rules/rng.js';
-import { createMon, rollWild, hatchEgg, fullHeal, healMon, maxHpOf, levelUp, evolve, TEAM_SIZE, WILD_LEVELS, gainXp, BASE_SHINY_RATE, setLevel, defIvOf } from './rules/monsters.js';
+import { variantFor, createMon, rollWild, hatchEgg, fullHeal, healMon, maxHpOf, levelUp, evolve, TEAM_SIZE, WILD_LEVELS, gainXp, BASE_SHINY_RATE, setLevel, defIvOf } from './rules/monsters.js';
 import { SHINY_CAKE_MULT, IV_PANCAKE_MIN } from './data/home.js';
 import { destinations, pathTo } from './rules/movement.js';
 import { startBattle, submitChoice, setBattleEndHandler, deliverCapture, sideActive, sideIndexOf } from './rules/battle.js';
@@ -34,6 +34,7 @@ import { initMissions, progressMission, playerCompanionBonus } from './rules/mis
 import { COMPANIONS } from './data/companions.js';
 import { isLegendOrMyth, legendCapBlocked, LEGEND_MATCH_LIMIT } from './rules/battle.js';
 import { pickRaidMega, pickWildMega, makeMegaBoss, grantMegaRewards, MEGA_RAID_CHANCE, MEGA_WILD_CHANCE } from './rules/mega.js';
+import { pickRaidGmax, makeGmaxBoss, grantGmaxRewards, GMAX_RAID_CHANCE } from './rules/gmax.js';
 import { startGroupRaid, startCatchStage, raidWaiting, raidAction, raidBallChance } from './rules/raid.js';
 import { sanitizeCosmetic, cleanNick } from './data/cosmetics.js';
 import { botAction } from './bots.js';
@@ -188,7 +189,13 @@ function newPlayer(rng, cfg, index) {
       const fixed = createRng(hashStr(String(m.uid || m.sp)));
       const mon = createMon(m.nature && m.iv && m.moves ? rng : fixed, m.sp, Math.max(1, Math.min(60, Number(m.lvl) || 5)), { shiny: !!m.shiny, ot: cfg.id, nature: m.nature || undefined, iv: m.iv || undefined, moves: m.moves || undefined, capTier: getSpecies(m.sp).tier });
       mon.brought = true; // veio da Coleção (segue a regra das insígnias como qualquer outro)
-      if (m.uid) mon.uid = String(m.uid);
+      if (m.uid) {
+        mon.uid = String(m.uid);
+        mon.gender = genderFor(m.sp, mon.uid, getSpecies(m.sp)); // ♂/♀ é do uid de verdade
+        const v = m.v !== undefined ? m.v : variantFor(m.sp, mon.uid); // 🎨 variação visual (antigos: a do uid)
+        if (v) mon.v = v; else delete mon.v;
+      }
+      if (m.gx) mon.gx = true; // 🔴 Fator Gigantamax
       if (m.aura) mon.aura = m.aura;
       if (m.held && ['megastone', 'gear'].includes(ITEMS[m.held]?.kind)) mon.held = m.held; // 💎 Megapedra ou ⚔️ item de batalha segurado
       if (m.trust) mon.trust = true; // capturado na Bola da Confiança
@@ -240,7 +247,8 @@ function newPlayer(rng, cfg, index) {
     moveBonus: 0,
     stats: { captures: 0, shinies: brought.length ? 0 : (mon.shiny ? 1 : 0), wins: 0, losses: 0, pvpWins: 0, ballsThrown: 0 },
     cosmetic: sanitizeCosmetic(cfg.cosmetic),
-    ...(cfg.megaKey ? { megaKey: true } : {}) // 🔗 Bracelete Mega da conta
+    ...(cfg.megaKey ? { megaKey: true } : {}), // 🔗 Bracelete Mega da conta
+    ...(cfg.dynaKey ? { dynaKey: true } : {}) // 🔴 Pulseira Dynamax da conta
   };
   // Pokémon extra (ex.: herdado do Cofre)
   if (cfg.extraMon && SPECIES[cfg.extraMon.sp]) {
@@ -1193,11 +1201,14 @@ function raidBoss(rng, tier, shrine, charm = false) {
   const pool = RAID_POOL[tier] || RAID_POOL[4];
   // 💎 Mega Raid: o chefe é um Pokémon Mega Evoluído (vence → fragmentos de Megapedra; Bracelete raríssimo)
   const mega = rng.chance(MEGA_RAID_CHANCE) ? pickRaidMega(rng, shrine) : null;
-  const sp = mega ? mega.base : rng.pick(pool.filter(id => SPECIES[id]));
+  // 🔴 Raid Gigantamax (v55): sem Mega, às vezes o chefe vem Gigantamax
+  const gmax = !mega && rng.chance(GMAX_RAID_CHANCE) ? pickRaidGmax(rng, shrine) : null;
+  const sp = mega ? mega.base : gmax ? gmax.base : rng.pick(pool.filter(id => SPECIES[id]));
   const lvl = WILD_LEVELS[tier][1] + (shrine ? 0 : 1);
   // lendário também pode vir shiny (1/450; Amuleto Shiny triplica)
   const mon = createMon(rng, sp, lvl, { shiny: rng.chance(BASE_SHINY_RATE * (charm ? 3 : 1)), capTier: 5 });
   if (mega) makeMegaBoss(mon, mega);
+  if (gmax) makeGmaxBoss(mon, gmax);
   mon.bonusHp = Math.round(maxHpOf(mon) * RAID_HP_BONUS);
   mon.hp = maxHpOf(mon);
   mon.wild = true;
@@ -1330,8 +1341,9 @@ setBattleEndHandler((state, rng, b, outcome) => {
       p0.gold += g;
       addItem(p0, 'rare_candy', 1);
       addItem(p0, 'ultra_ball', 2);
-      log(state, `🔥 ${p0.name} venceu a RAID${boss.megaBoss ? ' MEGA' : ''} contra ${speciesName(boss.sp)}! +${g} de ouro, Rare Candy e 2 Ultra Balls. Agora escolha a Pokébola!`, 'win');
+      log(state, `🔥 ${p0.name} venceu a RAID${boss.megaBoss ? ' MEGA' : boss.gmaxBoss ? ' GIGANTAMAX' : ''} contra ${speciesName(boss.sp)}! +${g} de ouro, Rare Candy e 2 Ultra Balls. Agora escolha a Pokébola!`, 'win');
       if (boss.megaBoss) grantMegaRewards(state, rng, p0, boss.megaBoss, true);
+      if (boss.gmaxBoss) grantGmaxRewards(state, rng, p0);
       progressMission(state, p0.id, { k: 'raid_win' });
       startCatchStage(state, boss, [p0.id]);
     } else if (r !== 'draw') {
