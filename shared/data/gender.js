@@ -24,6 +24,13 @@ function hash(str) {
 
 /** 'M' | 'F' | 'N' (sem sexo). */
 export function genderFor(speciesId, uid, sp = null) {
+  // v54: proporção oficial dos jogos (PokeAPI) quando a espécie tem — vale para as Gen 8–9 e as formas
+  if (sp && Number.isFinite(sp.genderRate) && (sp.gen >= 8 || sp.form)) {
+    if (sp.genderRate < 0) return 'N';
+    if (sp.genderRate === 0) return 'M';
+    if (sp.genderRate === 8) return 'F';
+    return (hash(`g|${uid}`) % 1000) / 1000 < sp.genderRate / 8 ? 'F' : 'M';
+  }
   if (sp?.legendary || GENDERLESS.includes(speciesId)) return 'N';
   if (FEMALE_ONLY.includes(speciesId)) return 'F';
   if (MALE_ONLY.includes(speciesId)) return 'M';

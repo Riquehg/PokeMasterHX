@@ -1333,3 +1333,62 @@ test('🕊️ Soltar Pokémon: ouro pela raridade; recuperar devolve o ouro', as
   assert.equal((await db.getProfile(a.id)).gold, before - r.gold);
   assert.ok(r2.profile.vault.some(x => x.uid === m.uid && x.paid === undefined));
 });
+
+// ---------------------------------------------------------------- v54 📖 Dex completa + evoluções fiéis
+import { itemEvoTarget as _iet, levelEvoTarget as _let, evoItemsFor as _eif } from '../shared/data/evolution.js';
+import { variantFor as _vf, gainXp as _gx } from '../shared/rules/monsters.js';
+import { ITEMS as _IT } from '../shared/data/items.js';
+import { genderFor as _gf } from '../shared/data/gender.js';
+test('📖 Dex Gen 1–9 + formas: dados, sprites do HOME e sexo oficial', () => {
+  for (const id of ['sprigatito', 'great_tusk', 'koraidon', 'pecharunt', 'vulpix_alola', 'typhlosion_hisui', 'tauros_paldea_aqua', 'rotom_wash', 'urshifu_rapid_strike']) assert.ok(SPECIES[id], id);
+  assert.deepEqual(SPECIES.vulpix_alola.types, ['ice']);
+  assert.equal(SPECIES.vulpix_alola.file, 'vulpix-alola');
+  assert.equal(SPECIES.mr_mime.file, 'mrmime');
+  assert.equal(SPECIES.necrozma_dusk_mane.file, 'necrozma-duskmane');
+  assert.ok(SPECIES.pecharunt.mythical && SPECIES.pecharunt.tier === 5);
+  assert.ok(SPECIES.pikachu.fem && SPECIES.charizard.gmax);
+  assert.ok(SPECIES.vivillon.variants.includes('pokeball'));
+  assert.equal(_gf('sprigatito', 'x', SPECIES.sprigatito) !== 'N', true);
+  assert.equal(_gf('great_tusk', 'x', SPECIES.great_tusk), 'N');
+});
+test('✨ Evoluções fiéis: pedra certa, troca, sexo, ramos e variação', () => {
+  const mk = (sp, extra = {}) => ({ uid: 'u-' + sp, sp, lvl: 10, ...extra });
+  assert.equal(_iet(mk('vulpix'), 'fire_stone'), 'ninetales');
+  assert.equal(_iet(mk('vulpix'), 'water_stone'), null);
+  assert.equal(_iet(mk('vulpix_alola'), 'ice_stone'), 'ninetales_alola');
+  assert.equal(_iet(mk('kadabra'), 'linking_cord'), 'alakazam');
+  assert.equal(_iet(mk('kirlia', { gender: 'M' }), 'dawn_stone'), 'gallade');
+  assert.equal(_iet(mk('kirlia', { gender: 'F' }), 'dawn_stone'), null);
+  assert.equal(_iet(mk('gloom'), 'sun_stone'), 'bellossom');
+  assert.ok(['vaporeon', 'jolteon', 'flareon', 'espeon', 'umbreon', 'leafeon', 'glaceon', 'sylveon'].includes(_iet(mk('eevee'), 'evolution_stone')));
+  assert.equal(_let(mk('pikachu', { lvl: 60 })), null); // Pikachu só com Pedra do Trovão
+  assert.equal(_let(mk('charmander', { lvl: 16 })), 'charmeleon');
+  const night = Date.UTC(2026, 10, 23, 3); // 00h em Brasília
+  assert.equal(_let(mk('rockruff', { lvl: 25 }), night), 'lycanroc_midnight');
+  assert.equal(_let(mk('rockruff', { lvl: 25, v: 'dusk' }), night), 'lycanroc_dusk');
+  assert.equal(_let(mk('burmy', { lvl: 20, gender: 'F', v: 'sandy' })), 'wormadam_sandy');
+  assert.deepEqual(_eif(mk('applin')).sort(), ['syrupy_apple', 'sweet_apple', 'tart_apple'].sort());
+  for (const id of ['fire_stone', 'linking_cord', 'tart_apple']) assert.equal(_IT[id].kind, 'stone');
+  // variação visual sorteada pelo uid, sempre da lista
+  let got = 0; for (let i = 0; i < 200; i++) { const v = _vf('vivillon', 'x' + i); if (v) { got++; assert.ok(SPECIES.vivillon.variants.includes(v)); } }
+  assert.ok(got > 30 && got < 120);
+  // ao subir de nível com variação: Spewpa Polar → Vivillon Polar
+  const sp = { uid: 'q', sp: 'spewpa', lvl: 11, xp: 0, hp: 10, v: 'polar' };
+  _gx(sp, 9999);
+  assert.equal(sp.sp, 'vivillon'); assert.equal(sp.v, 'polar');
+});
+test('✨ Coleção: usar item de evolução da Mochila', async () => {
+  const { db, admin, us: [a] } = await users(1);
+  await adminOp(db, admin, { op: 'grant_mon', userId: a.id, species: 'vulpix', level: 10 });
+  const m = (await db.getProfile(a.id)).vault.find(x => x.sp === 'vulpix');
+  await assert.rejects(profileOp(db, a, { op: 'evo_item', uid: m.uid, item: 'fire_stone' }), /não tem/);
+  await adminOp(db, admin, { op: 'grant_item', userId: a.id, item: 'fire_stone', qty: 1 });
+  await adminOp(db, admin, { op: 'grant_item', userId: a.id, item: 'water_stone', qty: 1 });
+  await assert.rejects(profileOp(db, a, { op: 'evo_item', uid: m.uid, item: 'water_stone' }), /não faz/);
+  const r = await profileOp(db, a, { op: 'evo_item', uid: m.uid, item: 'fire_stone' });
+  assert.equal(r.evolved.to, 'Ninetales');
+  const p = await db.getProfile(a.id);
+  assert.equal(p.vault.find(x => x.uid === m.uid).sp, 'ninetales');
+  assert.ok(!(p.stats.bag.fire_stone > 0));
+  assert.ok(p.pokedex.includes('ninetales'));
+});

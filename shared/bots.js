@@ -4,6 +4,7 @@
 import { getSpecies } from './data/pokemon.js';
 import { getSpace } from './data/board.js';
 import { ITEMS, shopFor, ballBonusAgainst } from './data/items.js';
+import { itemEvoTarget } from './data/evolution.js';
 import { GYMS, gymAt, ELITE_FOUR, ELITE_SPACE, CHAMPION_SPACE, BADGES_TO_LEAGUE, CHAMPION } from './data/trainers.js';
 import { bestAttack } from './rules/types.js';
 import { maxHpOf, WILD_LEVELS, TEAM_SIZE } from './rules/monsters.js';
@@ -280,6 +281,11 @@ function cityActions(state, p) {
     const pot = shop.find(o => o.id === 'super_potion' && o.price * 2 <= p.gold - 200) || shop.find(o => o.id === 'potion' && o.price * 2 <= p.gold - 100);
     if (pot) return { type: 'city', op: 'buy', item: pot.id, qty: 2 };
   }
+  // ✨ item de evolução que serve para alguém do time (v54)
+  if (p.gold > 2600) {
+    const evo = shop.find(o => o.kind === 'stone' && o.price <= p.gold - 1000 && !(p.items[o.id] > 0) && p.team.some(m => !m.tf && itemEvoTarget(m, o.id)));
+    if (evo) return { type: 'city', op: 'buy', item: evo.id, qty: 1 };
+  }
   const nextGym = GYMS.find(g => !p.badges.includes(g.id));
   if (nextGym && !(p.items.x_attack > 0) && p.gold > 900) {
     const xa = shop.find(o => o.id === 'x_attack');
@@ -323,9 +329,11 @@ function itemActions(state, p) {
     return { type: 'use_item', item: 'rare_candy', index: i };
   }
   // Pedra Evolutiva em quem evolui
-  if (p.items.evolution_stone > 0) {
-    const i = p.team.findIndex(m => { const s = getSpecies(m.sp); return s.evolvesTo && getSpecies(s.evolvesTo); });
-    if (i >= 0) return { type: 'use_item', item: 'evolution_stone', index: i };
+  // ✨ itens de evolução (v54): usa o item certo em quem evolui com ele
+  for (const [id, q] of Object.entries(p.items || {})) {
+    if (!(q > 0) || ITEMS[id]?.kind !== 'stone') continue;
+    const i = p.team.findIndex(m => !m.tf && itemEvoTarget(m, id));
+    if (i >= 0) return { type: 'use_item', item: id, index: i };
   }
   return null;
 }

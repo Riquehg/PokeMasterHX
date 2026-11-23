@@ -11,10 +11,13 @@ import { createMatch, raidCatchChance } from '../shared/engine.js';
 import { createRng } from '../shared/rules/rng.js';
 import { ITEMS } from '../shared/data/items.js';
 
-test('Pokédex completa: #001 a #806, ids únicos, tipos válidos, evoluções existentes', () => {
-  assert.equal(SPECIES_LIST.length, 806);
-  assert.deepEqual(SPECIES_LIST.map(s => s.dex), Array.from({ length: 806 }, (_, i) => i + 1));
-  assert.equal(new Set(SPECIES_LIST.map(s => s.id)).size, 806);
+test('Pokédex completa: #001 a #1025 (+ formas), ids únicos, tipos válidos, evoluções existentes', () => {
+  const base = SPECIES_LIST.filter(s => !s.form);
+  assert.equal(base.length, 1025);
+  assert.deepEqual(base.map(s => s.dex), Array.from({ length: 1025 }, (_, i) => i + 1));
+  assert.equal(new Set(SPECIES_LIST.map(s => s.id)).size, SPECIES_LIST.length);
+  for (const s of SPECIES_LIST.filter(x => x.form)) assert.ok(SPECIES[s.form] && SPECIES[s.form].dex === s.dex, s.id);
+  for (const s of SPECIES_LIST) for (const e of s.evos) assert.ok(SPECIES[e.to] && (e.lvl || e.item), `${s.id} → ${e.to}`);
   for (const s of SPECIES_LIST) {
     assert.ok(s.types.length >= 1 && s.types.length <= 2, s.id);
     for (const t of s.types) assert.ok(TYPES.includes(t), `${s.id}: ${t}`);

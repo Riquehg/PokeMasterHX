@@ -26,26 +26,32 @@ const nameVariants = s => {
 };
 const SHINY_DIRS = ['monsters/shiny/', 'shinys/', 'shiny/', 'monsters/shinys/'];
 const NORMAL_DIRS = ['monsters/', 'normal/', 'pokemon/'];
-/** Lista de endereços possíveis (em ordem) para a espécie. */
-export function spriteCandidates(spId, shiny) {
+// 🆕 v54: sprites do Pokémon HOME em pokemon/<arquivo>.png e pokemon/shiny/<arquivo>.png (arquivo = sp.file, ex.: vulpix-alola,
+// charizard-megax). Variação visual (m.v) → <arquivo>-<v>.png; fêmea com sprite própria → <arquivo>-f.png.
+// Os 2 primeiros endereços são sempre do HOME (o específico e o normal); depois vêm os formatos antigos, como reserva.
+const HOME_DIR = shiny => (shiny ? 'pokemon/shiny/' : 'pokemon/');
+/** Lista de endereços possíveis (em ordem) para a espécie. `look` = { v, sex } do Pokémon (variação visual / fêmea). */
+export function spriteCandidates(spId, shiny, look = null) {
   const s = getSpecies(spId);
   if (!s) return [];
-  // 💎 forma Mega: megas/<arquivo>.png (shiny: megas/shiny/<arquivo>.png); sem imagem → sprite da forma base
+  // 💎 forma Mega: pokemon/<arquivo>.png → megas/<arquivo>.png (shiny: megas/shiny/) → sprite da forma base
   if (s.mega) {
     const file = MEGAS[s.mega]?.file;
-    return [...(shiny ? [`megas/shiny/${file}.png`] : []), `megas/${file}.png`, ...spriteCandidates(s.megaBase, shiny)];
+    return [`${HOME_DIR(shiny)}${file}.png`, `${HOME_DIR(shiny)}${file}.png`, ...(shiny ? [`megas/shiny/${file}.png`] : []), `megas/${file}.png`, ...spriteCandidates(s.megaBase, shiny)];
   }
+  const v = look?.v && (s.variants || []).includes(look.v) ? `${s.file}-${look.v}` : look?.sex === 'f' && s.fem ? `${s.file}-f` : s.file;
+  const out = [`${HOME_DIR(shiny)}${v}.png`, `${HOME_DIR(shiny)}${s.file}.png`];
+  if (s.form) return [...out, ...spriteCandidates(s.form, shiny).slice(2)]; // forma sem sprite antiga → a da espécie base
   const dirs = shiny ? SHINY_DIRS : NORMAL_DIRS;
-  const out = [];
   for (const d of dirs) out.push(`${d}${pad(s.dex)}.png`);
   for (const d of dirs) for (const n of nameVariants(s)) out.push(`${d}${n}.png`);
   return out;
 }
-const PREF_KEY = 'pmhx_sprite_fmt';
+const PREF_KEY = 'pmhx_sprite_fmt3';
 const pref = (() => { try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}'); } catch { return {}; } })();
 /** Formato que já funcionou (índice na lista de candidatos), para ir direto nele nas próximas. */
 // Padrão: normais pelo número (monsters/063.png) e shinies pelo nome (shinys/abra.png = índice 10 da lista)
-const DEFAULT_FMT = { n: 0, s: 10 };
+const DEFAULT_FMT = { n: 0, s: 0 };
 function preferred(shiny) { const k = shiny ? 's' : 'n'; return pref[k] !== undefined ? Number(pref[k]) || 0 : DEFAULT_FMT[k]; }
 function rememberFormat(shiny, idx) {
   pref[shiny ? 's' : 'n'] = idx;
@@ -55,18 +61,21 @@ function rememberFormat(shiny, idx) {
 export function monSprite(spOrMon, shiny) {
   const id = typeof spOrMon === 'string' ? spOrMon : spOrMon.sp;
   const isShiny = !!(typeof spOrMon === 'string' ? shiny : spOrMon.shiny);
-  const list = spriteCandidates(id, isShiny);
+  const look = typeof spOrMon === 'string' ? null : { v: spOrMon.v, sex: spOrMon.gender === 'F' ? 'f' : undefined };
+  const list = spriteCandidates(id, isShiny, look);
   if (!list.length) return '';
   const i = String(id).startsWith('mega_') ? 0 : Math.min(preferred(isShiny), list.length - 1);
-  return `${CFG.sprites}${list[i]}#${isShiny ? 's' : 'n'}:${id}:${i}`;
+  const lk = look && (look.v || look.sex === 'f') ? `:${look.v || ''}${look.sex === 'f' ? '.f' : ''}` : '';
+  return `${CFG.sprites}${list[i]}#${isShiny ? 's' : 'n'}:${id}:${i}${lk}`;
 }
 
 /** "Plano B" dos sprites: quando um <img> de Pokémon falha, tenta o próximo formato. Devolve true se tentou outro. */
 function trySpriteFallback(img) {
-  const m = /#([sn]):([a-z0-9_]+):(\d+)$/.exec(img.src);
+  const m = /#([sn]):([a-z0-9_]+):(\d+)(:[a-z0-9]*(?:\.f)?)?$/.exec(img.src);
   if (!m) return false;
-  const shiny = m[1] === 's', id = m[2], start = Number(m[3]);
-  const list = spriteCandidates(id, shiny);
+  const shiny = m[1] === 's', id = m[2], start = Number(m[3]), lk = m[4] || '';
+  const look = lk ? { v: lk.slice(1).replace('.f', '') || undefined, sex: lk.endsWith('.f') ? 'f' : undefined } : null;
+  const list = spriteCandidates(id, shiny, look);
   const tries = Number(img.dataset.spTries || 0) + 1;
   if (tries >= list.length) { // nenhum formato achado
     if (shiny && !img.dataset.spNormal) { img.dataset.spNormal = '1'; img.dataset.spTries = 0; delete img.dataset.spTry; img.src = monSprite(id, false); return true; } // mostra o normal
@@ -75,7 +84,7 @@ function trySpriteFallback(img) {
   const next = (Number(img.dataset.spTry ?? start) + 1) % list.length;
   img.dataset.spTry = next;
   img.dataset.spTries = tries;
-  img.src = `${CFG.sprites}${list[next]}#${m[1]}:${id}:${next}`;
+  img.src = `${CFG.sprites}${list[next]}#${m[1]}:${id}:${next}${lk}`;
   return true;
 }
 
@@ -84,8 +93,8 @@ export function installSpriteFallback() {
   document.addEventListener('load', e => {
     const img = e.target;
     if (!(img instanceof HTMLImageElement) || img.dataset.spTry === undefined) return;
-    const m = /#([sn]):([a-z0-9_]+):(\d+)$/.exec(img.src);
-    if (m && !m[2].includes('_')) rememberFormat(m[1] === 's', Number(m[3])); // nomes comuns definem o formato padrão // este formato funcionou: usa direto daqui pra frente
+    const m = /#([sn]):([a-z0-9_]+):(\d+)/.exec(img.src);
+    if (m && !m[2].includes('_') && Number(m[3]) !== 1) rememberFormat(m[1] === 's', Number(m[3])); // o 1 é "variação sem arquivo próprio": não vira padrão // nomes comuns definem o formato padrão // este formato funcionou: usa direto daqui pra frente
   }, true);
 }
 /** Avatar do treinador. Com skin (Loja de Diamantes) usa sprites/skins/<skin>.png. */
@@ -130,6 +139,11 @@ if (typeof window !== 'undefined') {
     if (el && el.tagName === 'IMG' && el.dataset.fb !== undefined) { // ícone de item sem sprite → emoji
       ITEM_MISS.add(el.src);
       const s = document.createElement('span'); s.className = `${el.className} itm-emo`; s.textContent = el.dataset.fb; el.replaceWith(s); return;
+    }
+    if (el && el.tagName === 'IMG' && !el.dataset.emojiFb) { // item com emoji (ex.: pedras novas da v54) sem arquivo na pasta → emoji
+      const m = /\/items\/([^/?#]+)$/.exec(el.src || '');
+      const it = m && Object.values(ITEMS).find(x => x.emoji && x.image === decodeURIComponent(m[1]));
+      if (it) { el.dataset.emojiFb = '1'; el.src = emojiImg(it.emoji); return; }
     }
     if (el && el.tagName === 'IMG' && trySpriteFallback(el)) return; // sprite de Pokémon: tenta outro formato antes
     if (el && el.tagName === 'IMG' && !el.dataset.fallback) {

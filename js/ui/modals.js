@@ -3,6 +3,7 @@ import { dexEntryHtml } from './dexentry.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
 // Janelas da partida: loja, PC, mochila, voo, Pokédex, ficha do treinador, detalhes do Pokémon e regras.
 import { SPECIES_LIST, getSpecies } from '../../shared/data/pokemon.js';
+import { evoSummary } from '../../shared/data/evolution.js';
 import { MEGAS, MEGA_KEYS } from '../../shared/data/megas.js';
 import { getSpace } from '../../shared/data/board.js';
 import { ITEMS, shopFor } from '../../shared/data/items.js';
@@ -327,7 +328,7 @@ export function openMon(session, act, index) {
   const v = monView(mon);
   const sp = getSpecies(mon.sp);
   const weak = TYPES.map(t => [t, against(t, sp.types)]).filter(([, m]) => m !== 1).sort((a, b) => b[1] - a[1]);
-  const evo = sp.evolvesTo ? `${getSpecies(sp.evolvesTo).name}${sp.evolutionLevel ? ` no Nv. ${sp.evolutionLevel}` : ' (Pedra Evolutiva)'}` : 'não evolui';
+  const evo = evoSummary(sp.id) || 'não evolui';
   const myTurn = session.state.players[session.state.current].id === p.id && !session.state.battle;
   const html = `<div class="mon-detail">
       ${statCard(mon, { owner: p, lead: index === 0 })}
@@ -419,7 +420,9 @@ export function openHelp() {
       <p><b>Equipe cheia:</b> com 6 Pokémon na equipe, novas capturas e ovos vão direto para o PC (abra o PC numa cidade para trocar).</p>
       <p><b>Captura:</b> jogue a Pokébola no selvagem. Precisa tirar no dado: Rosa 3+, Verde 4+, Azul 5+, Vermelho 6+, Lendário 7+ (shiny +1). Bônus: bola (+1 a +3), HP do selvagem abaixo de 50% (+1) ou 25% (+2), seu Pokémon 5+ níveis acima (+1). 🎲1 sempre falha e ele pode fugir. Derrotar (desmaiar) não captura!</p>
       <p><b>Shiny:</b> 1 em 40 (1 em 8 para o Pokémon do Dia; Amuleto Shiny triplica). Shinies têm +10% de status, valem mais XP e pontos.</p>
-      <p><b>XP:</b> quem derrota ganha tudo, quem participou 60% e o resto da equipe 40%. Vencer Pokémon muito mais fracos rende pouco. Evolução acontece no nível do catálogo (ou com Pedra Evolutiva).</p>
+      <p><b>XP:</b> quem derrota ganha tudo, quem participou 60% e o resto da equipe 40%. Vencer Pokémon muito mais fracos rende pouco. Evolução como nos jogos: por nível, ou com o item certo (veja abaixo).</p>
+      <p><b>📖 Pokédex completa (Gen 1–9):</b> 1.025 Pokémon + formas regionais (Alola, Galar, Hisui, Paldea) e de batalha (Rotom, Deoxys, Therian, Origem, Kyurem, Necrozma, Calyrex, Urshifu, Lycanroc, Oricorio...), cada uma com tipo, status e habilidade próprios. Fêmeas têm sprite própria quando existe, e alguns Pokémon (Vivillon, Unown, Alcremie, Minior, Furfrou, Flabébé, Pikachu de boné...) nascem com uma variação visual para colecionar.</p>
+      <p><b>✨ Evoluções e itens:</b> cada Pokémon evolui do jeito dos jogos — nível, 🔥💧⚡🍃🌙☀️❄️✨🌆🌅 Pedras, itens de troca (Revestimento Metálico, Pedra do Rei, Escama de Dragão, Protetor...), 🔗 Cabo de Conexão (quem evoluía por troca: Kadabra, Machoke, Graveler, Haunter...), sexo (Gallade ♂, Froslass ♀), dia/noite (Espeon/Umbreon, horário de Brasília) e itens da Gen 8–9 (Maçãs, Bule Rachado, Pergaminhos, Armaduras...). Use o item na 🎒 Mochila da partida ou na Coleção (botão ✨/🎒 do Pokémon). Pedras são vendidas nas cidades Azuis+, itens de troca nas Vermelhas+ e os da Gen 8–9 nas Amarelas; também caem em eventos do tabuleiro. Sobras ficam na Mochila da conta (leve até 3 de cada). A antiga Pedra Evolutiva virou rara e evolui qualquer um.</p>
       <p><b>PvP:</b> parou na mesma casa de outro treinador? Desafie! Quem perde paga 15% do ouro.</p>
       <p><b>Derrota:</b> se a equipe inteira desmaiar, você volta à última cidade, perde 10% do ouro e a equipe é curada.</p>
       <p><b>Online:</b> todos os dados são rolados no servidor. Se alguém sumir por 90s, os outros podem deixar uma CPU jogar a vez dele.</p>

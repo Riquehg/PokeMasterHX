@@ -30,7 +30,7 @@ export const ITEMS = {
 
   // --- Progressão ---
   rare_candy:      { name: 'Rare Candy',      kind: 'candy', price: 900,  minTier: 4, image: 'rare_candy.png',      desc: 'Sobe 1 nível (pode evoluir).' },
-  evolution_stone: { name: 'Pedra Evolutiva', kind: 'stone', price: 1200, minTier: 3, image: 'evolution_stone.png', desc: 'Evolui na hora um Pokémon que tenha evolução.' },
+  evolution_stone: { name: 'Pedra Evolutiva', kind: 'stone', price: 0, minTier: 0, image: 'evolution_stone.png', desc: 'Raríssima: evolui na hora QUALQUER Pokémon que tenha evolução (até os que precisam de pedra ou item especial).' },
   legend_charm:    { name: 'Amuleto Lendário', kind: 'charm', price: 0, minTier: 0, emoji: '🏵️', desc: 'Leve na partida (🎒 Mochila da conta): tira o limite de lendários das casas Amarelas. Cada unidade é 1 carga — gasta só quando ele libera um lendário além do limite (no máximo 1 por partida). Feito na 🔨 Oficina (vem com 3 cargas); quando acabar, faça outro.' },
   shiny_charm:     { name: 'Amuleto Shiny',   kind: 'charm', price: 0, minTier: 0, image: 'shiny_charm.png',     desc: 'Passivo: triplica a chance de encontrar shinies. Não acumula. Não é vendido nas cidades: vem de Raids lendárias e eventos raros (e fica na Mochila da conta).' },
   tm:              { name: 'TM',              kind: 'tm', price: 0, minTier: 0, image: 'tm.png',                   desc: 'Ensina um novo 2º golpe a um Pokémon (escolha entre os golpes dos tipos dele). Raro: Raids e eventos. Fica na Mochila da conta e pode ser vendido no Mercado.' },
@@ -77,7 +77,42 @@ for (const [id, g] of Object.entries(GEAR)) ITEMS[id] = { name: g.name, kind: 'g
 // 🍽️ comidas da casa (v49): levar 1 por partida; o efeito vale a partida inteira
 for (const [id, m] of Object.entries(MEAL_ITEMS)) ITEMS[id] = { name: m.name, kind: 'meal', price: 0, minTier: 0, emoji: m.emoji, meal: m.meal, mealType: m.type || null, desc: `Comida (leve 1 por partida): ${m.desc}` };
 
-export const KEEP_KINDS = ['ball', 'charm', 'tm', 'megastone', 'fragment', 'gear', 'meal'];
+// ✨ Itens de evolução (v54) — cada um evolui só os Pokémon certos, como nos jogos. image = items/<id>.png
+// grupo: 'stone' (pedras elementais, lojas Azuis+), 'trade' (itens de troca e Cabo de Conexão, lojas Vermelhas+), 'rare' (Gen 8–9, lojas Amarelas)
+export const EVO_ITEMS = {
+  fire_stone: ['Pedra do Fogo', 'stone', '🔥'], water_stone: ['Pedra da Água', 'stone', '💧'], thunder_stone: ['Pedra do Trovão', 'stone', '⚡'],
+  leaf_stone: ['Pedra da Folha', 'stone', '🍃'], moon_stone: ['Pedra da Lua', 'stone', '🌙'], sun_stone: ['Pedra do Sol', 'stone', '☀️'],
+  ice_stone: ['Pedra do Gelo', 'stone', '❄️'], shiny_stone: ['Pedra Brilhante', 'stone', '✨'], dusk_stone: ['Pedra do Crepúsculo', 'stone', '🌆'],
+  dawn_stone: ['Pedra da Alvorada', 'stone', '🌅'],
+  linking_cord: ['Cabo de Conexão', 'trade', '🔗', 'Faz evoluir quem nos jogos evolui por troca (Kadabra, Machoke, Graveler, Haunter, Boldore, Gurdurr, Phantump, Pumpkaboo, Karrablast, Shelmet).'],
+  kings_rock: ['Pedra do Rei', 'trade', '👑'], metal_coat: ['Revestimento Metálico', 'trade', '🔩'], dragon_scale: ['Escama de Dragão', 'trade', '🐉'],
+  up_grade: ['Melhoria', 'trade', '💾'], protector: ['Protetor', 'trade', '🛡️'], electirizer: ['Eletrizador', 'trade', '🔌'], magmarizer: ['Magmatizador', 'trade', '🌋'],
+  dubious_disc: ['Disco Duvidoso', 'trade', '💿'], reaper_cloth: ['Pano Ceifador', 'trade', '🧣'], deep_sea_tooth: ['Dente do Mar Profundo', 'trade', '🦷'],
+  deep_sea_scale: ['Escama do Mar Profundo', 'trade', '🐚'], prism_scale: ['Escama Prisma', 'trade', '🌈'], whipped_dream: ['Chantili', 'trade', '🍦'],
+  sachet: ['Sachê', 'trade', '🌸'], razor_claw: ['Garra Afiada', 'trade', '🗡️'], razor_fang: ['Presa Afiada', 'trade', '🦴'], oval_stone: ['Pedra Oval', 'trade', '🥚'],
+  tart_apple: ['Maçã Azeda', 'rare', '🍏'], sweet_apple: ['Maçã Doce', 'rare', '🍎'], syrupy_apple: ['Maçã Melada', 'rare', '🍯'],
+  strawberry_sweet: ['Doce de Morango', 'rare', '🍓'], cracked_pot: ['Bule Rachado', 'rare', '🫖'], unremarkable_teacup: ['Xícara Comum', 'rare', '🍵'],
+  galarica_cuff: ['Bracelete Galárico', 'rare', '📿'], galarica_wreath: ['Coroa Galárica', 'rare', '🌿'],
+  scroll_of_darkness: ['Pergaminho das Trevas', 'rare', '📜'], scroll_of_waters: ['Pergaminho das Águas', 'rare', '📜'],
+  auspicious_armor: ['Armadura Auspiciosa', 'rare', '🛡️'], malicious_armor: ['Armadura Maliciosa', 'rare', '🗡️'],
+  black_augurite: ['Augurita Negra', 'rare', '🪨'], peat_block: ['Bloco de Turfa', 'rare', '🟫'], metal_alloy: ['Liga Metálica', 'rare', '⚙️']
+};
+export const EVO_GROUP = { stone: { price: 1500, minTier: 3 }, trade: { price: 2500, minTier: 4 }, rare: { price: 3500, minTier: 5 } };
+// quem cada item evolui (para a descrição)
+const evoUsers = {};
+for (const s of Object.values(SPECIES)) for (const e of s.evos || []) if (e.item) (evoUsers[e.item] ||= []).push(s.name);
+for (const [id, [name, group, emoji, extra]] of Object.entries(EVO_ITEMS)) {
+  const who = [...new Set(evoUsers[id] || [])];
+  ITEMS[id] = { name, kind: 'stone', evo: group, emoji, price: EVO_GROUP[group].price, minTier: EVO_GROUP[group].minTier, image: `${id}.png`,
+    desc: extra || `Item de evolução. Evolui: ${who.slice(0, 12).join(', ')}${who.length > 12 ? '…' : ''}.` };
+}
+/** Sorteia um item de evolução (pedras mais comuns); se `useful` tiver itens que o time usa, eles pesam 4×. */
+export function pickEvoItem(rng, useful = []) {
+  const w = { stone: 6, trade: 3, rare: 1 };
+  return rng.weighted(Object.entries(EVO_ITEMS).map(([id, [, g]]) => [id, w[g] * (useful.includes(id) ? 4 : 1)]));
+}
+
+export const KEEP_KINDS = ['ball', 'charm', 'tm', 'megastone', 'fragment', 'gear', 'meal', 'stone'];
 export const isKeepable = id => !!ITEMS[id] && KEEP_KINDS.includes(ITEMS[id].kind);
 export const BAG_MAX_PER_ITEM = 99;
 /** Quanto de cada item dá para levar para uma partida (modo Coleção). */
@@ -88,6 +123,7 @@ export function bringLimit(id) {
   if (it.kind === 'charm') return 1;
   if (it.kind === 'meal') return 1;
   if (it.kind === 'tm') return 3;
+  if (it.kind === 'stone') return 3;  // ✨ itens de evolução (v54)
   return 10; // Pokébolas
 }
 export const BRING_BALLS_MAX = 20; // total de Pokébolas levadas

@@ -20,6 +20,7 @@ import { ITEMS, isKeepable, cleanBring, BAG_MAX_PER_ITEM, STARTING_ITEMS } from 
 import { tmMovesFor, defaultMoveIds, MOVES } from '../../shared/data/moves.js';
 import { MEGAS, megaByStone } from '../../shared/data/megas.js';
 import { releaseGold } from '../../shared/data/release.js';
+import { levelEvoTarget, variantAfter, itemEvoTarget } from '../../shared/data/evolution.js';
 import { TITLE_BY_ID, unlockedTitles } from '../../shared/data/titles.js';
 import { bondLevel, bondGain, BOND_MAX, COMPANIONS } from '../../shared/data/companions.js';
 import { equippedCosmetic, equippedSkin, skinFor, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment, myCosmetics, refreshCosmeticInMatches } from './shop.js';
@@ -184,11 +185,14 @@ export async function profileOp(db, user, body) {
         if (m.uid !== body.uid) return m;
         let sp = m.sp;
         // evolui como numa batalha, se passar do nível de evolução
+        let v = m.v;
         for (let k = 0; k < 2; k++) {
-          const S = getSpecies(sp);
-          if (S?.evolvesTo && S.evolutionLevel && target >= S.evolutionLevel) { sp = S.evolvesTo; evolved = sp; } else break;
+          const to = levelEvoTarget({ ...m, sp, v }, Date.now(), target);
+          if (to) { v = variantAfter({ v }, to); sp = to; evolved = sp; } else break;
         }
-        return { ...m, lvl: target, sp };
+        const out = { ...m, lvl: target, sp };
+        if (v) out.v = v; else delete out.v;
+        return out;
       });
       const pokedex = evolved && !(cur.pokedex || []).includes(evolved) ? [...(cur.pokedex || []), evolved] : cur.pokedex;
       return { vault, ...(pokedex !== cur.pokedex ? { pokedex } : {}) };
@@ -255,6 +259,34 @@ export async function profileOp(db, user, body) {
       st.bag = bag;
       return { stats: st, vault: cur.vault.map(x => (x.uid === body.uid ? { ...x, held: item || undefined } : x)) };
     })) };
+  }
+  if (body.op === 'evo_item') { // ✨ usar pedra / item de evolução da Mochila num Pokémon da Coleção (v54)
+    const item = String(body.item || '');
+    if (ITEMS[item]?.kind !== 'stone') bad('Item inválido.');
+    let res = null;
+    const prof = await mutateProfile(db, user.id, prof => {
+      res = null;
+      const bag = { ...(prof.stats?.bag || {}) };
+      if (!(bag[item] > 0)) bad(`Você não tem ${ITEMS[item].name} na Mochila.`);
+      const vault = [...(prof.vault || [])];
+      const i = vault.findIndex(m => m.uid === body.uid);
+      if (i < 0) bad('Pokémon não encontrado.');
+      const m = vault[i];
+      const to = itemEvoTarget(m, item);
+      if (!to) bad(`${ITEMS[item].name} não faz ${getSpecies(m.sp)?.name || 'esse Pokémon'} evoluir.`);
+      const v = variantAfter(m, to);
+      const nm = { ...m, sp: to };
+      if (v) nm.v = v; else delete nm.v;
+      vault[i] = nm;
+      bag[item] -= 1; if (bag[item] <= 0) delete bag[item];
+      res = { from: getSpecies(m.sp).name, to: getSpecies(to).name };
+      const st = { ...(prof.stats || {}), bag };
+      if (m.shiny) { const sd = st.shinyDex || []; if (!sd.includes(to)) st.shinyDex = [...sd, to]; }
+      const out = { vault, stats: st };
+      if (!(prof.pokedex || []).includes(to)) out.pokedex = [...(prof.pokedex || []), to];
+      return out;
+    });
+    return { profile: await withCosmetic(db, prof), evolved: res };
   }
   if (body.op === 'restore') { // recuperar um Pokémon que saiu por falta de espaço (ou que foi solto — devolve o ouro recebido)
     const pre = (p.stats?.overflow || []).find(x => x.uid === body.uid);

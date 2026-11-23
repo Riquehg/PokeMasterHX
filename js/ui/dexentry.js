@@ -1,6 +1,7 @@
 // 📖 v45 — ficha completa da Pokédex: arte normal/shiny, status base, habilidade (passiva), fraquezas,
 // linha evolutiva clicável, golpes com efeitos reais, Megas e o que você tem na Coleção.
 import { SPECIES_LIST, getSpecies } from '../../shared/data/pokemon.js';
+import { evoList } from '../../shared/data/evolution.js';
 import { megaBySpecies } from '../../shared/data/megas.js';
 import { movesOf, possibleSecondMoves, ROLE_LABELS } from '../../shared/data/moves.js';
 import { ABILITIES, abilityOf } from '../../shared/data/battlegear.js';
@@ -39,15 +40,18 @@ function matchups(sp) {
 function evoChain(sp, seen) {
   let root = sp, guard = 0;
   while (root.evolvesFrom && getSpecies(root.evolvesFrom) && guard++ < 5) root = getSpecies(root.evolvesFrom);
-  const chain = [];
-  for (let s = root, i = 0; s && i < 5; s = s.evolvesTo ? getSpecies(s.evolvesTo) : null, i++) chain.push(s);
-  if (chain.length < 2) return '<div class="tiny muted">Não evolui.</div>';
-  return `<div class="dx-evo">${chain.map((s, i) => {
-    const v = seen.has(s.id);
-    const how = i ? `<span class="dx-arrow">→<small>${s === chain[i] && chain[i - 1].evolutionLevel ? `Nv. ${chain[i - 1].evolutionLevel}` : 'Pedra'}</small></span>` : '';
-    return `${how}<button class="dx-evo-mon ${s.id === sp.id ? 'on' : ''} ${v ? '' : 'unseen'}" data-act="dx-go" data-id="${s.id}" ${v ? '' : 'disabled'}>
-      <img src="${monSprite(s.id)}" alt="" loading="lazy"><span>${v ? esc(s.name) : '???'}</span></button>`;
-  }).join('')}</div>`;
+  // v54: árvore com ramos (Eevee, Gloom, Kirlia...) — cada estágio é uma coluna; a condição aparece em cima de cada Pokémon
+  const stages = [[{ s: root, how: '' }]];
+  for (let i = 0; i < 3; i++) {
+    const next = stages[i].flatMap(x => evoList(x.s.id).map(e => ({ s: getSpecies(e.to), how: e.how })));
+    if (!next.length) break;
+    stages.push(next.filter((x, j, a) => a.findIndex(y => y.s.id === x.s.id) === j));
+  }
+  if (stages.length < 2) return '<div class="tiny muted">Não evolui.</div>';
+  const btn = ({ s, how }) => { const v = seen.has(s.id);
+    return `<div class="dx-evo-cell">${how ? `<small class="dx-how">${esc(how)}</small>` : ''}<button class="dx-evo-mon ${s.id === sp.id ? 'on' : ''} ${v ? '' : 'unseen'}" data-act="dx-go" data-id="${s.id}" ${v ? '' : 'disabled'}>
+      <img src="${monSprite(s.id)}" alt="" loading="lazy"><span>${v ? esc(s.name) : '???'}</span></button></div>`; };
+  return `<div class="dx-evo">${stages.map((st, i) => `${i ? '<span class="dx-arrow">→</span>' : ''}<div class="dx-evo-col">${st.map(btn).join('')}</div>`).join('')}</div>`;
 }
 
 const moveRow = m => `<div class="dx-move" style="--tc:${TYPE_COLORS[m.type]}"><span class="dx-ty" style="background:${TYPE_COLORS[m.type]}">${esc(typeLabel(m.type))}</span>

@@ -4,6 +4,7 @@ import { genderFor } from '../data/gender.js';
 import { NATURE_NAMES, natureMult } from '../data/natures.js';
 import { MOVES, rollMoveIds } from '../data/moves.js';
 import { baseDefOfDex } from '../data/basedef.js';
+import { levelEvoTarget, variantAfter } from '../data/evolution.js';
 
 export const MAX_LEVEL = 60;
 export const TEAM_SIZE = 6;
@@ -24,7 +25,7 @@ export const ivMult = iv => 1 + ((Math.max(0, Math.min(IV_MAX, iv ?? 15.5)) / IV
 // 🛡️ DEF (v42): base oficial (média Defesa + Def. Especial), não sobe com o nível — é a "resistência" da espécie.
 // No dano: fator = √(DEF_REF / DEF), limitado entre DEF_MIN_F e DEF_MAX_F (DEF 70 = dano igual ao de antes).
 export const DEF_REF = 70, DEF_MIN_F = 0.6, DEF_MAX_F = 1.4, MEGA_DEF_MULT = 1.2;
-export const baseDefOf = sp => Math.round(baseDefOfDex(sp?.dex) * (sp?.mega ? MEGA_DEF_MULT : 1));
+export const baseDefOf = sp => Math.round((sp?.def ?? baseDefOfDex(sp?.dex)) * (sp?.mega ? MEGA_DEF_MULT : 1));
 export const defFactor = def => Math.max(DEF_MIN_F, Math.min(DEF_MAX_F, Math.sqrt(DEF_REF / Math.max(1, def))));
 function hashUid(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 /** IV de DEF: Pokémon antigos (sem iv.def) ganham um valor fixo derivado do uid — não dá para re-sortear. */
@@ -164,7 +165,21 @@ export function createMon(rng, speciesId, level, opts = {}) {
   };
   if (opts.starter) mon.starter = true;
   mon.gender = genderFor(speciesId, mon.uid, getSpecies(speciesId)); // ♂/♀ fixo pelo uid (não gasta RNG)
+  const v = opts.v !== undefined ? opts.v : variantFor(speciesId, mon.uid);
+  if (v) mon.v = v;
   return mon;
+}
+
+// 🎨 Variações só visuais (v54): Vivillon, Unown, Alcremie, Minior, Furfrou... sorteadas na criação, fixas pelo uid (não gastam RNG).
+export const VARIANT_CHANCE = 0.35;
+const RARE_VARIANT = { pikachu: 0.04, magearna: 0.08, zarude: 0.08, rockruff: 0.1, xerneas: 0.1, keldeo: 0.1 };
+function hashV(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+export function variantFor(speciesId, uid) {
+  const list = getSpecies(speciesId)?.variants;
+  if (!list?.length || !uid) return null;
+  const chance = RARE_VARIANT[speciesId] ?? VARIANT_CHANCE;
+  if ((hashV(`v|${uid}`) % 10000) / 10000 >= chance) return null;
+  return list[hashV(`vv|${uid}`) % list.length];
 }
 
 /** Visão completa (para UI e cálculos): junta espécie + status. */
@@ -203,13 +218,17 @@ export function setLevel(mon, newLevel) {
   mon.hp = mon.hp <= 0 ? 0 : Math.max(1, Math.round(newMax * ratio));
 }
 
-export function evolve(mon) {
+/** Evolui para `to` (ou, sem `to`, para a evolução por nível disponível). */
+export function evolve(mon, to = null) {
   const sp = getSpecies(mon.sp);
-  if (!sp || !sp.evolvesTo || !getSpecies(sp.evolvesTo)) return null;
+  const target = to || levelEvoTarget(mon) || sp?.evolvesTo;
+  if (!sp || !target || !getSpecies(target)) return null;
   const oldMax = maxHpOf(mon);
   const ratio = oldMax > 0 ? mon.hp / oldMax : 1;
   const from = sp.name;
-  mon.sp = sp.evolvesTo;
+  const v = variantAfter(mon, target);
+  if (v) mon.v = v; else delete mon.v;
+  mon.sp = target;
   const newMax = maxHpOf(mon);
   mon.hp = mon.hp <= 0 ? 0 : Math.max(1, Math.round(newMax * ratio));
   return { from, to: getSpecies(mon.sp).name };
@@ -225,9 +244,9 @@ export function gainXp(mon, amount) {
     setLevel(mon, mon.lvl + 1);
     const name = getSpecies(mon.sp).name;
     msgs.push(`${name} subiu para o nível ${mon.lvl}!`);
-    const sp = getSpecies(mon.sp);
-    if (!mon.tf && sp.evolvesTo && sp.evolutionLevel && mon.lvl >= sp.evolutionLevel) {
-      const ev = evolve(mon);
+    const to = !mon.tf ? levelEvoTarget(mon) : null;
+    if (to) {
+      const ev = evolve(mon, to);
       if (ev) msgs.push(`✨ ${ev.from} evoluiu para ${ev.to}!`);
     }
   }

@@ -12,7 +12,8 @@ import { SPECIES, getSpecies, STARTERS } from './data/pokemon.js';
 import { SPACE_LIST, getSpace, START_SPACE, useMap, useStateMap, BIOMES, isMapId } from './data/board.js';
 import { tickWeather, weatherSpawn, weatherRare } from './rules/weather.js';
 import { assistTick, giveTravelQuest, questVisit } from './rules/assist.js';
-import { ITEMS, getItem, shopFor, STARTING_ITEMS, STARTING_GOLD, cleanBring } from './data/items.js';
+import { ITEMS, getItem, shopFor, STARTING_ITEMS, STARTING_GOLD, cleanBring, pickEvoItem } from './data/items.js';
+import { itemEvoTarget, evoItemsFor } from './data/evolution.js';
 import { MOVES, tmMovesFor, defaultMoveIds } from './data/moves.js';
 import { genderFor } from './data/gender.js';
 import {
@@ -842,14 +843,16 @@ function useItem(state, rng, p, a) {
       levelUp(target).forEach(m => log(state, m, 'good'));
       return;
     }
-    case 'stone': {
+    case 'stone': { // ✨ pedras e itens de evolução (v54): cada item evolui só os Pokémon certos
       if (!target) fail('Escolha um Pokémon.');
       const sp = getSpecies(target.sp);
-      if (!sp.evolvesTo || !getSpecies(sp.evolvesTo)) fail(`${sp.name} não evolui.`);
+      if (target.tf) fail('Espere ele voltar à forma normal.');
+      const to = itemEvoTarget(target, a.item);
+      if (!to) fail(sp.evos?.length ? `${ITEMS[a.item].name} não faz ${sp.name} evoluir.` : `${sp.name} não evolui.`);
       takeItem(p, a.item);
-      const ev = evolve(target);
+      const ev = evolve(target, to);
       markCaught(p, target.sp, !!target.shiny);
-      log(state, `💎 ${ev.from} evoluiu para ${ev.to} com a Pedra Evolutiva!`, 'good');
+      log(state, `💎 ${ev.from} evoluiu para ${ev.to} com ${ITEMS[a.item].name}!`, 'good');
       return;
     }
     case 'tm': { // 💿 ensina um novo 2º golpe
@@ -956,12 +959,17 @@ function wildEncounter(state, rng, p, sp, tier, opts = {}) {
 const EVENT_ITEMS = {
   1: [['poke_ball', 5], ['potion', 4], ['bicycle', 2], ['escape_rope', 1], ['great_ball', 1]],
   2: [['poke_ball', 3], ['great_ball', 4], ['potion', 3], ['super_potion', 2], ['revive', 1], ['x_attack', 1]],
-  3: [['great_ball', 3], ['ultra_ball', 3], ['super_potion', 3], ['revive', 2], ['evolution_stone', 1], ['flame_ball', 1], ['aqua_ball', 1]],
-  4: [['ultra_ball', 4], ['super_potion', 3], ['revive', 2], ['rare_candy', 2], ['evolution_stone', 1], ['shadow_ball', 1], ['mystic_ball', 1], ['master_ball', 0.05], ['trust_ball', 0.06], ['tm', 0.4]],
-  5: [['ultra_ball', 4], ['rare_candy', 3], ['revive', 2], ['rainbow_ball', 1], ['master_ball', 0.1], ['trust_ball', 0.12], ['tm', 0.7], ['shiny_charm', 0.1]]
+  3: [['great_ball', 3], ['ultra_ball', 3], ['super_potion', 3], ['revive', 2], ['evo_item', 1.5], ['flame_ball', 1], ['aqua_ball', 1]],
+  4: [['ultra_ball', 4], ['super_potion', 3], ['revive', 2], ['rare_candy', 2], ['evo_item', 1.5], ['shadow_ball', 1], ['mystic_ball', 1], ['master_ball', 0.05], ['trust_ball', 0.06], ['tm', 0.4]],
+  5: [['ultra_ball', 4], ['rare_candy', 3], ['revive', 2], ['evo_item', 1.5], ['rainbow_ball', 1], ['master_ball', 0.1], ['trust_ball', 0.12], ['tm', 0.7], ['shiny_charm', 0.1]]
 };
 
-const LUCKY_ITEMS = [['rare_candy', 4], ['evolution_stone', 3], ['rainbow_ball', 2], ['tm', 1.2], ['master_ball', 0.15], ['trust_ball', 0.25], ['shiny_charm', 0.3]];
+const LUCKY_ITEMS = [['rare_candy', 4], ['evo_item', 3], ['evolution_stone', 0.4], ['rainbow_ball', 2], ['tm', 1.2], ['master_ball', 0.15], ['trust_ball', 0.25], ['shiny_charm', 0.3]];
+
+/** ✨ Item de evolução sorteado — os que servem para o time do jogador pesam mais. */
+function rollEvoItem(rng, p) {
+  return pickEvoItem(rng, [...new Set((p.team || []).flatMap(m => evoItemsFor(m)))]);
+}
 
 function boardEvent(state, rng, p, sp, forceId = null) {
   const t = sp.tier;
@@ -988,6 +996,7 @@ function boardEvent(state, rng, p, sp, forceId = null) {
     case 'camper_backpack': {
       let id = rng.weighted(EVENT_ITEMS[t]);
       if (id === 'shiny_charm' && p.items.shiny_charm) id = 'tm'; // o Amuleto não acumula
+      if (id === 'evo_item') id = rollEvoItem(rng, p);
       const q = ITEMS[id].kind === 'ball' && ITEMS[id].bonus < 2 ? rng.int(1, 3) : 1;
       addItem(p, id, q);
       effects.push({ text: `+${q}x ${ITEMS[id].name}`, tone: id === 'master_ball' ? 'shiny' : 'good', item: id });
@@ -1102,7 +1111,8 @@ function boardEvent(state, rng, p, sp, forceId = null) {
       const g = rng.int(600, 1000);
       p.gold += g;
       effects.push({ text: `+${g} de ouro`, tone: 'good', icon: '🪙' });
-      const id = rng.weighted([['master_ball', 0.1], ['rainbow_ball', 3], ['rare_candy', 3], ['evolution_stone', 2]]);
+      let id = rng.weighted([['master_ball', 0.1], ['rainbow_ball', 3], ['rare_candy', 3], ['evo_item', 2], ['evolution_stone', 0.3]]);
+      if (id === 'evo_item') id = rollEvoItem(rng, p);
       addItem(p, id, 1);
       effects.push({ text: `+1x ${ITEMS[id].name}`, tone: id === 'master_ball' ? 'shiny' : 'good', item: id });
       addItem(p, 'ultra_ball', 3);
@@ -1160,6 +1170,7 @@ function boardEvent(state, rng, p, sp, forceId = null) {
     case 'lucky_find': {
       let id = rng.weighted(LUCKY_ITEMS);
       if (id === 'shiny_charm' && p.items.shiny_charm) id = 'tm'; // o Amuleto não acumula
+      if (id === 'evo_item') id = rollEvoItem(rng, p);
       addItem(p, id, 1);
       effects.push({ text: `+1x ${ITEMS[id].name}`, tone: 'shiny', item: id });
       break;
@@ -1492,7 +1503,8 @@ function triggerHotspot(state, rng, p, sp, h) {
     p.gold += g;
     ev.effects.push({ text: `+${g} de ouro`, tone: 'good', icon: '🪙' });
     for (let i = 0; i < 2; i++) {
-      const id = rng.weighted(i === 0 ? EVENT_ITEMS[t] : LUCKY_ITEMS);
+      let id = rng.weighted(i === 0 ? EVENT_ITEMS[t] : LUCKY_ITEMS);
+      if (id === 'evo_item') id = rollEvoItem(rng, p);
       addItem(p, id, 1);
       ev.effects.push({ text: `+1x ${ITEMS[id].name}`, tone: id === 'master_ball' ? 'shiny' : 'good', item: id });
     }

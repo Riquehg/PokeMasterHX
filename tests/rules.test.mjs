@@ -70,7 +70,7 @@ test('Pedra Evolutiva evolui na hora (fora de batalha) e é consumida', () => {
   s.players[0].items.evolution_stone = 1;
   const r = applyAction(s, 'a', { type: 'use_item', item: 'evolution_stone', index: 0 }, { now: T0 });
   assert.equal(r.error, undefined);
-  assert.equal(r.state.players[0].team[0].sp, getSpecies('eevee').evolvesTo);
+  assert.ok(getSpecies('eevee').evos.some(e => e.to === r.state.players[0].team[0].sp)); // a universal escolhe uma das evoluções
   assert.equal(r.state.players[0].items.evolution_stone, undefined);
   // Pokémon sem evolução não gasta a pedra
   let s2 = createMatch({ seed: 9, now: T0, players: [{ id: 'a', name: 'A', starter: 'pikachu' }, { id: 'b', name: 'B', isBot: true }] });

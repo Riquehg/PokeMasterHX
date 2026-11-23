@@ -110,6 +110,6 @@ import { ABILITY_BY_DEX } from './abilitymap.js';
 export function abilityOf(sp) {
   const S = SPECIES[sp];
   if (!S) return null;
-  const k = ABILITY_BY_DEX[(S.dex | 0) - 1];
+  const k = S.ab !== undefined ? S.ab : ABILITY_BY_DEX[(S.dex | 0) - 1]; // formas e Gen 8–9 trazem a própria (v54)
   return k && ABILITIES[k] ? k : null;
 }

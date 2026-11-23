@@ -20,6 +20,7 @@ import { COMPANIONS } from '../../shared/data/companions.js';
 import { openCompanionPicker } from './missions.js';
 // Telas fora da partida: login, hub do treinador, lobby online, sala de espera, partida local, coleção, ranking e admin.
 import { STARTERS, getSpecies, SPECIES_LIST } from '../../shared/data/pokemon.js';
+import { evoSummary, evoItemsFor, itemEvoTarget } from '../../shared/data/evolution.js';
 import { releaseGold, releaseLabel } from '../../shared/data/release.js';
 import { dailyPokemon } from '../../shared/daily.js';
 import { esc, toast, bindActions, openModal, closeModal, setModalBody } from './dom.js';
@@ -318,6 +319,8 @@ function collectionModal(profile, onChange) {
     const vault = profile?.vault || [];
     const all = sortCollection(vault);
     const recent = new Map(vault.map((m, i) => [m.uid, i]));
+    const bagNow = profile?.stats?.bag || {};
+    const evoReady = m => evoItemsFor(m).some(id => (bagNow[id] || 0) > 0); // ✨ tem item de evolução que serve
     const n = k => all.filter(m => k(m)).length;
     return `<details class="info-fold"><summary class="small">ℹ️ Como funciona a Coleção</summary><p class="small muted">Tudo que você captura em partidas salvas na conta (Treino contra CPUs e Online) fica aqui, com o nível atualizado. Use no modo <b>📦 Coleção</b> para levar seu time. Limite: ${cap()}. Se lotar, só os comuns mais fracos saem e ficam em "↩️ Saíram da Coleção" para recuperar (⭐ favoritos, shinies, lendários, Vermelhos/Amarelos, Confiança e com apelido nunca saem).${profile?.stats?.vaultBonus ? '' : ' Dá para ampliar para 350 na 💎 Loja.'}</p></details>
       ${(profile?.stats?.overflow || []).length ? `<details class="vf-out"><summary>↩️ Saíram da Coleção (${profile.stats.overflow.length}) — toque para ver e recuperar</summary>
@@ -328,7 +331,7 @@ function collectionModal(profile, onChange) {
       ${boxBar()}
       <div class="vf-scope">${vfBar('vault')}
       <div class="pk-grid ${picking ? 'bx-picking' : ''}">${all.map(m => { const bx = boxOf(m.uid); const hide = picking ? !!bx && bx.id === picking.box : view === 'none' ? !!bx : view !== 'all' && bx?.id !== view;
-        return `<div class="vf-cell ${hide ? 'bx-hide' : ''} ${picking?.sel.has(m.uid) ? 'bx-sel' : ''}" data-uid="${esc(m.uid)}" ${vfAttrs(m, recent.get(m.uid) || 0)}>${bx && view === 'all' ? `<span class="bx-tag" title="${esc(bx.name)}">${bx.icon}</span>` : ''}${statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px">${bx && view === bx.id ? `<button class="btn sm" data-act="bx-out" data-uid="${esc(m.uid)}" title="Tirar da box">↩️</button>` : ''}<button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="farm" data-uid="${esc(m.uid)}" title="Mandar para a 🌾 Fazenda (ganha XP com o tempo)">🌾</button><button class="btn sm ${m.held ? 'purple' : ''}" data-act="mstone" data-uid="${esc(m.uid)}" title="🎒 Item segurado (Megapedra ou item de batalha): equipar / trocar / tirar">${megaBySpecies(m.sp).length ? '💎' : '🎒'}</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar (o Professor paga 🪙 ${releaseGold(m)})">✕</button></div>` })}</div>`; }).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div></div>`;
+        return `<div class="vf-cell ${hide ? 'bx-hide' : ''} ${picking?.sel.has(m.uid) ? 'bx-sel' : ''}" data-uid="${esc(m.uid)}" ${vfAttrs(m, recent.get(m.uid) || 0)}>${bx && view === 'all' ? `<span class="bx-tag" title="${esc(bx.name)}">${bx.icon}</span>` : ''}${statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px">${bx && view === bx.id ? `<button class="btn sm" data-act="bx-out" data-uid="${esc(m.uid)}" title="Tirar da box">↩️</button>` : ''}<button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="farm" data-uid="${esc(m.uid)}" title="Mandar para a 🌾 Fazenda (ganha XP com o tempo)">🌾</button><button class="btn sm ${m.held ? 'purple' : ''} ${evoReady(m) ? 'green' : ''}" data-act="mstone" data-uid="${esc(m.uid)}" title="${evoReady(m) ? '✨ Pode evoluir com um item da sua Mochila! · ' : ''}🎒 Item segurado (Megapedra ou item de batalha): equipar / trocar / tirar">${evoReady(m) ? '✨' : megaBySpecies(m.sp).length ? '💎' : '🎒'}</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar (o Professor paga 🪙 ${releaseGold(m)})">✕</button></div>` })}</div>`; }).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div></div>`;
   };
   const ov = openModal('vault', `📦 Coleção (${(profile?.vault || []).length}/${cap()})`, body(), { wide: true });
   const redraw = () => { setModalBody('vault', body()); vfBind(document.getElementById('vault')); };
@@ -377,7 +380,7 @@ function collectionModal(profile, onChange) {
       const bag = profile?.stats?.bag || {};
       const opts = megaBySpecies(m.sp);
       const gear = Object.keys(ALL_ITEMS).filter(id => ALL_ITEMS[id].kind === 'gear' && ((bag[id] || 0) > 0 || m.held === id));
-      const ov2 = openModal('mstone', `🎒 Item segurado — ${esc(m.nick || getSpecies(m.sp).name)}`, `<div class="ms-pick">
+      const ov2 = openModal('mstone', `🎒 Itens — ${esc(m.nick || getSpecies(m.sp).name)}`, `<div class="ms-pick">
           <p class="tiny muted">Cada Pokémon segura <b>1 item</b>: uma Megapedra <i>ou</i> um item de batalha. Trocar devolve o anterior para a Mochila.</p>
           ${opts.map(x => { const id = `ms_${x.key}`, n = bag[id] || 0, on = m.held === id;
             return `<div class="ms-opt ${on ? 'on' : ''}"><img class="ms-st" src="${itemUrl(id)}" alt=""><img class="ms-mon" src="${monSprite({ sp: x.sp, shiny: m.shiny })}" alt="">
@@ -389,12 +392,24 @@ function collectionModal(profile, onChange) {
               ${on ? '<span class="chip purple">Segurando</span>' : `<button class="btn sm primary" data-act="ms-hold" data-item="${id}" ${n > 0 ? '' : 'disabled'}>Equipar</button>`}</div>`; }).join('')}
           ${!gear.length ? '<p class="tiny muted">⚔️ Itens de batalha (Garra Rápida, Faixa de Foco, Placas, Restos, Faixa Escolhida) são feitos na 🔨 Oficina da Fazenda.</p>' : ''}
           ${m.held ? '<button class="btn sm" data-act="ms-off">↩️ Tirar o item (volta para a Mochila)</button>' : ''}
-          ${opts.length ? `<p class="tiny muted">O Pokémon que segura a pedra é quem pode Mega Evoluir (precisa também do 🔗 Bracelete Mega na conta). Pedras vêm da 🔨 Oficina (10 fragmentos), de Mega Raids e do 🏪 Mercado.</p>` : ''}</div>`);
+          ${opts.length ? `<p class="tiny muted">O Pokémon que segura a pedra é quem pode Mega Evoluir (precisa também do 🔗 Bracelete Mega na conta). Pedras vêm da 🔨 Oficina (10 fragmentos), de Mega Raids e do 🏪 Mercado.</p>` : ''}
+          ${(() => { // ✨ v54: evoluir com pedra / item de evolução da Mochila
+            const evoIds = [...new Set([...evoItemsFor(m), ...((bag.evolution_stone || 0) > 0 && getSpecies(m.sp).evos?.length ? ['evolution_stone'] : [])])];
+            if (!evoIds.length) return '';
+            return `<h4 style="margin:6px 0 2px">✨ Evoluir com item</h4>${evoIds.map(id => { const n = bag[id] || 0, to = itemEvoTarget(m, id);
+              return to ? `<div class="ms-opt"><img class="ms-st" src="${itemUrl(id)}" alt=""><img class="ms-mon" src="${monSprite({ sp: to, shiny: m.shiny })}" alt="">
+                <div class="grow"><b>${esc(ALL_ITEMS[id].name)}</b><div class="tiny muted">evolui para <b>${esc(getSpecies(to).name)}</b> · você tem ${n} na Mochila</div></div>
+                <button class="btn sm green" data-act="ms-evo" data-item="${id}" ${n > 0 ? '' : 'disabled'}>Evoluir</button></div>` : ''; }).join('')}
+              <p class="tiny muted">Itens de evolução caem em eventos do tabuleiro e são vendidos nas lojas das cidades (Pedras nas Azuis, itens de troca nas Vermelhas, os da Gen 8–9 nas Amarelas). Sobras ficam na Mochila da conta.</p>`; })()}</div>`);
       const hold = async item => {
         try { profile = (await api('profile', { op: 'hold_stone', uid: m.uid, item })).profile; closeModal('mstone'); redraw(); onChange(profile); toast(item ? `${ALL_ITEMS[item]?.kind === 'gear' ? '⚔️' : '💎'} ${ALL_ITEMS[item]?.name} equipado!` : 'O item voltou para a Mochila.', 'good'); }
         catch (e) { toast(e.message, 'bad'); }
       };
-      bindActions(ov2, { 'ms-hold': x => hold(x.item), 'ms-off': () => hold(null) });
+      const evoUse = async item => {
+        try { const r = await api('profile', { op: 'evo_item', uid: m.uid, item }); profile = r.profile; closeModal('mstone'); redraw(); onChange(profile); toast(`✨ ${r.evolved.from} evoluiu para ${r.evolved.to}!`, 'good'); }
+        catch (e) { toast(e.message, 'bad'); }
+      };
+      bindActions(ov2, { 'ms-hold': x => hold(x.item), 'ms-off': () => hold(null), 'ms-evo': x => evoUse(x.item) });
     },
     rel: async d => {
       const m = (profile?.vault || []).find(x => x.uid === d.uid);
@@ -929,7 +944,7 @@ function trainModal(profile, uid, onDone) {
   const costTo = n => { let c = 0; for (let l = m.lvl; l < Math.min(TRAIN_MAX, m.lvl + n); l++) c += trainCost(l); return c; };
   const gold = profile.gold || 0;
   const opts = [1, 3, 5, 10].filter(n => m.lvl + 1 <= TRAIN_MAX);
-  const evo = sp.evolvesTo && sp.evolutionLevel ? `<p class="small">✨ Evolui para <b>${esc(getSpecies(sp.evolvesTo).name)}</b> no Nv. ${sp.evolutionLevel}.</p>` : '';
+  const evo = evoSummary(sp.id) ? `<p class="small">✨ Evolui para <b>${esc(evoSummary(sp.id))}</b>.</p>` : '';
   const html = m.lvl >= TRAIN_MAX ? `<p>${esc(sp.name)} já está no Nv. ${m.lvl}. O Centro de Treino vai até o Nv. ${TRAIN_MAX} — daqui pra frente, só batalhando nas partidas!</p>`
     : `<div class="row"><img src="${monSprite(m)}" style="width:80px;height:80px;object-fit:contain"><div><b>${esc(m.nick || sp.name)}</b> · Nv. ${m.lvl}<div class="small muted">Ouro da conta: 🪙 ${gold}</div></div></div>${evo}
       <p class="small muted">Treinar não muda o potencial (IV) nem a natureza — só o nível. Vai até o Nv. ${TRAIN_MAX}.</p>
