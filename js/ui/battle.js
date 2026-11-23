@@ -1,3 +1,4 @@
+import { caughtBall } from '../owned.js';
 import { genderOf, genderHtml } from '../../shared/data/gender.js';
 // Tela de batalha (arena estilo jogos de Pokémon) + animações de golpe, dano, cura, troca e desmaio.
 import { getSpecies } from '../../shared/data/pokemon.js';
@@ -35,14 +36,14 @@ export function captureChance(state, ballId) {
   return captureProb(captureMath(wild, me, ballId, b.sides[1].status?.[wild.uid]));
 }
 
-function hpBox(state, side, mon, cls, vs = null) {
+function hpBox(state, side, mon, cls, vs = null, viewer = null) {
   const v = monView(mon);
   const owner = side.kind === 'player' ? state.players.find(p => p.id === side.pid)?.name : side.kind === 'wild' ? 'Selvagem' : side.name;
   const team = sideTeam(state, side);
   const r = Math.max(0, v.hp) / v.maxHp;
   return `<div class="hpbox ${cls}" data-uid="${esc(mon.uid)}">
     <div class="owner">${esc(owner || '')}</div>
-    <div class="nm"><span>${vs ? edgeBadge(mon, vs, true) : ''}${esc(v.name)}${genderHtml(genderOf(mon, getSpecies(mon.sp)))}${v.shiny ? ' ✨' : ''}${mon.raid ? ' <span class="chip red">CHEFE</span>' : ''}</span><span class="lv">Nv.${v.lvl}</span></div>
+    <div class="nm"><span>${cls === 'foe' && viewer ? caughtBall(mon.sp, viewer, itemUrl('poke_ball')) : ''}${vs ? edgeBadge(mon, vs, true) : ''}${esc(v.name)}${genderHtml(genderOf(mon, getSpecies(mon.sp)))}${v.shiny ? ' ✨' : ''}${mon.raid ? ' <span class="chip red">CHEFE</span>' : ''}</span><span class="lv">Nv.${v.lvl}</span></div>
     <div class="types">${typeChips(v.types)}${side.boost?.[mon.uid] ? ` <span class="chip green">ATQ +${side.boost[mon.uid]}</span>` : ''}${statusChip(side, mon)}${stageChip(side, mon)}${(() => { const A = ABILITIES[abilityOf(mon.sp)]; return A ? ` <span class="chip abil-chip" title="${esc(A.name)}: ${esc(A.desc)}">${A.icon} ${esc(A.name)}</span>` : ''; })()}${gearOf(mon) ? ` <span class="chip abil-chip" title="${esc(gearOf(mon).name)}: ${esc(gearOf(mon).desc)}">${gearOf(mon).emoji}</span>` : ''}</div>
     <div class="hp ${hpClass(r)}"><i style="width:${(r * 100).toFixed(1)}%"></i></div>
     <div class="hpnum"><b class="cur">${Math.max(0, v.hp)}</b> / ${v.maxHp}</div>
@@ -107,7 +108,7 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
       ${foeMon.aura ? `<div class="aura-fx foe aura-${esc(foeMon.aura)}"></div>` : ''}${myMon.aura ? `<div class="aura-fx me aura-${esc(myMon.aura)}"></div>` : ''}
       <img class="mon-sprite foe ${foeMon.shiny ? 'shiny' : ''} ${foeMon.raid ? 'raid-boss' : ''} ${foeMon.mega ? 'mega' : ''} ${getSpecies(foeMon.sp)?.gmaxOf ? 'gmax' : ''} ${foeMon.aura ? 'aura-' + esc(foeMon.aura) : ''}" data-uid="${esc(foeMon.uid)}" src="${monSprite(foeMon)}" alt="${esc(getSpecies(foeMon.sp).name)}">
       <img class="mon-sprite me ${myMon.shiny ? 'shiny' : ''} ${myMon.mega ? 'mega' : ''} ${getSpecies(myMon.sp)?.gmaxOf ? 'gmax' : ''} ${myMon.aura ? 'aura-' + esc(myMon.aura) : ''}" data-uid="${esc(myMon.uid)}" src="${monSprite(myMon)}" alt="${esc(getSpecies(myMon.sp).name)}">
-      ${hpBox(state, foe, foeMon, 'foe')}
+      ${hpBox(state, foe, foeMon, 'foe', null, vp)}
       ${hpBox(state, me, myMon, 'me', participant ? foeMon : null)}
     </div>`;
 

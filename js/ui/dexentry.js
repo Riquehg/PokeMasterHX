@@ -76,11 +76,11 @@ export function dexEntryHtml(spId, ctx) {
     <div class="dx-head" style="--t1:${TYPE_COLORS[sp.types[0]]};--t2:${TYPE_COLORS[sp.types[1] || sp.types[0]]}">
       <div class="dx-arts">
         <div class="dx-art"><img src="${monSprite(sp.id)}" alt=""><span>Normal</span></div>
-        <div class="dx-art ${ss ? 'shiny' : 'locked'}"><img src="${monSprite(sp.id, true)}" alt=""><span>${sc ? '✨ capturado' : ss ? '✧ visto' : '✨ ???'}</span></div>
+        ${sp.noShiny ? '<div class="dx-art locked"><span>☠️ sem versão shiny</span></div>' : `<div class="dx-art ${ss ? 'shiny' : 'locked'}"><img src="${monSprite(sp.id, true)}" alt=""><span>${sc ? '✨ capturado' : ss ? '✧ visto' : '✨ ???'}</span></div>`}
       </div>
       <div class="dx-id"><span class="dx-num">#${String(sp.dex).padStart(3, '0')}</span><h3>${esc(sp.name)}</h3>
         <div>${typeChips(sp.types)}</div>
-        <div class="dx-tags"><span class="chip">Tier ${sp.tier}${ctx.tierNames?.[sp.tier] ? ' · ' + esc(ctx.tierNames[sp.tier]) : ''}</span>${sp.mythical ? '<span class="chip mythic">🌟 Mítico</span>' : sp.ultra ? '<span class="chip ultra">🌀 Ultracriatura</span>' : sp.legendary ? '<span class="chip gold">⚡ Lendário</span>' : ''}${sp.role ? `<span class="chip">🛡️ ${esc(ROLE_LABELS[sp.role])}</span>` : ''}</div>
+        <div class="dx-tags"><span class="chip">Tier ${sp.tier}${ctx.tierNames?.[sp.tier] ? ' · ' + esc(ctx.tierNames[sp.tier]) : ''}</span>${sp.corrupt ? '<span class="chip mythic">☠️ Lendário Corrompido · sem shiny</span>' : sp.mythical ? '<span class="chip mythic">🌟 Mítico</span>' : sp.ultra ? '<span class="chip ultra">🌀 Ultracriatura</span>' : sp.legendary ? '<span class="chip gold">⚡ Lendário</span>' : ''}${sp.role ? `<span class="chip">🛡️ ${esc(ROLE_LABELS[sp.role])}</span>` : ''}</div>
         <div class="tiny">${c ? '🔴 Capturado' : '👁️ Só visto'}${mine.length ? ` · 📦 ${mine.length} na Coleção${mine.some(m => m.shiny) ? ' ✨' : ''}${best ? ` (melhor: Nv. ${best.lvl})` : ''}` : ''}</div></div>
     </div>
 

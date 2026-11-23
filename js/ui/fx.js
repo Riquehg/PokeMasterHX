@@ -343,3 +343,20 @@ export function miniCapture(f, who, ballName) {
   };
   setTimeout(shake, 500);
 }
+
+// ⚡ v58: Modo leve — menos efeitos contínuos (pulsos, partículas, auras, borboletas, blur). Automático em aparelho de
+// toque com poucos núcleos/pouca memória; o jogador pode ligar/desligar no 🎬 da partida (fica salvo no aparelho).
+export function liteAuto() {
+  try {
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    return coarse && ((navigator.hardwareConcurrency || 8) <= 6 || (navigator.deviceMemory || 8) <= 4);
+  } catch { return false; }
+}
+export function isLite() {
+  try { const v = localStorage.getItem('pmhx_lite'); return v === null ? liteAuto() : v === '1'; } catch { return false; }
+}
+export function setLite(on) {
+  try { localStorage.setItem('pmhx_lite', on ? '1' : '0'); } catch { /* sem armazenamento */ }
+  document.documentElement.classList.toggle('lite', !!on);
+}
+try { document.documentElement.classList.toggle('lite', isLite()); } catch { /* fora do navegador */ }

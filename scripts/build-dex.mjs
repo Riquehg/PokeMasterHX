@@ -133,10 +133,24 @@ for (const p of pokemon) {
   out.push(row); rowById[row.id] = row; byPk[p.id] = row.id;
 }
 
+// ---------------------------------------------------------------- ☠️ lendários corrompidos (v58, pedido do usuário — não existem nos jogos principais)
+// formas extras sem versão shiny; sprite própria em pokemon/<arquivo>.png (sem ela, usa a da espécie base)
+const CORRUPT = [
+  { base: 'mewtwo', id: 'mewtwo_armor', name: 'Mewtwo Armadura', types: ['psychic', 'steel'], file: 'mewtwo-armor', hp: 1.12, str: 1.0, def: 30 },
+  { base: 'mewtwo', id: 'mewtwo_shadow', name: 'Mewtwo Sombrio', types: ['psychic', 'dark'], file: 'mewtwo-shadow', hp: 1.0, str: 1.15, def: 0 },
+  { base: 'lugia', id: 'lugia_shadow', name: 'Lugia Sombrio', types: ['dark', 'flying'], file: 'lugia-shadow', hp: 1.0, str: 1.15, def: 0 }
+];
+for (const c of CORRUPT) {
+  const b = rowById[c.base];
+  const row = { dex: b.dex, pk: b.pk, id: c.id, name: c.name, types: c.types, tier: 5, hp: Math.round(b.hp * c.hp), str: Math.round(b.str * c.str * 10) / 10,
+    legendary: true, role: c.id.endsWith('shadow') ? null : b.role, def: defAvg(b.pk) + c.def, ab: abOf(b.pk), gen: b.gen, myth: false, stem: c.file, form: b.id, region: null, corrupt: true };
+  out.push(row); rowById[row.id] = row;
+}
+
 // ---------------------------------------------------------------- arquivos de sprite
 const miss = [];
 for (const r of out) {
-  if (!sprites.has(r.stem)) miss.push(`${r.id} (${r.stem})`);
+  if (!sprites.has(r.stem) && !r.corrupt) miss.push(`${r.id} (${r.stem})`);
   r.fem = sprites.has(`${r.stem}-f`) ? 1 : 0;
   r.gmax = sprites.has(`${r.stem}-gmax`) ? 1 : 0;
 }
@@ -239,6 +253,7 @@ const lines = out.map(r => {
   const gr = +spById[String(r.dex)].gender_rate; // −1 sem sexo · 0 só machos · 8 só fêmeas · n = n/8 fêmeas
   if (gr !== 4) x.gr = gr;
   if (ULTRA.includes(r.id)) x.ub = 1;
+  if (r.corrupt) x.cr = 1; // ☠️ corrompido: sem shiny
   x.g = r.gen;
   return '  ' + JSON.stringify([r.dex, r.id, r.name, r.types.join('/'), r.tier, r.hp, r.str, r.legendary ? 1 : 0, r.role || null, x]);
 });
@@ -247,7 +262,7 @@ const src = `// Catálogo de espécies — Pokédex nacional #001–#${pad(Math.
 // [dex, id, nome, tipos, tier, hpBase, forçaBase, lendário, papel, extras]
 // extras: d = DEF base, a = habilidade, e = evoluções [{to, lvl?, item?, sex?, time?}], f = arquivo da sprite (sem .png),
 //         fm = forma de (espécie base), rg = região, v = variações visuais, fe = tem sprite de fêmea, gx = tem Gigantamax,
-//         my = mítico, ub = ultracriatura, gr = proporção de fêmeas em oitavos (−1 sem sexo; padrão 4), g = geração
+//         my = mítico, ub = ultracriatura, cr = corrompido (sem shiny), gr = proporção de fêmeas em oitavos (−1 sem sexo; padrão 4), g = geração
 export const DEX_RAW = [
 ${lines.join(',\n')}
 ];

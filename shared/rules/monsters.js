@@ -145,6 +145,7 @@ export function makeUid(rng) {
 }
 
 export function createMon(rng, speciesId, level, opts = {}) {
+  if (getSpecies(speciesId)?.noShiny && opts.shiny) opts = { ...opts, shiny: false }; // ☠️ corrompidos não têm shiny
   const nature = opts.nature !== undefined ? opts.nature : rng.pick(NATURE_NAMES);
   const iv = opts.iv && typeof opts.iv === 'object' ? cleanIv(opts.iv) : rollIvs(rng);
   const moves = Array.isArray(opts.moves) && opts.moves.length === 2 && opts.moves.every(id => MOVES[id]) ? [...opts.moves] : rollMoveIds(rng, speciesId);
@@ -266,12 +267,16 @@ export function xpReward(foe, isTrainer) {
 }
 
 /** Sorteia um selvagem para uma casa de tier `tier`. */
+export const CORRUPT_WILD_CHANCE = 0.02;
+
 export function rollWild(rng, tier, opts = {}) {
   // Tier estável: a cor da casa define o tier (Rosa 1 · Verde 2 · Azul 3 · Vermelha 4 · Amarela 5)
   // 🌟 Míticos não aparecem soltos: só numa aparição mítica rara (4%) nas casas Amarelas
   const all = speciesByTier(tier);
   const myth = all.filter(s => s.mythical);
-  const pool = tier === 5 && myth.length && rng.chance(MYTHICAL_WILD_CHANCE) ? myth : all.filter(s => !s.mythical);
+  const corrupt = all.filter(s => s.corrupt); // ☠️ v58: corrompidos só numa aparição rara (2%) nas casas Amarelas
+  const pool = tier === 5 && myth.length && rng.chance(MYTHICAL_WILD_CHANCE) ? myth
+    : tier === 5 && corrupt.length && rng.chance(CORRUPT_WILD_CHANCE) ? corrupt : all.filter(s => !s.mythical && !s.corrupt);
   // ambiente da casa e clima puxam alguns tipos (ex.: mar → Água, caverna → Pedra, chuva → Água)
   const favor = opts.favorTypes?.length && rng.chance(opts.favorChance ?? 0.45) ? pool.filter(s => s.types.some(t => opts.favorTypes.includes(t))) : null;
   let speciesId = rng.pick(favor?.length ? favor : pool).id;
@@ -295,7 +300,7 @@ export function rollWild(rng, tier, opts = {}) {
 
 /** Ovo: choca um Pokémon básico (primeiro estágio) do tier pedido. */
 export function hatchEgg(rng, tier, opts = {}) {
-  const pool = speciesByTier(tier).filter(s => !s.mythical); // ovo nunca choca Mítico
+  const pool = speciesByTier(tier).filter(s => !s.mythical && !s.corrupt); // ovo nunca choca Mítico nem Corrompido
   const basics = pool.filter(s => !s.evolvesFrom || getSpecies(s.evolvesFrom)?.tier !== tier);
   const sp = rng.pick(basics.length ? basics : pool);
   const lvl = opts.level || { 1: 5, 2: 12, 3: 18, 4: 25, 5: 30 }[tier];

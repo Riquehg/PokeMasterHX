@@ -907,9 +907,11 @@ function companionAssist(state, rng, si) {
 
 // ⚡ Limite de lendários da casa Amarela: 2 capturas por jogador por partida (Raid, eventos e Megas não contam)
 export const LEGEND_MATCH_LIMIT = 2;
+export const CHARM_DAYS = 7; // 🏵️ v58: o Amuleto Lendário vale 1 semana a partir da ativação
+export const charmActive = (player, now = Date.now()) => !!player?.legendCharmOn || (player?.legendCharmUntil || 0) > now;
 export const isLegendOrMyth = mon => { const sp = getSpecies(mon?.sp); return !!(sp && (sp.legendary || sp.mythical)); };
 export function legendCapBlocked(player, foe) {
-  if (player?.legendCharmOn || (player?.items?.legend_charm || 0) > 0) return false; // 🏵️ Amuleto Lendário: sem limite
+  if (charmActive(player) || (player?.items?.legend_charm || 0) > 0) return false; // 🏵️ Amuleto Lendário: sem limite
   return !!(foe?.yellowLegend && (player?.legendCaught || 0) >= LEGEND_MATCH_LIMIT);
 }
 
@@ -1225,12 +1227,13 @@ export function deliverCapture(state, pid, mon, ballId) {
   if (ballId) progressMission(state, pid, { k: 'capture', sp: mon.sp });
   if (mon.yellowLegend) {
     p.legendCaught = (p.legendCaught || 0) + 1; delete mon.yellowLegend;
-    // 🏵️ passou do limite graças ao Amuleto Lendário: gasta 1 carga (só 1 por partida)
-    if (p.legendCaught > LEGEND_MATCH_LIMIT && !p.legendCharmOn && (p.items?.legend_charm || 0) > 0) {
+    // 🏵️ passou do limite graças ao Amuleto Lendário (levado na Mochila): ativa por 1 semana
+    if (p.legendCaught > LEGEND_MATCH_LIMIT && !charmActive(p) && (p.items?.legend_charm || 0) > 0) {
       p.items.legend_charm -= 1;
       if (!p.items.legend_charm) delete p.items.legend_charm;
-      p.legendCharmOn = true; // continua sem limite até o fim desta partida
-      log(state, `🏵️ O Amuleto Lendário brilhou! 1 carga usada — sem limite de lendários até o fim da partida.`, 'good');
+      p.legendCharmOn = true;
+      p.legendCharmUntil = Date.now() + CHARM_DAYS * 86400000; // salvo na conta no fim da partida
+      log(state, `🏵️ O Amuleto Lendário brilhou! Ativado por ${CHARM_DAYS} dias — sem limite de lendários em todas as partidas até lá.`, 'good');
     }
   }
   const where = giveMon(p, mon);

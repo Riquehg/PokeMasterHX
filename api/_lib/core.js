@@ -261,6 +261,17 @@ export async function profileOp(db, user, body) {
       return { stats: st, vault: cur.vault.map(x => (x.uid === body.uid ? { ...x, held: item || undefined } : x)) };
     })) };
   }
+  if (body.op === 'charm_activate') { // 🏵️ ativar o Amuleto Lendário pela Mochila: +7 dias (soma se já estiver ativo)
+    const prof = await mutateProfile(db, user.id, prof => {
+      const bag = { ...(prof.stats?.bag || {}) };
+      if (!(bag.legend_charm > 0)) bad('Você não tem 🏵️ Amuleto Lendário (Oficina da Fazenda ou Loja PB da Torre).');
+      bag.legend_charm -= 1; if (bag.legend_charm <= 0) delete bag.legend_charm;
+      const now = Date.now();
+      const until = Math.max(now, prof.stats?.legendCharmUntil || 0) + 7 * 86400000;
+      return { stats: { ...(prof.stats || {}), bag, legendCharmUntil: until } };
+    });
+    return { profile: await withCosmetic(db, prof) };
+  }
   if (body.op === 'max_soup') { // 🍲 Sopa Max: dá o ✨ Fator Gigantamax a um Pokémon da Coleção (v55)
     const prof = await mutateProfile(db, user.id, prof => {
       const bag = { ...(prof.stats?.bag || {}) };
@@ -772,7 +783,8 @@ async function playerCfg(db, e, options) {
   const prof = e.isBot ? null : await db.getProfile(e.id);
   if (prof) { try { p.cosmetic = await equippedCosmetic(db, prof); } catch { /* sem cosmético */ } }
   if (prof?.stats?.megaBracelet) p.megaKey = true; // 🔗 Bracelete Mega (ícone no peão; Mega só se a sala permitir)
-  if (prof?.stats?.dynamaxBand) p.dynaKey = true; // 🔴 Pulseira Dynamax (Gigantamax, mesmas regras da Mega)
+  if (prof?.stats?.dynamaxBand) p.dynaKey = true;
+  if ((prof?.stats?.legendCharmUntil || 0) > Date.now()) { p.legendCharmUntil = prof.stats.legendCharmUntil; p.legendCharmOn = true; } // 🏵️ Amuleto ativo (1 semana) // 🔴 Pulseira Dynamax (Gigantamax, mesmas regras da Mega)
   if (prof) { // companheiros da conta + nível de laço de cada um
     p.companions = prof.stats?.companions || []; p.companion = prof.stats?.companion || null;
     p.companionBond = Object.fromEntries(Object.entries(prof.stats?.companionBond || {}).map(([id, pts]) => [id, bondLevel(pts)]));
@@ -1143,7 +1155,8 @@ export async function recordResults(db, state, options = {}) {
         vaultBonus: base.vaultBonus || fresh.vaultBonus, nicknames: base.nicknames || fresh.nicknames, bag: addToBag(base.bag, keep),
         serie: base.serie ?? fresh.serie, trophies: base.trophies ?? fresh.trophies,
         ...(base.megaBracelet || (p.items?.mega_bracelet > 0 && !p.hardcoreLost) ? { megaBracelet: true } : {}), // 🔗 Bracelete Mega (só cai em Mega Raid)
-        ...(base.dynamaxBand || (p.items?.dynamax_band > 0 && !p.hardcoreLost) ? { dynamaxBand: true } : {}) }; // 🔴 Pulseira Dynamax (só cai em Raid Gigantamax)
+        ...(base.dynamaxBand || (p.items?.dynamax_band > 0 && !p.hardcoreLost) ? { dynamaxBand: true } : {}),
+        ...((p.legendCharmUntil || 0) > (base.legendCharmUntil || 0) ? { legendCharmUntil: p.legendCharmUntil } : {}) }; // 🏵️ Amuleto ativado na partida // 🔴 Pulseira Dynamax (só cai em Raid Gigantamax)
       return { ...patch, stats: merged, points: calcPoints(cur.pokedex || [], merged) };
     });
     // Hardcore: quem caiu não leva nada (nem o ouro trazido); quem sobreviveu ganha o dobro de ouro da conta

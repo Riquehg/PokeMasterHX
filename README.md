@@ -155,6 +155,7 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 - **v56 — 🔴 Gigantamax:** `shared/data/gmax.js` (34 formas `gmax_<id>`: HP ×1,5, força ×1,2, 3 rodadas) e `shared/rules/gmax.js` (Raid Gigantamax 15% quando o chefe não é Mega; 🍄 Cogumelo Max; 🔴 Pulseira Dynamax 1%). Batalha: `gmaxBlock`/`doGmax`/`endGmax` (ação grátis, divide o "1 por batalha" com a Mega, acaba ao sair de campo). `player.dynaKey` ← `stats.dynamaxBand`; Fator `mon.gx` (captura de Raid Gmax, 1% na natureza, 🍲 Sopa Max — receita da casa, op `max_soup`). Salas: "Megas e Gigantamax".
 
 - **v57 — sprites:** `monSprite` sempre começa por `pokemon/<arquivo>.png` (o "formato lembrado" antigo fazia Gigantamax/formas mostrarem a sprite da espécie base).
+- **v58** — Desempenho: Coleção em mini-cartões (status completos ao tocar), auras e pulsos do tabuleiro mais leves, ⚡ Modo leve automático no celular; Pokébola colorida/cinza indica espécie já capturada; 🏵️ Amuleto Lendário agora vale 1 semana; ☠️ Lendários Corrompidos (Mewtwo Armadura, Mewtwo Sombrio, Lugia Sombrio — sem shiny).
 
 ## 3. Publicar (passo a passo, só pelo navegador)
 

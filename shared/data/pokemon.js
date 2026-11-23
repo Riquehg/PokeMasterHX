@@ -21,6 +21,7 @@ export const SPECIES_LIST = DEX_RAW.map(([dex, id, name, types, tier, hp, str, l
   if (x.gx) s.gmax = true;
   if (x.my) s.mythical = true;
   if (x.ub) s.ultra = true;
+  if (x.cr) { s.corrupt = true; s.noShiny = true; } // ☠️ lendário corrompido (v58): não existe shiny
   s.genderRate = x.gr ?? 4;
   SPECIES[id] = s;
   return s;

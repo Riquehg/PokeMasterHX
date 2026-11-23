@@ -1,7 +1,8 @@
 // 🌿 v50 — Zona Safári (cliente). Entrada com ouro; andar, encontrar, 🥎 Safari Ball / 🪨 Pedra / 🍓 Isca / 🏃 Fugir.
 import { api } from '../api.js';
 import { esc, toast, openModal, setModalBody, bindActions } from './dom.js';
-import { monSprite } from '../config.js';
+import { monSprite, itemUrl } from '../config.js';
+import { caughtBall } from '../owned.js';
 import { getSpecies } from '../../shared/data/pokemon.js';
 import { SAFARI_ZONES, RARITY, SAFARI_BALLS, SAFARI_STEPS } from '../../shared/data/safari.js';
 import { confetti } from './fx.js';
@@ -25,7 +26,7 @@ export async function openSafari(profile, onProfile) {
     return `<div class="sf-scene ${anim}" style="--bg:${z.bg}">
         <div class="sf-hud"><span>${z.icon} ${esc(z.name)}</span><span>🥎 <b>${s.balls}</b></span><span>👣 <b>${s.steps}</b></span><span>📦 <b>${s.caught.length}</b></span></div>
         ${e ? `<div class="sf-enc"><img class="sf-mon ${e.shiny ? 'shiny' : ''} ${e.mood ? 'mood-' + e.mood : ''}" src="${monSprite({ sp: e.sp, shiny: e.shiny })}" alt="">
-            <div class="sf-tag"><b>${esc(getSpecies(e.sp).name)}${e.shiny ? ' ✨' : ''}</b> <span class="tiny">Nv. ${e.lvl}</span> <span class="chip ${rarityCls(e.rarity)}">${RARITY[e.rarity].name}</span>${e.mood ? `<span class="chip">${e.mood === 'rock' ? '😠 bravo' : '😋 comendo'} (${e.moodLeft})</span>` : ''}</div>
+            <div class="sf-tag"><b>${caughtBall(e.sp, null, itemUrl('poke_ball'))}${esc(getSpecies(e.sp).name)}${e.shiny ? ' ✨' : ''}</b> <span class="tiny">Nv. ${e.lvl}</span> <span class="chip ${rarityCls(e.rarity)}">${RARITY[e.rarity].name}</span>${e.mood ? `<span class="chip">${e.mood === 'rock' ? '😠 bravo' : '😋 comendo'} (${e.moodLeft})</span>` : ''}</div>
             <div class="sf-meters"><div><span class="tiny">🥎 Captura</span><div class="sf-bar"><i style="width:${e.catchPct}%;background:#5cc96b"></i></div><b class="tiny">${e.catchPct}%</b></div>
               <div><span class="tiny">💨 Fuga</span><div class="sf-bar"><i style="width:${e.fleePct}%;background:#ff7a5a"></i></div><b class="tiny">${e.fleePct}%</b></div></div></div>`
           : s.over ? `<div class="sf-end"><h3>🏁 Fim do passeio!</h3><p>Você capturou <b>${s.caught.length}</b> Pokémon.</p></div>`

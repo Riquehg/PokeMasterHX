@@ -3,7 +3,7 @@
 // [dex, id, nome, tipos, tier, hpBase, forçaBase, lendário, papel, extras]
 // extras: d = DEF base, a = habilidade, e = evoluções [{to, lvl?, item?, sex?, time?}], f = arquivo da sprite (sem .png),
 //         fm = forma de (espécie base), rg = região, v = variações visuais, fe = tem sprite de fêmea, gx = tem Gigantamax,
-//         my = mítico, ub = ultracriatura, gr = proporção de fêmeas em oitavos (−1 sem sexo; padrão 4), g = geração
+//         my = mítico, ub = ultracriatura, cr = corrompido (sem shiny), gr = proporção de fêmeas em oitavos (−1 sem sexo; padrão 4), g = geração
 export const DEX_RAW = [
   [1,"bulbasaur","Bulbasaur","grass/poison",1,16,4,0,"drainer",{"e":[{"to":"ivysaur","lvl":16}],"gr":1,"g":1}],
   [2,"ivysaur","Ivysaur","grass/poison",2,22,6,0,"drainer",{"e":[{"to":"venusaur","lvl":32}],"gr":1,"g":1}],
@@ -1127,5 +1127,8 @@ export const DEX_RAW = [
   [901,"ursaluna_bloodmoon","Ursaluna Lua de Sangue","ground/normal",4,31,8.1,0,null,{"d":93,"a":"","f":"ursaluna-bloodmoon","fm":"ursaluna","g":8}],
   [1017,"ogerpon_wellspring","Ogerpon Máscara Nascente","grass/water",5,36,8,1,null,{"d":90,"a":"water_absorb","f":"ogerpon-wellspring","fm":"ogerpon","gr":8,"g":9}],
   [1017,"ogerpon_hearthflame","Ogerpon Máscara Fornalha","grass/fire",5,36,8,1,null,{"d":90,"a":"mold_breaker","f":"ogerpon-hearthflame","fm":"ogerpon","gr":8,"g":9}],
-  [1017,"ogerpon_cornerstone","Ogerpon Máscara Alicerce","grass/rock",5,36,8,1,null,{"d":90,"a":"sturdy","f":"ogerpon-cornerstone","fm":"ogerpon","gr":8,"g":9}]
+  [1017,"ogerpon_cornerstone","Ogerpon Máscara Alicerce","grass/rock",5,36,8,1,null,{"d":90,"a":"sturdy","f":"ogerpon-cornerstone","fm":"ogerpon","gr":8,"g":9}],
+  [150,"mewtwo_armor","Mewtwo Armadura","psychic/steel",5,50,11,1,null,{"d":120,"a":"","f":"mewtwo-armor","fm":"mewtwo","gr":-1,"cr":1,"g":1}],
+  [150,"mewtwo_shadow","Mewtwo Sombrio","psychic/dark",5,45,12.6,1,null,{"d":90,"a":"","f":"mewtwo-shadow","fm":"mewtwo","gr":-1,"cr":1,"g":1}],
+  [249,"lugia_shadow","Lugia Sombrio","dark/flying",5,45,12.6,1,null,{"d":142,"a":"multiscale","f":"lugia-shadow","fm":"lugia","gr":-1,"cr":1,"g":2}]
 ];

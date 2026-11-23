@@ -1480,3 +1480,34 @@ test('🔴 Raid Gigantamax: Cogumelos Max, Pulseira rara; 🍲 Sopa Max dá o Fa
   await adminOp(db, admin, { op: 'grant_item', userId: a.id, item: 'dynamax_band' });
   assert.equal((await db.getProfile(a.id)).stats.dynamaxBand, true);
 });
+test('🏵️ v58: Amuleto Lendário vale 1 semana (ativar na Mochila soma +7 dias)', async () => {
+  const { legendCapBlocked, charmActive } = await import('../shared/rules/battle.js');
+  const { db, admin, us: [a] } = await users(1);
+  await assert.rejects(profileOp(db, a, { op: 'charm_activate' }), /Amuleto/);
+  await adminOp(db, admin, { op: 'grant_item', userId: a.id, item: 'legend_charm', qty: 2 });
+  const t0 = Date.now();
+  let r = await profileOp(db, a, { op: 'charm_activate' });
+  const u1 = r.profile.stats.legendCharmUntil;
+  assert.ok(u1 >= t0 + 7 * 86400000 - 1000 && u1 <= Date.now() + 7 * 86400000);
+  assert.equal(r.profile.stats.bag.legend_charm, 1);
+  r = await profileOp(db, a, { op: 'charm_activate' });
+  assert.ok(r.profile.stats.legendCharmUntil >= u1 + 7 * 86400000 - 1000);
+  assert.ok(!r.profile.stats.bag.legend_charm);
+  const p = { legendCaught: 5, legendCharmUntil: Date.now() + 1000 };
+  assert.equal(charmActive(p), true);
+  assert.equal(legendCapBlocked(p, { yellowLegend: true }), false);
+  assert.equal(legendCapBlocked({ legendCaught: 5, legendCharmUntil: Date.now() - 1 }, { yellowLegend: true }), true);
+});
+test('☠️ v58: lendários corrompidos (sem shiny, raros, nunca em ovo)', () => {
+  for (const id of ['mewtwo_armor', 'mewtwo_shadow', 'lugia_shadow']) {
+    const s = SPECIES[id];
+    assert.ok(s && s.tier === 5 && s.legendary && s.corrupt && s.noShiny, id);
+  }
+  assert.deepEqual(SPECIES.mewtwo_shadow.types, ['psychic', 'dark']);
+  assert.deepEqual(SPECIES.lugia_shadow.types, ['dark', 'flying']);
+  const rng = createRng(11);
+  let corr = 0;
+  for (let i = 0; i < 3000; i++) { const m = rollWild(rng, 5, { forceShiny: true }); if (SPECIES[m.sp].corrupt) { corr++; assert.equal(m.shiny, false); } }
+  assert.ok(corr > 10 && corr < 150, 'corrompidos raros: ' + corr);
+  for (let i = 0; i < 400; i++) assert.ok(!SPECIES[hatchEgg(rng, 5).sp].corrupt);
+});

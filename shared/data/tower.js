@@ -29,5 +29,5 @@ export const TOWER_SHOP = {
   rare_candy: { pb: 8, qty: 1 }, tm: { pb: 12, qty: 1 },
   quick_claw: { pb: 20, qty: 1 }, focus_sash: { pb: 20, qty: 1 }, leftovers: { pb: 48, qty: 1 }, choice_band: { pb: 48, qty: 1 },
   plate: { pb: 25, qty: 1, plate: true },
-  ultra_ball: { pb: 4, qty: 5 }, master_ball: { pb: 160, qty: 1 }, legend_charm: { pb: 140, qty: 3 }
+  ultra_ball: { pb: 4, qty: 5 }, master_ball: { pb: 160, qty: 1 }, legend_charm: { pb: 140, qty: 1 }
 };

@@ -316,6 +316,13 @@ function collectionModal(profile, onChange) {
         <button class="btn sm red" data-act="bx-del">🗑️ Apagar box</button></div>`
       : view === 'all' ? `<div class="bx-quick tiny muted">Box automática: ${QUICK.map(([k, i, n]) => `<button class="btn sm" data-act="bx-quick" data-k="${k}">${i} ${n}</button>`).join('')}</div>` : ''}`;
   };
+  // 🗂️ v58: Coleção compacta (ícones) — o card completo abre ao tocar. Preferência salva no aparelho.
+  let compact = (() => { try { return localStorage.getItem('pmhx_vault_view') !== 'cards'; } catch { return true; } })();
+  const actBtns = (m, bx, evoReady) => `<div class="row" style="justify-content:center;gap:4px;margin-top:4px">${bx && view === bx.id ? `<button class="btn sm" data-act="bx-out" data-uid="${esc(m.uid)}" title="Tirar da box">↩️</button>` : ''}<button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="farm" data-uid="${esc(m.uid)}" title="Mandar para a 🌾 Fazenda (ganha XP com o tempo)">🌾</button><button class="btn sm ${m.held ? 'purple' : ''} ${evoReady(m) ? 'green' : ''}" data-act="mstone" data-uid="${esc(m.uid)}" title="${evoReady(m) ? '✨ Pode evoluir com um item da sua Mochila! · ' : ''}🎒 Item segurado (Megapedra ou item de batalha): equipar / trocar / tirar">${evoReady(m) ? '✨' : megaBySpecies(m.sp).length ? '💎' : '🎒'}</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar (o Professor paga 🪙 ${releaseGold(m)})">✕</button></div>` ;
+  const miniTile = (m, evo) => { const sp = getSpecies(m.sp);
+    return `<button class="vm-tile t${sp?.tier || 1} ${m.shiny ? 'shiny' : ''} ${sp?.legendary ? 'legend' : ''}" data-act="vm-open" data-uid="${esc(m.uid)}" title="${esc(m.nick || sp?.name || '')}">
+      <img src="${monSprite(m)}" alt="" loading="lazy" decoding="async"><span class="vm-name">${esc(m.nick || sp?.name || '?')}</span><span class="vm-lv">Nv.${m.lvl}</span>
+      <span class="vm-badges">${m.shiny ? '✨' : ''}${m.fav ? '⭐' : ''}${m.gx ? '🔴' : ''}${m.held ? '🎒' : ''}${evo ? '<b class="vm-evo">✨</b>' : ''}</span></button>`; };
   const body = () => {
     const vault = profile?.vault || [];
     const all = sortCollection(vault);
@@ -329,10 +336,11 @@ function collectionModal(profile, onChange) {
         <div class="pk-grid">${profile.stats.overflow.map(m => statCard(m, { extra: `<div class="tiny muted">${m.why === 'solto' ? 'Solto por você' : 'Coleção cheia'} · ${new Date(m.outAt).toLocaleDateString('pt-BR')}</div><button class="btn sm green" data-act="restore" data-uid="${esc(m.uid)}">↩️ Recuperar${m.paid ? ` (devolve 🪙 ${m.paid})` : ''}</button>` })).join('')}</div></details>` : ''}
       ${(profile?.vault || []).length > cap() ? `<p class="small" style="color:#ffb35c">⚠️ Sua Coleção passou do limite (${(profile.vault || []).length}/${cap()}). Nada some sozinho além dos comuns; solte alguns para liberar espaço.</p>` : ''}
       <div class="vf-sum tiny muted">⚡ ${n(m => getSpecies(m.sp)?.legendary && !getSpecies(m.sp)?.mythical)} lendários · 🌟 ${n(m => getSpecies(m.sp)?.mythical)} míticos · ✨ ${n(m => m.shiny)} shinies · ⭐ ${n(m => m.fav)} favoritos · 🤝 ${n(m => m.trust)} da Confiança</div>
+      <div class="row" style="justify-content:flex-end;margin:4px 0"><button class="btn sm" data-act="vm-toggle">${compact ? '🃏 Ver como cartas' : '🔳 Ver compacto'}</button></div>
       ${boxBar()}
       <div class="vf-scope">${vfBar('vault')}
       <div class="pk-grid ${picking ? 'bx-picking' : ''}">${all.map(m => { const bx = boxOf(m.uid); const hide = picking ? !!bx && bx.id === picking.box : view === 'none' ? !!bx : view !== 'all' && bx?.id !== view;
-        return `<div class="vf-cell ${hide ? 'bx-hide' : ''} ${picking?.sel.has(m.uid) ? 'bx-sel' : ''}" data-uid="${esc(m.uid)}" ${vfAttrs(m, recent.get(m.uid) || 0)}>${bx && view === 'all' ? `<span class="bx-tag" title="${esc(bx.name)}">${bx.icon}</span>` : ''}${statCard(m, { extra: `<div class="row" style="justify-content:center;gap:4px;margin-top:4px">${bx && view === bx.id ? `<button class="btn sm" data-act="bx-out" data-uid="${esc(m.uid)}" title="Tirar da box">↩️</button>` : ''}<button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="farm" data-uid="${esc(m.uid)}" title="Mandar para a 🌾 Fazenda (ganha XP com o tempo)">🌾</button><button class="btn sm ${m.held ? 'purple' : ''} ${evoReady(m) ? 'green' : ''}" data-act="mstone" data-uid="${esc(m.uid)}" title="${evoReady(m) ? '✨ Pode evoluir com um item da sua Mochila! · ' : ''}🎒 Item segurado (Megapedra ou item de batalha): equipar / trocar / tirar">${evoReady(m) ? '✨' : megaBySpecies(m.sp).length ? '💎' : '🎒'}</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar (o Professor paga 🪙 ${releaseGold(m)})">✕</button></div>` })}</div>`; }).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div></div>`;
+        return `<div class="vf-cell ${compact ? 'vf-mini' : ''} ${hide ? 'bx-hide' : ''} ${picking?.sel.has(m.uid) ? 'bx-sel' : ''}" data-uid="${esc(m.uid)}" ${vfAttrs(m, recent.get(m.uid) || 0)}>${bx && view === 'all' ? `<span class="bx-tag" title="${esc(bx.name)}">${bx.icon}</span>` : ''}${compact ? miniTile(m, evoReady(m)) : statCard(m, { extra: actBtns(m, bx, evoReady) })}</div>`; }).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div></div>`;
   };
   const ov = openModal('vault', `📦 Coleção (${(profile?.vault || []).length}/${cap()})`, body(), { wide: true });
   const redraw = () => { setModalBody('vault', body()); vfBind(document.getElementById('vault')); };
@@ -361,7 +369,7 @@ function collectionModal(profile, onChange) {
     try { profile = (await api('profile', { op: o, uid })).profile; redraw(); onChange(profile); }
     catch (e) { toast(e.message, 'bad'); }
   };
-  bindActions(ov, {
+  const acts = {
     fav: d => op('favorite', d.uid),
     farm: async d => {
       try { await api('profile', { op: 'farm_place', uid: d.uid }); toast('🌾 Foi para a Fazenda! Ele ganha XP com o tempo.', 'good'); }
@@ -464,7 +472,27 @@ function collectionModal(profile, onChange) {
       const id = view; view = 'all';
       saveBoxes(boxes().filter(b => b.id !== id));
     }
-  });
+  };
+  // 🔍 ficha completa do Pokémon (abre ao tocar no ícone)
+  const openMon = uid => {
+    const m = (profile?.vault || []).find(x => x.uid === uid);
+    if (!m) return closeModal('vault-mon');
+    const bagNow = profile?.stats?.bag || {};
+    const evoReady = x => evoItemsFor(x).some(id => (bagNow[id] || 0) > 0);
+    const bx = boxOf(m.uid);
+    const html = `<div class="vm-detail">${statCard(m, { extra: actBtns(m, bx, evoReady) })}</div>`;
+    if (document.getElementById('vault-mon')) { setModalBody('vault-mon', html); return; }
+    const ov2 = openModal('vault-mon', `${esc(m.nick || getSpecies(m.sp)?.name || '')}`, html);
+    const wrapped = {};
+    for (const [k, fn] of Object.entries(acts)) wrapped[k] = async d => {
+      await fn(d);
+      if (document.getElementById('vault-mon')) openMon(d.uid); // some sozinho se o Pokémon saiu da Coleção
+    };
+    bindActions(ov2, wrapped);
+  };
+  acts['vm-open'] = d => { if (!picking) openMon(d.uid); };
+  acts['vm-toggle'] = () => { compact = !compact; try { localStorage.setItem('pmhx_vault_view', compact ? 'mini' : 'cards'); } catch { /* sem armazenamento */ } redraw(); };
+  bindActions(ov, acts);
 }
 
 async function rankingModal(myRating = null, myLeagueRaw = null, myName = '') {

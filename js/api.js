@@ -1,3 +1,4 @@
+import { setOwnedDex } from './owned.js';
 // Comunicação com o backend: autenticação (Supabase Auth ou login de dev), chamadas /api e tempo real.
 import { setSpritesUrl } from './config.js';
 
@@ -144,6 +145,7 @@ export async function api(path, body, method = 'POST') {
     err.status = r.status;
     throw err;
   }
+  if (data?.profile?.pokedex) setOwnedDex(data.profile.pokedex); // ⚪🔴 v58: ícone "já tenho"
   return data;
 }
 

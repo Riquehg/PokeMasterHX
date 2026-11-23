@@ -1,5 +1,6 @@
 // Ponto de entrada: inicializa a rede e navega entre as telas.
 import { initNet, net, api, setNewPassword } from './api.js';
+import './ui/fx.js'; // ⚡ aplica o Modo leve (html.lite) logo no início
 import { dailyPokemon } from '../shared/daily.js';
 import { OnlineSession } from './session.js';
 import { mountGame } from './ui/game.js';

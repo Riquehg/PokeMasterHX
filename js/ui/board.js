@@ -1,3 +1,4 @@
+import { caughtBall } from '../owned.js';
 // Tabuleiro com zoom (roda do mouse / pinça / botões), arrastar para mover e animação dos peões.
 import { SPACE_LIST, getSpace, useStateMap, GATES, BIOMES } from '../../shared/data/board.js';
 import { hasGate } from '../../shared/rules/movement.js';
@@ -263,6 +264,7 @@ export class BoardView {
       spaces += `<div class="space t${sp.tier} ${sp.type} ${isOpt ? 'opt' : ''} ${locked ? 'locked' : ''} ${storm} ${center}" style="left:${sp.x}%;top:${sp.y}%" ${isOpt ? `data-to="${sp.id}"` : ''} title="${esc(sp.name)}${esc(extra)}">${icon || (sp.type === 'event' ? '<i class="sp-ic ev">?</i>' : sp.type === 'pokemon' ? '<i class="sp-ic pk"></i>' : '')}${g ? `<i class="gate-ic" title="${esc(g.name)}">${g.icon}</i>` : ''}<span class="lbl">${esc(sp.name)}</span></div>`;
     }
     this.stage.querySelector('.layer-spaces').innerHTML = spaces;
+    this.stage.querySelector('.layer-spaces').classList.toggle('many-opt', options.length > 6); // v58: menos efeito com muitas opções
     this.stage.querySelector('.layer-badges').innerHTML = state.kind === 'duel' || state.rules === 'royale' ? '' : state.rules === 'conquest' ? conquestMarkers(state) : badgeMarkers(state, me);
     this.stage.classList.toggle('royale', !!royale);
     const q = me?.quest && getSpace(me.quest.space);
@@ -273,7 +275,7 @@ export class BoardView {
       const sp = getSpace(id);
       if (!sp) continue;
       wild += `<div class="wild ${mon.shiny ? 'shiny' : ''}" style="left:${sp.x}%;top:${sp.y}%;--tc:${TIER_COLORS[sp.tier]}" title="${esc(speciesName(mon.sp))} Nv.${mon.lvl} — ${mon.hp}/${maxHpOf(mon)} HP">
-        <div class="w-shadow"></div><div class="disc"></div><img src="${monSprite(mon)}" alt="${esc(speciesName(mon.sp))}" draggable="false"><span class="tag">${mon.shiny ? '✨' : ''}Nv.${mon.lvl}</span></div>`;
+        <div class="w-shadow"></div><div class="disc"></div><img src="${monSprite(mon)}" alt="${esc(speciesName(mon.sp))}" draggable="false"><span class="tag">${caughtBall(mon.sp, me, itemUrl('poke_ball'))}${mon.shiny ? '✨' : ''}Nv.${mon.lvl}</span></div>`;
     }
     this.stage.querySelector('.layer-wild').innerHTML = wild;
 

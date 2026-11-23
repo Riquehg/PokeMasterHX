@@ -36,7 +36,7 @@ export class WeatherLayer {
 
   resize() {
     const r = this.host.getBoundingClientRect();
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const dpr = Math.min(document.documentElement.classList.contains('lite') ? 1 : 1.5, window.devicePixelRatio || 1); // v58: canvas mais leve
     this.w = Math.max(1, r.width); this.h = Math.max(1, r.height);
     this.cv.width = Math.round(this.w * dpr); this.cv.height = Math.round(this.h * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -80,8 +80,11 @@ export class WeatherLayer {
     }
   }
 
-  loop() {
+  loop(ts) {
     if (document.hidden) { this.raf = requestAnimationFrame(this.loop); return; }
+    // v58: no Modo leve desenha a ~30 quadros/s
+    if (document.documentElement.classList.contains('lite') && ts && ts - (this.lastTs || 0) < 32) { this.raf = requestAnimationFrame(this.loop); return; }
+    this.lastTs = ts;
     const c = this.ctx, w = this.w, h = this.h;
     this.t += 1;
     c.clearRect(0, 0, w, h);

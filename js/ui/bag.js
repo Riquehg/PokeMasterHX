@@ -30,6 +30,10 @@ export function openAccountBag(profile, onChange, openMarket) {
       <div class="row" style="gap:8px;align-items:center;margin-top:6px"><img class="bracelet-ic ${profile?.stats?.dynamaxBand ? '' : 'off'}" src="${itemUrl('dynamax_band')}" alt="">
         <div><b>🔴 Pulseira Dynamax</b> ${profile?.stats?.dynamaxBand ? '<span class="chip green">Você tem!</span>' : '<span class="chip">ainda não</span>'}
         <div class="tiny muted">Só cai em 🔴 Raids Gigantamax (raríssimo). Com ela, um Pokémon com o ✨ Fator Gigantamax fica gigante por 3 rodadas — no lugar da Mega (1 dos dois por batalha). ${(profile?.vault || []).filter(m => m.gx).length} Pokémon seus têm o Fator.</div></div></div>
+      ${(() => { const n = profile?.stats?.bag?.legend_charm || 0, until = profile?.stats?.legendCharmUntil || 0, on = until > Date.now();
+        return n || on ? `<div class="row" style="gap:8px;align-items:center;margin-top:6px"><span style="font-size:24px">🏵️</span><div class="grow"><b>Amuleto Lendário</b> ${on ? '<span class="chip green">ATIVO</span>' : ''} <span class="tiny muted">tem ${n}</span>
+          <div class="tiny muted">${on ? `Sem limite de lendários até ${new Date(until).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.` : 'Ative para ficar 7 dias sem limite de lendários das casas Amarelas.'}${on && n ? ' Ativar outro soma +7 dias.' : ''}</div></div>
+          ${n ? `<button class="btn sm green" data-act="charm-on">🏵️ Ativar 7 dias</button>` : ''}</div>` : ''; })()}
       ${holders.length ? `<div class="row wrap" style="gap:6px;margin-top:6px">${holders.map(m => `<span class="chip"><img class="chip-ic" src="${itemUrl(m.held)}" alt="">${esc(m.nick || getSpecies(m.sp)?.name)} <button class="btn sm x" data-act="unhold" data-uid="${esc(m.uid)}" title="Tirar a pedra (volta para a Mochila)">✕</button></span>`).join('')}</div>` : ''}</div>`;
     if (stoneFor) {
       const mg = MEGAS[ITEMS[stoneFor]?.mega];
@@ -52,6 +56,11 @@ export function openAccountBag(profile, onChange, openMarket) {
   const ov = openModal('abag', '🎒 Mochila da conta', render(), { wide: true, onClose: () => onChange && onChange(profile) });
   const redraw = () => { setModalBody('abag', render()); vfBind(document.getElementById('abag')); };
   bindActions(ov, {
+    'charm-on': async () => {
+      if (!confirm('Ativar 1 Amuleto Lendário? Fica 7 dias sem limite de lendários das casas Amarelas (o tempo corre mesmo sem jogar).')) return;
+      try { profile = (await api('profile', { op: 'charm_activate' })).profile; toast('🏵️ Amuleto Lendário ativo por 7 dias!', 'good'); redraw(); onChange && onChange(profile); }
+      catch (e) { toast(e.message, 'bad'); }
+    },
     tm: () => { picking = true; tmFor = null; redraw(); },
     'tm-mon': d => { tmFor = d.uid; redraw(); },
     'tm-back': () => { tmFor = null; redraw(); },
@@ -83,6 +92,12 @@ export function openAccountBag(profile, onChange, openMarket) {
   });
 }
 
+/** 🏵️ v58: situação do Amuleto Lendário (1 semana por ativação). */
+function charmLine(profile) {
+  const until = profile?.stats?.legendCharmUntil || 0;
+  return until > Date.now() ? `<div class="tiny" style="color:#6be38a">🏵️ Ativo até ${new Date(until).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>` : '';
+}
+
 /** Escolher os itens para levar (modo Coleção). onSave(bring). */
 export function bringItemsPicker(profile, current, onSave) {
   const bag = Object.fromEntries(bagOf(profile));
@@ -93,7 +108,7 @@ export function bringItemsPicker(profile, current, onSave) {
       const max = Math.min(n, bringLimit(id));
       const q = sel[id] || 0;
       const full = (ITEMS[id].kind === 'ball' && balls() >= BRING_BALLS_MAX) || (ITEMS[id].kind === 'meal' && Object.keys(sel).some(k => k !== id && ITEMS[k]?.kind === 'meal')); // 🍽️ 1 comida por partida
-      return `<div class="shop-item"><img src="${itemUrl(id)}" alt=""><div><b>${esc(ITEMS[id].name)}</b> <span class="tiny muted">tem ${n} · leva até ${max}</span>${ITEMS[id].kind === 'meal' || id === 'legend_charm' ? `<div class="tiny muted">${esc(ITEMS[id].desc)}</div>` : ''}</div>
+      return `<div class="shop-item"><img src="${itemUrl(id)}" alt=""><div><b>${esc(ITEMS[id].name)}</b> <span class="tiny muted">tem ${n} · leva até ${max}</span>${ITEMS[id].kind === 'meal' || id === 'legend_charm' ? `<div class="tiny muted">${esc(ITEMS[id].desc)}</div>` : ''}${id === 'legend_charm' ? charmLine(profile) : ''}</div>
         <div class="row" style="gap:4px"><button class="btn sm" data-act="dec" data-item="${id}" ${q ? '' : 'disabled'}>−</button><b style="min-width:22px;text-align:center">${q}</b>
         <button class="btn sm" data-act="inc" data-item="${id}" ${q >= max || full ? 'disabled' : ''}>+</button></div></div>`;
     }).join('');

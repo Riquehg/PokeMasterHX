@@ -9,7 +9,7 @@ import { monSprite, typeLabel } from '../config.js';
 import { monCard, playerColor, avatarImg, speciesName, titleHtml } from './common.js';
 import { battleHtml, outcomeText, playBattleFx } from './battle.js';
 import { BoardView } from './board.js';
-import { anim, rollDice, turnBanner, eventCard, battleIntro, captureAnim, confetti, evolutionAnim, victoryFx, miniCapture } from './fx.js';
+import { anim, rollDice, turnBanner, eventCard, battleIntro, captureAnim, confetti, evolutionAnim, victoryFx, miniCapture, isLite, setLite } from './fx.js';
 const vicOf = (s, pid) => s?.players?.find(x => x.id === pid)?.cosmetic?.victory || null;
 import * as M from './modals.js';
 import { renderTrades } from './trade.js';
@@ -46,6 +46,7 @@ export function mountGame(root, session, opts = {}) {
           <button class="btn sm" data-act="open-dex" title="Pokédex">📖<span class="lbl-txt"> Pokédex</span></button>
           <button class="btn sm soc-tb" data-act="social" title="Chat global e treinadores online">💬<span class="lbl-txt"> <span data-soc-online>0</span> online</span><i data-soc-badge></i></button>
           <button class="btn sm" data-act="speed" id="g-speed" title="Velocidade das animações">🎬</button>
+          <button class="btn sm" data-act="lite" id="g-lite" title="⚡ Modo leve: menos efeitos (para celular travando)">⚡</button>
           <button class="btn sm" data-act="open-help" title="Regras">❔</button>
           <button class="btn sm red" data-act="exit" title="Sair">🚪<span class="lbl-txt"> Sair</span></button>
         </div>
@@ -300,6 +301,7 @@ export function mountGame(root, session, opts = {}) {
     const wc = root.querySelector('#g-weather');
     if (wc) wc.innerHTML = s.kind === 'duel' ? '' : weatherChipHtml(s);
     root.querySelector('#g-speed').textContent = SPEEDS.find(x => x[0] === anim.speed)?.[1].split(' ')[0] || '🎬';
+    root.querySelector('#g-lite')?.classList.toggle('green', isLite());
     root.querySelector('#g-stats').innerHTML = p ? `
       <span class="stat stat-name">${avatarImg(p, 'avatar sm', playerColor(s, p.id))} ${esc(p.name)}</span>
       <span class="stat">🪙 ${p.gold}</span><span class="stat">🎖️ ${p.badges.length}/${GYMS.length}</span><span class="stat stat-dex">📖 ${p.caught.length}</span>` : '';
@@ -780,6 +782,7 @@ export function mountGame(root, session, opts = {}) {
       toast(nx[1]);
       render();
     },
+    lite: () => { const on = !isLite(); setLite(on); toast(on ? '⚡ Modo leve ligado: menos efeitos, mais fluido.' : '✨ Modo leve desligado: todos os efeitos.'); render(); },
     exit: () => {
       if (session.kind !== 'online' || S().status !== 'playing') return onExit();
       const ov = openModal('exit', '🚪 Sair', `
