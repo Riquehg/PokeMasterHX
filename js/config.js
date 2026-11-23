@@ -67,7 +67,9 @@ export function monSprite(spOrMon, shiny) {
   const look = typeof spOrMon === 'string' ? null : { v: spOrMon.v !== undefined ? spOrMon.v : spOrMon.uid ? variantFor(id, spOrMon.uid) : undefined, sex: (spOrMon.gender || (spOrMon.uid ? genderFor(id, spOrMon.uid, getSpecies(id)) : null)) === 'F' ? 'f' : undefined };
   const list = spriteCandidates(id, isShiny, look);
   if (!list.length) return '';
-  const i = String(id).startsWith('mega_') ? 0 : Math.min(preferred(isShiny), list.length - 1);
+  // v57: sempre começa pelo arquivo do HOME (pokemon/<arquivo>.png). O "formato lembrado" antigo podia pular direto
+  // para a sprite da espécie base — por isso Gigantamax/formas apareciam com a cara do Pokémon normal.
+  const i = 0;
   const lk = look && (look.v || look.sex === 'f') ? `:${look.v || ''}${look.sex === 'f' ? '.f' : ''}` : '';
   return `${CFG.sprites}${list[i]}#${isShiny ? 's' : 'n'}:${id}:${i}${lk}`;
 }
@@ -97,7 +99,7 @@ export function installSpriteFallback() {
     const img = e.target;
     if (!(img instanceof HTMLImageElement) || img.dataset.spTry === undefined) return;
     const m = /#([sn]):([a-z0-9_]+):(\d+)/.exec(img.src);
-    if (m && !m[2].includes('_') && Number(m[3]) !== 1) rememberFormat(m[1] === 's', Number(m[3])); // o 1 é "variação sem arquivo próprio": não vira padrão // nomes comuns definem o formato padrão // este formato funcionou: usa direto daqui pra frente
+    // v57: não lembra mais formato (todas as sprites estão em pokemon/); fica só o "plano B" quando um arquivo falta // nomes comuns definem o formato padrão // este formato funcionou: usa direto daqui pra frente
   }, true);
 }
 /** Avatar do treinador. Com skin (Loja de Diamantes) usa sprites/skins/<skin>.png. */
