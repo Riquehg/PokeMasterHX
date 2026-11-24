@@ -56,7 +56,9 @@ for (const p of pokemon) if (p.is_default === '1') defaultPk[p.species_id] = p.i
 const out = [];        // linhas finais
 const byPk = {};       // pokemon id → id do jogo
 const rowById = {};
-const legendFlag = sp => sp.is_legendary === '1' || sp.is_mythical === '1';
+// v59: Paradoxos "lendários" de Scarlet/Violet (versões dos lendários) também contam como Lendários (tier 5)
+const PARADOX_LEGEND = ['walking-wake', 'iron-leaves', 'gouging-fire', 'raging-bolt', 'iron-boulder', 'iron-crown'];
+const legendFlag = sp => sp.is_legendary === '1' || sp.is_mythical === '1' || PARADOX_LEGEND.includes(sp.identifier);
 const ULTRA = ['nihilego', 'buzzwole', 'pheromosa', 'xurkitree', 'celesteela', 'kartana', 'guzzlord', 'poipole', 'naganadel', 'stakataka', 'blacephalon'];
 
 for (const s of species) {
@@ -66,6 +68,10 @@ for (const s of species) {
   const row = { dex, pk, stem: stemOf(s.identifier), gen: +s.generation_id, myth: s.is_mythical === '1' };
   if (o) {
     Object.assign(row, { id: o[1], name: o[2], types: o[3].split('/'), tier: o[4], hp: o[5], str: o[6], legendary: !!o[9], role: o[10], oldEvo: o[7], oldLvl: o[8] });
+    if (legendFlag(s) && (!row.legendary || row.tier !== 5)) { // v59: lendário oficial que estava em tier menor (ex.: Type: Null, Silvally)
+      const B = bst(pk);
+      Object.assign(row, { legendary: true, tier: 5, hp: Math.max(row.hp, Math.round((0.065 * B - 4.5) * 1.15)), str: Math.max(row.str, Math.round(B / 60 - 0.8)) });
+    }
   } else {
     const B = bst(pk), L = legendFlag(s);
     const evolves = species.some(x => x.evolves_from_species_id === s.id);
@@ -194,7 +200,9 @@ for (const r of evo) {
   const to = sidOfForm(r.evolved_pokemon_form_id, toSp);
   if (!from || !to || from === to) continue;
   const e = { to };
-  if (trig === 1 || trig === 10) {
+  if ((trig === 1 || trig === 10) && r.held_item_id && ITEM[r.held_item_id]) { // v59: "sobe de nível segurando X" → só com o item (Sneasel, Gligar, Happiny...)
+    e.item = ITEM[r.held_item_id];
+  } else if (trig === 1 || trig === 10) {
     if (r.minimum_level) e.lvl = +r.minimum_level; else e.fb = 1;
     if (r.time_of_day === 'day' || r.time_of_day === 'night') e.time = r.time_of_day;
   } else if (trig === 2) e.item = r.held_item_id ? ITEM[r.held_item_id] : 'linking_cord';
@@ -234,6 +242,10 @@ for (const r of out.filter(x => x.region)) {
     if (rowById[t]) (evoFrom[r.id] ||= []).push({ ...e, to: t });
   }
 }
+// v59: Eevee só evolui com item (nos jogos Espeon/Umbreon/Sylveon são por amizade — aqui viram Sol/Lua/Brilhante,
+// como em vários jogos de fã), para não virar um deles sozinho ao subir de nível
+const EEVEE_ITEM = { espeon: 'sun_stone', umbreon: 'moon_stone', sylveon: 'shiny_stone' };
+for (const e of evoFrom.eevee || []) if (EEVEE_ITEM[e.to]) { e.item = EEVEE_ITEM[e.to]; delete e.lvl; delete e.time; }
 for (const r of out) r.evos = evoFrom[r.id] || [];
 
 // ---------------------------------------------------------------- saída

@@ -3,7 +3,7 @@
 //  - anunciar tira o Pokémon da Coleção do vendedor até vender ou cancelar;
 //  - ofertar reserva o ouro/diamantes/Pokémon de quem oferta até a resposta.
 // As mudanças em dinheiro usam a função atômica wallet_add; a Coleção usa gravação condicional (rev).
-import { bad, notFound, mutateProfile, collectionMax } from './core.js';
+import { bad, notFound, mutateProfile, collectionMax, releaseLocks } from './core.js';
 import { getSpecies } from '../../shared/data/pokemon.js';
 import { ITEMS, isKeepable, BAG_MAX_PER_ITEM } from '../../shared/data/items.js';
 
@@ -47,7 +47,15 @@ async function takeMons(db, userId, uids) {
     taken = uids.map(uid => vault.find(m => m.uid === uid));
     if (taken.some(m => !m)) bad('Esse Pokémon não está mais na sua Coleção.');
     if (taken.some(m => m.fav)) bad('Tire a ⭐ de favorito antes de negociar esse Pokémon.');
-    return { vault: vault.filter(m => !uids.includes(m.uid)) };
+    const locks = releaseLocks(prof.stats || {}); // v59: time da Liga / Fazenda / Creche não podem ir ao Mercado
+    const lk = uids.find(u => locks.has(u));
+    if (lk) bad(`Esse Pokémon está ${locks.get(lk)}. Tire de lá antes de negociar.`);
+    // v59: o item segurado volta para a Mochila de quem vendeu (não some junto)
+    const held = taken.filter(m => m.held && ITEMS[m.held]).map(m => m.held);
+    let bag = { ...(prof.stats?.bag || {}) };
+    for (const h of held) bag[h] = Math.min(BAG_MAX_PER_ITEM, (bag[h] || 0) + 1);
+    taken = taken.map(({ held: _h, ...m }) => m);
+    return { vault: vault.filter(m => !uids.includes(m.uid)), ...(held.length ? { stats: { ...(prof.stats || {}), bag } } : {}) };
   });
   return taken;
 }

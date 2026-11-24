@@ -15,12 +15,15 @@ export function openAccountBag(profile, onChange, openMarket) {
   let tmFor = null; // uid do Pokémon escolhido para o TM
   let picking = false;
   let stoneFor = null; // 💎 Megapedra escolhida para equipar
+  let trash = null; // 🗑️ v59: { id: qtd } escolhidos para jogar fora
+  const trashN = () => Object.values(trash || {}).reduce((a, b) => a + b, 0);
   const render = () => {
     const items = bagOf(profile).sort((a, b) => (ITEMS[a[0]].kind === 'fragment') - (ITEMS[b[0]].kind === 'fragment'));
     const list = items.map(([id, n]) => `<div class="shop-item"><img src="${itemUrl(id)}" alt="${esc(ITEMS[id].name)}">
       <div><b>${esc(ITEMS[id].name)}</b> <span class="chip">×${n}</span><div class="tiny muted">${esc(ITEMS[id].desc)}</div></div>
       <div class="col" style="gap:4px">${id === 'tm' ? '<button class="btn sm primary" data-act="tm">💿 Usar</button>' : ''}${ITEMS[id].kind === 'megastone' ? `<button class="btn sm purple" data-act="stone" data-item="${id}">💎 Equipar</button>` : ''}${ITEMS[id].kind === 'fragment' ? `<span class="tiny muted">${n}/${FRAGS_PER_STONE} p/ a pedra</span>` : ''}
-        <button class="btn sm" data-act="sell" data-item="${id}">🏷️ Vender</button></div></div>`).join('');
+        ${trash ? `<div class="row" style="gap:4px"><button class="btn sm" data-act="tr-dec" data-item="${id}" ${trash[id] ? '' : 'disabled'}>−</button><b style="min-width:22px;text-align:center">${trash[id] || 0}</b><button class="btn sm" data-act="tr-inc" data-item="${id}" ${(trash[id] || 0) >= n ? 'disabled' : ''}>+</button><button class="btn sm" data-act="tr-all" data-item="${id}">Tudo</button></div>`
+          : `<button class="btn sm" data-act="sell" data-item="${id}">🏷️ Vender</button>`}</div></div>`).join('');
     let extra = '';
     // 💎 Megas: Bracelete e quem está segurando Megapedra
     const holders = (profile?.vault || []).filter(m => m.held && ITEMS[m.held]);
@@ -51,11 +54,25 @@ export function openAccountBag(profile, onChange, openMarket) {
     }
     return `<p class="small muted">No fim de cada partida salva (Treino e Online), as <b>Pokébolas</b>, o <b>Amuleto Shiny</b>, os <b>TM</b> e os <b>💠 Fragmentos/💎 Megapedras</b> que sobraram vêm para cá.
       Poções, Revive, X Attack, doces, pedras e itens de tabuleiro são só da partida. Leve itens para partidas do modo 📦 Coleção (até ${BRING_BALLS_MAX} Pokébolas, 1 Amuleto e 3 TM) ou venda no 🏪 Mercado.</p>
-      ${megaBox}<div class="col">${list || '<p class="muted">Mochila vazia. Jogue partidas salvas para juntar itens!</p>'}</div>${extra}`;
+      ${megaBox}${items.length ? (trash ? `<div class="bx-pick rel" style="position:sticky;top:0;z-index:2">🗑️ Escolha quanto jogar fora de cada item · <b>${trashN()}</b> item(ns)
+        <button class="btn sm red" data-act="tr-ok" ${trashN() ? '' : 'disabled'}>🗑️ Jogar fora</button><button class="btn sm" data-act="tr-cancel">Cancelar</button></div>`
+        : '<div class="row" style="justify-content:flex-end;margin:6px 0"><button class="btn sm" data-act="tr-start">🗑️ Jogar fora vários</button></div>') : ''}<div class="col">${list || '<p class="muted">Mochila vazia. Jogue partidas salvas para juntar itens!</p>'}</div>${extra}`;
   };
   const ov = openModal('abag', '🎒 Mochila da conta', render(), { wide: true, onClose: () => onChange && onChange(profile) });
   const redraw = () => { setModalBody('abag', render()); vfBind(document.getElementById('abag')); };
+  const bagN = id => profile?.stats?.bag?.[id] || 0;
   bindActions(ov, {
+    'tr-start': () => { trash = {}; redraw(); },
+    'tr-cancel': () => { trash = null; redraw(); },
+    'tr-inc': d => { trash[d.item] = Math.min(bagN(d.item), (trash[d.item] || 0) + 1); redraw(); },
+    'tr-dec': d => { trash[d.item] = Math.max(0, (trash[d.item] || 0) - 1); if (!trash[d.item]) delete trash[d.item]; redraw(); },
+    'tr-all': d => { trash[d.item] = bagN(d.item); redraw(); },
+    'tr-ok': async () => {
+      const n = trashN(); if (!n) return;
+      if (!confirm(`Jogar fora ${n} item(ns)? Eles somem da Mochila e não voltam.`)) return;
+      try { const r = await api('profile', { op: 'discard_items', items: trash }); profile = r.profile; trash = null; redraw(); onChange && onChange(profile); toast(`🗑️ ${r.discarded} item(ns) jogado(s) fora.`, 'good'); }
+      catch (e) { toast(e.message, 'bad'); }
+    },
     'charm-on': async () => {
       if (!confirm('Ativar 1 Amuleto Lendário? Fica 7 dias sem limite de lendários das casas Amarelas (o tempo corre mesmo sem jogar).')) return;
       try { profile = (await api('profile', { op: 'charm_activate' })).profile; toast('🏵️ Amuleto Lendário ativo por 7 dias!', 'good'); redraw(); onChange && onChange(profile); }

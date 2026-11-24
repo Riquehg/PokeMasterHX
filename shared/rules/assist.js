@@ -1,13 +1,13 @@
 // Eventos que deixam a partida mais equilibrada e dinâmica:
 //  👴 Ajuda do Professor: a cada 4 rodadas, quem tem menos Pokémon recebe ajuda (uma Insígnia de Incentivo, uma vez
-//     por partida, se estiver bem atrás nas insígnias; senão itens e um Pokémon novo).
+//     por partida, se estiver bem atrás nas insígnias) + ouro, Pokébolas e cura (v59: não dá mais Pokémon).
 //  🗺️ Convite de viagem: carta de evento que pede para visitar uma cidade onde você nunca foi, dentro de algumas rodadas.
 import { SPACE_LIST, getSpace } from '../data/board.js';
 import { GYMS, LEAGUE_GATE_SPACES } from '../data/trainers.js';
 import { ITEMS } from '../data/items.js';
 import { createRng } from './rng.js';
 import { log, fx, addItem, giveMon, speciesName } from './helpers.js';
-import { rollWild } from './monsters.js';
+import { maxHpOf } from './monsters.js';
 import { distancesFrom } from './movement.js';
 
 export const HELP_EVERY = 4;           // rodadas
@@ -47,15 +47,15 @@ export function assistTick(state) {
       fx(state, { k: 'badge', pid: low.id, badge: g.id, gift: true });
     }
   }
-  // sempre: um Pokémon do tier da região e alguns itens
+  // v59: o Professor não dá mais Pokémon — ajuda com ouro, Pokébolas e cura
   const tier = Math.max(1, Math.min(4, getSpace(low.pos)?.tier || 1));
-  const mon = rollWild(rng, tier, { dailyPokemon: state.options.dailyPokemon });
-  const where = giveMon(low, mon);
-  ev.effects.push({ text: `${speciesName(mon.sp)} Nv.${mon.lvl} entrou ${where === 'team' ? 'na equipe' : 'no PC'}`, tone: 'good', icon: '🎁' });
+  const gold = 80 + 40 * tier + rng.int(0, 60);
+  low.gold += gold;
+  ev.effects.push({ text: `+${gold} de ouro`, tone: 'good', icon: '🪙' });
   addItem(low, 'great_ball', 3);
   addItem(low, 'potion', 2);
-  ev.effects.push({ text: '+3 Great Ball · +2 Potion', tone: 'good', icon: '🎒' });
-  ev.mon = { sp: mon.sp, shiny: !!mon.shiny };
+  for (const m of low.team) { m.hp = maxHpOf(m); delete m.status; }
+  ev.effects.push({ text: '+3 Great Ball · +2 Potion · equipe curada', tone: 'good', icon: '🎒' });
   fx(state, ev);
   log(state, `👴 Ajuda do Professor para ${low.name}: ${ev.effects.map(e => e.text).join(' · ')}.`, 'event');
 }

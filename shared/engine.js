@@ -1,4 +1,5 @@
 // =====================================================================================
+import { REGIONS, activeRegion, regionWeight, pickRegional } from './data/regions.js';
 // Motor de regras do Pokémon Master Trainer HEX — puro (sem DOM, sem rede).
 // Roda igual no navegador (modo local) e no servidor (modo online, autoritativo).
 //
@@ -591,8 +592,21 @@ function finishDuel(state, outcome) {
 }
 
 // ------------------------------------------------------------------ AFK / saída
+/** 🎒 v59: quem sai (fora do Hardcore) leva de volta o que sobrou do que trouxe da conta; a CPU que assume não gasta. */
+function takeLeaveRefund(state, p) {
+  if (p.leaveRefund || state.options?.hardcore || p.hardcoreLost) return;
+  const items = {};
+  for (const [id, q] of Object.entries(p.broughtItems || {})) {
+    const n = Math.min(q, p.items?.[id] || 0);
+    if (n > 0) { items[id] = n; p.items[id] -= n; if (!p.items[id]) delete p.items[id]; }
+  }
+  const gold = Math.max(0, Math.min(p.gold || 0, p.broughtGold || 0));
+  if (gold) { p.gold -= gold; p.broughtGold = 0; }
+  p.leaveRefund = { items, gold };
+}
 function leave(state, rng, p, now) {
   if (p.left) return;
+  takeLeaveRefund(state, p);
   p.left = true;
   p.isBot = true;
   if (state.options.duel && state.status === 'playing') { // sair do duelo = desistir
@@ -611,6 +625,7 @@ function leave(state, rng, p, now) {
 /** Removido pelo anfitrião: sai da rodada na hora (sem esperar a CPU). Se estava numa batalha, a CPU termina só ela. */
 function kicked(state, p) {
   if (p.out && p.left) return;
+  if (!p.left) takeLeaveRefund(state, p);
   p.left = true;
   p.isBot = true;
   p.kicked = true;
@@ -972,7 +987,7 @@ const EVENT_ITEMS = {
   5: [['ultra_ball', 4], ['rare_candy', 3], ['revive', 2], ['evo_item', 1.5], ['rainbow_ball', 1], ['master_ball', 0.1], ['trust_ball', 0.12], ['tm', 0.7], ['shiny_charm', 0.1]]
 };
 
-const LUCKY_ITEMS = [['rare_candy', 4], ['evo_item', 3], ['evolution_stone', 0.4], ['rainbow_ball', 2], ['tm', 1.2], ['master_ball', 0.15], ['trust_ball', 0.25], ['shiny_charm', 0.3]];
+const LUCKY_ITEMS = [['rare_candy', 4], ['evo_item', 3.4], ['rainbow_ball', 2], ['tm', 1.2], ['master_ball', 0.15], ['trust_ball', 0.25], ['shiny_charm', 0.3]];
 
 /** ✨ Item de evolução sorteado — os que servem para o time do jogador pesam mais. */
 function rollEvoItem(rng, p) {
@@ -1106,7 +1121,7 @@ function boardEvent(state, rng, p, sp, forceId = null) {
       const tier = rng.weighted([[3, 5], [4, 4]]);
       const mon = rollWild(rng, tier, { forceShiny: rng.chance(0.2) }); // 20% de shiny: ainda é raro
       mon.lvl = Math.max(mon.lvl, WILD_LEVELS[5][0]); fullHeal(mon);
-      ev.mon = { sp: mon.sp, shiny: true };
+      ev.mon = { sp: mon.sp, shiny: !!mon.shiny }; // v59: a carta mostra o mesmo Pokémon (shiny ou não) que vai para a batalha
       effects.push({ text: `${speciesName(mon.sp)}${mon.shiny ? ' ✨SHINY' : ''} Nv.${mon.lvl} apareceu!`, tone: mon.shiny ? 'shiny' : 'battle', icon: '🌠' });
       then = () => {
         if (mon.shiny) fx(state, { k: 'shiny', pid: p.id });
@@ -1119,7 +1134,7 @@ function boardEvent(state, rng, p, sp, forceId = null) {
       const g = rng.int(600, 1000);
       p.gold += g;
       effects.push({ text: `+${g} de ouro`, tone: 'good', icon: '🪙' });
-      let id = rng.weighted([['master_ball', 0.1], ['rainbow_ball', 3], ['rare_candy', 3], ['evo_item', 2], ['evolution_stone', 0.3]]);
+      let id = rng.weighted([['master_ball', 0.1], ['rainbow_ball', 3], ['rare_candy', 3], ['evo_item', 2.3]]);
       if (id === 'evo_item') id = rollEvoItem(rng, p);
       addItem(p, id, 1);
       effects.push({ text: `+1x ${ITEMS[id].name}`, tone: id === 'master_ball' ? 'shiny' : 'good', item: id });
@@ -1203,7 +1218,10 @@ function raidBoss(rng, tier, shrine, charm = false) {
   const mega = rng.chance(MEGA_RAID_CHANCE) ? pickRaidMega(rng, shrine) : null;
   // 🔴 Raid Gigantamax (v55): sem Mega, às vezes o chefe vem Gigantamax
   const gmax = !mega && rng.chance(GMAX_RAID_CHANCE) ? pickRaidGmax(rng, shrine) : null;
-  const sp = mega ? mega.base : gmax ? gmax.base : rng.pick(pool.filter(id => SPECIES[id]));
+  // 🗺️ v59: os lendários em destaque do mapa entram nas Raids (e os de outros mapas ficam mais raros)
+  const reg = activeRegion() && tier >= 4 ? REGIONS[activeRegion()].legends.filter(id => SPECIES[id] && !SPECIES[id].mythical && !SPECIES[id].corrupt) : [];
+  const cand = [...new Set([...pool, ...reg])].filter(id => SPECIES[id]);
+  const sp = mega ? mega.base : gmax ? gmax.base : rng.weighted(cand.map(id => [id, regionWeight(SPECIES[id])]));
   const lvl = WILD_LEVELS[tier][1] + (shrine ? 0 : 1);
   // lendário também pode vir shiny (1/450; Amuleto Shiny triplica)
   const mon = createMon(rng, sp, lvl, { shiny: rng.chance(BASE_SHINY_RATE * (charm ? 3 : 1)), capTier: 5 });
@@ -1257,7 +1275,7 @@ function routeTeam(rng, tier, size, favorite) {
   const fav = pool.filter(s => s.types.some(t => favorite.includes(t)));
   const team = [];
   for (let i = 0; i < size; i++) {
-    const s = (fav.length && rng.chance(0.7)) ? rng.pick(fav) : rng.pick(pool);
+    const s = (fav.length && rng.chance(0.7)) ? pickRegional(rng, fav) : pickRegional(rng, pool);
     team.push(createMon(rng, s.id, rng.int(Math.floor((lo + hi) / 2), hi)));
   }
   return team;

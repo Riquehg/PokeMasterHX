@@ -156,6 +156,7 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 
 - **v57 — sprites:** `monSprite` sempre começa por `pokemon/<arquivo>.png` (o "formato lembrado" antigo fazia Gigantamax/formas mostrarem a sprite da espécie base).
 - **v58** — Desempenho: Coleção em mini-cartões (status completos ao tocar), auras e pulsos do tabuleiro mais leves, ⚡ Modo leve automático no celular; Pokébola colorida/cinza indica espécie já capturada; 🏵️ Amuleto Lendário agora vale 1 semana; ☠️ Lendários Corrompidos (Mewtwo Armadura, Mewtwo Sombrio, Lugia Sombrio — sem shiny).
+- **v59** — Correções de sumiço: itens trazidos voltam ao sair/abandonar, fim de partida não sobrescreve a conta, Liga ignora Pokémon que saíram, Pokémon da Liga/Fazenda protegidos; soltar vários e jogar fora vários; lendários oficiais no tier 5; Eevee só com item; Ajuda do Professor sem Pokémon; Chuva de Estrelas sem shiny falso; mutações da Creche visíveis; cada mapa com Liga e lendários próprios; fim da temporada na Liga; sprites de itens com nomes alternativos.
 
 ## 3. Publicar (passo a passo, só pelo navegador)
 

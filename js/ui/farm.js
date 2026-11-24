@@ -1,4 +1,5 @@
 // 🌾 Fazenda Pokémon: cena com biomas, Pokémon andando soltos, coleta, carinho, Frutinhas, decoração e visitas.
+import { MUTATION_LABEL } from '../../shared/data/daycare.js';
 import { getSpecies } from '../../shared/data/pokemon.js';
 import { FARM_BIOMES, BIOME_IDS, RESOURCES, FARM_DECOR, DECOR_MAX, FARM_MAX_LEVEL, bestBiome, decorItemId } from '../../shared/data/farm.js';
 import { genderHtml } from '../../shared/data/gender.js';
@@ -713,7 +714,7 @@ export async function openFarm(ctx, profile, userId = null) {
       const r = await api('profile', { op: 'farm_hatch', id: d.id });
       const b = r.baby, mut = b.mutations || [];
       openModal('hatch', '🐣 Nasceu!', `<div class="center dc-born">${statCard(b)}
-        ${mut.length ? `<div class="dc-mut">${mut.map(x => ({ shiny: '✨ SHINY!', aura: '🌈 Mutação: aura ' + esc(b.aura || ''), perfect: '💯 Potencial máximo!' })[x]).join('<br>')}</div>` : ''}
+        ${mut.length ? `<div class="dc-mut">🧬 <b>Mutação!</b><br>${mut.map(x => ({ shiny: '✨ SHINY!', aura: '🌈 Aura ' + esc(b.aura || ''), perfect: '💯 Potencial máximo!' })[x] || esc(MUTATION_LABEL[x] || x)).join('<br>')}</div>` : ''}
         <p class="small muted">Foi para a sua Coleção.</p></div>`);
       return r;
     }),

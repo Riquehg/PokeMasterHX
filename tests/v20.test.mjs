@@ -1511,3 +1511,80 @@ test('☠️ v58: lendários corrompidos (sem shiny, raros, nunca em ovo)', () =
   assert.ok(corr > 10 && corr < 150, 'corrompidos raros: ' + corr);
   for (let i = 0; i < 400; i++) assert.ok(!SPECIES[hatchEgg(rng, 5).sp].corrupt);
 });
+
+// ---------------------------------------------------------------- v59
+test('🎒 v59: quem sai da partida recebe de volta o que trouxe (Master Ball não some)', async () => {
+  const db = createMemoryDb();
+  const ash = await db.verifyToken('dev:ash@kanto.com');
+  const { profile } = await profileOp(db, ash, { op: 'get' });
+  await db.upsertProfile(ash.id, { vault: [{ uid: 'v1', sp: 'pikachu', lvl: 20 }], stats: { ...(profile.stats || {}), bag: { master_ball: 1, ultra_ball: 5 } } });
+  const { match } = await matchOp(db, ash, { op: 'solo', bots: 1, teamUids: ['v1'], bringItems: { master_ball: 1, ultra_ball: 3 } });
+  assert.deepEqual((await db.getProfile(ash.id)).stats.bag, { ultra_ball: 2 });
+  await matchOp(db, ash, { op: 'leave', matchId: match.id });
+  const bag = (await db.getProfile(ash.id)).stats.bag;
+  assert.equal(bag.master_ball, 1, 'Master Ball voltou');
+  assert.equal(bag.ultra_ball, 5, 'Ultra Balls voltaram');
+  const st = (await db.getMatch(match.id)).state;
+  assert.ok(!st.players.find(p => p.id === ash.id).items.master_ball, 'a CPU que assumiu não usa a Master Ball');
+});
+test('🎒 v59: partida abandonada devolve os itens trazidos', async () => {
+  const { refundAbandoned } = await import('../api/_lib/core.js');
+  const db = createMemoryDb();
+  const ash = await db.verifyToken('dev:ash@kanto.com');
+  await profileOp(db, ash, { op: 'get' });
+  const st = { options: {}, players: [{ id: ash.id, broughtItems: { master_ball: 1, ultra_ball: 4 }, items: { master_ball: 1, ultra_ball: 2, poke_ball: 5 }, gold: 300, broughtGold: 200 }, { id: 'cpu_1', items: {} }] };
+  await refundAbandoned(db, st);
+  const prof = await db.getProfile(ash.id);
+  assert.deepEqual(prof.stats.bag, { master_ball: 1, ultra_ball: 2 });
+});
+test('🕊️ v59: soltar vários; time da Liga e Fazenda ficam protegidos; item segurado volta', async () => {
+  const { db, us: [a] } = await users(1);
+  let v = (await db.getProfile(a.id)).vault;
+  const [m1, m2, m3, m4] = v;
+  await db.upsertProfile(a.id, { vault: v.map(m => (m.uid === m1.uid ? { ...m, held: 'metal_coat' } : m)), stats: { ...(await db.getProfile(a.id)).stats, serie: { defense: [m3.uid] }, farm: { slots: [{ uid: m4.uid }] } } });
+  const r = await profileOp(db, a, { op: 'release_many', uids: [m1.uid, m2.uid, m3.uid, m4.uid] });
+  assert.equal(r.released, 2); assert.equal(r.skipped, 2);
+  const prof = await db.getProfile(a.id);
+  assert.ok(prof.vault.some(m => m.uid === m3.uid) && prof.vault.some(m => m.uid === m4.uid));
+  assert.equal(prof.stats.bag.metal_coat, 1);
+  await assert.rejects(profileOp(db, a, { op: 'release', uid: m3.uid }), /Liga/);
+  const d = await profileOp(db, a, { op: 'discard_items', items: { metal_coat: 5 } });
+  assert.equal(d.discarded, 1); assert.ok(!d.profile.stats.bag.metal_coat);
+});
+test('⚽ v59: Liga ignora Pokémon que saíram da Coleção', async () => {
+  const { db, us: [a] } = await users(1);
+  const v = (await db.getProfile(a.id)).vault;
+  let r = await matchOp(db, a, { op: 'serie_defense', uids: v.map(m => m.uid) });
+  await db.upsertProfile(a.id, { vault: v.slice(1) });
+  r = await matchOp(db, a, { op: 'serie_get' });
+  assert.equal(r.serie.defense.length, 5);
+  assert.equal(r.serie.defenseLost, 1);
+});
+test('🗺️ v59: cada mapa tem Liga e lendários próprios; lendários oficiais no tier 5; Eevee só com item', async () => {
+  const { ELITE_FOUR, CHAMPION } = await import('../shared/data/trainers.js');
+  const { activeRegion, regionWeight } = await import('../shared/data/regions.js');
+  useMap('theme:glacial');
+  assert.equal(activeRegion(), 'glacial'); assert.equal(CHAMPION.name, 'Cynthia'); assert.equal(ELITE_FOUR.length, 4);
+  assert.ok(regionWeight(SPECIES.kyurem) > 1 && regionWeight(SPECIES.groudon) < 1);
+  const rng = createRng(3); let k = 0;
+  for (let i = 0; i < 1500; i++) if (rollWild(rng, 5).sp === 'kyurem') k++;
+  useMap('kanto');
+  assert.equal(CHAMPION.name, 'Blue'); assert.equal(activeRegion(), 'kanto');
+  const rng2 = createRng(3); let k2 = 0;
+  for (let i = 0; i < 1500; i++) if (rollWild(rng2, 5).sp === 'kyurem') k2++;
+  assert.ok(k > k2 * 3, `Kyurem mais comum nos Picos Gelados (${k} x ${k2})`);
+  for (const id of ['type_null', 'silvally', 'walking_wake', 'iron_crown']) assert.ok(SPECIES[id].tier === 5 && SPECIES[id].legendary, id);
+  assert.ok(SPECIES.eevee.evos.every(e => e.item), 'Eevee só evolui com item');
+  const { levelEvoTarget } = await import('../shared/data/evolution.js');
+  assert.equal(levelEvoTarget({ sp: 'eevee', lvl: 60 }), null);
+});
+test('🥚 v59: ovos com mutação marcada; Ajuda do Professor sem Pokémon; Chuva de Estrelas mostra o shiny certo', async () => {
+  const { makeEgg, hatchFromEgg, MUTATION_LABEL } = await import('../shared/data/daycare.js');
+  const rng = createRng(77);
+  const mom = { uid: 'm', sp: 'bulbasaur', lvl: 20, iv: { hp: 5, atk: 5, spe: 5, def: 5 }, moves: ['grass_p', 'grass_x'] };
+  const dad = { uid: 'd', sp: 'ivysaur', lvl: 20, iv: { hp: 5, atk: 5, spe: 5, def: 5 }, moves: ['grass_p', 'grass_x'] };
+  const seen = new Set();
+  for (let i = 0; i < 2000; i++) { const e = makeEgg(rng, mom, dad); e.mutations.forEach(m => seen.add(m)); if (e.mutations.length) { const b = hatchFromEgg(rng, e); assert.deepEqual(b.mutations, e.mutations); } }
+  for (const m of ['shiny', 'aura', 'perfect', 'move', 'rare_move', 'strong']) assert.ok(seen.has(m), 'mutação ' + m);
+  for (const m of seen) assert.ok(MUTATION_LABEL[m], m);
+});

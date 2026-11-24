@@ -435,9 +435,10 @@ test('Ajuda do Professor: quem tem menos Pokémon ganha ajuda (e uma Insígnia d
   for (let i = 0; i < 5; i++) g.box.push(createMon(createRng(20 + i), 'rattata', 5));
   g.badges = ['boulder', 'cascade', 'thunder'];
   s.turn = 4; s.fx = [];
-  const n0 = a.team.length + a.box.length;
+  const n0 = a.team.length + a.box.length, g0 = a.gold;
   assistTick(s);
-  assert.equal(a.team.length + a.box.length, n0 + 1, 'ganhou um Pokémon');
+  assert.equal(a.team.length + a.box.length, n0, 'v59: não dá mais Pokémon');
+  assert.ok(a.gold > g0, 'ganhou ouro');
   assert.ok(a.badges.length === 1 && a.helpBadge, 'Insígnia de Incentivo');
   assert.ok(s.fx.some(f => f.id === 'professor_help' && f.pid === 'ash'));
   s.turn = 8; assistTick(s);

@@ -34,7 +34,7 @@ export const EVENT_CARDS = [
   ] },
   { id: 'rustling_grass', title: 'Grama Agitada', icon: '🌟', tone: 'battle', weight: 6, minTier: 1, lore: [
     'A grama alta se agita de um jeito diferente... algo raro está escondido ali!',
-    'Um brilho estranho entre as folhas chama a atenção de {name}.'
+    'Um barulho estranho entre as folhas chama a atenção de {name}.'
   ] },
   { id: 'pokemon_egg', title: 'Ovo Misterioso', icon: '🥚', tone: 'good', weight: 4, minTier: 1, lore: [
     'Um casal de criadores entrega um ovo a {name}: "Cuide bem dele!" Ele choca na mesma hora!',
@@ -83,7 +83,7 @@ export const EVENT_CARDS = [
   ] },
   { id: 'star_shower', title: 'Chuva de Estrelas', icon: '🌠', tone: 'battle', weight: 14, tiers: [5], lore: [
     'Estrelas cadentes riscam o céu e uma delas cai bem ao lado de {name}... um Pokémon brilhante surge da luz!',
-    'Na noite mais clara do ano, um Pokémon forte aparece atraído pelo brilho das estrelas... será que ele brilha?'
+    'Na noite mais clara do ano, um Pokémon forte aparece atraído pelo brilho das estrelas!'
   ] },
   { id: 'league_treasure', title: 'Tesouro da Liga', icon: '👑', tone: 'good', weight: 16, tiers: [5], lore: [
     'Um baú dourado com o selo da Liga Pokémon está escondido entre as rochas. {name} abre com cuidado...',

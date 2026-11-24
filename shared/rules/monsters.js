@@ -1,4 +1,5 @@
 // Criação de instâncias de Pokémon, status, XP e evolução.
+import { pickRegional } from '../data/regions.js';
 import { getSpecies, speciesByTier, MYTHICAL_WILD_CHANCE } from '../data/pokemon.js';
 import { genderFor } from '../data/gender.js';
 import { NATURE_NAMES, natureMult } from '../data/natures.js';
@@ -222,7 +223,7 @@ export function setLevel(mon, newLevel) {
 /** Evolui para `to` (ou, sem `to`, para a evolução por nível disponível). */
 export function evolve(mon, to = null) {
   const sp = getSpecies(mon.sp);
-  const target = to || levelEvoTarget(mon) || sp?.evolvesTo;
+  const target = to || levelEvoTarget(mon); // v59: sem alvo, só evolução por nível (nunca as que pedem item)
   if (!sp || !target || !getSpecies(target)) return null;
   const oldMax = maxHpOf(mon);
   const ratio = oldMax > 0 ? mon.hp / oldMax : 1;
@@ -279,7 +280,7 @@ export function rollWild(rng, tier, opts = {}) {
     : tier === 5 && corrupt.length && rng.chance(CORRUPT_WILD_CHANCE) ? corrupt : all.filter(s => !s.mythical && !s.corrupt);
   // ambiente da casa e clima puxam alguns tipos (ex.: mar → Água, caverna → Pedra, chuva → Água)
   const favor = opts.favorTypes?.length && rng.chance(opts.favorChance ?? 0.45) ? pool.filter(s => s.types.some(t => opts.favorTypes.includes(t))) : null;
-  let speciesId = rng.pick(favor?.length ? favor : pool).id;
+  let speciesId = pickRegional(rng, favor?.length ? favor : pool).id; // 🗺️ v59: Pokémon da região do mapa aparecem mais
 
   // Pokémon do Dia: 25% de chance de aparecer, mas só nas casas do tier dele
   const daily = opts.dailyPokemon && getSpecies(opts.dailyPokemon);

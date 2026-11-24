@@ -336,22 +336,53 @@ export async function profileOp(db, user, body) {
       })), paidBack: owe };
     } catch (e) { if (owe) await db.walletAdd(user.id, 0, owe); throw e; }
   }
-  if (body.op === 'release') {
-    // Soltar um Pokémon da Coleção (não afeta partidas em andamento)
-    // vai para a lista de recuperação (dá para desfazer se soltou sem querer)
-    // 🪙 o Professor paga ouro pela raridade (v52); o valor fica anotado e é devolvido se recuperar
-    let gold = 0;
+  if (body.op === 'release' || body.op === 'release_many') {
+    // Soltar Pokémon da Coleção (um ou vários — v59). Vão para "Saíram da Coleção" (dá para recuperar devolvendo o ouro).
+    // 🪙 o Professor paga ouro pela raridade (v52). v59: quem está no time da Liga, na Fazenda/Creche ou é ⭐ favorito não sai;
+    // o item segurado volta para a Mochila.
+    const want = body.op === 'release' ? [String(body.uid || '')] : [...new Set((Array.isArray(body.uids) ? body.uids : []).map(String))].slice(0, 120);
+    let gold = 0, done = 0, skipped = [];
     const prof1 = await mutateProfile(db, user.id, prof => {
-      gold = 0;
-      const m = (prof.vault || []).find(x => x.uid === body.uid);
-      if (!m) return null;
-      gold = releaseGold(m);
+      gold = 0; done = 0; skipped = [];
       const st = { ...(prof.stats || {}) };
-      st.overflow = [{ ...m, outAt: new Date().toISOString(), why: 'solto', paid: gold || undefined }, ...(st.overflow || [])].slice(0, OVERFLOW_MAX);
-      return { vault: (prof.vault || []).filter(x => x.uid !== body.uid), stats: st };
+      const locked = releaseLocks(st);
+      const out = new Set();
+      let bag = st.bag || {};
+      const gone = [];
+      for (const uid of want) {
+        const m = (prof.vault || []).find(x => x.uid === uid);
+        if (!m) continue;
+        const why = locked.get(uid) || (body.op === 'release_many' && m.fav ? 'favorito' : null);
+        if (why) { skipped.push({ uid, why }); continue; }
+        const g = releaseGold(m);
+        gold += g; done++; out.add(uid);
+        if (m.held) { bag = addToBag(bag, { [m.held]: 1 }); }
+        const { held, ...rest } = m;
+        gone.push({ ...rest, outAt: new Date().toISOString(), why: 'solto', paid: g || undefined });
+      }
+      if (!done) return null;
+      st.bag = bag;
+      st.overflow = [...gone, ...(st.overflow || [])].slice(0, OVERFLOW_MAX);
+      return { vault: (prof.vault || []).filter(x => !out.has(x.uid)), stats: st };
     });
+    if (!done && skipped.length) bad(`Não dá para soltar: ${skipped[0].why === 'favorito' ? 'é ⭐ favorito' : `está ${skipped[0].why}`}. Tire de lá primeiro.`);
     if (gold) await db.walletAdd(user.id, 0, gold);
-    return { profile: await withCosmetic(db, gold ? (await db.getProfile(user.id) || prof1) : prof1), gold };
+    return { profile: await withCosmetic(db, gold ? (await db.getProfile(user.id) || prof1) : prof1), gold, released: done, skipped: skipped.length };
+  }
+  if (body.op === 'discard_items') { // 🗑️ v59: jogar fora vários itens da Mochila de uma vez
+    const want = body.items && typeof body.items === 'object' ? body.items : {};
+    let n = 0;
+    const prof = await mutateProfile(db, user.id, cur => {
+      n = 0;
+      const bag = { ...(cur.stats?.bag || {}) };
+      for (const [id, q0] of Object.entries(want)) {
+        const q = Math.min(bag[id] || 0, Math.max(0, Math.floor(Number(q0) || 0)));
+        if (q > 0) { bag[id] -= q; n += q; if (bag[id] <= 0) delete bag[id]; }
+      }
+      return n ? { stats: { ...(cur.stats || {}), bag } } : null;
+    });
+    if (!n) bad('Escolha pelo menos 1 item.');
+    return { profile: await withCosmetic(db, prof), discarded: n };
   }
   if (body.op === 'daily_claim') { // 🎁 prêmio diário com sequência
     const now = new Date();
@@ -487,8 +518,12 @@ function collectionPatch(prof, p, state) {
     const cap = collectionMax(prof);
     let overflow = null;
     if (vault.length > cap) {
-      const keep = new Set([...p.team, ...p.box, ...garrison].map(m => m.uid));
-      const removable = vault.filter(m => isExpendable(m) && !keep.has(m.uid)).sort((a, b) => a.lvl - b.lvl);
+      // v59: nunca tira quem está no time da Liga, na Fazenda/Creche ou segurando item; tira primeiro as capturas novas desta partida
+      const keep = new Set([...p.team.filter(m => !isNewHere(m, prof)), ...garrison].map(m => m.uid));
+      const st0 = prof.stats || {};
+      for (const u of [...(st0.serie?.defense || []), ...(st0.farm?.slots || []).map(s => s.uid), st0.farm?.daycare?.a, st0.farm?.daycare?.b]) if (u) keep.add(u);
+      const isNew = m => m.from === state.id && !(prof.vault || []).some(v => v.uid === m.uid);
+      const removable = vault.filter(m => isExpendable(m) && !m.held && !keep.has(m.uid)).sort((a, b) => (isNew(b) - isNew(a)) || a.lvl - b.lvl);
       const dropped = removable.slice(0, vault.length - cap);
       const drop = new Set(dropped.map(m => m.uid));
       for (let i = vault.length - 1; i >= 0; i--) if (drop.has(vault[i].uid)) vault.splice(i, 1);
@@ -525,7 +560,8 @@ export function addToBag(bag, add) {
 }
 
 /** Pokémon "comum" que pode sair sozinho quando a Coleção lota. */
-export const OVERFLOW_MAX = 40;
+export const OVERFLOW_MAX = 120;
+const isNewHere = (m, prof) => !(prof.vault || []).some(v => v.uid === m.uid);
 export function isExpendable(m) {
   const sp = SPECIES[m.sp];
   return !m.shiny && !m.fav && !m.trust && !m.nick && !(sp?.legendary) && (sp?.tier || 1) <= 3;
@@ -586,7 +622,7 @@ async function closeStale(db, rows) {
     if (!old) continue;
     try {
       const full = await db.getMatch(r.id);
-      if (full && full.status === r.status) await db.updateMatch(full.id, full.version, { status: 'abandoned', version: full.version + 1 });
+      if (full && full.status === r.status && await db.updateMatch(full.id, full.version, { status: 'abandoned', version: full.version + 1 }) && r.status === 'playing') await refundAbandoned(db, full.state);
     } catch { /* tenta de novo na próxima */ }
   }
 }
@@ -981,6 +1017,7 @@ async function kickPlayer(db, user, row, body) {
     const ok = await db.updateMatch(cur.id, cur.version, patch);
     if (!ok) continue;
     await db.removeMember(cur.id, target);
+    await creditLeavers(db, cur.state, state);
     if (state.options?.hardcore) { try { await purgeMatchCaptures(db, target, state.id); } catch (e) { console.error('[hardcore]', e.message); } }
     if (finished) await recordResults(db, state, cur.options || {});
     return { match: publicMatch({ ...cur, ...patch }, user.id) };
@@ -1046,6 +1083,7 @@ export async function actionOp(db, user, body) {
     const ok = await db.updateMatch(row.id, row.version, patch);
     if (!ok) continue; // conflito de versão: outra jogada entrou antes — recalcula
     try { await publishCaptures(db, state, state.fx); } catch (e) { console.error('[feed]', e.message); }
+    await creditLeavers(db, row.state, state);
     // companheiros ganhos em missões ficam na conta
     for (const f of state.fx || []) {
       if (f.k !== 'mission_done' || !f.companion || String(f.pid).startsWith('cpu_') || row.options?.mode === 'solo_local') continue;
@@ -1097,6 +1135,42 @@ export async function actionOp(db, user, body) {
   throw new HttpError(409, 'Muitas jogadas ao mesmo tempo. Tente de novo.');
 }
 
+/** v59: Pokémon que não podem sair da Coleção agora (uid → onde está). */
+export function releaseLocks(st) {
+  const m = new Map();
+  for (const u of st?.serie?.defense || []) m.set(u, 'no time da Liga das Séries');
+  for (const s of st?.farm?.slots || []) if (s?.uid) m.set(s.uid, 'na Fazenda');
+  for (const u of [st?.farm?.daycare?.a, st?.farm?.daycare?.b]) if (u) m.set(u, 'na Creche');
+  return m;
+}
+
+/** 🎒 v59: devolve à conta o que quem acabou de sair trouxe e não gastou (state.players[].leaveRefund). */
+export async function creditLeavers(db, prev, state) {
+  for (const p of state?.players || []) {
+    if (!p.leaveRefund || String(p.id).startsWith('cpu_') || prev?.players?.find(x => x.id === p.id)?.leaveRefund) continue;
+    const { items = {}, gold = 0 } = p.leaveRefund;
+    try {
+      if (Object.keys(items).length) await mutateProfile(db, p.id, cur => ({ stats: { ...(cur.stats || {}), bag: addToBag(cur.stats?.bag, items) } }));
+      if (gold > 0 && db.walletAdd) await db.walletAdd(p.id, 0, gold);
+    } catch (e) { console.error('[leave refund]', e.message); }
+  }
+}
+
+/** 🎒 v59: partida encerrada sem fim (abandonada): quem ainda estava nela recebe de volta o que trouxe e não gastou. */
+export async function refundAbandoned(db, state) {
+  if (!state?.players || state.options?.hardcore) return;
+  for (const p of state.players) {
+    if (String(p.id).startsWith('cpu_') || p.left || p.hardcoreLost) continue;
+    const items = {};
+    for (const [id, q] of Object.entries(p.broughtItems || {})) { const n = Math.min(q, p.items?.[id] || 0); if (n > 0) items[id] = n; }
+    const gold = refundBrought(p);
+    try {
+      if (Object.keys(items).length) await mutateProfile(db, p.id, cur => ({ stats: { ...(cur.stats || {}), bag: addToBag(cur.stats?.bag, items) } }));
+      if (gold > 0 && db.walletAdd) await db.walletAdd(p.id, 0, gold);
+    } catch (e) { console.error('[abandon refund]', e.message); }
+  }
+}
+
 /** Fim de partida online: Coleção + Pokédex + estatísticas + pontos + rating (competitivo). */
 export async function recordResults(db, state, options = {}) {
   await syncCollection(db, state, null);
@@ -1108,57 +1182,55 @@ export async function recordResults(db, state, options = {}) {
   const deltas = ranked ? (state.ratingChanges || await eloDeltas(db, state, humans)) : {};
   const places = ranked ? placements(state, humans) : {};
   for (const p of humans) {
-    const prof = await db.getProfile(p.id);
-    if (!prof) continue;
-    const st = { ...(prof.stats || {}) };
-    st.matches = (st.matches || 0) + 1;
-    st.wins = (st.wins || 0) + (state.winner === p.id ? 1 : 0);
-    st.champion = (st.champion || 0) + (p.champion ? 1 : 0);
-    st.captures = (st.captures || 0) + p.stats.captures;
-    st.shinies = (st.shinies || 0) + p.stats.shinies;
-    st.pvpWins = (st.pvpWins || 0) + p.stats.pvpWins;
-    st.bestScore = Math.max(st.bestScore || 0, score(p));
-    // 💞 Laço: o companheiro que terminou a partida com você ganha pontos
-    if (p.companion && COMPANIONS[p.companion] && !p.hardcoreLost) {
-      const bond = { ...(st.companionBond || {}) };
-      const before = bond[p.companion] || 0;
-      const gain = (p.meal?.id === 'bond_pudding' ? 2 : 1) * bondGain({ won: state.winner === p.id, badges: p.badges.length, captures: p.stats.captures, battlesWon: p.stats.wins, missions: p.missionsDone || 0, turns: state.turn }); // 🍮 Pudim da Amizade: laço em dobro
-      bond[p.companion] = Math.min(5000, before + gain);
-      st.companionBond = bond;
-      const lb = bondLevel(before), la = bondLevel(bond[p.companion]);
-      (state.bondChanges ||= {})[p.id] = { comp: p.companion, gain, lvl: la, up: la > lb, intimate: la >= BOND_MAX && lb < BOND_MAX, points: bond[p.companion] };
-    }
-    const patch = { stats: st, points: calcPoints(prof.pokedex || [], st) };
     if (p.champion && db.insertFeed) {
       try { await db.insertFeed({ kind: 'champion', text: `👑 ${p.name} venceu a Liga e se tornou Campeão!`, data: { name: p.name, avatar: p.avatar, skin: p.cosmetic?.skin || null } }); } catch { /* ok */ }
     }
-    if (ranked) {
-      st.ranked = (st.ranked || 0) + 1;
-      st.rankedWins = (st.rankedWins || 0) + (state.winner === p.id ? 1 : 0);
-      patch.rating = Math.max(100, (prof.rating ?? START_RATING) + (deltas[p.id] || 0));
-      // 🏆 Liga: Pontos de Liga pela colocação (sobe/cai de divisão)
-      const lg = leagueStats(st, places[p.id], humans.length);
-      Object.assign(st, lg.stats);
-      (state.leagueChanges ||= {})[p.id] = { delta: lg.result.delta, change: lg.result.change, div: lg.result.to, lp: lg.result.league.lp };
-      if (lg.reward && db.walletAdd) { try { await db.walletAdd(p.id, lg.reward, 0); } catch (e) { console.error('[season]', e.message); } }
-    }
-    if (state.options?.hardcore) st.hardcore = (st.hardcore || 0) + (p.hardcoreLost ? 0 : 1);
     // 🎒 itens que sobraram (só os que podem ficar: Pokébolas, Amuleto, TM) vão para a Mochila da conta
+    // (quem saiu já recebeu de volta o que trouxe na hora em que saiu — v59)
     const keep = (p.hardcoreLost || p.left) ? {} : bagFromMatch(p);
     if (Object.keys(keep).length) (state.bagChanges ||= {})[p.id] = keep;
-    // grava só os campos de estatística em cima do perfil MAIS NOVO (não apaga o que outra parte acabou de salvar)
-    const fresh = { ...st };
-    await mutateProfile(db, p.id, cur => {
-      const base = { ...(cur.stats || {}) };
-      const merged = { ...base, ...fresh, companions: base.companions || fresh.companions, companion: base.companion ?? fresh.companion,
-        shinyDex: base.shinyDex || fresh.shinyDex, shinySeen: base.shinySeen || fresh.shinySeen, megaDex: base.megaDex || fresh.megaDex, overflow: base.overflow || fresh.overflow,
-        vaultBonus: base.vaultBonus || fresh.vaultBonus, nicknames: base.nicknames || fresh.nicknames, bag: addToBag(base.bag, keep),
-        serie: base.serie ?? fresh.serie, trophies: base.trophies ?? fresh.trophies,
-        ...(base.megaBracelet || (p.items?.mega_bracelet > 0 && !p.hardcoreLost) ? { megaBracelet: true } : {}), // 🔗 Bracelete Mega (só cai em Mega Raid)
-        ...(base.dynamaxBand || (p.items?.dynamax_band > 0 && !p.hardcoreLost) ? { dynamaxBand: true } : {}),
-        ...((p.legendCharmUntil || 0) > (base.legendCharmUntil || 0) ? { legendCharmUntil: p.legendCharmUntil } : {}) }; // 🏵️ Amuleto ativado na partida // 🔴 Pulseira Dynamax (só cai em Raid Gigantamax)
-      return { ...patch, stats: merged, points: calcPoints(cur.pokedex || [], merged) };
+    let leagueReward = 0;
+    // v59: tudo é calculado em cima do perfil MAIS NOVO dentro da gravação — nada de cópia antiga apagando
+    // o que outra parte (Fazenda, Mochila, Liga...) salvou durante o fim da partida.
+    const saved = await mutateProfile(db, p.id, cur => {
+      const st = { ...(cur.stats || {}) };
+      st.matches = (st.matches || 0) + 1;
+      st.wins = (st.wins || 0) + (state.winner === p.id ? 1 : 0);
+      st.champion = (st.champion || 0) + (p.champion ? 1 : 0);
+      st.captures = (st.captures || 0) + p.stats.captures;
+      st.shinies = (st.shinies || 0) + p.stats.shinies;
+      st.pvpWins = (st.pvpWins || 0) + p.stats.pvpWins;
+      st.bestScore = Math.max(st.bestScore || 0, score(p));
+      // 💞 Laço: o companheiro que terminou a partida com você ganha pontos
+      if (p.companion && COMPANIONS[p.companion] && !p.hardcoreLost) {
+        const bond = { ...(st.companionBond || {}) };
+        const before = bond[p.companion] || 0;
+        const gain = (p.meal?.id === 'bond_pudding' ? 2 : 1) * bondGain({ won: state.winner === p.id, badges: p.badges.length, captures: p.stats.captures, battlesWon: p.stats.wins, missions: p.missionsDone || 0, turns: state.turn }); // 🍮 Pudim da Amizade: laço em dobro
+        bond[p.companion] = Math.min(5000, before + gain);
+        st.companionBond = bond;
+        const lb = bondLevel(before), la = bondLevel(bond[p.companion]);
+        (state.bondChanges ||= {})[p.id] = { comp: p.companion, gain, lvl: la, up: la > lb, intimate: la >= BOND_MAX && lb < BOND_MAX, points: bond[p.companion] };
+      }
+      const patch = {};
+      if (ranked) {
+        st.ranked = (st.ranked || 0) + 1;
+        st.rankedWins = (st.rankedWins || 0) + (state.winner === p.id ? 1 : 0);
+        patch.rating = Math.max(100, (cur.rating ?? START_RATING) + (deltas[p.id] || 0));
+        // 🏆 Liga: Pontos de Liga pela colocação (sobe/cai de divisão)
+        const lg = leagueStats(st, places[p.id], humans.length);
+        Object.assign(st, lg.stats);
+        (state.leagueChanges ||= {})[p.id] = { delta: lg.result.delta, change: lg.result.change, div: lg.result.to, lp: lg.result.league.lp };
+        leagueReward = lg.reward || 0;
+      }
+      if (state.options?.hardcore) st.hardcore = (st.hardcore || 0) + (p.hardcoreLost ? 0 : 1);
+      st.bag = addToBag(st.bag, keep);
+      if (p.items?.mega_bracelet > 0 && !p.hardcoreLost) st.megaBracelet = true; // 🔗 Bracelete Mega (só cai em Mega Raid)
+      if (p.items?.dynamax_band > 0 && !p.hardcoreLost) st.dynamaxBand = true; // 🔴 Pulseira Dynamax (só cai em Raid Gigantamax)
+      if ((p.legendCharmUntil || 0) > (st.legendCharmUntil || 0)) st.legendCharmUntil = p.legendCharmUntil; // 🏵️ Amuleto ativado na partida
+      return { ...patch, stats: st, points: calcPoints(cur.pokedex || [], st) };
     });
+    if (!saved) continue;
+    if (leagueReward && db.walletAdd) { try { await db.walletAdd(p.id, leagueReward, 0); } catch (e) { console.error('[season]', e.message); } }
     // Hardcore: quem caiu não leva nada (nem o ouro trazido); quem sobreviveu ganha o dobro de ouro da conta
     const coins = p.hardcoreLost ? 0 : (state.options?.hardcore ? Math.min(2400, accountGoldReward(state, p) * 2) : accountGoldReward(state, p)) + refundBrought(p);
     if (coins > 0 && db.walletAdd) {
@@ -1357,7 +1429,8 @@ export async function adminOp(db, user, body) {
     case 'close_match': {
       const row = await db.getMatch(body.matchId);
       if (!row) notFound();
-      await db.updateMatch(row.id, row.version, { status: 'abandoned', version: row.version + 1 });
+      const ok = await db.updateMatch(row.id, row.version, { status: 'abandoned', version: row.version + 1 });
+      if (ok && row.status === 'playing') await refundAbandoned(db, row.state);
       return { ok: true };
     }
     default:

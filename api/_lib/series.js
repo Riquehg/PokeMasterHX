@@ -208,7 +208,7 @@ async function serieView(db, userId, serie, vault, now) {
   const hist = (await db.getConfig('serie_history'))?.closed || {};
   const lastSeason = Object.keys(hist).sort().pop();
   return {
-    serie: { ...serie, info: serieInfo(serie.div), seasonName: seasonName(season), left: Math.max(0, SERIE_DAILY - used), foesToday: foes,
+    serie: { ...serie, defense: (serie.defense || []).filter(u => vault.some(v => v.uid === u)), defenseLost: (serie.defense || []).filter(u => !vault.some(v => v.uid === u)).length, info: serieInfo(serie.div), seasonName: seasonName(season), left: Math.max(0, SERIE_DAILY - used), foesToday: foes,
       defenseMons: teamFrom(vault, serie.defense || []).map(m => ({ uid: m.uid, sp: m.sp, lvl: m.lvl, shiny: !!m.shiny })) },
     table,
     trophies: (await db.getProfile(userId))?.stats?.trophies || [],
@@ -233,8 +233,8 @@ async function challenge(db, user, prof, serie, body, now) {
 
   // time do atacante
   const vault = prof.vault || [];
-  let uids = (body.teamUids || []).map(String);
-  if (!uids.length) uids = serie.defense;
+  let uids = (body.teamUids || []).map(String).filter(u => vault.some(v => v.uid === u)); // v59: ignora quem não está mais na Coleção
+  if (!uids.length) uids = (serie.defense || []).filter(u => vault.some(v => v.uid === u));
   const myTeam = teamFrom(vault, uids);
   if (myTeam.length < Math.min(SERIE_TEAM, vault.length) || !myTeam.length) bad(`O time de ataque precisa ter ${SERIE_TEAM} Pokémon.`);
 

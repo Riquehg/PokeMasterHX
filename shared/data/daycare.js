@@ -13,7 +13,9 @@ export const INCUBATOR_MAX = 3;         // ovos esperando para chocar
 export const HATCH_HOURS = { 1: 2, 2: 3, 3: 5, 4: 8, 5: 12 };
 export const NATURE_COST = { crystal: 3 }; // herdar natureza (por ovo)
 export const HATCH_LEVEL = 5;
-export const MUTATION = { shiny: 1 / 150, shinyBothShiny: 1 / 40, aura: 1 / 40, perfect: 1 / 80 };
+export const MUTATION = { shiny: 1 / 150, shinyBothShiny: 1 / 40, aura: 1 / 40, perfect: 1 / 80, rareMove: 1 / 25, strong: 1 / 30 };
+// v59: nomes das mutações (mostrados no card do Pokémon e ao chocar)
+export const MUTATION_LABEL = { shiny: '✨ Shiny', aura: '🌈 Aura', perfect: '💯 Potencial máximo', move: '💿 Golpe herdado do pai', rare_move: '🎲 Golpe raro', strong: '💪 Potencial alto' };
 export const EGG_AURAS = ['galaxy', 'gold', 'sakura', 'neon', 'frost', 'inferno', 'flame', 'aqua', 'volt', 'shadow', 'mystic', 'rainbow'];
 
 const brtDay = (ms = Date.now()) => new Date(ms - 3 * 3600000).toISOString().slice(0, 10);
@@ -70,12 +72,20 @@ export function makeEgg(rng, mother, father, { natureFrom = null, now = Date.now
   const shiny = rng.chance((bothShiny ? MUTATION.shinyBothShiny : MUTATION.shiny) * shinyMult);
   if (shiny) mut.push('shiny');
   if (rng.chance(MUTATION.perfect)) { iv.hp = iv.atk = iv.spe = iv.def = IV_MAX; mut.push('perfect'); }
+  else if (rng.chance(MUTATION.strong)) { const k = keys[rng.int(0, 3)]; iv[k] = IV_MAX; for (const o of keys) iv[o] = Math.max(iv[o], Math.ceil(IV_MAX * 0.6)); mut.push('strong'); } // v59: potencial alto (1 no máximo, resto bom)
   const aura = rng.chance(MUTATION.aura) ? rng.pick(EGG_AURAS) : null;
   if (aura) mut.push('aura');
   const natureParent = natureFrom === 'mother' ? mother : natureFrom === 'father' ? father : null;
   // golpe herdado: 40% de pegar o 2º golpe do pai, se o filhote puder aprender
   const fm = father.moves?.[1];
-  const move2 = fm && rng.chance(0.4) && tmMovesFor(sp).some(m => m.id === fm) ? fm : null;
+  let move2 = fm && rng.chance(0.4) && tmMovesFor(sp).some(m => m.id === fm) ? fm : null;
+  if (move2) mut.push('move');
+  else if (rng.chance(MUTATION.rareMove)) { // v59: golpe raro (o mais forte que ele pode aprender)
+    const ty = getSpecies(sp)?.types || [];
+    const w = m => (m.power || 0) * (ty.includes(m.type) ? 1.5 : 1);
+    const best = [...tmMovesFor(sp)].filter(m => m.kind === 'dmg').sort((a, b) => w(b) - w(a))[0];
+    if (best) { move2 = best.id; mut.push('rare_move'); }
+  }
   return {
     id: 'e' + Math.floor(rng.next() * 1e9).toString(36),
     sp, tier, iv, shiny, aura, mutations: mut,

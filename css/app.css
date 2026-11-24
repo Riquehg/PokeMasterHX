@@ -2396,3 +2396,13 @@ html.lite .modal-overlay, html.lite .overlay { backdrop-filter: none !important;
 .caught-ball { width: 15px; height: 15px; vertical-align: -2px; margin-right: 3px; object-fit: contain; }
 .caught-ball.not { filter: grayscale(1) brightness(1.6) opacity(.75); }
 .wild .tag .caught-ball { width: 10px; height: 10px; margin-right: 1px; vertical-align: -1px; }
+
+/* v59 — Liga: fim da temporada */
+.se-season { margin: 8px 0; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); font-size: 13px; }
+.se-season.soon { border-color: #ffb347; background: rgba(255,179,71,.1); }
+.se-sbar { height: 6px; border-radius: 4px; background: rgba(255,255,255,.1); margin-top: 6px; overflow: hidden; }
+.se-sbar i { display: block; height: 100%; background: linear-gradient(90deg, #6be38a, #ffd36b); }
+
+/* v59 — mutações da Creche */
+.pk-mut { font-size: 11px; margin-top: 4px; padding: 3px 6px; border-radius: 8px; background: linear-gradient(90deg, rgba(180,120,255,.25), rgba(80,200,255,.2)); color: #e9dcff; text-align: center; }
+.pk-mut.dim { background: rgba(255,255,255,.06); color: #bbb; }

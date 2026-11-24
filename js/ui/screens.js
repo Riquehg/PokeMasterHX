@@ -4,6 +4,16 @@ import { bondLevel } from '../../shared/data/companions.js';
 import { ensureSeason, divInfo, LEAGUE_DIVS, TOP_DIV, LP_PER_DIV } from '../../shared/data/league.js';
 const HARDCORE_TXT = 'Hardcore: se toda a sua equipe for derrotada você sai da partida e perde tudo o que ganhou nela (capturas, níveis e ouro). Quem sobrevive ganha o dobro de ouro da conta.';
 import { MAP_CHOICES, mapChoiceName, BUILTIN_MAPS, setCustomMaps } from '../../shared/data/board.js';
+import { regionBlurb } from '../../shared/data/regions.js';
+// 🗺️ v59: Liga e Pokémon em destaque do mapa escolhido (atualiza ao trocar o mapa)
+const mapRegion = id => (!id || id === 'kanto' ? 'kanto' : id === 'gen' || String(id).startsWith('gen:') ? 'expedicao' : String(id).startsWith('theme:') ? String(id).slice(6) : null);
+const mapInfoText = id => regionBlurb(mapRegion(id)) || 'Mapa personalizado: Liga de Kanto, sem Pokémon em destaque.';
+const mapInfo = id => `<div class="tiny muted map-info">${esc(mapInfoText(id))}</div>`;
+if (typeof document !== 'undefined') document.addEventListener('change', e => {
+  const el = e.target;
+  if (!el?.matches?.('#s-map,#c-map,#o-map,#ls-map')) return;
+  const info = el.parentElement?.querySelector('.map-info'); if (info) info.textContent = mapInfoText(el.value);
+});
 import { openMapEditor, templateMap } from './mapeditor.js';
 import { openSeries, openTrophies, checkSeasonResult } from './series.js';
 import { openTrainerCard } from './trainercard.js';
@@ -259,7 +269,7 @@ function soloModal(profile, ctx) {
       <div class="field"><label>Adversários (CPU)</label><select class="input" id="s-bots">${[1, 2, 3, 4, 5].map(n => `<option ${n === st.bots ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
       <div class="field"><label>Duração</label><select class="input" id="s-turns"><option value="30" ${st.turnLimit === 30 ? 'selected' : ''}>Rápida (30 turnos)</option><option value="45" ${st.turnLimit === 45 ? 'selected' : ''}>Média (45 turnos)</option><option value="60" ${st.turnLimit === 60 ? 'selected' : ''}>Normal (60 turnos)</option></select></div>
 <div class="field"><label>Tipo de partida</label><select class="input" id="s-rules">${Object.entries(GAME_RULES).map(([k, g]) => `<option value="${k}" ${k === (st.rules) ? 'selected' : ''} title="${esc(g.desc)}">${g.icon} ${g.name}</option>`).join('')}</select></div>
-      <div class="field"><label>Mapa</label><select class="input" id="s-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (st.map) ? 'selected' : ''} title="${esc(m.desc)}">${m.icon || '🗺️'} ${esc(m.name)}</option>`).join('')}</select></div>
+      <div class="field"><label>Mapa</label><select class="input" id="s-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (st.map) ? 'selected' : ''} title="${esc(m.desc)}">${m.icon || '🗺️'} ${esc(m.name)}</option>`).join('')}</select>${mapInfo(st.map)}</div>
       <div class="field"><label>Dificuldade</label><select class="input" id="s-hc"><option value="0" ${!st.hardcore ? 'selected' : ''}>Normal</option><option value="1" ${st.hardcore ? 'selected' : ''}>☠️ Hardcore</option></select><div class="tiny muted">${HARDCORE_TXT}</div></div>
     </div>
     <div class="tabs" style="margin:10px 0"><button class="btn sm ${!st.useTeam ? 'primary' : ''}" data-act="use-starter">🌱 Começar com inicial</button><button class="btn sm ${st.useTeam ? 'primary' : ''}" data-act="use-team">📦 Levar time da Coleção</button></div>
@@ -308,7 +318,10 @@ function collectionModal(profile, onChange) {
       ${boxes().map(b => `<button class="bx-chip ${view === b.id ? 'on' : ''}" data-act="bx-view" data-id="${esc(b.id)}">${b.icon} ${esc(b.name)} <small>${b.uids.length}</small></button>`).join('')}
       ${boxes().length < BOX_MAX ? '<button class="bx-chip add" data-act="bx-new">➕ Nova box</button>' : ''}
     </div>
-    ${picking ? `<div class="bx-pick">Toque nos Pokémon para colocar em <b>${esc(boxes().find(b => b.id === picking.box)?.name || '')}</b> · <b>${picking.sel.size}</b> escolhido(s)
+    ${picking?.rel ? `<div class="bx-pick rel">🕊️ Toque nos Pokémon para <b>soltar</b> · <b>${picking.sel.size}</b> escolhido(s) · 🪙 <span class="rel-gold">${relGold()}</span>
+        <button class="btn sm red" data-act="rel-ok" ${picking.sel.size ? '' : 'disabled'}>🕊️ Soltar escolhidos</button><button class="btn sm" data-act="bx-pick-cancel">Cancelar</button>
+        <div class="tiny muted">⭐ Favoritos, time da Liga e Pokémon na Fazenda/Creche não podem ser escolhidos.</div></div>`
+      : picking ? `<div class="bx-pick">Toque nos Pokémon para colocar em <b>${esc(boxes().find(b => b.id === picking.box)?.name || '')}</b> · <b>${picking.sel.size}</b> escolhido(s)
         <button class="btn sm primary" data-act="bx-pick-ok" ${picking.sel.size ? '' : 'disabled'}>📥 Colocar na box</button><button class="btn sm" data-act="bx-pick-cancel">Cancelar</button></div>`
       : cur ? `<div class="bx-head">${cur.icon} <b>${esc(cur.name)}</b> <span class="tiny muted">${cur.uids.length} Pokémon</span>
         <button class="btn sm primary" data-act="bx-add">➕ Adicionar Pokémon</button><button class="btn sm" data-act="bx-rename">✏️ Nome</button>
@@ -323,6 +336,9 @@ function collectionModal(profile, onChange) {
     return `<button class="vm-tile t${sp?.tier || 1} ${m.shiny ? 'shiny' : ''} ${sp?.legendary ? 'legend' : ''}" data-act="vm-open" data-uid="${esc(m.uid)}" title="${esc(m.nick || sp?.name || '')}">
       <img src="${monSprite(m)}" alt="" loading="lazy" decoding="async"><span class="vm-name">${esc(m.nick || sp?.name || '?')}</span><span class="vm-lv">Nv.${m.lvl}</span>
       <span class="vm-badges">${m.shiny ? '✨' : ''}${m.fav ? '⭐' : ''}${m.gx ? '🔴' : ''}${m.held ? '🎒' : ''}${evo ? '<b class="vm-evo">✨</b>' : ''}</span></button>`; };
+  // 🕊️ v59: soltar vários de uma vez
+  const relLocked = m => m.fav || (profile?.stats?.serie?.defense || []).includes(m.uid) || (profile?.stats?.farm?.slots || []).some(s => s?.uid === m.uid) || [profile?.stats?.farm?.daycare?.a, profile?.stats?.farm?.daycare?.b].includes(m.uid);
+  const relGold = () => [...(picking?.sel || [])].reduce((a, u) => { const m = (profile?.vault || []).find(x => x.uid === u); return a + (m ? releaseGold(m) : 0); }, 0);
   const body = () => {
     const vault = profile?.vault || [];
     const all = sortCollection(vault);
@@ -332,14 +348,14 @@ function collectionModal(profile, onChange) {
     const n = k => all.filter(m => k(m)).length;
     return `<details class="info-fold"><summary class="small">ℹ️ Como funciona a Coleção</summary><p class="small muted">Tudo que você captura em partidas salvas na conta (Treino contra CPUs e Online) fica aqui, com o nível atualizado. Use no modo <b>📦 Coleção</b> para levar seu time. Limite: ${cap()}. Se lotar, só os comuns mais fracos saem e ficam em "↩️ Saíram da Coleção" para recuperar (⭐ favoritos, shinies, lendários, Vermelhos/Amarelos, Confiança e com apelido nunca saem).${profile?.stats?.vaultBonus ? '' : ' Dá para ampliar para 350 na 💎 Loja.'}</p></details>
       ${(profile?.stats?.overflow || []).length ? `<details class="vf-out"><summary>↩️ Saíram da Coleção (${profile.stats.overflow.length}) — toque para ver e recuperar</summary>
-        <p class="tiny muted">Pokémon que você soltou ou que saíram sozinhos quando a Coleção lotou (só saem os comuns, tier até Azul). Ficam aqui por um tempo (últimos ${40}).</p>
+        <p class="tiny muted">Pokémon que você soltou ou que saíram sozinhos quando a Coleção lotou (só saem os comuns, tier até Azul). Ficam aqui por um tempo (últimos 120).</p>
         <div class="pk-grid">${profile.stats.overflow.map(m => statCard(m, { extra: `<div class="tiny muted">${m.why === 'solto' ? 'Solto por você' : 'Coleção cheia'} · ${new Date(m.outAt).toLocaleDateString('pt-BR')}</div><button class="btn sm green" data-act="restore" data-uid="${esc(m.uid)}">↩️ Recuperar${m.paid ? ` (devolve 🪙 ${m.paid})` : ''}</button>` })).join('')}</div></details>` : ''}
       ${(profile?.vault || []).length > cap() ? `<p class="small" style="color:#ffb35c">⚠️ Sua Coleção passou do limite (${(profile.vault || []).length}/${cap()}). Nada some sozinho além dos comuns; solte alguns para liberar espaço.</p>` : ''}
       <div class="vf-sum tiny muted">⚡ ${n(m => getSpecies(m.sp)?.legendary && !getSpecies(m.sp)?.mythical)} lendários · 🌟 ${n(m => getSpecies(m.sp)?.mythical)} míticos · ✨ ${n(m => m.shiny)} shinies · ⭐ ${n(m => m.fav)} favoritos · 🤝 ${n(m => m.trust)} da Confiança</div>
-      <div class="row" style="justify-content:flex-end;margin:4px 0"><button class="btn sm" data-act="vm-toggle">${compact ? '🃏 Ver como cartas' : '🔳 Ver compacto'}</button></div>
+      <div class="row" style="justify-content:flex-end;margin:4px 0;gap:6px">${picking ? '' : '<button class="btn sm" data-act="rel-many">🕊️ Soltar vários</button>'}<button class="btn sm" data-act="vm-toggle">${compact ? '🃏 Ver como cartas' : '🔳 Ver compacto'}</button></div>
       ${boxBar()}
       <div class="vf-scope">${vfBar('vault')}
-      <div class="pk-grid ${picking ? 'bx-picking' : ''}">${all.map(m => { const bx = boxOf(m.uid); const hide = picking ? !!bx && bx.id === picking.box : view === 'none' ? !!bx : view !== 'all' && bx?.id !== view;
+      <div class="pk-grid ${picking ? 'bx-picking' : ''}">${all.map(m => { const bx = boxOf(m.uid); const hide = picking?.rel ? relLocked(m) : picking ? !!bx && bx.id === picking.box : view === 'none' ? !!bx : view !== 'all' && bx?.id !== view;
         return `<div class="vf-cell ${compact ? 'vf-mini' : ''} ${hide ? 'bx-hide' : ''} ${picking?.sel.has(m.uid) ? 'bx-sel' : ''}" data-uid="${esc(m.uid)}" ${vfAttrs(m, recent.get(m.uid) || 0)}>${bx && view === 'all' ? `<span class="bx-tag" title="${esc(bx.name)}">${bx.icon}</span>` : ''}${compact ? miniTile(m, evoReady(m)) : statCard(m, { extra: actBtns(m, bx, evoReady) })}</div>`; }).join('') || '<p class="muted">Nada aqui ainda.</p>'}</div></div>`;
   };
   const ov = openModal('vault', `📦 Coleção (${(profile?.vault || []).length}/${cap()})`, body(), { wide: true });
@@ -352,14 +368,15 @@ function collectionModal(profile, onChange) {
   const newId = () => { let i = 1; while (boxes().some(b => b.id === `b${i}`)) i++; return `b${i}`; };
   // escolhendo Pokémon: toque no card (fora dos botões)
   ov.addEventListener('click', e => {
-    if (!picking || e.target.closest('button,select,input')) return;
+    if (!picking || (e.target.closest('button,select,input') && !e.target.closest('.vm-tile'))) return; // v59: o mini-cartão também escolhe
     const cell = e.target.closest('.vf-cell[data-uid]');
     if (!cell) return;
     const u = cell.dataset.uid;
     picking.sel.has(u) ? picking.sel.delete(u) : picking.sel.add(u);
     cell.classList.toggle('bx-sel', picking.sel.has(u));
     const bar = ov.querySelector('.bx-pick b:nth-of-type(2)'); if (bar) bar.textContent = picking.sel.size;
-    const okBtn = ov.querySelector('[data-act=bx-pick-ok]'); if (okBtn) okBtn.disabled = !picking.sel.size;
+    const okBtn = ov.querySelector('[data-act=bx-pick-ok],[data-act=rel-ok]'); if (okBtn) okBtn.disabled = !picking.sel.size;
+    const rg = ov.querySelector('.rel-gold'); if (rg) rg.textContent = relGold();
   });
   ov.addEventListener('change', e => {
     if (e.target.dataset.actChange !== 'bx-icon') return;
@@ -456,6 +473,16 @@ function collectionModal(profile, onChange) {
       toast(`${q[1]} Box "${q[2]}" criada com ${uids.length} Pokémon.`, 'good');
     },
     'bx-add': () => { picking = { box: view, sel: new Set() }; redraw(); },
+    'rel-many': () => { picking = { rel: true, box: null, sel: new Set() }; redraw(); },
+    'rel-ok': async () => {
+      const uids = [...picking.sel]; if (!uids.length) return;
+      if (!confirm(`Soltar ${uids.length} Pokémon da sua Coleção?\n\n🪙 O Professor paga ${relGold()} de ouro no total.\n\nEles ficam em "Saíram da Coleção": dá para recuperar depois devolvendo o ouro.`)) return;
+      try {
+        const r = await api('profile', { op: 'release_many', uids });
+        profile = r.profile; picking = null; redraw(); onChange(profile);
+        toast(`🕊️ ${r.released} solto(s)${r.gold ? ` · 🪙 ${r.gold}` : ''}${r.skipped ? ` · ${r.skipped} não puderam sair` : ''}.`, 'good');
+      } catch (e) { toast(e.message, 'bad'); }
+    },
     'bx-pick-cancel': () => { picking = null; redraw(); },
     'bx-pick-ok': () => {
       const add = [...picking.sel], target = picking.box;
@@ -558,7 +585,7 @@ export async function lobbyScreen(root, ctx) {
           <div class="field"><label>Jogadores</label><select class="input" id="c-max">${[2, 3, 4, 5, 6, 8].map(n => `<option ${n === 4 ? 'selected' : ''}>${n}</option>`).join('')}</select><div class="tiny muted">8 só na Copa · Duelo é sempre 2</div></div>
           <div class="field"><label>Duração</label><select class="input" id="c-turns"><option value="30">Rápida (30 turnos)</option><option value="40">Competitiva (40 turnos)</option><option value="45">Média (45 turnos)</option><option value="60" selected>Normal (60 turnos)</option></select></div>
 <div class="field"><label>Tipo de partida</label><select class="input" id="c-rules">${Object.entries(GAME_RULES).map(([k, g]) => `<option value="${k}" ${k === ('classic') ? 'selected' : ''} title="${esc(g.desc)}">${g.icon} ${g.name}</option>`).join('')}</select></div>
-          <div class="field"><label>Mapa</label><select class="input" id="c-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === ('kanto') ? 'selected' : ''} title="${esc(m.desc)}">${m.icon || '🗺️'} ${esc(m.name)}</option>`).join('')}</select></div>
+          <div class="field"><label>Mapa</label><select class="input" id="c-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === ('kanto') ? 'selected' : ''} title="${esc(m.desc)}">${m.icon || '🗺️'} ${esc(m.name)}</option>`).join('')}</select>${mapInfo('kanto')}</div>
         </div>
         <div class="field"><label>Dificuldade</label><select class="input" id="c-hc"><option value="0">Normal</option><option value="1">☠️ Hardcore — perdeu a equipe, está fora e perde tudo</option></select></div>
         <div class="field hidden" id="c-megas-f"><label>Mega / Gigantamax</label><select class="input" id="c-megas" title="Mega: 🔗 Bracelete + Megapedra · Gigantamax: 🔴 Pulseira Dynamax + Fator Gigantamax"><option value="0" >💎 Desligado</option><option value="1" >💎🔴 Megas e Gigantamax liberados</option></select><div class="tiny muted">Só no modo Coleção: 1 Mega Evolução OU 1 Gigantamax por batalha (Mega: 🔗 Bracelete + Megapedra segurada · Gigantamax: 🔴 Pulseira Dynamax + Pokémon com o Fator, dura 3 rodadas).</div></div>
@@ -638,7 +665,7 @@ export async function roomScreen(root, ctx, matchId) {
           ${isHost ? `<div class="grid2">
             <select class="input" id="o-mode">${Object.entries(MODE_INFO).map(([k, m]) => `<option value="${k}" ${k === mode ? 'selected' : ''}>${m.icon} ${m.name}</option>`).join('')}</select>
             ${['balanced', 'collection'].includes(mode) ? `<select class="input" id="o-rules">${Object.entries(GAME_RULES).map(([k, g]) => `<option value="${k}" ${k === (o.rules || 'classic') ? 'selected' : ''}>${g.icon} ${g.name}</option>`).join('')}</select>` : ''}
-            <select class="input" id="o-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (o.map || 'kanto') ? 'selected' : ''}>${m.icon || '🗺️'} ${esc(m.name)}</option>`).join('')}</select>
+            <select class="input" id="o-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (o.map || 'kanto') ? 'selected' : ''}>${m.icon || '🗺️'} ${esc(m.name)}</option>`).join('')}</select>${mapInfo(o.map || 'kanto')}
             <select class="input" id="o-turns">${[[30, 'Rápida (30)'], [40, 'Competitiva (40)'], [45, 'Média (45)'], [60, 'Normal (60)']].map(([v, l]) => `<option value="${v}" ${v === (o.turnLimit || 60) ? 'selected' : ''}>${l}</option>`).join('')}</select>
             <select class="input" id="o-hc" title="${esc(HARDCORE_TXT)}"><option value="0" ${!o.hardcore ? 'selected' : ''}>Dificuldade normal</option><option value="1" ${o.hardcore ? 'selected' : ''}>☠️ Hardcore</option></select>
             ${mode === 'collection' ? `<select class="input" id="o-megas" title="Mega Evolução (Bracelete Mega + Megapedra)"><option value="0" ${!o.megas ? 'selected' : ''}>💎 Sem Megas</option><option value="1" ${o.megas ? 'selected' : ''}>💎 Megas liberadas</option></select>` : ''}
@@ -929,7 +956,7 @@ export function localSetupScreen(root, ctx) {
           <div class="grid2"><button class="btn sm" data-act="add-human" ${players.length >= 6 ? 'disabled' : ''}>+ Humano</button><button class="btn sm" data-act="add-bot" ${players.length >= 6 ? 'disabled' : ''}>+ CPU</button></div>
           <div class="field"><label>Duração</label><select class="input" id="ls-turns"><option value="30" ${turnLimit === 30 ? 'selected' : ''}>Rápida (30 turnos)</option><option value="60" ${turnLimit === 60 ? 'selected' : ''}>Normal (60 turnos)</option><option value="0" ${turnLimit === 0 ? 'selected' : ''}>Completa (até o Campeão)</option></select></div>
 <div class="field"><label>Tipo de partida</label><select class="input" id="ls-rules">${Object.entries(GAME_RULES).map(([k, g]) => `<option value="${k}" ${k === (rulesId) ? 'selected' : ''} title="${esc(g.desc)}">${g.icon} ${g.name}</option>`).join('')}</select></div>
-          <div class="field"><label>Mapa</label><select class="input" id="ls-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (mapId) ? 'selected' : ''} title="${esc(m.desc)}">${m.icon || '🗺️'} ${esc(m.name)}</option>`).join('')}</select></div>
+          <div class="field"><label>Mapa</label><select class="input" id="ls-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (mapId) ? 'selected' : ''} title="${esc(m.desc)}">${m.icon || '🗺️'} ${esc(m.name)}</option>`).join('')}</select>${mapInfo(mapId)}</div>
           <div class="field"><label>Dificuldade</label><select class="input" id="ls-hc" title="${esc(HARDCORE_TXT)}"><option value="0" ${!hardcore ? 'selected' : ''}>Normal</option><option value="1" ${hardcore ? 'selected' : ''}>☠️ Hardcore</option></select></div>
           <button class="btn primary" data-act="start">▶ Começar</button>
           <button class="btn ghost" data-act="back">← Voltar</button>

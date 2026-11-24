@@ -61,6 +61,22 @@ export async function openSeries(ctx, profile) {
     const m = Math.max(1, Math.round((next - brt) / 60000));
     return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m} min`;
   };
+  // v59: só conta quem ainda está na Coleção (um Pokémon solto/vendido não "ocupa" vaga invisível)
+  const livePicks = () => (data.serie.defense || []).filter(u => vault.some(v => v.uid === u));
+  // 🏁 fim da temporada: dia 1 do próximo mês, 00:05 de Brasília
+  const seasonEnd = () => {
+    const brt = new Date(Date.now() - 3 * 3600000);
+    return Date.UTC(brt.getUTCFullYear(), brt.getUTCMonth() + 1, 1, 3, 5);
+  };
+  const seasonBar = () => {
+    const end = seasonEnd(), brt = new Date(Date.now() - 3 * 3600000);
+    const start = Date.UTC(brt.getUTCFullYear(), brt.getUTCMonth(), 1, 3, 5);
+    const left = Math.max(0, end - Date.now()), d = Math.floor(left / 86400000), h = Math.floor(left / 3600000) % 24;
+    const pct = Math.min(100, Math.max(0, Math.round((Date.now() - start) / (end - start) * 100)));
+    const when = new Date(end).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
+    return `<div class="se-season ${d < 3 ? 'soon' : ''}"><div class="row" style="justify-content:space-between;gap:6px"><span>🏁 <b>Fim da temporada</b> em ${d ? `${d} dia${d > 1 ? 's' : ''} e ` : ''}${h}h</span><span class="tiny muted">vira em ${when} às 00:05</span></div>
+      <div class="se-sbar"><i style="width:${pct}%"></i></div>${data.serie.defenseLost ? `<div class="tiny" style="color:#ffb347;margin-top:4px">⚠️ ${data.serie.defenseLost} Pokémon do seu time de defesa não está mais na Coleção — escolha outro em 🛡️ Defesa.</div>` : ''}</div>`;
+  };
   const head = () => {
     const S = data.serie, me = data.table.find(r => r.me);
     return `<div class="se-head" style="--sc:${S.info.color}">
@@ -130,14 +146,14 @@ export async function openSeries(ctx, profile) {
     if (picking) return setModalBody('series', head() + pickView());
     const tabs = `<div class="row" style="gap:4px;margin:8px 0;flex-wrap:wrap">${[['tabela', '📊 Tabela'], ['defesa', '⚽ Meu time'], ['trofeus', `🏆 Troféus (${(data.trophies || []).length})`], ['regras', '📜 Regras']].map(([k, l]) => `<button class="btn sm ${tab === k ? 'primary' : ''}" data-act="tab" data-t="${k}">${l}</button>`).join('')}</div>`;
     const cta = data.serie.defense.length ? '' : `<div class="se-cta"><b>Comece aqui:</b> escolha 6 Pokémon para o seu time de defesa e entre na tabela da Série D (depois dê nome e escudo ao seu time em ⚽ Meu time). <button class="btn primary sm" data-act="pick-def">🛡️ Escolher defesa</button></div>`;
-    setModalBody('series', head() + cta + tabs + (tab === 'tabela' ? tableView() : tab === 'defesa' ? defenseView() : tab === 'trofeus' ? trophyRoomHtml(data.trophies) : rulesView()));
+    setModalBody('series', head() + seasonBar() + cta + tabs + (tab === 'tabela' ? tableView() : tab === 'defesa' ? defenseView() : tab === 'trofeus' ? trophyRoomHtml(data.trophies) : rulesView()));
   };
   const load = async (op = 'serie_get', extra = {}) => { data = await api('match', { op, ...extra }); render(); };
 
   bindActions(ov, {
     tab: d => { tab = d.t; render(); },
-    'pick-def': () => { picking = { kind: 'defense', picks: [...(data.serie.defense || [])] }; render(); },
-    atk: d => { picking = { kind: 'attack', target: d.id, picks: [...(data.serie.defense || [])] }; render(); },
+    'pick-def': () => { picking = { kind: 'defense', picks: livePicks() }; render(); },
+    atk: d => { picking = { kind: 'attack', target: d.id, picks: livePicks() }; render(); },
     pick: d => {
       const P = picking, i = P.picks.indexOf(d.uid);
       if (i >= 0) P.picks.splice(i, 1); else if (P.picks.length < data.rules.team) P.picks.push(d.uid);

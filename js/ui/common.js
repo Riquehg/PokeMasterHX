@@ -1,4 +1,5 @@
 import { genderOf, genderHtml } from '../../shared/data/gender.js';
+import { MUTATION_LABEL } from '../../shared/data/daycare.js';
 // Componentes visuais reaproveitados (cartas de Pokémon, chips de tipo, etc.).
 import { getSpecies } from '../../shared/data/pokemon.js';
 import { monView, xpToNext, MAX_LEVEL, maxStats, ivPercent, IV_MAX, defIvOf, defFactor } from '../../shared/rules/monsters.js';
@@ -115,7 +116,7 @@ export function statCard(mon, { owner = null, act = '', index = '', extra = '', 
     ${locked ? `<div class="lock-tag">🔒 precisa de ${badgesNeeded(mon)} insígnia${badgesNeeded(mon) > 1 ? 's' : ''}</div>` : ''}
     ${mon.trust ? '<div class="tiny"><span class="trust-chip" title="Capturado na Bola da Confiança: obedece sem insígnias">🤝 Confiança</span></div>' : ''}
     ${abilityLine(mon)}
-    ${heldLine(mon)}
+    ${heldLine(mon)}${mon.mutations?.length ? `<div class="pk-mut" title="Nasceu de um ovo da Creche com mutação">🧬 ${mon.mutations.map(x => MUTATION_LABEL[x] || x).join(' · ')}</div>` : mon.bred ? '<div class="pk-mut dim">🥚 Nascido na Creche</div>' : ''}
     ${extra}
   </div>`;
 }
