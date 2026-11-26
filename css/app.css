@@ -2512,7 +2512,9 @@ body.in-game #toasts .toast.good { border-top-color: var(--green); } body.in-gam
     .arena .hpbox { padding: 3px 6px; border-width: 2px; }
     .arena .hpbox .nm { font-size: 12px; }
     .arena .hpbox .lv, .arena .hpbox .hpnum { font-size: 11px; }
-    .arena .hpbox .types { display: none; }
+    .arena .hpbox .types { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 2px; }
+    .arena .hpbox .types .chip { font-size: 8.5px; padding: 0 4px; line-height: 15px; }
+    .arena .hpbox .types .abil-chip { max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   }
   @keyframes lungeMe { 50% { translate: 12cqw -8cqh; } }
   @keyframes lungeFoe { 50% { translate: -12cqw 8cqh; } }
