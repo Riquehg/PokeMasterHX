@@ -1,4 +1,5 @@
 // Configuração do front. O endereço dos sprites é o Storage público do seu Supabase (mesmo do projeto original).
+import { regionBadge, REGION_BADGES } from '../shared/data/regions.js';
 import { getSpecies } from '../shared/data/pokemon.js';
 import { ITEMS } from '../shared/data/items.js';
 import { MEGAS } from '../shared/data/megas.js';
@@ -134,6 +135,13 @@ export const itemIcon = (id, fb = '', cls = 'itm-ic') => {
   const url = itemSpriteUrl(id);
   return ITEM_MISS.has(url) ? `<span class="${cls} itm-emo">${fb}</span>` : `<img class="${cls}" src="${url}" alt="" data-fb="${fb}">`;
 };
+/** 🖼️ v60: sprite qualquer da pasta (ex.: "furniture/sofa.png", "ui/bag.png"); sem o arquivo, mostra o emoji. */
+export const spriteIcon = (path, fb = '', cls = 'itm-ic') => {
+  const url = `${CFG.sprites}${path}`;
+  return ITEM_MISS.has(url) ? `<span class="${cls} itm-emo">${fb}</span>` : `<img class="${cls}" src="${url}" alt="" data-fb="${fb}">`;
+};
+export const furnIcon = (id, fb) => spriteIcon(`furniture/${id}.png`, fb, 'furn-ic');
+export const uiIcon = (id, fb) => spriteIcon(`ui/${id}.png`, fb, 'ui-ic');
 export const itemUrl = id => (ITEMS[id]?.emoji && !ITEMS[id]?.image ? emojiImg(ITEMS[id].emoji) : `${CFG.sprites}items/${itemFile(id)}`);
 // Sprite de treinador/líder: aceita "pasta/arquivo.png" (ex.: "leaders/Lt. Surge.png") ou só o arquivo (vai para leaders/)
 export const leaderUrl = file => {
@@ -141,7 +149,10 @@ export const leaderUrl = file => {
   const path = file.includes('/') ? file : `leaders/${file}`;
   return CFG.sprites + path.split('/').map(encodeURIComponent).join('/');
 };
-export const badgeUrl = id => `${CFG.sprites}badges/${id}.png`;
+// 🏅 v60: cada mapa tem as suas insígnias (sem o arquivo, volta para a de Kanto)
+export const badgeUrl = id => `${CFG.sprites}badges/${regionBadge(id)?.file || id}.png`;
+const BADGE_KANTO = {};
+for (const k of Object.keys(REGION_BADGES)) REGION_BADGES[k].forEach((b, i) => { BADGE_KANTO[b.file] = ['boulder', 'cascade', 'thunder', 'rainbow', 'volcano', 'soul'][i]; });
 export const mapUrl = () => CFG.sprites + CFG.mapImage;
 
 export const typeLabel = t => TYPE_LABELS[t] || t;
@@ -166,6 +177,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('error', e => {
     const el = e.target;
     if (el && el.tagName === 'IMG' && tryItemAlt(el)) return; // v59: outro nome de arquivo do item
+    if (el && el.tagName === 'IMG') { const bm = /\/badges\/([^/?#]+)\.png$/.exec(el.src || ''); if (bm && BADGE_KANTO[bm[1]]) { el.src = el.src.replace(/[^/]+\.png$/, BADGE_KANTO[bm[1]] + '.png'); return; } }
     if (el && el.tagName === 'IMG' && el.dataset.fb !== undefined) { // ícone de item sem sprite → emoji
       ITEM_MISS.add(el.src);
       const s = document.createElement('span'); s.className = `${el.className} itm-emo`; s.textContent = el.dataset.fb; el.replaceWith(s); return;

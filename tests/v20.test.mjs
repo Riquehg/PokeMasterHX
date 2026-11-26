@@ -1588,3 +1588,54 @@ test('🥚 v59: ovos com mutação marcada; Ajuda do Professor sem Pokémon; Chu
   for (const m of ['shiny', 'aura', 'perfect', 'move', 'rare_move', 'strong']) assert.ok(seen.has(m), 'mutação ' + m);
   for (const m of seen) assert.ok(MUTATION_LABEL[m], m);
 });
+
+// ---------------------------------------------------------------- v60
+test('🧭 v60: habilidades de campo (Teletransporte, Aroma, Vento, Surfar, Escavar) com recarga', async () => {
+  const { applyAction } = await import('../shared/engine.js');
+  const { createMon } = await import('../shared/rules/monsters.js');
+  const { FIELD_SKILLS, fieldOptions } = await import('../shared/data/fieldskills.js');
+  useMap('kanto');
+  let s = createMatch({ seed: 9, players: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }] });
+  const a = s.players[0];
+  const rng = createRng(4);
+  a.badges = ['x', 'y', 'z', 'w', 'v'];
+  a.team = [createMon(rng, 'alakazam', 30), createMon(rng, 'pidgeot', 30), createMon(rng, 'golem', 30), createMon(rng, 'vileplume', 30), createMon(rng, 'starmie', 30)];
+  const cities = SPACE_LIST.filter(x => x.type === 'city').map(x => x.id);
+  a.visited = [a.pos, cities[1], cities[2]];
+  assert.deepEqual(fieldOptions(s, a).map(o => o.id).sort(), Object.keys(FIELD_SKILLS).sort());
+  let r = applyAction(s, 'a', { type: 'field', id: 'teleport' }, { now: 0 });
+  assert.ok(!r.error, r.error);
+  s = r.state;
+  assert.equal(s.phase, 'move'); assert.ok(s.pending.teleport);
+  r = applyAction(s, 'a', { type: 'move', to: cities[2] }, { now: 0 }); s = r.state;
+  assert.equal(s.players[0].pos, cities[2]);
+  assert.match(applyAction(s, 'a', { type: 'field', id: 'dig' }, { now: 0 }).error || '', /rolar|turno/);
+  s = applyAction(s, 'a', { type: 'end_turn' }, { now: 0 }).state;
+  s = applyAction(s, 'b', { type: 'end_turn' }, { now: 0 }).state;
+  if (s.phase !== 'roll') s = applyAction(s, 'b', { type: 'roll' }, { now: 0 }).state;
+  r = applyAction(s, 'a', { type: 'field', id: 'teleport' }, { now: 0 });
+  assert.match(r.error || '', /recarrega/);
+  const bag0 = Object.values(s.players[0].items).reduce((x, y) => x + y, 0);
+  r = applyAction(s, 'a', { type: 'field', id: 'dig' }, { now: 0 }); assert.ok(!r.error, r.error); s = r.state;
+  assert.equal(Object.values(s.players[0].items).reduce((x, y) => x + y, 0), bag0 + 1);
+  assert.match(applyAction(s, 'a', { type: 'field', id: 'tailwind' }, { now: 0 }).error || '', /1 habilidade/);
+});
+test('🎾 v60: bolas elementais pegam o próprio elemento; soltar logo após capturar', async () => {
+  const { ballBonusAgainst } = await import('../shared/data/items.js');
+  assert.equal(ballBonusAgainst('flame_ball', ['fire']), 3);
+  assert.equal(ballBonusAgainst('aqua_ball', ['water']), 3);
+  assert.equal(ballBonusAgainst('volt_ball', ['electric']), 3);
+  assert.equal(ballBonusAgainst('shadow_ball', ['ghost']), 3);
+  assert.equal(ballBonusAgainst('mystic_ball', ['psychic']), 3);
+  assert.equal(ballBonusAgainst('flame_ball', ['grass']), 1);
+  const { applyAction } = await import('../shared/engine.js');
+  const { createMon } = await import('../shared/rules/monsters.js');
+  let s = createMatch({ seed: 3, players: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }] });
+  const m = createMon(createRng(2), 'rattata', 10);
+  s.players[0].team.push(m); s.players[0].lastPlaced = { uid: m.uid, where: 'team' };
+  const g0 = s.players[0].gold;
+  const r = applyAction(s, 'a', { type: 'place', op: 'release' }, { now: 0 });
+  assert.ok(!r.error, r.error);
+  assert.ok(!r.state.players[0].team.some(x => x.uid === m.uid));
+  assert.equal(r.state.players[0].gold, g0 + 200);
+});

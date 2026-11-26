@@ -9,7 +9,7 @@ import { getItem, ballBonusAgainst } from '../data/items.js';
 import { against, bestAttack, effectivenessLabel, TYPE_LABELS } from './types.js';
 import { monMoves, STAB, defaultMoveIds, MAX_FORMS } from '../data/moves.js';
 import { companionBonus, progressMission, companionLevel } from './missions.js';
-import { getCompanion, isIntimate, ASSIST_CHANCE, ASSIST_MAX } from '../data/companions.js';
+import { getCompanion, assistChance, assistMax } from '../data/companions.js';
 import { weatherMult, weatherInflict, weatherChip, weatherOf } from './weather.js';
 import { conquestMult } from './modeBonus.js';
 import { GYMS } from '../data/trainers.js';
@@ -848,9 +848,10 @@ function companionAssist(state, rng, si) {
   if (side.kind !== 'player' || b.mustSwitch[si]) return false;
   const p = getPlayer(state, side.pid);
   const c = getCompanion(p?.companion);
-  if (!c?.assist || !isIntimate(companionLevel(p))) return false;
+  const lvl = companionLevel(p);
+  if (!c?.assist || !assistMax(lvl)) return false; // v60: ajuda a partir do Laço Nv.5 (rara); íntimo ajuda mais
   side.assists ||= 0;
-  if (side.assists >= ASSIST_MAX || !rng.chance(ASSIST_CHANCE)) return false;
+  if (side.assists >= assistMax(lvl) || !rng.chance(assistChance(lvl))) return false;
   const me = sideActive(state, side), foeSide = b.sides[1 - si], foe = sideActive(state, foeSide);
   if (!me || me.hp <= 0 || !foe || foe.hp <= 0) return false;
   side.assists += 1;

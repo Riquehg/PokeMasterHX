@@ -75,6 +75,23 @@ export const REGIONS = {
   }
 };
 
+// 🏅 v60: insígnias exclusivas de cada mapa (mesmos ginásios, outra insígnia). Ordem: boulder, cascade, thunder, rainbow, volcano, soul.
+// Arquivo em badges/<arquivo>.png — enquanto não existir, mostra a de Kanto.
+const B = (file, name) => ({ file, name });
+export const REGION_BADGES = {
+  expedicao: [B('galar_rock', 'Insígnia Rocha de Galar'), B('galar_water', 'Insígnia Água de Galar'), B('galar_dragon', 'Insígnia Dragão de Galar'), B('galar_grass', 'Insígnia Grama de Galar'), B('galar_fire', 'Insígnia Fogo de Galar'), B('galar_dark', 'Insígnia Sombria de Galar')],
+  arquipelago: [B('hoenn_stone', 'Insígnia Pedra'), B('hoenn_rain', 'Insígnia Chuva'), B('hoenn_dynamo', 'Insígnia Dínamo'), B('hoenn_feather', 'Insígnia Pena'), B('hoenn_heat', 'Insígnia Calor'), B('hoenn_mind', 'Insígnia Mente')],
+  vulcanica: [B('sinnoh_coal', 'Insígnia Carvão'), B('sinnoh_fen', 'Insígnia Pântano'), B('sinnoh_beacon', 'Insígnia Farol'), B('sinnoh_forest', 'Insígnia Floresta'), B('sinnoh_cobble', 'Insígnia Calçada'), B('sinnoh_relic', 'Insígnia Relíquia')],
+  glacial: [B('unova_quake', 'Insígnia Tremor'), B('unova_icicle', 'Insígnia Pingente'), B('unova_bolt', 'Insígnia Raio'), B('unova_trio', 'Insígnia Trio'), B('unova_basic', 'Insígnia Básica'), B('unova_toxic', 'Insígnia Tóxica')],
+  floresta: [B('kalos_cliff', 'Insígnia Penhasco'), B('kalos_fairy', 'Insígnia Fada'), B('kalos_voltage', 'Insígnia Voltagem'), B('kalos_plant', 'Insígnia Planta'), B('kalos_rumble', 'Insígnia Estrondo'), B('kalos_psychic', 'Insígnia Psíquica')]
+};
+const GYM_ORDER = ['boulder', 'cascade', 'thunder', 'rainbow', 'volcano', 'soul'];
+/** Insígnia do mapa ativo para o ginásio (ou null = a de Kanto). */
+export function regionBadge(gymId, key = ACTIVE) {
+  const i = GYM_ORDER.indexOf(gymId);
+  return (key && REGION_BADGES[key]?.[i]) || null;
+}
+
 /** Região de um mapa: Kanto, a do tema (mapas gerados) ou nenhuma (mapas personalizados usam Kanto sem destaque). */
 export function regionKey(map) {
   if (!map || map.id === 'kanto') return 'kanto';

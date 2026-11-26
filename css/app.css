@@ -2406,3 +2406,140 @@ html.lite .modal-overlay, html.lite .overlay { backdrop-filter: none !important;
 /* v59 — mutações da Creche */
 .pk-mut { font-size: 11px; margin-top: 4px; padding: 3px 6px; border-radius: 8px; background: linear-gradient(90deg, rgba(180,120,255,.25), rgba(80,200,255,.2)); color: #e9dcff; text-align: center; }
 .pk-mut.dim { background: rgba(255,255,255,.06); color: #bbb; }
+
+/* ================================================ v60 — novo layout do tabuleiro */
+/* insígnias no topo */
+.badge-strip { display: flex; align-items: center; gap: 6px; padding: 4px 12px; overflow-x: auto; scrollbar-width: none; flex: 0 0 auto;
+  background: linear-gradient(90deg, #120d09, #1a130d 50%, #120d09); border-bottom: 1px solid var(--line); }
+.badge-strip::-webkit-scrollbar { display: none; }
+.bs-lbl { font-size: 12px; white-space: nowrap; color: #e8d6b8; margin-right: 2px; }
+.bs-lbl.league { color: var(--gold); font-weight: 800; margin-left: 6px; }
+.bs-item { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px 2px 3px; border-radius: 999px; border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.04); color: inherit; font: inherit; cursor: pointer; white-space: nowrap; flex: 0 0 auto; }
+.bs-item img { width: 26px; height: 26px; object-fit: contain; }
+.bs-item.missing img { filter: grayscale(1) brightness(.7); }
+.bs-item.owned { border-color: rgba(63, 212, 107, .55); background: rgba(63, 212, 107, .1); }
+.bs-item.next { border-color: var(--gold); box-shadow: 0 0 10px rgba(242, 179, 61, .35); }
+.bs-txt { font-size: 11px; font-weight: 700; display: inline-flex; gap: 4px; align-items: baseline; }
+.bs-txt i { font-style: normal; font-size: 10px; color: #c9b493; }
+.bs-item.next .bs-txt i { color: var(--gold); }
+#g-badge-count, #g-badges, #g-goals-panel > .spread:has(#g-badge-count) { display: none !important; }
+.rot-btn { display: none; }
+/* PC: o tabuleiro ocupa a altura livre e a equipe fica sempre visível embaixo */
+@media (min-width: 901px) {
+  .layout { grid-template-columns: minmax(0, 1fr) 340px; }
+  .left { min-height: 0; }
+  .board-viewport { flex: 1 1 auto; aspect-ratio: auto; max-height: none; min-height: 240px; }
+  .left .panel-team { flex: 0 0 auto; padding: 6px 8px; }
+  .left .panel-team > .spread { margin-bottom: 4px !important; font-size: 13px; }
+  #g-team .mon { min-height: 0; display: grid; grid-template-columns: 46px minmax(0, 1fr); grid-template-rows: auto auto auto; column-gap: 6px; text-align: left; align-items: center; padding: 5px 8px 6px 4px; }
+  #g-team .mon img { width: 46px; height: 46px; grid-row: 1 / span 3; margin: 0; }
+  #g-team .mon .lv { position: static; grid-column: 2; font-size: 10px; }
+  #g-team .mon .nm { grid-column: 2; font-size: 12px; }
+  #g-team .mon .hp, #g-team .mon .xp { grid-column: 2; }
+  #g-team .mon > :not(img):not(.lv):not(.nm):not(.hp):not(.xp) { grid-column: 2; }
+  #g-team .mon.empty { display: flex; min-height: 58px; }
+}
+/* avisos (capturas etc.) no centro da tela, durante a partida */
+body.in-game #toasts { left: 50%; right: auto; top: 26%; bottom: auto; transform: translateX(-50%); width: min(440px, calc(100vw - 24px)); max-width: none; align-items: stretch; pointer-events: none; }
+body.in-game #toasts .toast { text-align: center; border-left-width: 1px; border-top: 3px solid var(--gold); font-size: 15px; padding: 12px 16px;
+  background: linear-gradient(180deg, rgba(40, 29, 18, .97), rgba(22, 16, 11, .97)); box-shadow: 0 12px 40px rgba(0,0,0,.6), 0 0 0 1px rgba(242,179,61,.15); animation: toastPop .3s cubic-bezier(.2, 1.4, .4, 1); }
+body.in-game #toasts .toast.good { border-top-color: var(--green); } body.in-game #toasts .toast.bad { border-top-color: var(--red); }
+@keyframes toastPop { from { transform: scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
+/* celular */
+@media (max-width: 900px) {
+  .badge-strip { padding: 3px 6px; gap: 4px; position: sticky; top: 44px; z-index: 29; }
+  .bs-item img { width: 22px; height: 22px; }
+  .bs-txt { font-size: 10px; }
+  .mtabs { top: 76px !important; }
+  .rot-btn { display: inline-flex; }
+}
+/* 📱 celular DEITADO: tabuleiro à esquerda, painel à direita, equipe numa faixa embaixo do tabuleiro */
+@media (orientation: landscape) and (max-height: 560px) {
+  #game { height: 100dvh !important; min-height: 0 !important; overflow: hidden !important; }
+  .topbar { position: static !important; padding: 2px 6px !important; }
+  .topbar h1, .tb-btns .lbl-txt, #g-mode, .stats .stat-name, .stats .stat-dex { display: none !important; }
+  .tb-btns .btn { min-height: 28px !important; padding: 2px 7px !important; }
+  .rot-btn { display: inline-flex; }
+  .badge-strip { position: static !important; padding: 2px 6px; }
+  .bs-item img { width: 20px; height: 20px; } .bs-txt { font-size: 10px; }
+  .layout { grid-template-columns: minmax(0, 1fr) minmax(250px, 34vw) !important; padding: 4px !important; gap: 4px !important; padding-bottom: 4px !important; min-height: 0; }
+  .left { display: flex !important; flex-direction: column; min-height: 0; gap: 4px; }
+  .board-viewport { flex: 1 1 auto !important; height: auto !important; max-height: none !important; aspect-ratio: auto !important; min-height: 0 !important; }
+  .left .panel-team { display: block !important; padding: 3px 4px !important; flex: 0 0 auto; }
+  .left .panel-team > .spread { display: none !important; }
+  #g-team { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; gap: 3px !important; }
+  #g-team .mon { min-height: 0 !important; padding: 2px !important; }
+  #g-team .mon img { width: 30px !important; height: 30px !important; }
+  #g-team .mon .nm { font-size: 9px; } #g-team .mon .lv { font-size: 8px; top: 1px; left: 3px; }
+  .right { overflow: auto !important; min-height: 0; }
+  .mtabs { display: flex !important; position: sticky !important; top: 0 !important; z-index: 5; }
+  .mtabs [data-t="team"] { display: none; }
+  #game[data-mtab="team"] .right > [data-mtab="goals"] { display: block !important; }
+  .right > .panel-team-m { display: none !important; }
+  .dock { position: static !important; max-height: none !important; border-radius: var(--radius) !important; box-shadow: none !important; }
+  body.in-game #toasts { top: 18%; }
+  .zoom-ctrl button { width: 34px; height: 34px; }
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  #g-team .mon > .tiny, #g-team .mon > .xp, #g-team .mon > .lock-tag, #g-team .mon > .trust-chip { display: none !important; }
+  #g-team .mon.locked-mon::after { content: "🔒"; position: absolute; right: 2px; bottom: 2px; font-size: 9px; }
+}
+@media (min-width: 901px) {
+  #g-team .mon > .lock-tag { font-size: 10px; padding: 1px 6px; margin-top: 2px; justify-self: start; }
+  #g-team .mon > .xp { display: none; }
+}
+@media (orientation: landscape) and (max-height: 560px) { .right > * { flex-shrink: 0; } }
+
+/* ================================================ v60 — arena de batalha sem cortes nem sobreposição
+   tudo medido pelo tamanho da própria arena (container query): sprite do adversário à direita, caixa dele à
+   esquerda em cima; meu Pokémon à esquerda embaixo, minha caixa à direita embaixo — nunca um em cima do outro. */
+@supports (container-type: size) {
+  .arena { container-type: size; height: clamp(250px, 44vh, 360px); }
+  .arena .mon-sprite.foe { right: 4cqw; top: 9cqh; width: min(38cqw, 48cqh); height: min(38cqw, 48cqh); }
+  .arena .mon-sprite.me { left: 3cqw; bottom: 3cqh; width: min(42cqw, 58cqh); height: min(42cqw, 58cqh); }
+  .arena .mon-sprite.gmax { scale: 1; }
+  .arena .mon-sprite.foe.gmax { right: 2cqw; top: 2cqh; width: min(44cqw, 60cqh); height: min(44cqw, 60cqh); }
+  .arena .mon-sprite.me.gmax { left: 1cqw; bottom: 1cqh; width: min(46cqw, 70cqh); height: min(46cqw, 70cqh); }
+  .arena .mon-sprite.foe.raid-boss { right: 3cqw; top: 3cqh; width: min(42cqw, 58cqh); height: min(42cqw, 58cqh); }
+  .arena .hpbox { width: min(300px, 47cqw); max-width: none; padding: 5px 9px; }
+  .arena .hpbox.foe { left: 2.5cqw; top: 3cqh; }
+  .arena .hpbox.me { right: 2.5cqw; bottom: 3cqh; }
+  .arena .platform.foe { right: 1cqw; top: calc(9cqh + min(38cqw, 48cqh) * .72); width: min(46cqw, 60cqh); height: 13cqh; }
+  .arena .platform.me { left: 0; bottom: 0; width: min(50cqw, 70cqh); height: 15cqh; }
+  .arena .foe-trainer { right: 1cqw; top: 1cqh; width: min(14cqw, 22cqh); height: min(18cqw, 28cqh); opacity: .55; }
+  @container (max-width: 480px) {
+    .arena .hpbox { padding: 3px 6px; border-width: 2px; }
+    .arena .hpbox .nm { font-size: 12px; }
+    .arena .hpbox .lv, .arena .hpbox .hpnum { font-size: 11px; }
+    .arena .hpbox .types { display: none; }
+  }
+  @keyframes lungeMe { 50% { translate: 12cqw -8cqh; } }
+  @keyframes lungeFoe { 50% { translate: -12cqw 8cqh; } }
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .arena { height: clamp(180px, 52vh, 260px) !important; }
+  .battle-log { height: 60px; }
+}
+
+/* v60 — habilidades de campo */
+.fs-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.fs-btn { display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(180deg, #23324a, #18233a); border-color: #4a6a9a; }
+.fs-btn img { width: 24px; height: 24px; object-fit: contain; margin: -4px 0 -4px -4px; }
+.fs-btn i { font-style: normal; font-size: 11px; opacity: .8; }
+.fs-btn.wait { filter: grayscale(.6); opacity: .65; }
+
+/* v60 — companheiro ao lado na batalha */
+.b-comp { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px 2px 2px; border-radius: 999px; background: rgba(255, 120, 180, .12); border: 1px solid rgba(255, 140, 190, .4); font-size: 11px; margin-left: auto; }
+.b-comp img { width: 30px; height: 30px; object-fit: contain; }
+.b-comp .b-comp-mon { width: 26px; height: 26px; margin-left: -10px; }
+.b-comp span { display: flex; flex-direction: column; line-height: 1.1; } .b-comp i { font-style: normal; color: #ffb3d1; font-size: 10px; }
+.battle-head { gap: 6px; flex-wrap: wrap; }
+/* v60 — sprites de móveis e ícones da interface (emoji enquanto não tiver o arquivo) */
+.furn-ic { width: 1.6em; height: 1.6em; object-fit: contain; vertical-align: middle; display: inline-block; }
+.hm-f img.furn-ic { width: 100%; height: 100%; max-width: 64px; max-height: 64px; transform: scaleX(var(--fl, 1)); filter: drop-shadow(0 3px 3px rgba(0,0,0,.35)); }
+.hm-shop-ic img.furn-ic { width: 44px; height: 44px; }
+.fm-dbtn img.furn-ic { width: 30px; height: 30px; }
+.ui-ic { width: 20px; height: 20px; object-fit: contain; vertical-align: -4px; display: inline-block; }
+span.ui-ic.itm-emo { width: auto; height: auto; }
+.acct-tile .ui-ic { width: 34px; height: 34px; vertical-align: middle; }

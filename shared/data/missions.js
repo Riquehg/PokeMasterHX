@@ -14,6 +14,6 @@ export const MISSION_TEMPLATES = [
   { id: 'trainer_win',weight: 3, text: 'Vença {n} batalhas contra treinadores', n: [2, 3], reward: { companion: 'rocket', gold: 300 } },
   { id: 'badge',      weight: 2, text: 'Conquiste {n} insígnia(s)',        n: [1, 1], reward: { companion: 'joy', items: { super_potion: 2 } } },
   { id: 'evolve',     weight: 2, text: 'Evolua {n} Pokémon',               n: [1, 2], reward: { companion: 'oak', items: { rare_candy: 1 } } },
-  { id: 'catch_tier', weight: 2, text: 'Capture {n} Pokémon de tier 3 ou maior', n: [1, 2], reward: { items: { ultra_ball: 3, full_heal: 2 } } },
+  { id: 'catch_tier', weight: 2, text: 'Capture {n} Pokémon de tier 3 ou maior', n: [1, 2], reward: { companion: 'region', items: { ultra_ball: 2 } } }, // v60: companheiro do mapa
   { id: 'raid',       weight: 1, text: 'Derrote {n} lendário(s) numa Raid', n: [1, 1], reward: { companion: 'lance', gold: 800 } }
 ];

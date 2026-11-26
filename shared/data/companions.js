@@ -24,7 +24,14 @@ export const COMPANIONS = {
   valerie: { name: 'Valerie',    sprite: 'companions/valerie.png', icon: '🧚', bonus: { types: ['fairy'], dmg: 0.15 },               desc: '+15% de dano em golpes de Fada', mon: 'sylveon', assist: { kind: 'heal', type: 'fairy', move: 'Brilho Encantado' } },
   oak:     { name: 'Prof. Oak',  sprite: 'companions/oak.png',     icon: '🎓', bonus: { xp: 1.25 },                                  desc: '+25% de XP para a equipe', mon: 'eevee', assist: { kind: 'buff', type: 'normal', move: 'Lição do Professor' } },
   joy:     { name: 'Enfermeira Joy', sprite: 'companions/joy.png', icon: '💗', bonus: { potion: 1.5 },                               desc: 'Poções curam 50% a mais', mon: 'chansey', assist: { kind: 'heal', type: 'normal', move: 'Ovo Curativo' } },
-  rocket:  { name: 'Jessie & James', sprite: 'trainers/rocket.png', icon: '🚀', bonus: { gold: 1.2 },                                desc: '+20% de ouro nas vitórias', mon: 'meowth', assist: { kind: 'debuff', type: 'dark', move: 'Dia de Pagamento' } }
+  rocket:  { name: 'Jessie & James', sprite: 'trainers/rocket.png', icon: '🚀', bonus: { gold: 1.2 },                                desc: '+20% de ouro nas vitórias', mon: 'meowth', assist: { kind: 'debuff', type: 'dark', move: 'Dia de Pagamento' } },
+  // 🗺️ v60: companheiros das regiões (missão "Capture Pokémon de tier 3+" de cada mapa)
+  elaine:  { name: 'Elaine',     sprite: 'skins/elaine.png',       icon: '🦊', bonus: { types: ['normal', 'fairy'], dmg: 0.15 },     desc: '+15% de dano em golpes Normais e de Fada', mon: 'eevee', assist: { kind: 'heal', type: 'fairy', move: 'Desejo' } },
+  leon:    { name: 'Leon',       sprite: 'skins/leon.png',         icon: '🏆', bonus: { types: ['fire', 'dragon'], dmg: 0.15 },      desc: '+15% de dano em golpes de Fogo e Dragão', mon: 'charizard', assist: { kind: 'dmg', type: 'fire', move: 'Lança-Chamas' } },
+  brendan: { name: 'Brendan',    sprite: 'skins/brendan-masters2.png', icon: '🌊', bonus: { types: ['water', 'ground'], dmg: 0.15 }, desc: '+15% de dano em golpes de Água e Terra', mon: 'swampert', assist: { kind: 'dmg', type: 'water', move: 'Surfar' } },
+  adaman:  { name: 'Adaman',     sprite: 'skins/adaman.png',       icon: '🍃', bonus: { types: ['grass', 'ground'], dmg: 0.15 },     desc: '+15% de dano em golpes de Planta e Terra', mon: 'leafeon', assist: { kind: 'buff', type: 'grass', move: 'Dança das Espadas' } },
+  cynthia: { name: 'Cynthia',    sprite: 'skins/cynthia-masters.png', icon: '🐲', bonus: { types: ['dragon', 'ground'], dmg: 0.15 }, desc: '+15% de dano em golpes de Dragão e Terra', mon: 'garchomp', assist: { kind: 'dmg', type: 'dragon', move: 'Garra do Dragão' } },
+  acerola: { name: 'Acerola',    sprite: 'skins/acerola-masters.png', icon: '🎃', bonus: { types: ['ghost', 'fairy'], dmg: 0.15 }, desc: '+15% de dano em golpes Fantasma e de Fada', mon: 'mimikyu', assist: { kind: 'debuff', type: 'ghost', move: 'Sombra Furtiva' } }
 };
 
 /** Companheiro temático de cada tipo (prêmio das missões de tipo). */
@@ -33,6 +40,12 @@ export const COMPANION_BY_TYPE = {
   ice: 'lorelei', fighting: 'bruno', ghost: 'agatha', dragon: 'lance', bug: 'bugsy', flying: 'falkner', normal: 'whitney', steel: 'jasmine',
   dark: 'karen', fairy: 'valerie'
 };
+
+/** 🗺️ v60: companheiro de cada mapa (prêmio da missão de captura de tier 3+). */
+export const REGION_COMPANION = { kanto: 'elaine', expedicao: 'leon', arquipelago: 'brendan', vulcanica: 'adaman', glacial: 'cynthia', floresta: 'acerola' };
+/** ❤️ Ajuda na batalha: a partir do Laço Nv.5 (rara e 1 vez por batalha); no Nv.10 (íntimo) 12% por rodada, até 2 vezes. */
+export const assistChance = lvl => (lvl >= BOND_MAX ? ASSIST_CHANCE : lvl >= 5 ? +(0.03 + 0.01 * (lvl - 5)).toFixed(2) : 0);
+export const assistMax = lvl => (lvl >= BOND_MAX ? ASSIST_MAX : lvl >= 5 ? 1 : 0);
 
 export const getCompanion = id => (id && COMPANIONS[id]) || null;
 

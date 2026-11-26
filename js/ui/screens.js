@@ -35,7 +35,7 @@ import { GMAX } from '../../shared/data/gmax.js';
 import { releaseGold, releaseLabel } from '../../shared/data/release.js';
 import { dailyPokemon } from '../../shared/daily.js';
 import { esc, toast, bindActions, openModal, closeModal, setModalBody } from './dom.js';
-import { monSprite, avatarUrl, itemUrl } from '../config.js';
+import { monSprite, avatarUrl, itemUrl, uiIcon } from '../config.js';
 import { net, api, signIn, signUp, signOut, resetPassword, watchMatch } from '../api.js';
 import { LocalSession } from '../session.js';
 import { openDex } from './modals.js';
@@ -200,10 +200,10 @@ export async function hubScreen(root, ctx) {
       <h2 class="hub-h">🎒 Minha conta</h2>
       <div class="acct-tiles">
         <button class="acct-tile" data-act="titles" ${profile ? '' : 'disabled'}><span>🏅</span><b>Títulos</b><small>${profile ? `${unlockedTitles(profile).length}/${ACH_TITLES.length} conquistados` : 'conquistas com efeito'}</small></button>
-        <button class="acct-tile" data-act="vault" ${profile ? '' : 'disabled'}><span>📦</span><b>Coleção</b><small>${(profile?.vault || []).length} Pokémon</small></button>
-        <button class="acct-tile" data-act="dex"><span>📖</span><b>Pokédex</b><small>${(profile?.pokedex || []).length} capturados</small></button>
+        <button class="acct-tile" data-act="vault" ${profile ? '' : 'disabled'}><span>${uiIcon('collection', '📦')}</span><b>Coleção</b><small>${(profile?.vault || []).length} Pokémon</small></button>
+        <button class="acct-tile" data-act="dex"><span>${uiIcon('pokedex', '📖')}</span><b>Pokédex</b><small>${(profile?.pokedex || []).length} capturados</small></button>
         <button class="acct-tile" data-act="companions" ${profile ? '' : 'disabled'}><span>🤝</span><b>Companheiros</b><small>${(profile?.stats?.companions || []).length}/${Object.keys(COMPANIONS).length}${profile?.stats?.companion && COMPANIONS[profile.stats.companion] ? ` · ${esc(COMPANIONS[profile.stats.companion].name)}${bondLevel(profile?.stats?.companionBond?.[profile.stats.companion] || 0) >= 10 ? ' ❤️' : ''}` : ''}</small></button>
-        <button class="acct-tile" data-act="abag" ${profile ? '' : 'disabled'}><span>🎒</span><b>Mochila</b><small>${Object.values(profile?.stats?.bag || {}).reduce((a, b) => a + b, 0)} itens · levar e vender</small></button>
+        <button class="acct-tile" data-act="abag" ${profile ? '' : 'disabled'}><span>${uiIcon('bag', '🎒')}</span><b>Mochila</b><small>${Object.values(profile?.stats?.bag || {}).reduce((a, b) => a + b, 0)} itens · levar e vender</small></button>
         <button class="acct-tile" data-act="market" ${profile ? '' : 'disabled'}><span>🏪</span><b>Mercado</b><small>Pokémon e itens</small></button>
         <button class="acct-tile" data-act="farm" ${profile ? '' : 'disabled'}><span>🌾</span><b>Fazenda</b><small>${profile?.stats?.farm?.slots?.length ? `${profile.stats.farm.slots.length} Pokémon · Nv. ${profile.stats.farm.lvl || 1}` : 'Solte seus Pokémon para treinar'}</small></button>
         <button class="acct-tile" data-act="tower" ${profile ? '' : 'disabled'}><span>🗼</span><b>Torre de Batalha</b><small>${profile?.stats?.tower?.set ? `🔥 Sequência ${profile.stats.tower.streak} · duelo ${profile.stats.tower.set.n}/7` : `🏅 ${profile?.stats?.tower?.pb || 0} PB · recorde ${profile?.stats?.tower?.best || 0}`}</small></button>

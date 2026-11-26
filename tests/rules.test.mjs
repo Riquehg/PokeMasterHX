@@ -21,9 +21,11 @@ test('todas as Pokébolas existem, têm bônus e estão na loja certa', () => {
 });
 
 test('Pokébolas temáticas: +3 contra os tipos do tema, +1 nos demais', () => {
-  assert.equal(ballBonusAgainst('flame_ball', ['grass']), 3);
+  assert.equal(ballBonusAgainst('flame_ball', ['fire']), 3);
+  assert.equal(ballBonusAgainst('flame_ball', ['grass']), 1);
   assert.equal(ballBonusAgainst('flame_ball', ['water']), 1);
-  assert.equal(ballBonusAgainst('aqua_ball', ['rock', 'ground']), 3);
+  assert.equal(ballBonusAgainst('aqua_ball', ['water', 'ground']), 3);
+  assert.equal(ballBonusAgainst('aqua_ball', ['rock']), 1);
   assert.equal(ballBonusAgainst('volt_ball', ['flying']), 3);
   assert.equal(ballBonusAgainst('shadow_ball', ['ghost']), 3);
   assert.equal(ballBonusAgainst('mystic_ball', ['dragon']), 3);

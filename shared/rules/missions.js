@@ -1,6 +1,7 @@
 // Missões e companheiros dentro da partida.
 import { MISSION_TEMPLATES, MISSION_TYPES, ACTIVE_MISSIONS, MAX_MISSIONS_PER_MATCH } from '../data/missions.js';
-import { COMPANIONS, COMPANION_BY_TYPE, getCompanion, scaledBonus } from '../data/companions.js';
+import { COMPANIONS, COMPANION_BY_TYPE, getCompanion, scaledBonus, REGION_COMPANION } from '../data/companions.js';
+import { activeRegion } from '../data/regions.js';
 import { getSpecies } from '../data/pokemon.js';
 import { ITEMS } from '../data/items.js';
 import { createRng } from './rng.js';
@@ -25,6 +26,7 @@ function newMission(state, p) {
     const n = rng.int(tpl.n[0], tpl.n[1]);
     const text = tpl.text.replace('{n}', n).replace('{T}', TYPE_LABELS[type] || type || '');
     let reward = tpl.reward === 'companion' ? { companion: COMPANION_BY_TYPE[type] } : { ...tpl.reward };
+    if (reward.companion === 'region') reward.companion = REGION_COMPANION[activeRegion() || 'kanto'];
     return { id: `m${p.missionSeq}`, tpl: tpl.id, type, n, done: 0, text, reward };
   }
   return null;

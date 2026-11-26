@@ -34,8 +34,8 @@ test('companheiro íntimo entra na batalha (e o comum não)', () => {
     }
     return assists;
   };
-  assert.equal(run(5), 0);
-  assert.ok(run(10) > 0);
+  assert.equal(run(4), 0); // v60: ajuda a partir do Laço Nv.5
+  assert.ok(run(10) > run(5));
 });
 
 test('API: laço sobe no fim da partida e o nível vai para a próxima', async () => {

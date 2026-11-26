@@ -115,10 +115,10 @@ export function openPlaceCaught(session, act, uid) {
     return `<div class="pl-new">${statCard(mon, { owner: p })}</div>
       ${inTeam >= 0
         ? `<p class="small center">Ele entrou na <b>equipe</b>.</p>
-           <div class="row" style="justify-content:center;gap:6px"><button class="btn primary" data-act="pl-keep">✅ Fica na equipe</button><button class="btn" data-act="pl-box" ${p.team.length <= 1 ? 'disabled' : ''}>💻 Mandar para o PC</button></div>`
+           <div class="row wrap" style="justify-content:center;gap:6px"><button class="btn primary" data-act="pl-keep">✅ Fica na equipe</button><button class="btn" data-act="pl-box" ${p.team.length <= 1 ? 'disabled' : ''}>💻 Mandar para o PC</button><button class="btn red" data-act="pl-rel" ${p.team.length <= 1 ? 'disabled' : ''}>🕊️ Soltar (+${20 * mon.lvl} 🪙)</button></div>`
         : `<p class="small center">${full ? 'Sua equipe está cheia — ele foi para o <b>PC</b>. Quer trocar? Toque em quem sai da equipe:' : 'Ele está no PC.'}</p>
            ${full ? `<div class="mini-row">${p.team.map((m, i) => miniMon(m, { act: 'pl-swap', index: i, owner: p })).join('')}</div>` : ''}
-           <div class="row" style="justify-content:center;gap:6px;margin-top:8px">${full ? '' : '<button class="btn primary" data-act="pl-team">➕ Pôr na equipe</button>'}<button class="btn" data-act="pl-keep">💻 Deixar no PC</button></div>`}`;
+           <div class="row" style="justify-content:center;gap:6px;margin-top:8px">${full ? '' : '<button class="btn primary" data-act="pl-team">➕ Pôr na equipe</button>'}<button class="btn" data-act="pl-keep">💻 Deixar no PC</button><button class="btn red" data-act="pl-rel">🕊️ Soltar (+${20 * mon.lvl} 🪙)</button></div>`}`;
   };
   const html = render();
   if (!html) return;
@@ -128,7 +128,8 @@ export function openPlaceCaught(session, act, uid) {
     'pl-keep': () => go({ op: 'keep' }),
     'pl-box': () => go({ op: 'to_box' }),
     'pl-team': () => go({ op: 'to_team' }),
-    'pl-swap': d => go({ op: 'to_team', swap: Number(d.index) })
+    'pl-swap': d => go({ op: 'to_team', swap: Number(d.index) }),
+    'pl-rel': () => { if (confirm('Soltar este Pokémon na natureza? O Professor te dá um pouco de ouro.')) go({ op: 'release' }); }
   });
 }
 
@@ -387,6 +388,10 @@ export function openHelp() {
       <p><b>📦 Coleção compacta:</b> a Coleção abre em mini-cartões (nome, nível e selos). Toque no Pokémon para ver os status completos e as ações (favoritar, fazenda, pedras, apelido, soltar). O botão 🃏 Ver como cartas volta ao modo antigo.</p>
       <p><b>Pokébola ao lado do nome:</b> nos Pokémon selvagens (tabuleiro, batalha e Safari), a Pokébola <b>colorida</b> indica que você já capturou essa espécie; <b>cinza</b>, que ainda falta.</p>
       <p><b>⚡ Modo leve:</b> o botão ⚡ na partida desliga animações pesadas (pulsos das casas, auras, vagalumes, desfoque). Ele já liga sozinho em celulares mais fracos. Deixe ligado se o jogo travar.</p>
+      <p><b>🧭 Habilidades de campo:</b> antes de rolar o dado, Pokémon da sua equipe (de pé e que obedeçam) podem ajudar — 1 por turno, com recarga: 🌀 Teletransporte (Psíquico Nv.18+: vai a uma cidade já visitada · 8 turnos), 🌸 Aroma Doce (Grama/Fada Nv.12+: atrai um selvagem na casa 🌿 onde você está · 5), 💨 Vento a Favor (Voador Nv.12+: +2 casas · 4), 🌊 Surfar (Água Nv.15+: rola 2 vezes e fica com o maior · 5), ⛏️ Escavar (Terra/Pedra Nv.15+: acha um item · 7).</p>
+      <p><b>🤝 Companheiro na batalha:</b> ele aparece ao seu lado. A partir do Laço Nv.5 pode ajudar raramente (3% a 7% por rodada, 1 vez); no Nv.10 (íntimo), 12% por rodada, até 2 vezes. Novos companheiros por mapa (missão "Capture Pokémon de tier 3+"): Elaine (Kanto), Leon (Expedição), Brendan (Arquipélago), Adaman (Terras de Fogo), Cynthia (Picos Gelados), Acerola (Mata Profunda).</p>
+      <p><b>🎾 Bolas elementais:</b> +3 no próprio elemento — Flame (Fogo, Terra, Pedra), Aqua (Água, Gelo), Volt (Elétrico, Aço, Voador), Shadow (Fantasma, Sombrio, Veneno), Mystic (Psíquico, Fada, Dragão); +1 nos demais.</p>
+      <p><b>🔄 Celular deitado:</b> gire o celular (ou toque em 🔄 para tela cheia deitada): o tabuleiro fica à esquerda, o painel à direita e a equipe embaixo do tabuleiro.</p>
       <p><b>🗺️ Cada mapa tem a sua Liga:</b> Elite dos Quatro e Campeão diferentes (Kanto: Blue · Expedição: Leon · Arquipélago Coral: Brendan · Terras de Fogo: Turo · Picos Gelados: Cynthia · Mata Profunda: Calem). Os Pokémon da geração do mapa aparecem 3× mais, e cada mapa tem <b>lendários em destaque</b> que aparecem muito mais nas casas Amarelas e Raids de lá (e ficam raros nos outros mapas). Veja quais ao escolher o mapa.</p>
       <p><b>🕊️ Soltar vários / 🗑️ Jogar fora vários:</b> na Coleção, toque em "Soltar vários" e escolha os Pokémon; na Mochila, "Jogar fora vários". Favoritos, o time da Liga e quem está na Fazenda/Creche não podem ser soltos nem vendidos (tire de lá antes). O item segurado volta para a Mochila.</p>
       <p><b>🎒 Itens levados:</b> se você sair da partida (fora do Hardcore) ou ela for encerrada sem fim, o que você trouxe da Mochila e não gastou volta para a conta.</p>

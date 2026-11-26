@@ -5,7 +5,7 @@ import { FARM_BIOMES, BIOME_IDS, RESOURCES, FARM_DECOR, DECOR_MAX, FARM_MAX_LEVE
 import { genderHtml } from '../../shared/data/gender.js';
 import { api } from '../api.js';
 import { esc, toast, openModal, closeModal, setModalBody, bindActions } from './dom.js';
-import { monSprite, avatarUrl, leaderUrl, itemIcon } from '../config.js';
+import { monSprite, avatarUrl, leaderUrl, itemIcon, furnIcon } from '../config.js';
 import { canBreed, EGGS_PER_DAY, INCUBATOR_MAX, NATURE_COST, EGG_EVERY_H } from '../../shared/data/daycare.js';
 import { statCard, miniMon } from './common.js';
 import { RECIPES, FARM_ITEMS as FARM_ITEMS0, ARTISAN_LEVELS } from '../../shared/data/workshop.js';
@@ -248,7 +248,7 @@ export async function openFarm(ctx, profile, userId = null) {
       ${homeEdit ? Array.from({ length: ROOM_W * ROOM_H }, (_, i) => `<i class="hm-cell" data-act="hm-cell" data-x="${i % ROOM_W}" data-y="${Math.floor(i / ROOM_W)}" style="${cell(i % ROOM_W, Math.floor(i / ROOM_W))};z-index:5"></i>`).join('') : ''}
       ${placed.map((p, i) => { const F = FURNITURE[p.f]; if (!F) return '';
         const pos = F.wall ? `left:${((p.x + 0.5) / ROOM_W) * 100}%;top:${17 + (p.y % 2) * 6}%;z-index:3` : cell(p.x, p.y); // móveis de parede ficam na parede
-        return `<span class="hm-f ${F.glow ? 'glow' : ''} ${F.floor ? 'flat' : ''} ${F.wall ? 'onwall' : ''} hmf-${p.f} ${homeEdit && homeSel === i ? 'sel' : ''}" data-act="hm-f" data-i="${i}" data-f="${p.f}" style="${pos};--fl:${p.fl ? -1 : 1}">${p.f === 'rug' ? '<i class="hm-rug"></i>' : F.icon}</span>`; }).join('')}
+        return `<span class="hm-f ${F.glow ? 'glow' : ''} ${F.floor ? 'flat' : ''} ${F.wall ? 'onwall' : ''} hmf-${p.f} ${homeEdit && homeSel === i ? 'sel' : ''}" data-act="hm-f" data-i="${i}" data-f="${p.f}" style="${pos};--fl:${p.fl ? -1 : 1}">${p.f === 'rug' ? '<i class="hm-rug"></i>' : furnIcon(p.f, F.icon)}</span>`; }).join('')}
       ${comp ? `<button class="hm-pal hm-comp" data-act="hm-talk" title="${esc(comp.name)}"><img src="${leaderUrl(comp.sprite)}" alt=""><span class="hm-bubble">${farm.mine && !h.talked ? '💬' : '💞'}</span></button>` : ''}
       ${fav ? `<button class="hm-pal hm-fav" data-act="hm-play" title="${esc(fav.nick || getSpecies(fav.sp).name)}"><img src="${monSprite({ sp: fav.sp, shiny: fav.shiny })}" alt=""><span class="hm-bubble">${farm.mine && !h.played ? '🎾' : '♪'}</span></button>` : ''}
     </div>`;
@@ -259,7 +259,7 @@ export async function openFarm(ctx, profile, userId = null) {
     if (!farm.mine) return `<p class="small muted">🏡 Casa de ${esc(farm.owner?.name || 'um treinador')}.</p>${roomHtml()}${back}`;
     if (homeSub === 'shop') {
       const card = (kind, id, it) => { const own = kind === 'furniture' ? (h.owned || {})[id] || 0 : (h[kind + 's'] || []).includes(id) || !it.price;
-        return `<div class="hm-shop-it"><span class="hm-shop-ic" ${kind !== 'furniture' ? `style="background:${it.css}"` : ''}>${kind === 'furniture' ? it.icon : ''}</span><b class="small">${esc(it.name)}</b>
+        return `<div class="hm-shop-it"><span class="hm-shop-ic" ${kind !== 'furniture' ? `style="background:${it.css}"` : ''}>${kind === 'furniture' ? furnIcon(id, it.icon) : ''}</span><b class="small">${esc(it.name)}</b>
           ${it.desc ? `<span class="tiny muted">${esc(it.desc)}</span>` : ''}<span class="tiny">${kind === 'furniture' ? `tem ${own}/5` : own ? '✔ seu' : ''}</span>
           ${(kind === 'furniture' ? own < 5 : !own) ? `<button class="btn sm ${(me?.gold || 0) >= it.price ? 'primary' : ''}" data-act="hm-buy" data-k="${kind}" data-id="${id}" ${(me?.gold || 0) >= it.price ? '' : 'disabled'}>🪙 ${it.price}</button>` : ''}</div>`; };
       return `<p class="small muted">🛒 Móveis e estilos — tudo com ouro. Você tem 🪙 <b>${me?.gold ?? 0}</b>. Móveis especiais: 🍳 Fogão libera a cozinha, 🧊 Geladeira +1 prato ao mesmo tempo, 🔥 Lareira dobra o laço da conversa, 🧸 Baú dobra o XP da brincadeira.</p>
@@ -289,8 +289,8 @@ export async function openFarm(ctx, profile, userId = null) {
     // sala
     const stove = (h.placed || []).some(p => p.f === 'stove');
     const tools = homeEdit ? `<div class="fm-decorbar"><span class="tiny muted">✏️ <b>Arrumando</b> (${homeDraft.length}/${HOME_MAX}): escolha um móvel e toque num quadradinho. Toque num móvel para selecionar.</span>
-        ${homeSel !== null && homeDraft[homeSel] ? `<div class="fm-dtools"><span class="fm-dsel-ic">${FURNITURE[homeDraft[homeSel].f].icon}</span><button class="btn sm" data-act="hm-flip">↔️ Virar</button><button class="btn sm red" data-act="hm-del">📦 Guardar</button><button class="btn sm" data-act="hm-unsel">OK</button></div>` : ''}
-        <div class="fm-palette">${Object.keys(h.owned || {}).filter(f => FURNITURE[f]).map(f => `<button class="fm-dbtn ${homePick === f ? 'on' : ''}" data-act="hm-pick" data-f="${f}" title="${esc(FURNITURE[f].name)}" ${homeOwnedLeft(f) > 0 ? '' : 'disabled'}>${FURNITURE[f].icon}<small>${homeOwnedLeft(f)}</small></button>`).join('') || '<span class="tiny muted">Compre móveis na 🛒 Loja de móveis.</span>'}</div>
+        ${homeSel !== null && homeDraft[homeSel] ? `<div class="fm-dtools"><span class="fm-dsel-ic">${furnIcon(homeDraft[homeSel].f, FURNITURE[homeDraft[homeSel].f].icon)}</span><button class="btn sm" data-act="hm-flip">↔️ Virar</button><button class="btn sm red" data-act="hm-del">📦 Guardar</button><button class="btn sm" data-act="hm-unsel">OK</button></div>` : ''}
+        <div class="fm-palette">${Object.keys(h.owned || {}).filter(f => FURNITURE[f]).map(f => `<button class="fm-dbtn ${homePick === f ? 'on' : ''}" data-act="hm-pick" data-f="${f}" title="${esc(FURNITURE[f].name)}" ${homeOwnedLeft(f) > 0 ? '' : 'disabled'}>${furnIcon(f, FURNITURE[f].icon)}<small>${homeOwnedLeft(f)}</small></button>`).join('') || '<span class="tiny muted">Compre móveis na 🛒 Loja de móveis.</span>'}</div>
         <div class="row" style="gap:6px;flex-wrap:wrap"><select class="input sm" id="hm-wall">${Object.entries(WALLS).filter(([id, w]) => !w.price || (h.walls || []).includes(id)).map(([id, w]) => `<option value="${id}" ${(homeDraft.wall || h.wall) === id ? 'selected' : ''}>🧱 ${esc(w.name)}</option>`).join('')}</select>
           <select class="input sm" id="hm-floor">${Object.entries(FLOORS).filter(([id, f]) => !f.price || (h.floors || []).includes(id)).map(([id, f]) => `<option value="${id}" ${(homeDraft.floor || h.floor) === id ? 'selected' : ''}>🟫 ${esc(f.name)}</option>`).join('')}</select>
           <button class="btn sm" data-act="hm-cancel">Cancelar</button><button class="btn sm primary" data-act="hm-save">💾 Salvar</button></div></div>`

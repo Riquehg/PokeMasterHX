@@ -1,11 +1,12 @@
 // Tela da partida: tabuleiro com zoom, painel de ações, equipe, jogadores, log/chat, batalha e fila de animações.
+import { fieldOptions } from '../../shared/data/fieldskills.js';
 import { getSpace, useStateMap } from '../../shared/data/board.js';
 import { GYMS, gymAt, ELITE_SPACE, CHAMPION_SPACE, ELITE_FOUR, BADGES_TO_LEAGUE } from '../../shared/data/trainers.js';
 import { ITEMS } from '../../shared/data/items.js';
 import { whoMustAct, score, AFK_SECONDS } from '../../shared/engine.js';
 import { esc, toast, bindActions, openModal, closeModal, setModalBody } from './dom.js';
 import { maxHpOf } from '../../shared/rules/monsters.js';
-import { monSprite, typeLabel } from '../config.js';
+import { monSprite, typeLabel, uiIcon } from '../config.js';
 import { monCard, playerColor, avatarImg, speciesName, titleHtml } from './common.js';
 import { battleHtml, outcomeText, playBattleFx } from './battle.js';
 import { BoardView } from './board.js';
@@ -42,15 +43,17 @@ export function mountGame(root, session, opts = {}) {
         <div class="row"><h1>Pokémon Master Trainer HEX</h1><span class="chip" id="g-mode"></span><span class="chip gold" id="g-turn"></span><span id="g-rules"></span><span id="g-weather"></span></div>
         <div class="stats" id="g-stats"></div>
         <div class="row tb-btns">
-          <button class="btn sm" data-act="open-bag" title="Mochila">🎒<span class="lbl-txt"> Mochila</span></button>
-          <button class="btn sm" data-act="open-dex" title="Pokédex">📖<span class="lbl-txt"> Pokédex</span></button>
+          <button class="btn sm" data-act="open-bag" title="Mochila">${uiIcon('bag', '🎒')}<span class="lbl-txt"> Mochila</span></button>
+          <button class="btn sm" data-act="open-dex" title="Pokédex">${uiIcon('pokedex', '📖')}<span class="lbl-txt"> Pokédex</span></button>
           <button class="btn sm soc-tb" data-act="social" title="Chat global e treinadores online">💬<span class="lbl-txt"> <span data-soc-online>0</span> online</span><i data-soc-badge></i></button>
           <button class="btn sm" data-act="speed" id="g-speed" title="Velocidade das animações">🎬</button>
           <button class="btn sm" data-act="lite" id="g-lite" title="⚡ Modo leve: menos efeitos (para celular travando)">⚡</button>
+          <button class="btn sm rot-btn" data-act="rotate" title="Jogar com o celular deitado (tela cheia)">🔄</button>
           <button class="btn sm" data-act="open-help" title="Regras">❔</button>
           <button class="btn sm red" data-act="exit" title="Sair">🚪<span class="lbl-txt"> Sair</span></button>
         </div>
       </header>
+      <nav class="badge-strip" id="g-bstrip" aria-label="Insígnias"></nav>
       <div class="layout">
         <section class="left">
           <div class="board-viewport" id="g-board"></div>
@@ -127,6 +130,11 @@ export function mountGame(root, session, opts = {}) {
       const prev = ui.shown;
       try { await playFx(prev, next); } catch (e) { console.error('animação', e); }
       if (prev && next.fxSeq !== prev.fxSeq && !ui.spectate) { const pl = (next.fx || []).find(f => f.k === 'placed' && f.pid === vid() && f.uid); if (pl) ui.placeAsk = pl.uid; }
+      // v60: mesmo se o efeito se perdeu (vários passos de uma vez), a captura nova fica em lastPlaced
+      if (prev && !ui.spectate) {
+        const a = prev.players?.find(x => x.id === vid())?.lastPlaced?.uid, b = next.players?.find(x => x.id === vid())?.lastPlaced?.uid;
+        if (b && b !== a) ui.placeAsk = b;
+      }
       ui.shown = next;
       render();
     }
@@ -366,6 +374,13 @@ export function mountGame(root, session, opts = {}) {
     if (s.phase === 'roll') {
       html += `<button class="btn primary pulse block" data-act="roll" style="min-height:52px;font-size:16px">🎲 Rolar dado</button>`;
       if (p.items.bicycle) html += `<button class="btn sm" data-act="use" data-item="bicycle">🚲 Usar Bicicleta (+2) ×${p.items.bicycle}</button>`;
+      // 🧭 v60: habilidades de campo da equipe
+      const fo = s.kind === 'duel' ? [] : fieldOptions(s, p);
+      if (fo.length) html += `<div class="fs-row">${fo.map(o => `<button class="btn sm fs-btn ${o.wait || s.turnFlags?.field ? 'wait' : ''}" data-act="field" data-id="${o.id}" ${o.wait || s.turnFlags?.field ? 'disabled' : ''} title="${esc(o.desc)} (${esc(speciesName(o.mon.sp))} · recarga ${o.cd} turnos)">
+        <img src="${monSprite(o.mon)}" alt="">${o.icon} ${esc(o.name)}${o.wait ? ` <i>⏳${o.wait}</i>` : ''}</button>`).join('')}</div>`;
+    } else if (s.phase === 'move' && s.pending.teleport) {
+      html += `<p class="small">🌀 <b>Teletransporte:</b> toque numa cidade brilhando no mapa ou escolha:</p>
+        <div class="row">${s.pending.options.map(id => `<button class="btn sm" data-act="move" data-to="${id}">${esc(getSpace(id).name)}</button>`).join('')}</div>`;
     } else if (s.phase === 'move') {
       html += `<p class="small">🎲 Você tirou <b>${s.pending.roll}</b>${s.pending.bonus ? ` +${s.pending.bonus}` : ''}. Toque numa casa brilhando no mapa ou escolha:</p>
         <div class="row">${s.pending.options.map(id => `<button class="btn sm" data-act="move" data-to="${id}">${esc(getSpace(id).name)}${spaceHint(s, id)}</button>`).join('')}</div>`;
@@ -455,6 +470,11 @@ export function mountGame(root, session, opts = {}) {
       <img src="${badgeUrl(g.id)}" alt=""><b>${esc(g.city.replace(' City', '').replace(' Island', ''))}</b>
       <span class="tiny">${g.owned ? '✔ conquistada' : g.dist !== null ? `${g.next ? '➜ ' : ''}${g.dist} casas` : '—'}</span></div>`).join('');
     renderMissions(s, viewer);
+    // 🏅 v60: insígnias no topo (sprites), a próxima em destaque
+    const strip = root.querySelector('#g-bstrip');
+    if (strip) strip.innerHTML = `<span class="bs-lbl">🏅 <b>${viewer.badges.length}/${list.length}</b></span>` + list.map(g => `<button class="bs-item ${g.owned ? 'owned' : 'missing'} ${g.next ? 'next' : ''}" data-act="goto-gym" data-space="${g.space}" title="${esc(g.city)} · ${esc(g.leader)} · ${esc(typeLabel(g.type))}${g.owned ? ' · conquistada' : g.dist !== null ? ` · ${g.dist} casas` : ''}">
+      <img src="${badgeUrl(g.id)}" alt=""><span class="bs-txt">${esc(g.city.replace(' City', '').replace(' Island', ''))}${!g.owned && g.dist !== null ? `<i>${g.next ? '➜ ' : ''}${g.dist}</i>` : g.owned ? '<i>✔</i>' : ''}</span></button>`).join('')
+      + (viewer.badges.length >= list.length ? '<span class="bs-lbl league">🏆 Liga liberada!</span>' : '');
   }
 
   /** Convite de viagem pendente. */
@@ -734,6 +754,7 @@ export function mountGame(root, session, opts = {}) {
   // ================================================================ ações
   bindActions(root, {
     roll: () => act({ type: 'roll' }),
+    field: d => act({ type: 'field', id: d.id }),
     move: d => act({ type: 'move', to: Number(d.to) }),
     end: () => act({ type: 'end_turn' }),
     heal: () => act({ type: 'city', op: 'heal' }),
@@ -781,6 +802,13 @@ export function mountGame(root, session, opts = {}) {
       anim.speed = nx[0];
       toast(nx[1]);
       render();
+    },
+    rotate: async () => { // 🔄 v60: celular deitado em tela cheia (e volta)
+      try {
+        if (document.fullscreenElement) { try { screen.orientation?.unlock?.(); } catch { /* ok */ } await document.exitFullscreen(); return; }
+        await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' });
+        await screen.orientation?.lock?.('landscape');
+      } catch { toast('Gire o celular para deitar — o jogo se ajusta sozinho. (Se não girar, ative a rotação automática do aparelho.)'); }
     },
     lite: () => { const on = !isLite(); setLite(on); toast(on ? '⚡ Modo leve ligado: menos efeitos, mais fluido.' : '✨ Modo leve desligado: todos os efeitos.'); render(); },
     exit: () => {

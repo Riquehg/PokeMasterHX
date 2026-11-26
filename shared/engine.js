@@ -1,4 +1,5 @@
 // =====================================================================================
+import { FIELD_SKILLS, fieldUser, fieldCooldown } from './data/fieldskills.js';
 import { REGIONS, activeRegion, regionWeight, pickRegional } from './data/regions.js';
 // Motor de regras do Pokémon Master Trainer HEX — puro (sem DOM, sem rede).
 // Roda igual no navegador (modo local) e no servidor (modo online, autoritativo).
@@ -384,6 +385,7 @@ function dispatch(state, rng, actorId, action, now) {
 
   switch (type) {
     case 'roll': return roll(state, rng, actor);
+    case 'field': return fieldSkill(state, rng, actor, action); // 🧭 v60: habilidade de campo
     case 'move': return move(state, rng, actor, Number(action.to));
     case 'end_turn': return endTurn(state, rng, now);
     case 'use_item': return useItem(state, rng, actor, action);
@@ -416,7 +418,8 @@ function summarizeBattle(state, b) {
 function roll(state, rng, p) {
   if (state.phase !== 'roll') fail('Você já rolou o dado neste turno.');
   delete p.lastPlaced; // a escolha "equipe ou PC" vale até a próxima rolada
-  const die = rng.d6();
+  let die = rng.d6();
+  if (p.surfRoll) { const d2 = rng.d6(); log(state, `🌊 Surfando: ${die} e ${d2} — fica com ${Math.max(die, d2)}.`); die = Math.max(die, d2); delete p.surfRoll; }
   const bonus = p.moveBonus || 0;
   p.moveBonus = 0;
   const total = die + bonus;
@@ -432,9 +435,71 @@ function roll(state, rng, p) {
   log(state, `🎲 ${p.name} tirou ${die}${bonus ? ` +${bonus} (Bicicleta)` : ''}! Escolha o destino (${steps} casa${steps > 1 ? 's' : ''}).`);
 }
 
+// 🧭 v60: habilidades de campo (Pokémon da equipe ajudando no tabuleiro)
+function fieldSkill(state, rng, p, a) {
+  const id = String(a.id || '');
+  const sk = FIELD_SKILLS[id];
+  if (!sk) fail('Habilidade desconhecida.');
+  if (state.phase !== 'roll') fail('Use a habilidade antes de rolar o dado.');
+  if (state.turnFlags?.field) fail('Só 1 habilidade de campo por turno.');
+  const mon = fieldUser(p, id);
+  if (!mon) fail(`Precisa de um Pokémon ${sk.who} na equipe, de pé, Nv.${sk.minLvl}+ e que obedeça.`);
+  const wait = fieldCooldown(state, p, id);
+  if (wait) fail(`${sk.name} recarrega em ${wait} turno${wait > 1 ? 's' : ''}.`);
+  const nm = speciesName(mon.sp);
+  const done = () => { (state.turnFlags ||= {}).field = true; (p.fieldCd ||= {})[id] = (state.turn || 0) + sk.cd; fx(state, { k: 'field', pid: p.id, skill: id, sp: mon.sp }); };
+  if (id === 'teleport') {
+    const options = (p.visited || []).filter(c => c !== p.pos && getSpace(c)?.type === 'city');
+    if (!options.length) fail('Você ainda não visitou outra cidade.');
+    done();
+    state.pending = { kind: 'move', roll: 0, bonus: 0, steps: 0, options, teleport: true };
+    state.phase = 'move';
+    log(state, `🌀 ${nm} de ${p.name} usou Teletransporte! Escolha uma cidade já visitada.`, 'good');
+    return;
+  }
+  if (id === 'aroma') {
+    const sp = getSpace(p.pos);
+    if (sp?.type !== 'pokemon') fail('O Aroma Doce só funciona parado numa casa 🌿 de Pokémon.');
+    if (!hasUsable(p)) fail('Sua equipe precisa de alguém de pé.');
+    done();
+    state.phase = 'action';
+    const tier = rng.chance(0.25) ? Math.min(4, (sp.tier || 1) + 1) : (sp.tier || 1);
+    log(state, `🌸 ${nm} de ${p.name} espalhou um Aroma Doce… algo se aproxima!`, 'good');
+    return wildEncounter(state, rng, p, sp, tier, { fresh: true });
+  }
+  if (id === 'tailwind') {
+    done();
+    p.moveBonus = (p.moveBonus || 0) + 2;
+    log(state, `💨 ${nm} de ${p.name} chamou um Vento a Favor: +2 casas nesta rolagem!`, 'good');
+    return;
+  }
+  if (id === 'surf') {
+    done();
+    p.surfRoll = true;
+    log(state, `🌊 ${nm} de ${p.name} vai surfar com você!`, 'good');
+    return roll(state, rng, p);
+  }
+  if (id === 'dig') {
+    done();
+    const it = rng.weighted([['potion', 4], ['poke_ball', 3], ['great_ball', 2], ['revive', 1], ['evo_item', 0.6]]);
+    const got = it === 'evo_item' ? pickEvoItem(rng) : it;
+    addItem(p, got, 1);
+    log(state, `⛏️ ${nm} de ${p.name} cavou e achou ${getItem(got)?.name || got}!`, 'good');
+    return;
+  }
+}
+
 function move(state, rng, p, to) {
   if (state.phase !== 'move' || state.pending?.kind !== 'move') fail('Role o dado antes de se mover.');
   if (!state.pending.options.includes(to)) fail('Destino inválido para esta rolagem.');
+  if (state.pending.teleport) { // 🌀 Teletransporte: vai direto
+    state.pending = null;
+    const from = p.pos; p.pos = to;
+    fx(state, { k: 'move', pid: p.id, from, to, path: [from, to] });
+    const sp = getSpace(to);
+    log(state, `🌀 ${p.name} apareceu em ${sp.name}.`);
+    return resolveSpace(state, rng, p, sp);
+  }
   const path = pathTo(p, to, state.pending.steps);
   state.pending = null;
   const from = p.pos;
@@ -768,6 +833,16 @@ function placeCaught(state, p, a) {
   const ti = p.team.findIndex(m => m.uid === lp.uid), bi = p.box.findIndex(m => m.uid === lp.uid);
   if (ti < 0 && bi < 0) { delete p.lastPlaced; fail('Esse Pokémon não está mais com você.'); }
   if (a.op === 'keep' || (a.op === 'to_team' && ti >= 0) || (a.op === 'to_box' && bi >= 0)) { delete p.lastPlaced; return; }
+  if (a.op === 'release') { // 🕊️ v60: soltar na hora (não quis ficar com ele)
+    if (ti >= 0 && p.team.length <= 1) fail('A equipe precisa de pelo menos 1 Pokémon.');
+    const [m] = ti >= 0 ? p.team.splice(ti, 1) : p.box.splice(bi, 1);
+    (p.releasedUids ||= []).push(m.uid);
+    const g = 20 * m.lvl;
+    p.gold += g;
+    delete p.lastPlaced;
+    log(state, `🌲 ${p.name} soltou ${speciesName(m.sp)} logo depois de capturar (+${g} de ouro do Professor).`);
+    return;
+  }
   if (a.op === 'to_box') {
     if (p.team.length <= 1) fail('A equipe precisa de pelo menos 1 Pokémon.');
     const [m] = p.team.splice(ti, 1);

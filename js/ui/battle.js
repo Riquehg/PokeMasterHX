@@ -16,7 +16,7 @@ import { monSprite, itemUrl, leaderUrl, typeLabel } from '../config.js';
 import { typeChips, edgeBadge, foeIntelHtml , moveFxChips } from './common.js';
 import { canTransform } from '../../shared/rules/monsters.js';
 import { ABILITIES, abilityOf } from '../../shared/data/battlegear.js';
-import { COMPANIONS } from '../../shared/data/companions.js';
+import { COMPANIONS, assistChance, assistMax } from '../../shared/data/companions.js';
 import { wait } from './fx.js';
 
 const KIND_TITLE = {
@@ -167,7 +167,13 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
     }
   }
 
-  return `<div class="battle-head"><b>${state.kind === 'duel' ? '⚔️ Duelo' : KIND_TITLE[b.kind] || 'Batalha'}${foe.kind === 'npc' ? ` · ${esc(foe.title ? foe.title + ' ' : '')}${esc(foe.name)}` : ''}</b><span class="chip">Rodada ${b.round + 1}</span></div>
+  // 🤝 v60: o companheiro fica ao seu lado na batalha (ajuda de vez em quando a partir do Laço Nv.5)
+  const meP = me.kind === 'player' ? state.players.find(x => x.id === me.pid) : null;
+  const comp = meP?.companion && COMPANIONS[meP.companion] && state.kind !== 'duel' && state.roomMode !== 'ranked' ? COMPANIONS[meP.companion] : null;
+  const cLvl = comp ? Math.max(1, Math.min(10, Number(meP.bond?.[meP.companion]) || 1)) : 0;
+  const compHtml = comp ? `<div class="b-comp" title="${esc(comp.desc)}${assistMax(cLvl) ? ` · pode ajudar na batalha (${Math.round(assistChance(cLvl) * 100)}% por rodada, até ${assistMax(cLvl)}×)` : ' · ajuda na batalha a partir do Laço Nv.5'}">
+      <img src="${leaderUrl(comp.sprite)}" alt=""><img class="b-comp-mon" src="${monSprite({ sp: comp.mon })}" alt=""><span><b>${esc(comp.name)}</b><i>💞 Nv.${cLvl}${assistMax(cLvl) ? ` · ${Math.round(assistChance(cLvl) * 100)}%` : ''}</i></span></div>` : '';
+  return `<div class="battle-head"><b>${state.kind === 'duel' ? '⚔️ Duelo' : KIND_TITLE[b.kind] || 'Batalha'}${foe.kind === 'npc' ? ` · ${esc(foe.title ? foe.title + ' ' : '')}${esc(foe.name)}` : ''}</b><span class="chip">Rodada ${b.round + 1}</span>${compHtml}</div>
     ${arena}
     ${(b.kind === 'wild' || b.kind === 'raid') && foe.kind === 'wild' ? foeIntelHtml(foeMon) : ''}
     <div class="matchup">${matchup}</div>
