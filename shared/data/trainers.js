@@ -1,5 +1,5 @@
 // Treinadores NPC: Líderes de Ginásio, Elite dos Quatro, Campeão e treinadores de rota.
-import { REGIONS, regionKey, setActiveRegion, regionBadge } from './regions.js';
+import { REGIONS, regionKey, setActiveRegion, regionBadge, regionGym } from './regions.js';
 // team: [especie, nivel]. sprite: caminho dentro do bucket "sprites" do Supabase (pasta/arquivo, respeitando maiúsculas e espaços).
 
 export const BADGES_TO_LEAGUE = 6;
@@ -36,6 +36,11 @@ export function setLeagueSpaces(map) {
   Object.assign(CHAMPION, R.champion);
   // 🏅 v60: nomes das insígnias do mapa
   for (const g of GYMS) { g.kantoBadge ||= g.badge; g.badge = regionBadge(g.id)?.name || g.kantoBadge; }
+  // 🏟️ v62: líderes, tipo e time de cada mapa (Kanto e personalizados: os originais)
+  for (const g of GYMS) {
+    g.kanto ||= { leader: g.leader, type: g.type, sprite: g.sprite, team: g.team };
+    Object.assign(g, regionGym(g.id) || g.kanto);
+  }
   ELITE_SPACE = map.elite;
   CHAMPION_SPACE = map.champion;
   LEAGUE_GATE_SPACES.length = 0;

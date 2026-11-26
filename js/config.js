@@ -1,5 +1,5 @@
 // Configuração do front. O endereço dos sprites é o Storage público do seu Supabase (mesmo do projeto original).
-import { regionBadge, REGION_BADGES } from '../shared/data/regions.js';
+import { regionBadge, REGION_BADGES, REGION_GYMS } from '../shared/data/regions.js';
 import { getSpecies } from '../shared/data/pokemon.js';
 import { ITEMS } from '../shared/data/items.js';
 import { MEGAS } from '../shared/data/megas.js';
@@ -161,6 +161,9 @@ export const leaderUrl = file => {
 };
 // 🏅 v60: cada mapa tem as suas insígnias (sem o arquivo, volta para a de Kanto)
 export const badgeUrl = id => `${CFG.sprites}badges/${regionBadge(id)?.file || id}.png`;
+const GYM_KANTO_SPRITE = ['leaders/Brock.png', 'leaders/misty.png', 'leaders/Lt. Surge.png', 'leaders/Erika.png', 'leaders/Blaine.png', 'leaders/Koga.png'];
+const LEADER_FALLBACK = {}; // v62: sem a sprite do líder do mapa, mostra o líder de Kanto do mesmo ginásio
+for (const k of Object.keys(REGION_GYMS)) REGION_GYMS[k].forEach((g, i) => { LEADER_FALLBACK[g.sprite.slice('trainers/'.length)] = GYM_KANTO_SPRITE[i]; });
 const BADGE_KANTO = {};
 for (const k of Object.keys(REGION_BADGES)) REGION_BADGES[k].forEach((b, i) => { BADGE_KANTO[b.file] = ['boulder', 'cascade', 'thunder', 'rainbow', 'volcano', 'soul'][i]; });
 export const mapUrl = () => CFG.sprites + CFG.mapImage;
@@ -188,7 +191,8 @@ if (typeof window !== 'undefined') {
   window.addEventListener('error', e => {
     const el = e.target;
     if (el && el.tagName === 'IMG' && tryItemAlt(el)) return; // v59: outro nome de arquivo do item
-    if (el && el.tagName === 'IMG') { const bm = /\/badges\/([^/?#]+)\.png$/.exec(el.src || ''); if (bm && BADGE_KANTO[bm[1]]) { el.src = el.src.replace(/[^/]+\.png$/, BADGE_KANTO[bm[1]] + '.png'); return; } }
+    if (el && el.tagName === 'IMG') { const bm = /\/badges\/([^/?#]+)\.png$/.exec(el.src || ''); if (bm && BADGE_KANTO[bm[1]]) { el.src = el.src.replace(/[^/]+\.png$/, BADGE_KANTO[bm[1]] + '.png'); return; }
+      const tm = /\/trainers\/([^/?#]+\.png)$/.exec(el.src || ''); if (tm && LEADER_FALLBACK[tm[1]]) { el.src = el.src.replace(/trainers\/[^/]+\.png$/, LEADER_FALLBACK[tm[1]].split('/').map(encodeURIComponent).join('/')); return; } }
     if (el && el.tagName === 'IMG' && el.dataset.alt) { const a = el.dataset.alt; delete el.dataset.alt; ITEM_MISS.add(el.src); if (!ITEM_MISS.has(a)) { el.src = a; return; } } // v61: 2ª opção (ex.: golpe → tipo)
     if (el && el.tagName === 'IMG' && el.dataset.fb !== undefined) { // ícone de item sem sprite → emoji
       ITEM_MISS.add(el.src);

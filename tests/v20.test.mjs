@@ -1673,3 +1673,12 @@ test('📏 v61.3: cada móvel guarda o próprio tamanho (0,4× a 3×)', async ()
   assert.equal(r.farm.home.placed[0].s, 1.8);
   assert.equal(r.farm.home.placed[1].s, 3);
 });
+test('🏟️ v62: cada mapa tem os próprios líderes de ginásio (Kanto volta ao original)', async () => {
+  const { GYMS } = await import('../shared/data/trainers.js');
+  useMap('theme:vulcanica');
+  assert.deepEqual(GYMS.map(g => g.leader), ['Roark', 'Crasher Wake', 'Volkner', 'Gardenia', 'Maylene', 'Fantina']);
+  assert.equal(GYMS[5].type, 'ghost'); assert.equal(GYMS[0].sprite, 'trainers/roark.png');
+  for (const g of GYMS) for (const [id] of g.team) assert.ok(SPECIES[id], id);
+  useMap('kanto');
+  assert.deepEqual(GYMS.map(g => g.leader), ['Brock', 'Misty', 'Lt. Surge', 'Erika', 'Blaine', 'Koga']);
+});

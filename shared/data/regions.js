@@ -85,6 +85,31 @@ export const REGION_BADGES = {
   glacial: [B('unova_quake', 'Insígnia Tremor'), B('unova_icicle', 'Insígnia Pingente'), B('unova_bolt', 'Insígnia Raio'), B('unova_trio', 'Insígnia Trio'), B('unova_basic', 'Insígnia Básica'), B('unova_toxic', 'Insígnia Tóxica')],
   floresta: [B('kalos_cliff', 'Insígnia Penhasco'), B('kalos_fairy', 'Insígnia Fada'), B('kalos_voltage', 'Insígnia Voltagem'), B('kalos_plant', 'Insígnia Planta'), B('kalos_rumble', 'Insígnia Estrondo'), B('kalos_psychic', 'Insígnia Psíquica')]
 };
+// 🏟️ v62: líderes de ginásio de cada mapa (mesma ordem/força dos de Kanto; sprite em trainers/<arquivo>.png)
+const L = (leader, type, file, team) => ({ leader, type, sprite: `trainers/${file}.png`, team });
+export const REGION_GYMS = {
+  expedicao: [L('Gordie', 'rock', 'gordie', [['rolycoly', 11], ['carkol', 13]]), L('Nessa', 'water', 'nessa', [['chewtle', 12], ['drednaw', 14]]),
+    L('Raihan', 'dragon', 'raihan', [['axew', 17], ['fraxure', 18], ['flygon', 20]]), L('Milo', 'grass', 'milo', [['gossifleur', 20], ['eldegoss', 21], ['flapple', 23]]),
+    L('Kabu', 'fire', 'kabu', [['sizzlipede', 25], ['ninetales', 26], ['centiskorch', 28]]), L('Piers', 'dark', 'piers', [['scrafty', 25], ['malamar', 27], ['obstagoon', 29]])],
+  arquipelago: [L('Roxanne', 'rock', 'roxanne', [['geodude', 11], ['nosepass', 13]]), L('Juan', 'water', 'juan', [['luvdisc', 12], ['whiscash', 14]]),
+    L('Wattson', 'electric', 'wattson', [['magnemite', 17], ['voltorb', 18], ['manectric', 20]]), L('Winona', 'flying', 'winona', [['swablu', 20], ['pelipper', 21], ['altaria', 23]]),
+    L('Flannery', 'fire', 'flannery', [['slugma', 25], ['torkoal', 26], ['camerupt', 28]]), L('Tate & Liza', 'psychic', 'tateandliza', [['solrock', 25], ['lunatone', 27], ['xatu', 29]])],
+  vulcanica: [L('Roark', 'rock', 'roark', [['cranidos', 11], ['onix', 13]]), L('Crasher Wake', 'water', 'crasherwake', [['buizel', 12], ['floatzel', 14]]),
+    L('Volkner', 'electric', 'volkner', [['luxio', 17], ['jolteon', 18], ['electivire', 20]]), L('Gardenia', 'grass', 'gardenia', [['cherubi', 20], ['grotle', 21], ['roserade', 23]]),
+    L('Maylene', 'fighting', 'maylene', [['meditite', 25], ['machoke', 26], ['lucario', 28]]), L('Fantina', 'ghost', 'fantina', [['drifblim', 25], ['mismagius', 27], ['gengar', 29]])],
+  glacial: [L('Clay', 'ground', 'clay', [['drilbur', 11], ['sandile', 13]]), L('Brycen', 'ice', 'brycen', [['vanillite', 12], ['cryogonal', 14]]),
+    L('Elesa', 'electric', 'elesa', [['blitzle', 17], ['emolga', 18], ['zebstrika', 20]]), L('Cilan', 'grass', 'cilan', [['pansage', 20], ['lilligant', 21], ['simisage', 23]]),
+    L('Lenora', 'normal', 'lenora', [['herdier', 25], ['watchog', 26], ['stoutland', 28]]), L('Roxie', 'poison', 'roxie', [['koffing', 25], ['whirlipede', 27], ['scolipede', 29]])],
+  floresta: [L('Grant', 'rock', 'grant', [['amaura', 11], ['tyrunt', 13]]), L('Valerie', 'fairy', 'valerie', [['flabebe', 12], ['mawile', 14]]),
+    L('Clemont', 'electric', 'clemont', [['emolga', 17], ['magneton', 18], ['heliolisk', 20]]), L('Ramos', 'grass', 'ramos', [['jumpluff', 20], ['weepinbell', 21], ['gogoat', 23]]),
+    L('Korrina', 'fighting', 'korrina', [['mienfoo', 25], ['machoke', 26], ['hawlucha', 28]]), L('Olympia', 'psychic', 'olympia', [['sigilyph', 25], ['slowking', 27], ['meowstic', 29]])]
+};
+/** Líder do mapa ativo para o ginásio (ou null = o de Kanto). */
+export function regionGym(gymId, key = ACTIVE) {
+  const i = ['boulder', 'cascade', 'thunder', 'rainbow', 'volcano', 'soul'].indexOf(gymId);
+  return (key && REGION_GYMS[key]?.[i]) || null;
+}
+
 const GYM_ORDER = ['boulder', 'cascade', 'thunder', 'rainbow', 'volcano', 'soul'];
 /** Insígnia do mapa ativo para o ginásio (ou null = a de Kanto). */
 export function regionBadge(gymId, key = ACTIVE) {
