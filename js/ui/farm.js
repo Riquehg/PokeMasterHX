@@ -17,7 +17,7 @@ import { defIvOf, ivPercent } from '../../shared/rules/monsters.js';
 import { natureLabel } from '../../shared/data/natures.js';
 import { ART_PALETTE, ART_SIZE, ART_MAX, artSvg, isArtKey, artIndex } from '../../shared/data/farmart.js';
 import { EXPANSIONS } from '../../shared/data/expansions.js';
-import { FURNITURE, WALLS, FLOORS, ROOM_W, ROOM_H, HOME_MAX, PART_MAX, furnMax, MEALS, MEAL_ITEMS, TALK_BOND, PLAY_XP } from '../../shared/data/home.js';
+import { FURNITURE, WALLS, FLOORS, ROOM_W, ROOM_H, HOME_MAX, PART_MAX, furnMax, furnW, MEALS, MEAL_ITEMS, TALK_BOND, PLAY_XP } from '../../shared/data/home.js';
 import { ITEMS as ALL_ITEMS } from '../../shared/data/items.js';
 
 // ✨ v47 — decoração viva: animação por enfeite + o que acontece ao tocar
@@ -248,7 +248,7 @@ export async function openFarm(ctx, profile, userId = null) {
       ${homeEdit ? Array.from({ length: ROOM_W * ROOM_H }, (_, i) => `<i class="hm-cell" data-act="hm-cell" data-x="${i % ROOM_W}" data-y="${Math.floor(i / ROOM_W)}" style="${cell(i % ROOM_W, Math.floor(i / ROOM_W))};z-index:5"></i>`).join('') : ''}
       ${placed.map((p, i) => { const F = FURNITURE[p.f]; if (!F) return '';
         const pos = F.wall ? `left:${((p.x + 0.5) / ROOM_W) * 100}%;top:${17 + (p.y % 2) * 6}%;z-index:3` : cell(p.x, p.y); // móveis de parede ficam na parede
-        return `<span class="hm-f ${F.part ? 'part' : ''} ${F.glow ? 'glow' : ''} ${F.floor ? 'flat' : ''} ${F.wall ? 'onwall' : ''} hmf-${p.f} ${homeEdit && homeSel === i ? 'sel' : ''}" data-act="hm-f" data-i="${i}" data-f="${p.f}" style="${pos};--fl:${p.fl ? -1 : 1}">${F.part ? '' : furnIcon(p.f, F.icon)}</span>`; }).join('')}
+        return `<span class="hm-f ${F.part ? 'part' : ''} ${F.glow ? 'glow' : ''} ${F.floor ? 'flat' : ''} ${F.wall ? 'onwall' : ''} hmf-${p.f} ${homeEdit && homeSel === i ? 'sel' : ''}" data-act="hm-f" data-i="${i}" data-f="${p.f}" style="${pos};--fl:${p.fl ? -1 : 1};--fw:${furnW(p.f)}">${F.part ? '' : furnIcon(p.f, F.icon)}</span>`; }).join('')}
       ${comp ? `<button class="hm-pal hm-comp" data-act="hm-talk" title="${esc(comp.name)}"><img src="${leaderUrl(comp.sprite)}" alt=""><span class="hm-bubble">${farm.mine && !h.talked ? '💬' : '💞'}</span></button>` : ''}
       ${fav ? `<button class="hm-pal hm-fav" data-act="hm-play" title="${esc(fav.nick || getSpecies(fav.sp).name)}"><img src="${monSprite({ sp: fav.sp, shiny: fav.shiny })}" alt=""><span class="hm-bubble">${farm.mine && !h.played ? '🎾' : '♪'}</span></button>` : ''}
     </div>`;

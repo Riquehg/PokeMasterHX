@@ -5,30 +5,32 @@ import { TYPES, TYPE_LABELS } from '../rules/types.js';
 
 export const ROOM_W = 12, ROOM_H = 7, HOME_MAX = 40, PART_MAX = 80; // v61: paredes internas têm limite próprio
 export const furnMax = id => FURNITURE[id]?.max || 5;
+// v61.2: largura de cada móvel na sala, em quadradinhos (a imagem se ajusta a isso, qualquer que seja o tamanho do arquivo)
+export const furnW = id => FURNITURE[id]?.w || 1;
 
 export const FURNITURE = {
-  chair: { name: 'Cadeira', icon: '🪑', price: 800 },
-  plant: { name: 'Vaso de planta', icon: '🪴', price: 600 },
-  lamp: { name: 'Abajur', icon: '💡', price: 1000, glow: true },
-  rug: { name: 'Tapete', icon: '🟫', price: 1200, floor: true },
+  chair: { name: 'Cadeira', icon: '🪑', w: 0.5, price: 800 },
+  plant: { name: 'Vaso de planta', icon: '🪴', w: 0.6, price: 600 },
+  lamp: { name: 'Abajur', icon: '💡', w: 0.45, price: 1000, glow: true },
+  rug: { name: 'Tapete', icon: '🟫', w: 1.4, price: 1200, floor: true },
   partition: { name: 'Parede (10 pedaços)', icon: '🧱', price: 500, part: true, pack: 10, max: 80, desc: 'Monte cômodos: cada pedaço ocupa 1 quadradinho e usa a cor da parede. Não conta no limite de móveis.' },
-  window: { name: 'Janela', icon: '🪟', price: 1500, wall: true },
-  table: { name: 'Mesa', icon: '🍽️', price: 1500 },
-  bed: { name: 'Cama', icon: '🛏️', price: 2000 },
-  toybox: { name: 'Baú de brinquedos', icon: '🧸', price: 2000, perk: 'play', desc: 'Brincar com o favorito dá o dobro de XP.' },
-  sofa: { name: 'Sofá', icon: '🛋️', price: 2500 },
-  clock: { name: 'Relógio de parede', icon: '🕰️', price: 2500, wall: true },
-  painting: { name: 'Quadro', icon: '🖼️', price: 3000, wall: true },
-  books: { name: 'Estante de livros', icon: '📚', price: 3000 },
-  bath: { name: 'Banheira', icon: '🛁', price: 4000 },
-  fridge: { name: 'Geladeira', icon: '🧊', price: 5000, perk: 'queue', desc: '+1 prato cozinhando ao mesmo tempo.' },
-  tv: { name: 'TV', icon: '📺', price: 5000, glow: true },
-  stove: { name: 'Fogão', icon: '🍳', price: 6000, perk: 'cook', desc: 'Libera a cozinha: pratos com buff para as partidas.' },
-  fireplace: { name: 'Lareira', icon: '🔥', price: 7000, glow: true, perk: 'cozy', desc: 'Conversar com o companheiro dá o dobro de laço.' },
-  aquarium: { name: 'Aquário', icon: '🐠', price: 8000 },
-  trophies: { name: 'Estante de troféus', icon: '🏆', price: 10000 },
-  piano: { name: 'Piano', icon: '🎹', price: 12000 },
-  arcade: { name: 'Fliperama', icon: '🕹️', price: 15000, glow: true }
+  window: { name: 'Janela', icon: '🪟', w: 0.55, price: 1500, wall: true },
+  table: { name: 'Mesa', icon: '🍽️', w: 1, price: 1500 },
+  bed: { name: 'Cama', icon: '🛏️', w: 1.2, price: 2000 },
+  toybox: { name: 'Baú de brinquedos', icon: '🧸', w: 0.8, price: 2000, perk: 'play', desc: 'Brincar com o favorito dá o dobro de XP.' },
+  sofa: { name: 'Sofá', icon: '🛋️', w: 1.2, price: 2500 },
+  clock: { name: 'Relógio de parede', icon: '🕰️', w: 0.5, price: 2500, wall: true },
+  painting: { name: 'Quadro', icon: '🖼️', w: 0.6, price: 3000, wall: true },
+  books: { name: 'Estante de livros', icon: '📚', w: 0.9, price: 3000 },
+  bath: { name: 'Banheira', icon: '🛁', w: 1.3, price: 4000 },
+  fridge: { name: 'Geladeira', icon: '🧊', w: 0.6, price: 5000, perk: 'queue', desc: '+1 prato cozinhando ao mesmo tempo.' },
+  tv: { name: 'TV', icon: '📺', w: 1, price: 5000, glow: true },
+  stove: { name: 'Fogão', icon: '🍳', w: 1.6, price: 6000, perk: 'cook', desc: 'Libera a cozinha: pratos com buff para as partidas.' },
+  fireplace: { name: 'Lareira', icon: '🔥', w: 1.1, price: 7000, glow: true, perk: 'cozy', desc: 'Conversar com o companheiro dá o dobro de laço.' },
+  aquarium: { name: 'Aquário', icon: '🐠', w: 1.5, price: 8000 },
+  trophies: { name: 'Estante de troféus', icon: '🏆', w: 0.9, price: 10000 },
+  piano: { name: 'Piano', icon: '🎹', w: 1.1, price: 12000 },
+  arcade: { name: 'Fliperama', icon: '🕹️', w: 0.7, price: 15000, glow: true }
 };
 export const WALLS = {
   plain: { name: 'Bege', price: 0, css: 'linear-gradient(#e9dcc3, #d8c7a6)' },
