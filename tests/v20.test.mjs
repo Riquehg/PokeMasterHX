@@ -1663,3 +1663,13 @@ test('🎵 v61: links do YouTube (vídeo/playlist) aceitos; outros sites recusad
   assert.equal(parseYoutube('https://example.com/watch?v=dQw4w9WgXcQ'), null);
   assert.equal(parseYoutube('javascript:alert(1)'), null);
 });
+test('📏 v61.3: cada móvel guarda o próprio tamanho (0,4× a 3×)', async () => {
+  const { db, admin, us: [a] } = await users(1);
+  await adminOp(db, admin, { op: 'give_gold', userId: a.id, amount: 9000 });
+  await profileOp(db, a, { op: 'farm_get' });
+  await profileOp(db, a, { op: 'home_buy', kind: 'furniture', id: 'chair' });
+  await profileOp(db, a, { op: 'home_buy', kind: 'furniture', id: 'chair' });
+  const r = await profileOp(db, a, { op: 'home_place', placed: [{ f: 'chair', x: 1, y: 1, s: 1.8 }, { f: 'chair', x: 2, y: 1, s: 9 }] });
+  assert.equal(r.farm.home.placed[0].s, 1.8);
+  assert.equal(r.farm.home.placed[1].s, 3);
+});

@@ -371,7 +371,8 @@ export async function farmOp(db, user, body) {
     const used = {};
     let nF = 0, nP = 0; // v61: móveis (até HOME_MAX) e paredes internas (até PART_MAX) contam separado
     const placed = (Array.isArray(body.placed) ? body.placed : []).slice(0, HOME_MAX + PART_MAX).filter(it => (FURNITURE[it?.f]?.part ? ++nP <= PART_MAX : ++nF <= HOME_MAX)).map(it => ({
-      f: String(it?.f || ''), x: Math.max(0, Math.min(ROOM_W - 1, Math.floor(Number(it?.x) || 0))), y: Math.max(0, Math.min(ROOM_H - 1, Math.floor(Number(it?.y) || 0))), ...(it?.fl ? { fl: 1 } : {})
+      f: String(it?.f || ''), x: Math.max(0, Math.min(ROOM_W - 1, Math.floor(Number(it?.x) || 0))), y: Math.max(0, Math.min(ROOM_H - 1, Math.floor(Number(it?.y) || 0))), ...(it?.fl ? { fl: 1 } : {}),
+      ...(Number(it?.s) && Math.abs(Number(it.s) - 1) > 0.01 ? { s: Math.round(Math.max(0.4, Math.min(3, Number(it.s))) * 10) / 10 } : {}) // v61.3: tamanho de cada móvel
     })).filter(it => FURNITURE[it.f] && (used[it.f] = (used[it.f] || 0) + 1) <= ((h0.owned || {})[it.f] || 0));
     const wall = WALLS[body.wall] && (!WALLS[body.wall].price || (h0.walls || []).includes(body.wall)) ? body.wall : h0.wall || 'plain';
     const floor = FLOORS[body.floor] && (!FLOORS[body.floor].price || (h0.floors || []).includes(body.floor)) ? body.floor : h0.floor || 'wood';

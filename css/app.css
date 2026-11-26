@@ -2594,3 +2594,7 @@ img.mv-ic { width: 20px !important; height: 20px !important; flex: 0 0 auto; fil
 
 /* v61.2 — móveis: largura definida em quadradinhos (--fw), não pelo tamanho do arquivo */
 .hm-f img.furn-ic { width: calc(var(--fw, 1) * var(--hm-k, 1) * 100cqw / 12) !important; height: auto !important; max-height: calc(3 * var(--hm-k, 1) * 100cqw / 12 * 9 / 16 * 1.4) !important; object-fit: contain; image-rendering: auto; }
+
+/* v61.3 — tamanho individual do móvel */
+.hm-size { display: inline-flex; align-items: center; gap: 4px; margin: 0 4px; }
+.hm-size b { min-width: 42px; text-align: center; font-size: 13px; }
