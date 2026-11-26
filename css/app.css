@@ -2586,3 +2586,8 @@ body.in-game .mu-dock { bottom: auto; top: 96px; right: auto; left: 8px; }
 .fr-it .tiny { grid-column: 1 / -1; }
 .fr-ic { font-size: 22px; display: grid; place-items: center; } .fr-ic img { width: 28px; height: 28px; object-fit: contain; }
 .fr-n { font-weight: 800; color: #9fd3ff; }
+/* v61.1 — ícones de tipo/golpe não herdam o tamanho de outras imagens (ex.: .dex .e img 54px, .daily img 46px) */
+img.ty-ic { width: 16px !important; height: 16px !important; margin: 0 3px 0 0 !important; vertical-align: -3px; flex: 0 0 auto; filter: none !important; }
+img.mv-ic { width: 20px !important; height: 20px !important; flex: 0 0 auto; filter: none !important; }
+.mv-name img.mv-ic { width: 22px !important; height: 22px !important; }
+.chip.type { display: inline-flex; align-items: center; white-space: nowrap; }
