@@ -17,7 +17,7 @@ import { defIvOf, ivPercent } from '../../shared/rules/monsters.js';
 import { natureLabel } from '../../shared/data/natures.js';
 import { ART_PALETTE, ART_SIZE, ART_MAX, artSvg, isArtKey, artIndex } from '../../shared/data/farmart.js';
 import { EXPANSIONS } from '../../shared/data/expansions.js';
-import { FURNITURE, WALLS, FLOORS, ROOM_W, ROOM_H, HOME_MAX, MEALS, MEAL_ITEMS, TALK_BOND, PLAY_XP } from '../../shared/data/home.js';
+import { FURNITURE, WALLS, FLOORS, ROOM_W, ROOM_H, HOME_MAX, PART_MAX, furnMax, MEALS, MEAL_ITEMS, TALK_BOND, PLAY_XP } from '../../shared/data/home.js';
 import { ITEMS as ALL_ITEMS } from '../../shared/data/items.js';
 
 // ✨ v47 — decoração viva: animação por enfeite + o que acontece ao tocar
@@ -243,12 +243,12 @@ export async function openFarm(ctx, profile, userId = null) {
     const wall = WALLS[homeEdit ? homeDraft.wall || h.wall : h.wall] || WALLS.plain, floor = FLOORS[homeEdit ? homeDraft.floor || h.floor : h.floor] || FLOORS.wood;
     const comp = farm.companion, fav = h.fav;
     const cell = (x, y) => `left:${((x + 0.5) / ROOM_W) * 100}%;top:${32 + ((y + 0.5) / ROOM_H) * 68}%;z-index:${10 + y}`;
-    return `<div class="hm-room ${homeEdit ? 'editing' : ''}" style="--wall:${wall.css};--floor:${floor.css}">
+    return `<div class="hm-room ${homeEdit ? 'editing' : ''}" style="--wall:${wall.css};--floor:${floor.css};--hm-k:${hmK()}">
       <div class="hm-wall"></div><div class="hm-floor"></div>
       ${homeEdit ? Array.from({ length: ROOM_W * ROOM_H }, (_, i) => `<i class="hm-cell" data-act="hm-cell" data-x="${i % ROOM_W}" data-y="${Math.floor(i / ROOM_W)}" style="${cell(i % ROOM_W, Math.floor(i / ROOM_W))};z-index:5"></i>`).join('') : ''}
       ${placed.map((p, i) => { const F = FURNITURE[p.f]; if (!F) return '';
         const pos = F.wall ? `left:${((p.x + 0.5) / ROOM_W) * 100}%;top:${17 + (p.y % 2) * 6}%;z-index:3` : cell(p.x, p.y); // móveis de parede ficam na parede
-        return `<span class="hm-f ${F.glow ? 'glow' : ''} ${F.floor ? 'flat' : ''} ${F.wall ? 'onwall' : ''} hmf-${p.f} ${homeEdit && homeSel === i ? 'sel' : ''}" data-act="hm-f" data-i="${i}" data-f="${p.f}" style="${pos};--fl:${p.fl ? -1 : 1}">${p.f === 'rug' ? '<i class="hm-rug"></i>' : furnIcon(p.f, F.icon)}</span>`; }).join('')}
+        return `<span class="hm-f ${F.part ? 'part' : ''} ${F.glow ? 'glow' : ''} ${F.floor ? 'flat' : ''} ${F.wall ? 'onwall' : ''} hmf-${p.f} ${homeEdit && homeSel === i ? 'sel' : ''}" data-act="hm-f" data-i="${i}" data-f="${p.f}" style="${pos};--fl:${p.fl ? -1 : 1}">${F.part ? '' : furnIcon(p.f, F.icon)}</span>`; }).join('')}
       ${comp ? `<button class="hm-pal hm-comp" data-act="hm-talk" title="${esc(comp.name)}"><img src="${leaderUrl(comp.sprite)}" alt=""><span class="hm-bubble">${farm.mine && !h.talked ? '💬' : '💞'}</span></button>` : ''}
       ${fav ? `<button class="hm-pal hm-fav" data-act="hm-play" title="${esc(fav.nick || getSpecies(fav.sp).name)}"><img src="${monSprite({ sp: fav.sp, shiny: fav.shiny })}" alt=""><span class="hm-bubble">${farm.mine && !h.played ? '🎾' : '♪'}</span></button>` : ''}
     </div>`;
@@ -260,8 +260,8 @@ export async function openFarm(ctx, profile, userId = null) {
     if (homeSub === 'shop') {
       const card = (kind, id, it) => { const own = kind === 'furniture' ? (h.owned || {})[id] || 0 : (h[kind + 's'] || []).includes(id) || !it.price;
         return `<div class="hm-shop-it"><span class="hm-shop-ic" ${kind !== 'furniture' ? `style="background:${it.css}"` : ''}>${kind === 'furniture' ? furnIcon(id, it.icon) : ''}</span><b class="small">${esc(it.name)}</b>
-          ${it.desc ? `<span class="tiny muted">${esc(it.desc)}</span>` : ''}<span class="tiny">${kind === 'furniture' ? `tem ${own}/5` : own ? '✔ seu' : ''}</span>
-          ${(kind === 'furniture' ? own < 5 : !own) ? `<button class="btn sm ${(me?.gold || 0) >= it.price ? 'primary' : ''}" data-act="hm-buy" data-k="${kind}" data-id="${id}" ${(me?.gold || 0) >= it.price ? '' : 'disabled'}>🪙 ${it.price}</button>` : ''}</div>`; };
+          ${it.desc ? `<span class="tiny muted">${esc(it.desc)}</span>` : ''}<span class="tiny">${kind === 'furniture' ? `tem ${own}/${furnMax(id)}` : own ? '✔ seu' : ''}</span>
+          ${(kind === 'furniture' ? own + (it.pack || 1) <= furnMax(id) : !own) ? `<button class="btn sm ${(me?.gold || 0) >= it.price ? 'primary' : ''}" data-act="hm-buy" data-k="${kind}" data-id="${id}" ${(me?.gold || 0) >= it.price ? '' : 'disabled'}>🪙 ${it.price}</button>` : ''}</div>`; };
       return `<p class="small muted">🛒 Móveis e estilos — tudo com ouro. Você tem 🪙 <b>${me?.gold ?? 0}</b>. Móveis especiais: 🍳 Fogão libera a cozinha, 🧊 Geladeira +1 prato ao mesmo tempo, 🔥 Lareira dobra o laço da conversa, 🧸 Baú dobra o XP da brincadeira.</p>
         <h4>🛋️ Móveis</h4><div class="hm-shop">${Object.entries(FURNITURE).map(([id, it]) => card('furniture', id, it)).join('')}</div>
         <h4>🧱 Papel de parede</h4><div class="hm-shop">${Object.entries(WALLS).map(([id, it]) => card('wall', id, it)).join('')}</div>
@@ -288,7 +288,7 @@ export async function openFarm(ctx, profile, userId = null) {
     }
     // sala
     const stove = (h.placed || []).some(p => p.f === 'stove');
-    const tools = homeEdit ? `<div class="fm-decorbar"><span class="tiny muted">✏️ <b>Arrumando</b> (${homeDraft.length}/${HOME_MAX}): escolha um móvel e toque num quadradinho. Toque num móvel para selecionar.</span>
+    const tools = homeEdit ? `<div class="fm-decorbar"><span class="tiny muted">✏️ <b>Arrumando</b> (${homeDraft.filter(x => !FURNITURE[x.f]?.part).length}/${HOME_MAX} móveis · ${homeDraft.filter(x => FURNITURE[x.f]?.part).length}/${PART_MAX} 🧱): escolha um móvel e toque num quadradinho. Toque num móvel para selecionar.</span> <label class="tiny hm-k">📏 Tamanho dos móveis <input type="range" min="0.5" max="2" step="0.1" value="${hmK()}" data-hmk></label><span></span>
         ${homeSel !== null && homeDraft[homeSel] ? `<div class="fm-dtools"><span class="fm-dsel-ic">${furnIcon(homeDraft[homeSel].f, FURNITURE[homeDraft[homeSel].f].icon)}</span><button class="btn sm" data-act="hm-flip">↔️ Virar</button><button class="btn sm red" data-act="hm-del">📦 Guardar</button><button class="btn sm" data-act="hm-unsel">OK</button></div>` : ''}
         <div class="fm-palette">${Object.keys(h.owned || {}).filter(f => FURNITURE[f]).map(f => `<button class="fm-dbtn ${homePick === f ? 'on' : ''}" data-act="hm-pick" data-f="${f}" title="${esc(FURNITURE[f].name)}" ${homeOwnedLeft(f) > 0 ? '' : 'disabled'}>${furnIcon(f, FURNITURE[f].icon)}<small>${homeOwnedLeft(f)}</small></button>`).join('') || '<span class="tiny muted">Compre móveis na 🛒 Loja de móveis.</span>'}</div>
         <div class="row" style="gap:6px;flex-wrap:wrap"><select class="input sm" id="hm-wall">${Object.entries(WALLS).filter(([id, w]) => !w.price || (h.walls || []).includes(id)).map(([id, w]) => `<option value="${id}" ${(homeDraft.wall || h.wall) === id ? 'selected' : ''}>🧱 ${esc(w.name)}</option>`).join('')}</select>
@@ -623,6 +623,31 @@ export async function openFarm(ctx, profile, userId = null) {
     if (e.target.dataset.fm === 'biome' && sel) run(() => api('profile', { op: 'farm_place', uid: sel, biome: e.target.value }));
   });
 
+  // 📏 v61: tamanho dos móveis (só neste aparelho) — sprites de tamanhos diferentes
+  function hmK() { try { return Number(localStorage.getItem('pmhx_hm_k')) || 1; } catch { return 1; } }
+  ov.addEventListener('input', e => { if (e.target.matches?.('[data-hmk]')) { try { localStorage.setItem('pmhx_hm_k', e.target.value); } catch { /* ok */ } ov.querySelector('.hm-room')?.style.setProperty('--hm-k', e.target.value); } });
+  // 🧊 v61: geladeira — tudo que dá para comer/usar (cozinha, horta, Mochila)
+  const openFridge = () => {
+    const bag = me?.stats?.bag || {}, goods = farm?.garden?.goods || {};
+    const meals = Object.entries(bag).filter(([id, n]) => n > 0 && MEAL_ITEMS[id]);
+    const cons = Object.entries(bag).filter(([id, n]) => n > 0 && ['heal', 'revive', 'cure', 'candy', 'boost', 'ingredient', 'soup', 'meal'].includes(ALL_ITEMS[id]?.kind) && !MEAL_ITEMS[id]);
+    const gd = Object.entries(goods).filter(([k, n]) => n > 0 && GOODS[k]);
+    const row = (ic, name, n, desc = '') => `<div class="fr-it" title="${esc(desc)}"><span class="fr-ic">${ic}</span><b>${esc(name)}</b><span class="fr-n">×${n}</span>${desc ? `<span class="tiny muted">${esc(desc)}</span>` : ''}</div>`;
+    openModal('fridge', '🧊 Geladeira', `<div class="fr-wrap">
+      <h4>🍽️ Pratos prontos (Cozinha)</h4><div class="fr-grid">${meals.map(([id, n]) => row(MEAL_ITEMS[id].emoji, MEAL_ITEMS[id].name, n, MEAL_ITEMS[id].desc)).join('') || '<span class="tiny muted">Nenhum prato pronto. Cozinhe no 🍳 Fogão.</span>'}</div>
+      <h4>🥕 Da horta e dos Pokémon</h4><div class="fr-grid">${gd.map(([k, n]) => row(GOODS[k].icon, GOODS[k].name, n)).join('') || '<span class="tiny muted">Vazio. Colha na horta e faça ❤️ Carinho nos Pokémon.</span>'}</div>
+      <h4>🎒 Consumíveis da Mochila</h4><div class="fr-grid">${cons.map(([id, n]) => row(itemIcon(id, ALL_ITEMS[id].emoji || '🎁'), ALL_ITEMS[id].name, n, ALL_ITEMS[id].desc)).join('') || '<span class="tiny muted">Nenhum.</span>'}</div>
+      <p class="tiny muted">Os pratos são levados para a partida na 🎒 Mochila (escolha antes de entrar).</p></div>`, { wide: true });
+  };
+  // 📺 v61: TV — ranking e música
+  const openTv = () => {
+    const ov2 = openModal('tv', '📺 TV', `<div class="col" style="gap:8px"><button class="btn primary" data-act="tv-rank">🏆 Ver o Ranking (Liga, Elos e pontos)</button>
+      <button class="btn" data-act="tv-music">🎵 Escolher música para tocar no jogo</button><p class="tiny muted">A música continua tocando enquanto você joga.</p></div>`);
+    bindActions(ov2, {
+      'tv-rank': async () => { closeModal('tv'); const m = await import('./screens.js'); m.openRankingModal?.(me); },
+      'tv-music': async () => { closeModal('tv'); (await import('./music.js')).openMusic(); }
+    });
+  };
   bindActions(ov, {
     pick: d => { if (decorMode || houseMode) return; houseSel = false; sel = sel === d.uid ? null : d.uid; render(); },
     house: () => { if (!farm.mine) return; houseMode = true; houseSel = false; sel = null; render(); },
@@ -664,9 +689,11 @@ export async function openFarm(ctx, profile, userId = null) {
     'hm-pick': d => { homePick = d.f; homeSel = null; render(); },
     'hm-cell': d => { if (!homeEdit) return; if (homeSel !== null) { homeDraft[homeSel] = { ...homeDraft[homeSel], x: Number(d.x), y: Number(d.y) }; homeSel = null; render(); return; }
       if (!homePick || homeOwnedLeft(homePick) <= 0) return toast('Escolha um móvel (ou compre mais na 🛒 Loja).', 'bad');
-      if (homeDraft.length >= HOME_MAX) return toast(`Máximo de ${HOME_MAX} móveis.`, 'bad');
+      const isPart = !!FURNITURE[homePick]?.part, nSame = homeDraft.filter(x => !!FURNITURE[x.f]?.part === isPart).length;
+      if (nSame >= (isPart ? PART_MAX : HOME_MAX)) return toast(isPart ? `Máximo de ${PART_MAX} pedaços de parede.` : `Máximo de ${HOME_MAX} móveis.`, 'bad');
       homeDraft.push({ f: homePick, x: Number(d.x), y: Number(d.y) }); if (homeOwnedLeft(homePick) <= 0) homePick = Object.keys(H().owned || {}).find(f => homeOwnedLeft(f) > 0) || null; render(); },
-    'hm-f': d => { if (!homeEdit) { const el = ov.querySelector(`.hm-f[data-i="${d.i}"]`); el?.classList.remove('tapped'); void el?.offsetWidth; el?.classList.add('tapped'); return; } homeSel = Number(d.i); render(); },
+    'hm-f': d => { if (!homeEdit && d.f === 'fridge') return openFridge(); if (!homeEdit && d.f === 'tv') return openTv();
+      if (!homeEdit) { const el = ov.querySelector(`.hm-f[data-i="${d.i}"]`); el?.classList.remove('tapped'); void el?.offsetWidth; el?.classList.add('tapped'); return; } homeSel = Number(d.i); render(); },
     'hm-flip': () => { if (homeSel === null) return; homeDraft[homeSel].fl = homeDraft[homeSel].fl ? 0 : 1; render(); },
     'hm-del': () => { if (homeSel === null) return; homeDraft.splice(homeSel, 1); homeSel = null; render(); },
     'hm-unsel': () => { homeSel = null; render(); },

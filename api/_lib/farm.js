@@ -15,7 +15,7 @@ import { addToBag } from './core.js';
 import { CROPS, GOODS, GOODS_CAP, plotsFor, WATER_MULT, GRASS_MULT, WORKER_MULT, HARVEST_XP, BUILDINGS, BUILD_MAX, queueFor, POFFIN_ITEMS, POFFIN_HAPPY, POFFIN_XP, POFFIN_BOND, TORTA_FARM_XP, farmHasType } from '../../shared/data/garden.js';
 import { cleanArt, isArtKey, artIndex, ART_MAX } from '../../shared/data/farmart.js';
 import { EXPANSIONS, expLevel, nextExpPrice, slotsMaxOf, plotsMaxOf, benchesOf, decorMaxOf, incubMaxOf } from '../../shared/data/expansions.js';
-import { FURNITURE, WALLS, FLOORS, ROOM_W, ROOM_H, HOME_MAX, MEALS, MEAL_ITEMS, PRODUCE_BY_SP, PRODUCE_BY_TYPE, PRODUCE_TYPE_CHANCE, TALK_BOND, PLAY_XP, cookQueue, hasPlaced } from '../../shared/data/home.js';
+import { FURNITURE, WALLS, FLOORS, ROOM_W, ROOM_H, HOME_MAX, PART_MAX, furnMax, MEALS, MEAL_ITEMS, PRODUCE_BY_SP, PRODUCE_BY_TYPE, PRODUCE_TYPE_CHANCE, TALK_BOND, PLAY_XP, cookQueue, hasPlaced } from '../../shared/data/home.js';
 import { myCosmetics, getShop, equippedSkin } from './shop.js';
 
 let shopItems = []; // vitrine (para a skin do treinador nas listas), recarregada a cada chamada
@@ -350,7 +350,7 @@ export async function farmOp(db, user, body) {
     const cat = kind === 'furniture' ? FURNITURE : kind === 'wall' ? WALLS : kind === 'floor' ? FLOORS : null;
     if (!cat || !cat[id] || !cat[id].price) bad('Item inválido.');
     const f0 = current(p, now), h0 = f0.home || {};
-    if (kind === 'furniture' && ((h0.owned || {})[id] || 0) >= 5) bad('Você já tem 5 desse móvel.');
+    if (kind === 'furniture' && ((h0.owned || {})[id] || 0) + (cat[id].pack || 1) > furnMax(id)) bad(`Você já tem o máximo desse móvel (${furnMax(id)}).`);
     if (kind !== 'furniture' && (h0[kind + 's'] || []).includes(id)) bad('Você já tem esse.');
     const price = cat[id].price;
     if ((p.gold || 0) < price) bad(`Precisa de 🪙 ${price} de ouro.`);
@@ -359,7 +359,7 @@ export async function farmOp(db, user, body) {
     try {
       const { prof } = await save(db, user.id, farm => {
         const h = (farm.home = { ...(farm.home || {}) });
-        if (kind === 'furniture') h.owned = { ...(h.owned || {}), [id]: ((h.owned || {})[id] || 0) + 1 };
+        if (kind === 'furniture') h.owned = { ...(h.owned || {}), [id]: ((h.owned || {})[id] || 0) + (cat[id].pack || 1) };
         else { h[kind + 's'] = [...new Set([...(h[kind + 's'] || []), id])]; h[kind] = id; }
         return {};
       });
@@ -369,7 +369,8 @@ export async function farmOp(db, user, body) {
   if (body.op === 'home_place') { // arrumar a casa: posições dos móveis + parede/piso
     const f0 = current(p, now), h0 = f0.home || {};
     const used = {};
-    const placed = (Array.isArray(body.placed) ? body.placed : []).slice(0, HOME_MAX).map(it => ({
+    let nF = 0, nP = 0; // v61: móveis (até HOME_MAX) e paredes internas (até PART_MAX) contam separado
+    const placed = (Array.isArray(body.placed) ? body.placed : []).slice(0, HOME_MAX + PART_MAX).filter(it => (FURNITURE[it?.f]?.part ? ++nP <= PART_MAX : ++nF <= HOME_MAX)).map(it => ({
       f: String(it?.f || ''), x: Math.max(0, Math.min(ROOM_W - 1, Math.floor(Number(it?.x) || 0))), y: Math.max(0, Math.min(ROOM_H - 1, Math.floor(Number(it?.y) || 0))), ...(it?.fl ? { fl: 1 } : {})
     })).filter(it => FURNITURE[it.f] && (used[it.f] = (used[it.f] || 0) + 1) <= ((h0.owned || {})[it.f] || 0));
     const wall = WALLS[body.wall] && (!WALLS[body.wall].price || (h0.walls || []).includes(body.wall)) ? body.wall : h0.wall || 'plain';

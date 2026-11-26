@@ -3,13 +3,15 @@
 // (frutas da Horta + leite/ovo/mel que alguns Pokémon dão no ❤️ Carinho) e levadas na partida pela 🎒 Mochila.
 import { TYPES, TYPE_LABELS } from '../rules/types.js';
 
-export const ROOM_W = 12, ROOM_H = 7, HOME_MAX = 40;
+export const ROOM_W = 12, ROOM_H = 7, HOME_MAX = 40, PART_MAX = 80; // v61: paredes internas têm limite próprio
+export const furnMax = id => FURNITURE[id]?.max || 5;
 
 export const FURNITURE = {
   chair: { name: 'Cadeira', icon: '🪑', price: 800 },
   plant: { name: 'Vaso de planta', icon: '🪴', price: 600 },
   lamp: { name: 'Abajur', icon: '💡', price: 1000, glow: true },
   rug: { name: 'Tapete', icon: '🟫', price: 1200, floor: true },
+  partition: { name: 'Parede (10 pedaços)', icon: '🧱', price: 500, part: true, pack: 10, max: 80, desc: 'Monte cômodos: cada pedaço ocupa 1 quadradinho e usa a cor da parede. Não conta no limite de móveis.' },
   window: { name: 'Janela', icon: '🪟', price: 1500, wall: true },
   table: { name: 'Mesa', icon: '🍽️', price: 1500 },
   bed: { name: 'Cama', icon: '🛏️', price: 2000 },

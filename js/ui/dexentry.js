@@ -9,7 +9,7 @@ import { baseDefOf, defFactor } from '../../shared/rules/monsters.js';
 import { against, TYPES, TYPE_COLORS } from '../../shared/rules/types.js';
 import { STATUS } from '../../shared/rules/battle.js';
 import { esc } from './dom.js';
-import { monSprite, typeLabel } from '../config.js';
+import { monSprite, typeLabel, moveIcon, typeIcon } from '../config.js';
 import { typeChips, moveFxChips } from './common.js';
 
 let REF = null;
@@ -54,7 +54,7 @@ function evoChain(sp, seen) {
   return `<div class="dx-evo">${stages.map((st, i) => `${i ? '<span class="dx-arrow">→</span>' : ''}<div class="dx-evo-col">${st.map(btn).join('')}</div>`).join('')}</div>`;
 }
 
-const moveRow = m => `<div class="dx-move" style="--tc:${TYPE_COLORS[m.type]}"><span class="dx-ty" style="background:${TYPE_COLORS[m.type]}">${esc(typeLabel(m.type))}</span>
+const moveRow = m => `<div class="dx-move" style="--tc:${TYPE_COLORS[m.type]}"><span class="dx-ty" style="background:${TYPE_COLORS[m.type]}">${typeIcon(m.type)}${esc(typeLabel(m.type))}</span>${moveIcon(m)}
   <b>${esc(m.name)}</b><span class="tiny muted">${m.kind === 'dmg' || m.kind === 'drain' ? `${Math.round((m.power || 1) * 100)}%` : 'suporte'}${m.miss ? ` · erra no 🎲${m.miss === 1 ? '1' : `1–${m.miss}`}` : ''}</span>${moveFxChips(m)}</div>`;
 
 /**

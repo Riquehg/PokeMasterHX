@@ -7,7 +7,7 @@ import { canUse } from '../../shared/rules/helpers.js';
 import { against, TYPE_COLORS } from '../../shared/rules/types.js';
 import { raidWaiting, raidBallChance, RAID_ITEM_KINDS } from '../../shared/rules/raid.js';
 import { esc, openModal, closeModal, bindActions } from './dom.js';
-import { monSprite, itemUrl, typeLabel } from '../config.js';
+import { monSprite, itemUrl, typeLabel, moveIcon } from '../config.js';
 import { typeChips, edgeBadge, foeIntelHtml } from './common.js';
 
 function bossBar(r) {
@@ -59,7 +59,7 @@ export function raidHtml(s, vid) {
       controls = `<div class="move-grid">${monMoves(m).map((mv, i) => {
         const dmg = mv.kind === 'dmg' || mv.kind === 'drain';
         const mult = dmg ? against(mv.type, bossTypes) : 1;
-        return `<button class="btn move-btn" style="--tc:${TYPE_COLORS[mv.type]}" data-act="raid-attack" data-slot="${i}"><span class="mv-name">${esc(mv.name)}</span>
+        return `<button class="btn move-btn" style="--tc:${TYPE_COLORS[mv.type]}" data-act="raid-attack" data-slot="${i}"><span class="mv-name">${moveIcon(mv)}${esc(mv.name)}</span>
           <span class="mv-meta">${esc(typeLabel(mv.type))}${dmg ? ` · ${Math.round((mv.power || 1) * 100)}%` : ''}</span>${dmg ? `<span class="mv-tag ${mult >= 2 ? 'good' : mult < 1 ? 'bad' : ''}">${mult >= 2 ? 'Super efetivo' : mult < 1 ? 'Pouco efetivo' : 'Normal'}</span>` : `<span class="mv-tag sup">${esc(mv.desc)}</span>`}</button>`;
       }).join('')}</div>${raidItems(me, m, x)}`;
     } else controls = `<p class="muted center"><span class="spinner"></span> ${x && m?.hp <= 0 ? 'Seu Pokémon desmaiou — torça pelo grupo!' : `Aguardando: ${waiting.map(name).map(esc).join(', ')}`}</p>`;

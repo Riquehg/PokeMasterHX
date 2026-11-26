@@ -110,3 +110,5 @@ function openNewPassword() {
     }
   });
 }
+
+import('./ui/music.js').then(m => m.restoreMusic()).catch(() => {}); // 🎵 v61: volta a tocar a última música

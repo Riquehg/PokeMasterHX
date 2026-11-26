@@ -1639,3 +1639,27 @@ test('🎾 v60: bolas elementais pegam o próprio elemento; soltar logo após ca
   assert.ok(!r.state.players[0].team.some(x => x.uid === m.uid));
   assert.equal(r.state.players[0].gold, g0 + 200);
 });
+
+// ---------------------------------------------------------------- v61
+test('🧱 v61: paredes internas vêm em pacotes de 10 e têm limite próprio (fora dos 40 móveis)', async () => {
+  const { HOME_MAX, PART_MAX } = await import('../shared/data/home.js');
+  const { db, admin, us: [a] } = await users(1);
+  await adminOp(db, admin, { op: 'give_gold', userId: a.id, amount: 90000 });
+  await profileOp(db, a, { op: 'farm_get' });
+  let r;
+  for (let i = 0; i < 8; i++) r = await profileOp(db, a, { op: 'home_buy', kind: 'furniture', id: 'partition' });
+  assert.equal(r.farm.home.owned.partition, 80);
+  await assert.rejects(profileOp(db, a, { op: 'home_buy', kind: 'furniture', id: 'partition' }), /máximo/);
+  await profileOp(db, a, { op: 'home_buy', kind: 'furniture', id: 'chair' });
+  const placed = [{ f: 'chair', x: 1, y: 1 }, ...Array.from({ length: 50 }, (_, i) => ({ f: 'partition', x: i % 12, y: Math.floor(i / 12) }))];
+  r = await profileOp(db, a, { op: 'home_place', placed });
+  assert.equal(r.farm.home.placed.length, 51);
+  assert.ok(PART_MAX > HOME_MAX);
+});
+test('🎵 v61: links do YouTube (vídeo/playlist) aceitos; outros sites recusados', async () => {
+  const { parseYoutube } = await import('../js/ui/music.js');
+  assert.deepEqual(parseYoutube('https://youtu.be/dQw4w9WgXcQ'), { video: 'dQw4w9WgXcQ', list: null });
+  assert.equal(parseYoutube('https://www.youtube.com/playlist?list=PLxyz12345').list, 'PLxyz12345');
+  assert.equal(parseYoutube('https://example.com/watch?v=dQw4w9WgXcQ'), null);
+  assert.equal(parseYoutube('javascript:alert(1)'), null);
+});

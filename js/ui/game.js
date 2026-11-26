@@ -48,6 +48,7 @@ export function mountGame(root, session, opts = {}) {
           <button class="btn sm soc-tb" data-act="social" title="Chat global e treinadores online">💬<span class="lbl-txt"> <span data-soc-online>0</span> online</span><i data-soc-badge></i></button>
           <button class="btn sm" data-act="speed" id="g-speed" title="Velocidade das animações">🎬</button>
           <button class="btn sm" data-act="lite" id="g-lite" title="⚡ Modo leve: menos efeitos (para celular travando)">⚡</button>
+          <button class="btn sm" data-act="music" title="🎵 Música durante o jogo (YouTube)">🎵</button>
           <button class="btn sm rot-btn" data-act="rotate" title="Jogar com o celular deitado (tela cheia)">🔄</button>
           <button class="btn sm" data-act="open-help" title="Regras">❔</button>
           <button class="btn sm red" data-act="exit" title="Sair">🚪<span class="lbl-txt"> Sair</span></button>
@@ -803,6 +804,7 @@ export function mountGame(root, session, opts = {}) {
       toast(nx[1]);
       render();
     },
+    music: async () => (await import('./music.js')).openMusic(),
     rotate: async () => { // 🔄 v60: celular deitado em tela cheia (e volta)
       try {
         if (document.fullscreenElement) { try { screen.orientation?.unlock?.(); } catch { /* ok */ } await document.exitFullscreen(); return; }

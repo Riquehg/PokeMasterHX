@@ -2543,3 +2543,46 @@ body.in-game #toasts .toast.good { border-top-color: var(--green); } body.in-gam
 .ui-ic { width: 20px; height: 20px; object-fit: contain; vertical-align: -4px; display: inline-block; }
 span.ui-ic.itm-emo { width: auto; height: auto; }
 .acct-tile .ui-ic { width: 34px; height: 34px; vertical-align: middle; }
+
+/* v61 — ícones de golpes e de tipos */
+.mv-ic { width: 20px; height: 20px; object-fit: contain; vertical-align: -5px; margin-right: 4px; image-rendering: pixelated; }
+.mv-name .mv-ic { width: 22px; height: 22px; }
+.ty-ic { width: 14px; height: 14px; object-fit: contain; vertical-align: -2px; margin-right: 3px; }
+span.mv-ic.itm-emo, span.ty-ic.itm-emo { display: none; }
+
+/* ================================================ v61 — casa: móveis no tamanho real (pixel art), respiração, paredes */
+.hm-room { container-type: inline-size; }
+.hm-f.has-img { font-size: 0; transform: translate(-50%, -82%) scaleX(var(--fl, 1)); filter: none; }
+.hm-f.has-img.onwall { transform: translate(-50%, -50%) scaleX(var(--fl, 1)); }
+.hm-f.has-img.flat { transform: translate(-50%, -50%) scaleX(var(--fl, 1)); opacity: 1; }
+.hm-f img.furn-ic { width: calc(var(--nw, 32) * var(--hm-k, 1) * 100cqw / 400); height: auto; max-width: none; max-height: none; transform: none; image-rendering: pixelated; filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); display: block; }
+.hm-shop-ic img.furn-ic, .fm-dbtn img.furn-ic, .fm-dsel-ic img.furn-ic { image-rendering: pixelated; }
+/* personagens parados, só respirando */
+.hm-pal { animation: none !important; }
+.hm-pal img { animation: hmBreath 3.2s ease-in-out infinite !important; transform-origin: 50% 100%; }
+.hm-fav img { animation-duration: 2.6s !important; }
+@keyframes hmBreath { 0%, 100% { transform: scaleY(1) scaleX(1); } 50% { transform: scaleY(1.035) scaleX(.985); } }
+.hm-fav { left: 66%; }
+/* 🧱 paredes internas (cômodos) */
+.hm-f.part { font-size: 0; filter: none; width: calc(100% / 12 + 1px); height: calc(68% / 7 + 7%); transform: translate(-50%, -78%); background: var(--wall); border-radius: 2px 2px 0 0;
+  box-shadow: inset 0 6px 0 rgba(255,255,255,.18), inset 0 -8px 10px -6px rgba(0,0,0,.45), 0 3px 4px rgba(0,0,0,.3); }
+.hm-f.part.sel { outline-offset: 0; }
+@media (prefers-reduced-motion: reduce) { .hm-pal img { animation: none !important; } }
+
+/* v61 — mini player de música */
+.mu-dock { position: fixed; right: 10px; bottom: 10px; z-index: 9000; width: 220px; border-radius: 12px; overflow: hidden; background: #140f0a; border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+.mu-bar { display: flex; align-items: center; gap: 2px; padding: 3px 4px 3px 8px; font-size: 11px; }
+.mu-bar .mu-t { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mu-bar button { background: none; border: 0; color: inherit; cursor: pointer; padding: 2px 5px; font-size: 12px; }
+.mu-frame { display: block; width: 220px; height: 124px; border: 0; }
+.mu-dock.min { width: 150px; }
+.mu-dock.min .mu-frame { width: 1px; height: 1px; opacity: .01; position: absolute; pointer-events: none; }
+body.in-game .mu-dock { bottom: auto; top: 96px; right: auto; left: 8px; }
+@media (max-width: 900px) { body.in-game .mu-dock { top: auto; bottom: 74px; } }
+.mu-row { gap: 4px; align-items: center; padding: 4px 6px; border-radius: 8px; background: rgba(255,255,255,.04); }
+/* v61 — geladeira */
+.fr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-bottom: 10px; }
+.fr-it { display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 2px 6px; padding: 6px 8px; border-radius: 10px; background: rgba(120, 190, 255, .07); border: 1px solid rgba(120, 190, 255, .2); }
+.fr-it .tiny { grid-column: 1 / -1; }
+.fr-ic { font-size: 22px; display: grid; place-items: center; } .fr-ic img { width: 28px; height: 28px; object-fit: contain; }
+.fr-n { font-weight: 800; color: #9fd3ff; }

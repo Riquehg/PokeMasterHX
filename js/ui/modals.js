@@ -17,7 +17,7 @@ import { monView, xpToNext, defIvOf } from '../../shared/rules/monsters.js';
 import { against, TYPES } from '../../shared/rules/types.js';
 import { score } from '../../shared/engine.js';
 import { esc, openModal, closeModal, setModalBody, bindActions } from './dom.js';
-import { monSprite, itemUrl, badgeUrl, typeLabel, leaderUrl } from '../config.js';
+import { monSprite, itemUrl, badgeUrl, typeLabel, leaderUrl, moveIcon } from '../config.js';
 import { monCard, statCard, typeChips, avatarImg, playerColor, hpBar, miniMon, titleHtml } from './common.js';
 import { openTradeBuilder } from './trade.js';
 
@@ -295,7 +295,7 @@ export function openDex(session, extraCaught = [], extraSeen = [], extra = {}) {
 
 export function movesHtml(spId) {
   const sp = getSpecies(spId);
-  return `<div class="moves-list">${movesOf(spId).map(m => `<span class="move-chip" style="--tc:${TYPE_COLORS[m.type]}" title="${esc(m.desc)}"><b>${esc(m.name)}</b> <span class="tiny">${esc(m.desc)}</span></span>`).join('')}
+  return `<div class="moves-list">${movesOf(spId).map(m => `<span class="move-chip" style="--tc:${TYPE_COLORS[m.type]}" title="${esc(m.desc)}">${moveIcon(m)}<b>${esc(m.name)}</b> <span class="tiny">${esc(m.desc)}</span></span>`).join('')}
     ${sp?.role ? `<span class="chip">🛡️ Suporte: ${esc(ROLE_LABELS[sp.role])}</span>` : ''}</div>`;
 }
 
@@ -388,6 +388,8 @@ export function openHelp() {
       <p><b>📦 Coleção compacta:</b> a Coleção abre em mini-cartões (nome, nível e selos). Toque no Pokémon para ver os status completos e as ações (favoritar, fazenda, pedras, apelido, soltar). O botão 🃏 Ver como cartas volta ao modo antigo.</p>
       <p><b>Pokébola ao lado do nome:</b> nos Pokémon selvagens (tabuleiro, batalha e Safari), a Pokébola <b>colorida</b> indica que você já capturou essa espécie; <b>cinza</b>, que ainda falta.</p>
       <p><b>⚡ Modo leve:</b> o botão ⚡ na partida desliga animações pesadas (pulsos das casas, auras, vagalumes, desfoque). Ele já liga sozinho em celulares mais fracos. Deixe ligado se o jogo travar.</p>
+      <p><b>🏡 Casa (v61):</b> os móveis aparecem no tamanho da sprite (📏 ajuste o tamanho em ✏️ Arrumar). 🧱 Paredes (pacote de 10, até 80 pedaços, não contam no limite de móveis) criam cômodos. Toque na 🧊 Geladeira para ver pratos, colheita e consumíveis; na 📺 TV para ver o Ranking ou escolher música.</p>
+      <p><b>🎵 Música:</b> no botão 🎵 (partida ou menu) cole um link de música ou playlist do YouTube: um mini player toca enquanto você joga (▁ minimiza, ✖ para). Os links ficam salvos no aparelho.</p>
       <p><b>🧭 Habilidades de campo:</b> antes de rolar o dado, Pokémon da sua equipe (de pé e que obedeçam) podem ajudar — 1 por turno, com recarga: 🌀 Teletransporte (Psíquico Nv.18+: vai a uma cidade já visitada · 8 turnos), 🌸 Aroma Doce (Grama/Fada Nv.12+: atrai um selvagem na casa 🌿 onde você está · 5), 💨 Vento a Favor (Voador Nv.12+: +2 casas · 4), 🌊 Surfar (Água Nv.15+: rola 2 vezes e fica com o maior · 5), ⛏️ Escavar (Terra/Pedra Nv.15+: acha um item · 7).</p>
       <p><b>🤝 Companheiro na batalha:</b> ele aparece ao seu lado. A partir do Laço Nv.5 pode ajudar raramente (3% a 7% por rodada, 1 vez); no Nv.10 (íntimo), 12% por rodada, até 2 vezes. Novos companheiros por mapa (missão "Capture Pokémon de tier 3+"): Elaine (Kanto), Leon (Expedição), Brendan (Arquipélago), Adaman (Terras de Fogo), Cynthia (Picos Gelados), Acerola (Mata Profunda).</p>
       <p><b>🎾 Bolas elementais:</b> +3 no próprio elemento — Flame (Fogo, Terra, Pedra), Aqua (Água, Gelo), Volt (Elétrico, Aço, Voador), Shadow (Fantasma, Sombrio, Veneno), Mystic (Psíquico, Fada, Dragão); +1 nos demais.</p>

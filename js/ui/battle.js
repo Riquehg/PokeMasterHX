@@ -12,7 +12,7 @@ import { gmaxFor, BAND_ID } from '../../shared/data/gmax.js';
 import { bestAttack, against, effectivenessLabel, TYPE_COLORS } from '../../shared/rules/types.js';
 import { whoMustAct } from '../../shared/engine.js';
 import { esc, hpClass } from './dom.js';
-import { monSprite, itemUrl, leaderUrl, typeLabel } from '../config.js';
+import { monSprite, itemUrl, leaderUrl, typeLabel, moveIcon } from '../config.js';
 import { typeChips, edgeBadge, foeIntelHtml , moveFxChips } from './common.js';
 import { canTransform } from '../../shared/rules/monsters.js';
 import { ABILITIES, abilityOf } from '../../shared/data/battlegear.js';
@@ -69,7 +69,7 @@ function spectatorHtml(state, b) {
     const act = team[side.active];
     const owner = side.kind === 'player' ? state.players.find(p => p.id === side.pid)?.name : side.kind === 'wild' ? 'Selvagem' : side.name;
     return `<div class="spec-side"><b>${esc(owner || '')}</b>
-      <div class="spec-moves">${act ? monMoves(act).map(m => `<span class="move-chip" style="--tc:${TYPE_COLORS[m.type]}"><b>${esc(m.name)}</b> <span class="tiny">${m.kind === 'dmg' || m.kind === 'drain' ? Math.round((m.power || 1) * 100) + '%' : 'suporte'}</span></span>`).join('') : ''}</div>
+      <div class="spec-moves">${act ? monMoves(act).map(m => `<span class="move-chip" style="--tc:${TYPE_COLORS[m.type]}">${moveIcon(m)}<b>${esc(m.name)}</b> <span class="tiny">${m.kind === 'dmg' || m.kind === 'drain' ? Math.round((m.power || 1) * 100) + '%' : 'suporte'}</span></span>`).join('') : ''}</div>
       <div class="spec-bench">${team.map((m, i) => `<span class="spec-mon ${i === side.active ? 'on' : ''} ${m.hp <= 0 ? 'ko' : ''}" title="${esc(getSpecies(m.sp).name)} Nv.${m.lvl} — ${Math.max(0, m.hp)}/${maxHpOf(m)} HP">
         <img src="${monSprite(m)}" alt=""><i style="width:${Math.max(0, (m.hp / maxHpOf(m)) * 100).toFixed(0)}%"></i></span>`).join('')}</div></div>`;
   };
@@ -130,7 +130,7 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
       const tag = !dmg ? `<span class="mv-tag sup">${esc(m.desc)}</span>`
         : mult === 0 ? '<span class="mv-tag bad">Não afeta</span>' : mult >= 2 ? `<span class="mv-tag good">Super efetivo x${mult}</span>` : mult < 1 ? `<span class="mv-tag bad">Pouco efetivo x${mult}</span>` : '<span class="mv-tag">Normal</span>';
       return `<button class="btn move-btn" style="--tc:${TYPE_COLORS[m.type]}" data-act="b-attack" data-slot="${i}" title="${esc(banned ? '🎀 Faixa Escolhida: só golpes de ataque' : m.desc)}" ${banned ? 'disabled' : ''}>
-        <span class="mv-name">${esc(m.name)}</span>
+        <span class="mv-name">${moveIcon(m)}${esc(m.name)}</span>
         <span class="mv-meta">${esc(typeLabel(m.type))}${dmg ? ` · poder ${Math.round((m.power || 1) * (stab ? 1.2 : 1) * 100)}%` : ''}${m.miss ? ` · erra no 🎲${m.miss === 1 ? '1' : `1–${m.miss}`}` : ''}</span>${tag}${dmg ? moveFxChips(m) : ''}</button>`;
     }).join('');
     // 🧬 Ditto/Mew: voltar à forma, guardar a forma e usar formas guardadas (até 3)

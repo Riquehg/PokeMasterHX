@@ -140,6 +140,16 @@ export const spriteIcon = (path, fb = '', cls = 'itm-ic') => {
   const url = `${CFG.sprites}${path}`;
   return ITEM_MISS.has(url) ? `<span class="${cls} itm-emo">${fb}</span>` : `<img class="${cls}" src="${url}" alt="" data-fb="${fb}">`;
 };
+// 🥊 v61: ícone do golpe (moves/<nome>.png, ex.: thunderbolt.png); sem arquivo → ícone do tipo (types/<tipo>.png)
+export const moveSlug = name => String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+export const typeIconUrl = t => `${CFG.sprites}types/${t}.png`;
+export const moveIcon = m => {
+  if (!m) return '';
+  const u = `${CFG.sprites}moves/${moveSlug(m.name)}.png`, t = typeIconUrl(m.type);
+  if (ITEM_MISS.has(u)) return ITEM_MISS.has(t) ? '' : `<img class="mv-ic" src="${t}" data-fb="" alt="">`;
+  return `<img class="mv-ic" src="${u}" data-alt="${t}" data-fb="" alt="">`;
+};
+export const typeIcon = t => (ITEM_MISS.has(typeIconUrl(t)) ? '' : `<img class="ty-ic" src="${typeIconUrl(t)}" data-fb="" alt="">`);
 export const furnIcon = (id, fb) => spriteIcon(`furniture/${id}.png`, fb, 'furn-ic');
 export const uiIcon = (id, fb) => spriteIcon(`ui/${id}.png`, fb, 'ui-ic');
 export const itemUrl = id => (ITEMS[id]?.emoji && !ITEMS[id]?.image ? emojiImg(ITEMS[id].emoji) : `${CFG.sprites}items/${itemFile(id)}`);
@@ -170,6 +180,7 @@ export function placeholder(text, color = '#3b2b1d') {
 if (typeof window !== 'undefined') {
   document.addEventListener('load', e => { // lembra o nome de arquivo alternativo que funcionou
     const el = e.target;
+    if (el instanceof HTMLImageElement && el.classList.contains('furn-ic')) { el.style.setProperty('--nw', el.naturalWidth); el.parentElement?.classList.add('has-img'); } // v61: móvel no tamanho real da sprite
     if (!(el instanceof HTMLImageElement) || !el.dataset.itemOk || !el.dataset.itemTry) return;
     const m = /\/items\/([^/?#]+)$/.exec(el.src || '');
     if (m) { ITEM_ALT[el.dataset.itemOk] = decodeURIComponent(m[1]); try { localStorage.setItem('pmhx_item_alt', JSON.stringify(ITEM_ALT)); } catch { /* ok */ } }
@@ -178,6 +189,7 @@ if (typeof window !== 'undefined') {
     const el = e.target;
     if (el && el.tagName === 'IMG' && tryItemAlt(el)) return; // v59: outro nome de arquivo do item
     if (el && el.tagName === 'IMG') { const bm = /\/badges\/([^/?#]+)\.png$/.exec(el.src || ''); if (bm && BADGE_KANTO[bm[1]]) { el.src = el.src.replace(/[^/]+\.png$/, BADGE_KANTO[bm[1]] + '.png'); return; } }
+    if (el && el.tagName === 'IMG' && el.dataset.alt) { const a = el.dataset.alt; delete el.dataset.alt; ITEM_MISS.add(el.src); if (!ITEM_MISS.has(a)) { el.src = a; return; } } // v61: 2ª opção (ex.: golpe → tipo)
     if (el && el.tagName === 'IMG' && el.dataset.fb !== undefined) { // ícone de item sem sprite → emoji
       ITEM_MISS.add(el.src);
       const s = document.createElement('span'); s.className = `${el.className} itm-emo`; s.textContent = el.dataset.fb; el.replaceWith(s); return;

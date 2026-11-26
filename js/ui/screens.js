@@ -210,6 +210,7 @@ export async function hubScreen(root, ctx) {
         <button class="acct-tile" data-act="safari" ${profile ? '' : 'disabled'}><span>🌿</span><b>Zona Safári</b><small>${profile?.stats?.safari && !profile.stats.safari.over ? '👣 Passeio em andamento!' : 'Capture raros com ouro'}</small></button>
         <button class="acct-tile" data-act="daily" ${profile ? '' : 'disabled'}><span>🎁</span><b>Prêmio diário</b><small>${profile ? (dailyStatus(profile.stats?.login).canClaim ? '🔴 Disponível agora!' : `🔥 ${profile.stats?.login?.streak || 0} dias seguidos`) : ''}</small></button>
         <button class="acct-tile" data-act="trophies" ${profile ? '' : 'disabled'}><span>🏆</span><b>Sala de Troféus</b><small>${(profile?.stats?.trophies || []).length} troféus da Liga das Séries</small></button>
+        <button class="acct-tile" data-act="music"><span>🎵</span><b>Música</b><small>YouTube enquanto joga</small></button>
         <button class="acct-tile" data-act="ranking"><span>🏆</span><b>Ranking</b><small>Liga, Elos e pontos</small></button>
         <button class="acct-tile" data-act="dshop" ${profile ? '' : 'disabled'}><span>💎</span><b>Loja de cosméticos</b><small>${profile?.diamonds || 0} 💎 · só visual</small></button>
         <button class="acct-tile donate" data-act="donate" ${profile ? '' : 'disabled'}><span>💖</span><b>Apoiar o projeto</b><small>Doe e ganhe 💎 de agradecimento</small></button>
@@ -246,6 +247,7 @@ export async function hubScreen(root, ctx) {
         ctx.go('room', r.match.id);
       } catch (e) { toast(e.message, 'bad'); }
     },
+    music: async () => (await import('./music.js')).openMusic(),
     ranking: () => rankingModal(profile ? (profile.rating ?? 1000) : null, profile?.stats?.league || null, profile?.trainer_name),
     market: () => openMarket(profile, () => ctx.go('hub')),
     abag: () => openAccountBag(profile, rerender, opts => openMarket(profile, () => ctx.go('hub'), opts)),
@@ -522,6 +524,8 @@ function collectionModal(profile, onChange) {
   bindActions(ov, acts);
 }
 
+/** v61: abrir o ranking de fora do hub (📺 TV da casa). */
+export const openRankingModal = profile => rankingModal(profile ? (profile.rating ?? 1000) : null, profile?.stats?.league || null, profile?.trainer_name);
 async function rankingModal(myRating = null, myLeagueRaw = null, myName = '') {
   openModal('rank', '🏆 Ranking', '<span class="spinner"></span>', { wide: true });
   let tab = 'elos', data = null;

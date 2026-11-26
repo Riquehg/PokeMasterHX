@@ -9,13 +9,13 @@ import { TYPE_COLORS, against } from '../../shared/rules/types.js';
 import { esc, hpClass } from './dom.js';
 import { canUse, badgesNeeded } from '../../shared/rules/helpers.js';
 import { natureLabel } from '../../shared/data/natures.js';
-import { monSprite, typeLabel, typeColor, avatarUrl, PLAYER_COLORS, itemUrl } from '../config.js';
+import { monSprite, typeLabel, typeColor, avatarUrl, PLAYER_COLORS, itemUrl, moveIcon, typeIcon } from '../config.js';
 import { ITEMS } from '../../shared/data/items.js';
 import { MEGAS } from '../../shared/data/megas.js';
 import { ABILITIES, abilityOf } from '../../shared/data/battlegear.js';
 
 export function typeChips(types) {
-  return types.map(t => `<span class="chip type" style="background:${typeColor(t)}">${esc(typeLabel(t))}</span>`).join(' ');
+  return types.map(t => `<span class="chip type" style="background:${typeColor(t)}">${typeIcon(t)}${esc(typeLabel(t))}</span>`).join(' ');
 }
 
 export function hpBar(hp, max, cls = '') {
@@ -208,7 +208,7 @@ export function foeIntelHtml(mon) {
   return `<div class="foe-intel">
     <span class="fi-nat" title="${esc(natureLabel(mon.nature))}">❖ ${esc(natureLabel(mon.nature))}</span>
     <span class="fi-pot" title="Potencial (IVs) HP ${mon.iv?.hp ?? '?'} · ATQ ${mon.iv?.atk ?? '?'} · DEF ${mon.iv ? defIvOf(mon) : '?'} · VEL ${mon.iv?.spe ?? '?'} (de ${IV_MAX})">${pot === null ? '?' : `<b class="pk-stars">${potentialStars(pot)}</b> ${potentialLabel(pot)} ${pot}%`}</span>
-    <span class="fi-moves">${moves.map(m => `<span class="move-chip" style="--tc:${TYPE_COLORS[m.type]}"><b>${esc(m.name)}</b> <span class="tiny">${esc(typeLabel(m.type))}</span></span>`).join('')}</span>
+    <span class="fi-moves">${moves.map(m => `<span class="move-chip" style="--tc:${TYPE_COLORS[m.type]}">${moveIcon(m)}<b>${esc(m.name)}</b> <span class="tiny">${esc(typeLabel(m.type))}</span></span>`).join('')}</span>
   </div>`;
 }
 
@@ -218,5 +218,5 @@ export function tmPickerHtml(mon, act = 'tm-move') {
   const list = _tmMovesFor(mon.sp);
   return `<p class="small">Escolha o golpe que <b>${esc(getSpecies(mon.sp)?.name)}</b> vai aprender no lugar de <b>${esc(monMoves(mon)[1]?.name || '?')}</b>:</p>
     <div class="tm-grid">${list.map(m => `<button class="btn move-btn tm-opt ${m.id === cur ? 'on' : ''}" style="--tc:${TYPE_COLORS[m.type]}" data-act="${act}" data-move="${m.id}" ${m.id === cur ? 'disabled' : ''}>
-      <span class="mv-name">${esc(m.name)}</span><span class="mv-meta">${esc(typeLabel(m.type))}${m.kind === 'dmg' || m.kind === 'drain' ? ` · poder ${Math.round((m.power || 1) * 100)}%` : ''}${m.miss ? ` · erra no 🎲${m.miss === 1 ? '1' : '1–2'}` : ''}</span><span class="mv-tag ${m.kind === 'dmg' ? '' : 'sup'}">${esc(m.desc)}</span></button>`).join('')}</div>`;
+      <span class="mv-name">${moveIcon(m)}${esc(m.name)}</span><span class="mv-meta">${esc(typeLabel(m.type))}${m.kind === 'dmg' || m.kind === 'drain' ? ` · poder ${Math.round((m.power || 1) * 100)}%` : ''}${m.miss ? ` · erra no 🎲${m.miss === 1 ? '1' : '1–2'}` : ''}</span><span class="mv-tag ${m.kind === 'dmg' ? '' : 'sup'}">${esc(m.desc)}</span></button>`).join('')}</div>`;
 }
