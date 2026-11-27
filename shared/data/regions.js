@@ -86,7 +86,7 @@ export const REGION_BADGES = {
   floresta: [B('kalos_cliff', 'Insígnia Penhasco'), B('kalos_fairy', 'Insígnia Fada'), B('kalos_voltage', 'Insígnia Voltagem'), B('kalos_plant', 'Insígnia Planta'), B('kalos_rumble', 'Insígnia Estrondo'), B('kalos_psychic', 'Insígnia Psíquica')]
 };
 // 🏟️ v62: líderes de ginásio de cada mapa (mesma ordem/força dos de Kanto; sprite em trainers/<arquivo>.png)
-const L = (leader, type, file, team) => ({ leader, type, sprite: `trainers/${file}.png`, team });
+const L = (leader, type, file, team) => ({ leader, type, sprite: `leaders/${file}.png`, team });
 export const REGION_GYMS = {
   expedicao: [L('Gordie', 'rock', 'gordie', [['rolycoly', 11], ['carkol', 13]]), L('Nessa', 'water', 'nessa', [['chewtle', 12], ['drednaw', 14]]),
     L('Raihan', 'dragon', 'raihan', [['axew', 17], ['fraxure', 18], ['flygon', 20]]), L('Milo', 'grass', 'milo', [['gossifleur', 20], ['eldegoss', 21], ['flapple', 23]]),
