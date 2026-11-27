@@ -1812,3 +1812,15 @@ test('🗼 v64b: Loja PB da Torre libera Bracelete/Pulseira na conta; Coleção 
   assert.equal(k.profile.vault.find(m => m.uid === 'c2').lvl, 16);
   assert.ok(!k.profile.stats.bag.rare_candy);
 });
+
+test('📊 v64c: status normal da espécie (IV médio, natureza neutra) para o comparativo', async () => {
+  const { normalStats, statsOf } = await import('../shared/rules/monsters.js');
+  const n = normalStats('charizard', 40);
+  const top = statsOf({ sp: 'charizard', lvl: 40, iv: { hp: 31, atk: 31, spe: 31, def: 31 }, nature: 'Hardy' });
+  const low = statsOf({ sp: 'charizard', lvl: 40, iv: { hp: 0, atk: 0, spe: 0, def: 0 }, nature: 'Hardy' });
+  for (const k of ['maxHp', 'atk', 'spe', 'def']) assert.ok(low[k] <= n[k] && n[k] <= top[k], k);
+  const { statCard } = await import('../js/ui/common.js');
+  const html = statCard({ uid: 'a', sp: 'charizard', lvl: 40, iv: { hp: 31, atk: 31, spe: 31, def: 31 }, nature: 'Hardy' });
+  assert.match(html, /acima do normal/);
+  assert.match(html, /pk-norm/);
+});

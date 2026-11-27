@@ -865,7 +865,7 @@ body.in-game #social { bottom: 70px; }
 .pk-hpline { display: flex; align-items: center; gap: 6px; width: 100%; font-size: 9px; }
 .pk-hpline .hp { flex: 1; }
 .pk-stats { width: 100%; display: flex; flex-direction: column; gap: 3px; margin-top: 2px; }
-.pk-stat { display: grid; grid-template-columns: 34px 1fr 34px 18px; align-items: center; gap: 5px; font-size: 10px; }
+.pk-stat { display: grid; grid-template-columns: 34px 1fr 30px 30px 16px; align-items: center; gap: 5px; font-size: 10px; }
 .pk-sl { text-align: left; color: #cfc6b8; }
 .pk-stat.up .pk-sl { color: #ff7d7d; } .pk-stat.down .pk-sl { color: #7db4ff; }
 .pk-bar { height: 7px; background: #0e0b07; border: 1px solid #000; position: relative; }
@@ -885,7 +885,7 @@ body.in-game #social { bottom: 70px; }
 .pk-pwr, .pk-miss { font-size: 8px; padding: 1px 5px; border: 1px solid #4a3f30; color: #b9ad9a; background: #17120c; }
 .pk-card .lock-tag { font-family: inherit; font-size: 9px; }
 .pk-card .btn { font-family: 'Inter', sans-serif; }
-@media (max-width: 520px) { .pk-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; } .pk-card { padding: 10px 6px 8px; } .pk-name { font-size: 13px; } .pk-stat { grid-template-columns: 30px 1fr 28px 14px; } }
+@media (max-width: 520px) { .pk-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; } .pk-card { padding: 10px 6px 8px; } .pk-name { font-size: 13px; } .pk-stat { grid-template-columns: 28px 1fr 26px 27px 12px; } }
 
 .mon-detail { display: grid; grid-template-columns: 230px 1fr; gap: 14px; align-items: start; }
 .mon-detail > .col { display: flex; flex-direction: column; gap: 6px; }
@@ -2610,3 +2610,10 @@ img.mv-ic { width: 20px !important; height: 20px !important; flex: 0 0 auto; fil
 /* 📱 v64: enquanto arrasta/aproxima o mapa, congela as animações das casas e peões (era o que travava no celular) */
 .board-viewport.dragging .board-stage *, .board-viewport.dragging .board-stage *::before, .board-viewport.dragging .board-stage *::after { animation-play-state: paused !important; transition: none !important; }
 .board-viewport.dragging .board-stage { pointer-events: none; }
+
+/* 📊 v64c: comparativo com o normal da espécie */
+.pk-bar .pk-norm { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 0 1px #000; z-index: 1; pointer-events: none; }
+.pk-dv { font-size: 8.5px; text-align: right; font-weight: 800; white-space: nowrap; }
+.pk-dv.pos { color: #6be38a; } .pk-dv.neg { color: #ff8a7a; } .pk-dv.eq { color: #b8ad98; }
+.pk-cmp { font-size: 10px; text-align: center; margin: 3px 0 1px; font-weight: 700; }
+.pk-cmp.pos { color: #6be38a; } .pk-cmp.neg { color: #ff8a7a; } .pk-cmp.eq { color: #d8cdb6; }

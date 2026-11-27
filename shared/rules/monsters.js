@@ -48,6 +48,12 @@ export function computeStats(speciesId, level, shiny = false, nature = null, iv 
   };
 }
 
+/** 📊 v64c: status "normal" da espécie no nível (IVs na média 15,5, natureza neutra, sem shiny) — referência do comparativo. */
+export const IV_AVG = 15.5;
+export function normalStats(speciesId, level) {
+  return computeStats(speciesId, level, false, null, { hp: IV_AVG, atk: IV_AVG, spe: IV_AVG, def: IV_AVG });
+}
+
 /** Maior valor possível de cada status para a espécie/nível (IV 31 + natureza a favor) — base das barrinhas. */
 export function maxStats(speciesId, level) {
   const best = { hp: IV_MAX, atk: IV_MAX, spe: IV_MAX, def: IV_MAX };

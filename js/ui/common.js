@@ -3,7 +3,7 @@ import { MUTATION_LABEL } from '../../shared/data/daycare.js';
 import { FIELD_SKILLS, speciesKnows } from '../../shared/data/fieldskills.js';
 // Componentes visuais reaproveitados (cartas de Pokémon, chips de tipo, etc.).
 import { getSpecies } from '../../shared/data/pokemon.js';
-import { monView, xpToNext, MAX_LEVEL, maxStats, ivPercent, IV_MAX, defIvOf, defFactor } from '../../shared/rules/monsters.js';
+import { monView, statsOf, xpToNext, MAX_LEVEL, maxStats, normalStats, ivPercent, IV_MAX, defIvOf, defFactor } from '../../shared/rules/monsters.js';
 import { monMoves, tmMovesFor as _tmMovesFor, moveIdsOf as _moveIds, MOVES as _MOVES } from '../../shared/data/moves.js';
 import { NATURES } from '../../shared/data/natures.js';
 import { TYPE_COLORS, against } from '../../shared/rules/types.js';
@@ -85,6 +85,10 @@ export function statCard(mon, { owner = null, act = '', index = '', extra = '', 
   const v = monView(mon);
   const sp = getSpecies(mon.sp);
   const max = maxStats(mon.sp, v.lvl);
+  const norm = normalStats(mon.sp, v.lvl); // 📊 o "normal" da espécie neste nível
+  // a % sai do Nv.60 (números grandes: sem o arredondamento dos status pequenos de nível baixo)
+  const big = statsOf({ ...mon, lvl: MAX_LEVEL }), bigN = normalStats(mon.sp, MAX_LEVEL);
+  const diffs = [];
   const nat = NATURES[mon.nature];
   const pot = ivPercent(mon);
   const locked = owner && !canUse(owner, mon);
@@ -94,14 +98,22 @@ export function statCard(mon, { owner = null, act = '', index = '', extra = '', 
   const rows = STAT_ROWS.map(([k, key, label]) => {
     const val = v[key];
     // 🛡️ DEF: barra na escala geral (as paredes enchem a barra), as outras pela espécie/nível
-    const pct = Math.max(4, Math.min(100, k === 'def' ? (val / 150) * 100 : (val / max[key]) * 100));
+    const scale = x => Math.max(4, Math.min(100, k === 'def' ? (x / 150) * 100 : (x / max[key]) * 100));
+    const pct = scale(val);
+    // 📊 comparativo: risquinho = normal da espécie no nível; número = quanto está acima/abaixo
+    const nv = norm[key], d = bigN[key] ? Math.round(((big[key] - bigN[key]) / bigN[key]) * 100) : 0;
+    diffs.push(d);
+    const dCls = d >= 3 ? 'pos' : d <= -3 ? 'neg' : 'eq';
     const up = nat && nat[0] === k, down = nat && nat[1] === k;
     const iv = k === 'def' ? defIvOf(mon) : mon.iv?.[k];
     const tip = k === 'def' ? ` title="Defesa: recebe ${Math.round(defFactor(val) * 100)}% do dano (DEF 70 = 100%)"` : '';
     return `<div class="pk-stat k-${k} ${up ? 'up' : down ? 'down' : ''}"${tip}><span class="pk-sl">${label}${up ? '▲' : down ? '▼' : ''}</span>
-      <span class="pk-bar"><i style="width:${pct.toFixed(0)}%"></i></span><span class="pk-sv">${val}</span>
+      <span class="pk-bar" title="${label}: ${val} · normal da espécie no Nv.${v.lvl}: ${nv} (${d > 0 ? '+' : ''}${d}%)"><i style="width:${pct.toFixed(0)}%"></i><b class="pk-norm" style="left:${scale(nv).toFixed(1)}%"></b></span><span class="pk-sv">${val}</span>
+      <span class="pk-dv ${dCls}" title="Comparado ao normal (${nv})">${d > 0 ? '+' : d < 0 ? '−' : '±'}${Math.abs(d)}%</span>
       <span class="pk-iv" title="Potencial (IV) de ${label}: ${iv ?? '?'} de ${IV_MAX}">${iv ?? '–'}</span></div>`;
   }).join('');
+  const avgD = Math.round(diffs.reduce((a, b) => a + b, 0) / diffs.length);
+  const cmp = `<div class="pk-cmp ${avgD >= 3 ? 'pos' : avgD <= -3 ? 'neg' : 'eq'}" title="Média dos 4 status comparada a um ${esc(sp.name)} normal no Nv.${v.lvl} (potencial médio, natureza neutra). O risquinho branco em cada barra é o normal.">📊 ${avgD >= 3 ? `${avgD}% acima do normal` : avgD <= -3 ? `${-avgD}% abaixo do normal` : 'Na média da espécie'} <span class="tiny muted">(┃ = normal)</span></div>`;
   return `<div class="${cls}" style="--tc:${typeColor(v.types[0])}" ${act ? `data-act="${act}" data-index="${index}" data-uid="${esc(mon.uid || '')}"` : ''}>
     ${v.shiny ? '<span class="pk-ribbon">★ Shiny +15%</span>' : ''}<span class="pk-tier t${sp.tier}">${TIER_TXT[sp.tier]}</span>${sp.mythical ? '<span class="pk-cat mythic" title="Mítico: não aparece solto, só em aparições raras, Raids e prêmios">🌟 Mítico</span>' : sp.ultra ? '<span class="pk-cat ultra">🌀 Ultra</span>' : ''}
     <div class="pk-art"><img src="${monSprite(mon)}" alt="${esc(v.name)}" loading="lazy"></div>
@@ -110,7 +122,7 @@ export function statCard(mon, { owner = null, act = '', index = '', extra = '', 
     <div class="pk-lv">Nv. ${v.lvl}</div>
     <div class="pk-types">${v.types.map(t => `<span class="pk-type" style="background:${typeColor(t)}">${esc(typeLabel(t))}</span>`).join('')}</div>
     ${showHp && mon.hp !== undefined ? `<div class="pk-hpline">${hpBar(hp, v.maxHp)}<span>${hp}/${v.maxHp}</span></div>` : ''}
-    <div class="pk-stats">${rows}</div>
+    <div class="pk-stats">${rows}</div>${cmp}
     <div class="pk-pot" title="Potencial total (média dos IVs)">${pot === null ? '<span class="muted">Potencial desconhecido</span>' : `<span class="pk-stars">${potentialStars(pot)}</span> ${potentialLabel(pot)} · ${pot}%`}</div>
     <div class="pk-xp"><i style="width:${xpPct.toFixed(0)}%"></i><span>${v.lvl >= MAX_LEVEL ? 'MÁX' : `${Math.floor(mon.xp || 0)}/${xpToNext(v.lvl)}`}</span></div>
     <div class="pk-moves">${monMoves(mon).map(m => moveBox(m)).join('')}</div>
