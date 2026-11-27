@@ -72,11 +72,11 @@ test('Conquista: vencer o líder domina a cidade, escolher guarnição e outro j
   assert.equal(s.options.turnLimit, 40);
   const g = T.GYMS[0];
   const ash = s.players[0];
-  ash.team = [createMon(createRng(1), 'charizard', 60, { starter: true }), createMon(createRng(2), 'pidgeot', 50, {})];
+  ash.team = [createMon(createRng(1), 'charizard', 60, { starter: true, moves: ['fire_q', 'flying_s', 'fighting_s'] }), createMon(createRng(2), 'pidgeot', 50, {})];
   ash.pos = g.space; s.phase = 'action'; s.current = 0;
   let r = applyAction(s, 'ash', { type: 'city', op: 'gym' }, { now: T0 });
   assert.ok(!r.error, r.error); s = r.state;
-  for (let i = 0; i < 20 && s.battle; i++) { const rr = applyAction(s, 'ash', { type: 'battle', move: 'attack', slot: 0 }, { now: T0 }); if (!rr.error) s = rr.state; }
+  for (let i = 0; i < 20 && s.battle; i++) { const rr = applyAction(s, 'ash', { type: 'battle', move: 'attack', slot: 2 }, { now: T0 }); if (!rr.error) s = rr.state; }
   assert.equal(s.conquest.owners[g.id], 'ash');
   assert.ok(s.players[0].badges.includes(g.id));
   assert.deepEqual(whoMustAct(s), ['ash']);
@@ -114,11 +114,11 @@ test('Conquista: dominar todas as cidades vence na hora; bônus de tipo da cidad
   assert.equal(conquestMult(s, 'gary', 'water', T.GYMS), 1);
   const g = T.GYMS[0];
   const ash = s.players[0];
-  ash.team = [createMon(createRng(1), 'charizard', 60, { starter: true })];
+  ash.team = [createMon(createRng(1), 'charizard', 60, { starter: true, moves: ['fire_q', 'flying_s', 'fighting_s'] })];
   ash.pos = g.space; s.phase = 'action'; s.current = 0;
   let r = applyAction(s, 'ash', { type: 'city', op: 'gym' }, { now: T0 });
   s = r.state;
-  for (let i = 0; i < 20 && s.battle; i++) { const rr = applyAction(s, 'ash', { type: 'battle', move: 'attack', slot: 0 }, { now: T0 }); if (!rr.error) s = rr.state; }
+  for (let i = 0; i < 20 && s.battle; i++) { const rr = applyAction(s, 'ash', { type: 'battle', move: 'attack', slot: 2 }, { now: T0 }); if (!rr.error) s = rr.state; }
   assert.equal(s.status, 'finished');
   assert.equal(s.winner, 'ash');
 });

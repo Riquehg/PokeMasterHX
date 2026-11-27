@@ -1,9 +1,10 @@
 import { genderOf, genderHtml } from '../../shared/data/gender.js';
 import { MUTATION_LABEL } from '../../shared/data/daycare.js';
+import { FIELD_SKILLS, speciesKnows } from '../../shared/data/fieldskills.js';
 // Componentes visuais reaproveitados (cartas de Pokémon, chips de tipo, etc.).
 import { getSpecies } from '../../shared/data/pokemon.js';
 import { monView, xpToNext, MAX_LEVEL, maxStats, ivPercent, IV_MAX, defIvOf, defFactor } from '../../shared/rules/monsters.js';
-import { monMoves, tmMovesFor as _tmMovesFor, defaultMoveIds as _defMoves } from '../../shared/data/moves.js';
+import { monMoves, tmMovesFor as _tmMovesFor, moveIdsOf as _moveIds, MOVES as _MOVES } from '../../shared/data/moves.js';
 import { NATURES } from '../../shared/data/natures.js';
 import { TYPE_COLORS, against } from '../../shared/rules/types.js';
 import { esc, hpClass } from './dom.js';
@@ -116,7 +117,7 @@ export function statCard(mon, { owner = null, act = '', index = '', extra = '', 
     ${locked ? `<div class="lock-tag">🔒 precisa de ${badgesNeeded(mon)} insígnia${badgesNeeded(mon) > 1 ? 's' : ''}</div>` : ''}
     ${mon.trust ? '<div class="tiny"><span class="trust-chip" title="Capturado na Bola da Confiança: obedece sem insígnias">🤝 Confiança</span></div>' : ''}
     ${abilityLine(mon)}
-    ${heldLine(mon)}${mon.mutations?.length ? `<div class="pk-mut" title="Nasceu de um ovo da Creche com mutação">🧬 ${mon.mutations.map(x => MUTATION_LABEL[x] || x).join(' · ')}</div>` : mon.bred ? '<div class="pk-mut dim">🥚 Nascido na Creche</div>' : ''}
+    ${heldLine(mon)}${(() => { const fs = Object.entries(FIELD_SKILLS).filter(([id]) => speciesKnows(mon.sp, id)); return fs.length ? `<div class="pk-field" title="Habilidade de campo: usada no tabuleiro antes de rolar o dado">🧭 ${fs.map(([, f]) => `${f.icon} ${esc(f.name)} <i>Nv.${f.minLvl}+</i>`).join(' · ')}</div>` : ''; })()}${mon.mutations?.length ? `<div class="pk-mut" title="Nasceu de um ovo da Creche com mutação">🧬 ${mon.mutations.map(x => MUTATION_LABEL[x] || x).join(' · ')}</div>` : mon.bred ? '<div class="pk-mut dim">🥚 Nascido na Creche</div>' : ''}
     ${extra}
   </div>`;
 }
@@ -213,10 +214,16 @@ export function foeIntelHtml(mon) {
 }
 
 // ------------------------------------------------ 💿 TM: escolher o novo 2º golpe
+let tmSlot = 2;
+/** Qual golpe o TM vai substituir (1 = 2º golpe, 2 = 3º golpe). */
+export const setTmSlot = n => { tmSlot = Number(n) === 1 ? 1 : 2; };
 export function tmPickerHtml(mon, act = 'tm-move') {
-  const cur = (Array.isArray(mon.moves) && mon.moves.length === 2 ? mon.moves : _defMoves(mon.sp))[1];
+  const ids = _moveIds(mon);
   const list = _tmMovesFor(mon.sp);
-  return `<p class="small">Escolha o golpe que <b>${esc(getSpecies(mon.sp)?.name)}</b> vai aprender no lugar de <b>${esc(monMoves(mon)[1]?.name || '?')}</b>:</p>
-    <div class="tm-grid">${list.map(m => `<button class="btn move-btn tm-opt ${m.id === cur ? 'on' : ''}" style="--tc:${TYPE_COLORS[m.type]}" data-act="${act}" data-move="${m.id}" ${m.id === cur ? 'disabled' : ''}>
+  const slot = tmSlot === 1 ? 1 : 2;
+  const forget = [1, 2].map(i => `<button class="btn sm ${i === slot ? 'primary' : ''}" data-act="tm-slot" data-slot="${i}">Esquecer ${esc(_MOVES[ids[i]]?.name || '?')}</button>`).join(' ');
+  return `<p class="small">⚔️ Cada Pokémon sabe 3 golpes. O 1º (rápido do tipo dele) fica; escolha qual esquecer e o golpe novo de <b>${esc(getSpecies(mon.sp)?.name)}</b>:</p>
+    <div class="row wrap" style="gap:6px;margin:6px 0">${forget}</div>
+    <div class="tm-grid">${list.map(m => `<button class="btn move-btn tm-opt ${ids.includes(m.id) ? 'on' : ''}" style="--tc:${TYPE_COLORS[m.type]}" data-act="${act}" data-move="${m.id}" data-slot="${slot}" ${ids.includes(m.id) ? 'disabled' : ''}>${m.owner ? '<b class="mv-own">★</b>' : ''}
       <span class="mv-name">${moveIcon(m)}${esc(m.name)}</span><span class="mv-meta">${esc(typeLabel(m.type))}${m.kind === 'dmg' || m.kind === 'drain' ? ` · poder ${Math.round((m.power || 1) * 100)}%` : ''}${m.miss ? ` · erra no 🎲${m.miss === 1 ? '1' : '1–2'}` : ''}</span><span class="mv-tag ${m.kind === 'dmg' ? '' : 'sup'}">${esc(m.desc)}</span></button>`).join('')}</div>`;
 }

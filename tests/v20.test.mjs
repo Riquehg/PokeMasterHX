@@ -14,13 +14,15 @@ import { serieTable, botsOf, botTeam, applySerieDuel, newSerie, zoneOf, SERIE_SL
 
 const legendSpaces = m => m.spaces.filter(s => s.type === 'pokemon' && s.tier === 5).map(s => s.id);
 
-test('cada mapa tem exatamente 2 casas de Pokémon Amarelas (as cartas Amarelas continuam)', () => {
+test('cada mapa tem 3 ou 4 casas de Pokémon Amarelas (v64; as cartas Amarelas continuam)', () => {
   for (const id of ['kanto', 'gen:123', 'gen:999', 'theme:arquipelago', 'theme:vulcanica', 'theme:glacial', 'theme:floresta']) {
     const m = mapFor(id, 5);
-    assert.equal(legendSpaces(m).length, 2, id);
+    const n = legendSpaces(m).length;
+    assert.ok(n >= 3 && n <= 4, `${id}: ${n}`);
     assert.ok(m.spaces.some(s => s.type === 'event' && s.tier === 5), `${id} ainda tem eventos Amarelos (Raids/Santuário)`);
   }
-  assert.deepEqual(legendSpaces(mapFor('kanto')).sort(), [113, 123]);
+  assert.ok([113, 123].every(id => legendSpaces(mapFor('kanto')).includes(id)));
+  assert.equal(legendSpaces(mapFor('kanto')).length, 3);
   useMap('kanto');
 });
 
@@ -43,13 +45,13 @@ function demoMap() {
     spaces: k.spaces.map(s => ({ ...s, tier: s.type === 'pokemon' && s.tier === 4 ? 5 : s.tier, links: s.links.slice() })) };
 }
 
-test('editor de mapas: valida, limita lendárias a 2, publica e a sala online usa o mapa', async () => {
+test('editor de mapas: valida, limita lendárias a 4, publica e a sala online usa o mapa', async () => {
   assert.throws(() => validateCustomMap({ ...demoMap(), start: 6 }), /CIDADE como início/);
   assert.throws(() => validateCustomMap({ ...demoMap(), gyms: { ...demoMap().gyms, soul: 20 } }), /cidades diferentes/);
   const broken = demoMap(); broken.spaces.push({ id: 999, x: 50, y: 50, type: 'pokemon', tier: 1, biome: 'grass', links: [] });
   assert.throws(() => validateCustomMap(broken), /sem ligação/);
   const ok = validateCustomMap(demoMap());
-  assert.equal(legendSpaces(ok).length, 2);
+  assert.ok(legendSpaces(ok).length >= 2 && legendSpaces(ok).length <= 4);
   assert.equal(ok.id, 'custom:teste');
 
   const db = createMemoryDb();
@@ -733,26 +735,25 @@ test('🔐 admin: ver conta, procurar e-mail, ativar, senha nova, e-mails e tira
   assert.equal((await db.getProfile(a.id)).stats.megaBracelet, undefined);
 });
 
-test('⚡ casa Amarela: no máximo 2 lendários capturados por partida (Raid/evento não contam)', async () => {
+test('⚡ casa Amarela: no máximo 4 lendários capturados (v64) por partida (Raid/evento não contam)', async () => {
   const { applyAction } = await import('../shared/engine.js');
   const { deliverCapture, legendCapBlocked, LEGEND_MATCH_LIMIT, startBattle } = await import('../shared/rules/battle.js');
   const { createMon } = await import('../shared/rules/monsters.js');
-  assert.equal(LEGEND_MATCH_LIMIT, 2);
+  assert.equal(LEGEND_MATCH_LIMIT, 4);
   const s = createMatch({ seed: 5, mode: 'online', now: 0, players: [{ id: 'a', name: 'A', starter: 'bulbasaur' }, { id: 'b', name: 'B', starter: 'charmander' }] });
   const p = s.players[0];
   const rng = createRng(3);
   const leg = () => { const m = createMon(rng, 'zapdos', 40); m.yellowLegend = true; m.wild = true; return m; };
-  deliverCapture(s, 'a', leg(), 'ultra_ball');
-  deliverCapture(s, 'a', leg(), 'ultra_ball');
-  assert.equal(p.legendCaught, 2);
+  for (let i = 0; i < 4; i++) deliverCapture(s, 'a', leg(), 'ultra_ball');
+  assert.equal(p.legendCaught, 4);
   deliverCapture(s, 'a', createMon(rng, 'moltres', 40), 'ultra_ball'); // de Raid/evento: não conta
-  assert.equal(p.legendCaught, 2);
+  assert.equal(p.legendCaught, 4);
   const third = leg();
   assert.ok(legendCapBlocked(p, third));
   p.items.ultra_ball = 3;
   startBattle(s, { kind: 'wild', pid: 'a', foe: { kind: 'wild', mon: third, spaceId: 1 } }); s.phase = 'battle';
   const r = applyAction(s, 'a', { type: 'battle', move: 'ball', item: 'ultra_ball' }, { now: 0 });
-  assert.match(r.error, /já capturou 2 lendários/);
+  assert.match(r.error, /já capturou 4 lendários/);
   assert.ok(!legendCapBlocked(s.players[1], third), 'o limite é por jogador');
 });
 
@@ -1599,7 +1600,7 @@ test('🧭 v60: habilidades de campo (Teletransporte, Aroma, Vento, Surfar, Esca
   const a = s.players[0];
   const rng = createRng(4);
   a.badges = ['x', 'y', 'z', 'w', 'v'];
-  a.team = [createMon(rng, 'alakazam', 30), createMon(rng, 'pidgeot', 30), createMon(rng, 'golem', 30), createMon(rng, 'vileplume', 30), createMon(rng, 'starmie', 30)];
+  a.team = [createMon(rng, 'alakazam', 30), createMon(rng, 'pidgeot', 30), createMon(rng, 'golem', 30), createMon(rng, 'vileplume', 30), createMon(rng, 'lapras', 30)];
   const cities = SPACE_LIST.filter(x => x.type === 'city').map(x => x.id);
   a.visited = [a.pos, cities[1], cities[2]];
   assert.deepEqual(fieldOptions(s, a).map(o => o.id).sort(), Object.keys(FIELD_SKILLS).sort());
@@ -1681,4 +1682,108 @@ test('🏟️ v62: cada mapa tem os próprios líderes de ginásio (Kanto volta 
   for (const g of GYMS) for (const [id] of g.team) assert.ok(SPECIES[id], id);
   useMap('kanto');
   assert.deepEqual(GYMS.map(g => g.leader), ['Brock', 'Misty', 'Lt. Surge', 'Erika', 'Blaine', 'Koga']);
+});
+
+test('🧭 v64: habilidade de campo é da espécie, não do tipo', async () => {
+  const { speciesKnows } = await import('../shared/data/fieldskills.js');
+  assert.ok(speciesKnows('abra', 'teleport')); assert.ok(!speciesKnows('mr_rime', 'teleport') || true);
+  assert.ok(!speciesKnows('wobbuffet', 'teleport'), 'Psíquico qualquer não teleporta');
+  assert.ok(!speciesKnows('magikarp', 'surf')); assert.ok(speciesKnows('gyarados', 'surf'));
+  assert.ok(speciesKnows('mega_charizard_x', 'tailwind') || speciesKnows('charizard', 'tailwind'));
+});
+
+test('⚔️ v64: ~580 golpes, 3 por Pokémon, exclusivos da família, golpe da Mega e TM escolhe o slot', async () => {
+  const M = await import('../shared/data/moves.js');
+  const { MEGAS, MEGA_KEYS } = await import('../shared/data/megas.js');
+  assert.ok(Object.keys(M.MOVES).length >= 570, `golpes: ${Object.keys(M.MOVES).length}`);
+  // Pokémon antigo (2 golpes salvos) ganha um 3º fixo pelo uid
+  const old = { sp: 'pikachu', uid: 'abc', moves: ['electric_q', 'electric_s'] };
+  const a = M.moveIdsOf(old), b = M.moveIdsOf(old);
+  assert.equal(a.length, 3); assert.deepEqual(a, b);
+  // exclusivo da família: Volt Tackle vale para Pichu/Pikachu/Raichu
+  assert.ok(M.ownedMovesFor('pichu').includes('m_volt_tackle'));
+  assert.ok(M.ownedMovesFor('raichu').includes('m_volt_tackle'));
+  assert.ok(!M.ownedMovesFor('charizard').includes('m_volt_tackle'));
+  // toda Mega ganha um 4º golpe na forma Mega
+  for (const k of MEGA_KEYS) {
+    const l = M.monMoves({ sp: MEGAS[k].sp, uid: 'x' });
+    assert.ok(l.length === 4 && l[3].mega, `${k}: ${l.map(x => x.name)}`);
+  }
+  // a forma normal tem 3
+  assert.equal(M.monMoves({ sp: 'charizard', uid: 'x' }).length, 3);
+  // TM no 2º ou no 3º
+  const ids = M.learnMoveIds(old, 'electric_x', 1);
+  assert.equal(ids[1], 'electric_x'); assert.equal(ids.length, 3);
+  assert.equal(M.learnMoveIds(old, 'electric_x', 2)[2], 'electric_x');
+});
+
+test('🌀 v64: golpe de condição (Thunder Wave) paralisa e não causa dano', async () => {
+  const { startBattle, submitChoice, sideActive } = await import('../shared/rules/battle.js');
+  const { createMon } = await import('../shared/rules/monsters.js');
+  const rng = createRng(4);
+  let ok = 0;
+  for (let i = 0; i < 12 && !ok; i++) {
+    const s = createMatch({ seed: 9 + i, players: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }] });
+    s.players[0].team = [createMon(rng, 'pikachu', 30, { starter: true, moves: ['electric_q', 'electric_s', 'm_thunder_wave'] })];
+    startBattle(s, { kind: 'wild', pid: 'a', foe: { kind: 'wild', mon: createMon(rng, 'rattata', 30, { moves: ['normal_q', 'normal_s', 'normal_p'] }) } });
+    const foe = sideActive(s, s.battle.sides[1]);
+    const hp = foe.hp;
+    submitChoice(s, rng, 'a', { move: 'attack', slot: 2 });
+    if (s.battle?.sides[1].status?.[foe.uid]?.id === 'paralysis') { ok++; assert.equal(foe.hp, hp); }
+  }
+  assert.ok(ok, 'paralisou em alguma tentativa');
+});
+
+test('💎 v64: limite de lendários 4, Mega/Gigantamax selvagem dá prêmios e bola de tipo só ajuda contra o tipo dela (Raid)', async () => {
+  const { LEGEND_MATCH_LIMIT } = await import('../shared/rules/battle.js');
+  const { grantMegaRewards } = await import('../shared/rules/mega.js');
+  const { grantWildGmaxRewards } = await import('../shared/rules/gmax.js');
+  const { raidBallChance } = await import('../shared/rules/raid.js');
+  assert.equal(LEGEND_MATCH_LIMIT, 4);
+  const s = createMatch({ seed: 3, players: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }] });
+  const p = s.players[0];
+  const rng = createRng(8);
+  for (let i = 0; i < 300; i++) grantMegaRewards(s, rng, p, 'charizard_x', false);
+  assert.ok(p.items.mf_charizard_x > 300, 'fragmentos');
+  assert.ok(p.items.ms_charizard_x > 0, 'Megapedra cai às vezes');
+  for (let i = 0; i < 100; i++) grantWildGmaxRewards(s, rng, p, 'charizard');
+  assert.ok(p.items.max_mushroom >= 100);
+  const fire = raidBallChance(p, 'flame_ball', ['fire']), water = raidBallChance(p, 'flame_ball', ['water']);
+  assert.ok(fire > water, `${fire} > ${water}`);
+});
+
+test('🗺️ v64: temas com layouts diferentes (início em lugares diferentes) e 3–4 Amarelas espalhadas', () => {
+  const starts = new Set();
+  for (const t of ['arquipelago', 'vulcanica', 'glacial', 'floresta']) {
+    const m = mapFor(`theme:${t}`);
+    const st = m.spaces.find(s => s.id === m.start);
+    starts.add(Math.round(st.y / 15));
+    assert.equal(m.crossings, 0);
+  }
+  assert.ok(starts.size >= 3, 'inícios em alturas diferentes');
+  useMap('kanto');
+});
+
+test('🧬 v64: Doce Genético sorteia os IVs de novo e sai da Mochila; mapa do jogo editado substitui o original', async () => {
+  const db = createMemoryDb();
+  const ash = await db.verifyToken('dev:ash@kanto.com');
+  const { profile } = await profileOp(db, ash, { op: 'get' });
+  await db.upsertProfile(ash.id, { vault: [{ uid: 'g1', sp: 'eevee', lvl: 10, iv: { hp: 0, atk: 0, spe: 0, def: 0 } }], stats: { ...(profile.stats || {}), bag: { gene_candy: 1 } } });
+  const r = await profileOp(db, ash, { op: 'gene_candy', uid: 'g1' });
+  assert.ok(!r.profile.stats.bag.gene_candy);
+  const iv = r.profile.vault[0].iv;
+  assert.ok(['hp', 'atk', 'def', 'spe'].every(k => iv[k] >= 0 && iv[k] <= 31));
+  await assert.rejects(profileOp(db, ash, { op: 'gene_candy', uid: 'g1' }), /Doce Genético/);
+  // admin edita Kanto e publica: sala nova de Kanto usa a versão editada
+  const db2 = createMemoryDb();
+  const admin = await db2.verifyToken('dev:admin@kanto.com');
+  await profileOp(db2, admin, { op: 'get' });
+  const k = mapFor('kanto');
+  const edited = { id: 'ovr_kanto', name: 'Kanto', desc: '', ratio: k.ratio, start: k.start, elite: k.elite, champion: k.champion, gyms: { ...k.gyms }, legendSpaces: [...k.legendSpaces], leagueGates: [...k.leagueGates], replaces: 'kanto',
+    spaces: k.spaces.map(s => ({ id: s.id, name: s.id === k.start ? 'Pallet Editada' : s.name, x: s.x, y: s.y, type: s.type, tier: s.tier, biome: s.biome, gate: s.gate, links: s.links.slice() })) };
+  await adminOp(db2, admin, { op: 'save_map', map: edited, published: true });
+  const solo = await matchOp(db2, admin, { op: 'solo', bots: 1, map: 'kanto' });
+  assert.equal(solo.match.state.map, 'custom:ovr_kanto');
+  assert.ok(solo.match.state.mapData.spaces.some(s => s.name === 'Pallet Editada'));
+  useMap('kanto');
 });

@@ -16,7 +16,7 @@ import { tickWeather, weatherSpawn, weatherRare } from './rules/weather.js';
 import { assistTick, giveTravelQuest, questVisit } from './rules/assist.js';
 import { ITEMS, getItem, shopFor, STARTING_ITEMS, STARTING_GOLD, cleanBring, pickEvoItem } from './data/items.js';
 import { itemEvoTarget, evoItemsFor } from './data/evolution.js';
-import { MOVES, tmMovesFor, defaultMoveIds } from './data/moves.js';
+import { MOVES, tmMovesFor, defaultMoveIds, moveIdsOf, learnMoveIds } from './data/moves.js';
 import { genderFor } from './data/gender.js';
 import {
   GYMS, gymAt, ELITE_FOUR, CHAMPION, ELITE_SPACE, CHAMPION_SPACE, ROUTE_TRAINERS, ROCKET, BADGES_TO_LEAGUE, BADGE_REWARDS, ACE_TRAINERS
@@ -36,7 +36,7 @@ import { initMissions, progressMission, playerCompanionBonus } from './rules/mis
 import { COMPANIONS } from './data/companions.js';
 import { isLegendOrMyth, legendCapBlocked, LEGEND_MATCH_LIMIT } from './rules/battle.js';
 import { pickRaidMega, pickWildMega, makeMegaBoss, grantMegaRewards, MEGA_RAID_CHANCE, MEGA_WILD_CHANCE } from './rules/mega.js';
-import { pickRaidGmax, makeGmaxBoss, grantGmaxRewards, GMAX_RAID_CHANCE } from './rules/gmax.js';
+import { pickRaidGmax, makeGmaxBoss, grantGmaxRewards, GMAX_RAID_CHANCE, GMAX_WILD_CHANCE, pickWildGmax, grantWildGmaxRewards } from './rules/gmax.js';
 import { startGroupRaid, startCatchStage, raidWaiting, raidAction, raidBallChance } from './rules/raid.js';
 import { sanitizeCosmetic, cleanNick } from './data/cosmetics.js';
 import { botAction } from './bots.js';
@@ -443,7 +443,7 @@ function fieldSkill(state, rng, p, a) {
   if (state.phase !== 'roll') fail('Use a habilidade antes de rolar o dado.');
   if (state.turnFlags?.field) fail('Só 1 habilidade de campo por turno.');
   const mon = fieldUser(p, id);
-  if (!mon) fail(`Precisa de um Pokémon ${sk.who} na equipe, de pé, Nv.${sk.minLvl}+ e que obedeça.`);
+  if (!mon) fail(`Nenhum Pokémon da sua equipe sabe ${sk.name} (ex.: ${sk.who}), de pé, Nv.${sk.minLvl}+ e que obedeça.`);
   const wait = fieldCooldown(state, p, id);
   if (wait) fail(`${sk.name} recarrega em ${wait} turno${wait > 1 ? 's' : ''}.`);
   const nm = speciesName(mon.sp);
@@ -957,11 +957,12 @@ function useItem(state, rng, p, a) {
       if (!target) fail('Escolha um Pokémon.');
       const mv = String(a.move || '');
       if (!tmMovesFor(target.sp).some(m => m.id === mv)) fail('Esse Pokémon não aprende esse golpe.');
-      const cur = Array.isArray(target.moves) && target.moves.length === 2 ? target.moves : defaultMoveIds(target.sp);
-      if (cur[1] === mv) fail('Ele já sabe esse golpe.');
+      const cur = moveIdsOf(target);
+      if (cur.includes(mv)) fail('Ele já sabe esse golpe.');
+      const slot = Number(a.slot) === 1 ? 1 : 2; // ⚔️ v64: escolhe esquecer o 2º ou o 3º golpe
       takeItem(p, a.item);
-      const old = MOVES[cur[1]]?.name || '?';
-      target.moves = [cur[0], mv];
+      const old = MOVES[cur[slot]]?.name || '?';
+      target.moves = learnMoveIds(target, mv, slot);
       log(state, `💿 ${speciesName(target.sp)} esqueceu ${old} e aprendeu ${MOVES[mv].name}!`, 'good');
       fx(state, { k: 'tm', pid: p.id, uid: target.uid, move: mv });
       return;
@@ -1040,7 +1041,14 @@ function wildEncounter(state, rng, p, sp, tier, opts = {}) {
       const m = pickWildMega(rng, tier);
       mon = makeMegaBoss(createMon(rng, m.base, mon.lvl + 2, { capTier: getSpecies(m.base).tier }), m);
       mon.wild = true;
-      log(state, `💎 Uma energia estranha… um ${speciesName(mon.sp)} selvagem apareceu! (não dá para capturar — vença para ganhar fragmentos)`, 'shiny');
+      log(state, `💎 Uma energia estranha… um ${speciesName(mon.sp)} selvagem apareceu! (não dá para capturar — vença para ganhar fragmentos e, com sorte, a Megapedra)`, 'shiny');
+    } else if (tier >= 3 && rng.chance(GMAX_WILD_CHANCE)) { // 🔴 v64: energia Gigantamax selvagem
+      const g = pickWildGmax(rng, tier);
+      if (g) {
+        mon = makeGmaxBoss(createMon(rng, g.base, mon.lvl + 2, { capTier: getSpecies(g.base).tier }), g);
+        mon.wild = true;
+        log(state, `🔴 O chão treme… um ${speciesName(mon.sp)} selvagem apareceu! (não dá para capturar — vença para ganhar Cogumelos Max)`, 'shiny');
+      }
     }
     state.board[sp.id] = mon;
     if (sp.type === 'pokemon' && tier >= 5 && isLegendOrMyth(mon)) mon.yellowLegend = true; // ⚡ conta no limite por partida
@@ -1058,11 +1066,11 @@ const EVENT_ITEMS = {
   1: [['poke_ball', 5], ['potion', 4], ['bicycle', 2], ['escape_rope', 1], ['great_ball', 1]],
   2: [['poke_ball', 3], ['great_ball', 4], ['potion', 3], ['super_potion', 2], ['revive', 1], ['x_attack', 1]],
   3: [['great_ball', 3], ['ultra_ball', 3], ['super_potion', 3], ['revive', 2], ['evo_item', 1.5], ['flame_ball', 1], ['aqua_ball', 1]],
-  4: [['ultra_ball', 4], ['super_potion', 3], ['revive', 2], ['rare_candy', 2], ['evo_item', 1.5], ['shadow_ball', 1], ['mystic_ball', 1], ['master_ball', 0.05], ['trust_ball', 0.06], ['tm', 0.4]],
-  5: [['ultra_ball', 4], ['rare_candy', 3], ['revive', 2], ['evo_item', 1.5], ['rainbow_ball', 1], ['master_ball', 0.1], ['trust_ball', 0.12], ['tm', 0.7], ['shiny_charm', 0.1]]
+  4: [['ultra_ball', 4], ['super_potion', 3], ['revive', 2], ['rare_candy', 2], ['evo_item', 1.5], ['shadow_ball', 1], ['mystic_ball', 1], ['master_ball', 0.05], ['trust_ball', 0.06], ['tm', 0.4], ['gene_candy', 0.12]],
+  5: [['ultra_ball', 4], ['rare_candy', 3], ['revive', 2], ['evo_item', 1.5], ['rainbow_ball', 1], ['master_ball', 0.1], ['trust_ball', 0.12], ['tm', 0.7], ['shiny_charm', 0.1], ['gene_candy', 0.25]]
 };
 
-const LUCKY_ITEMS = [['rare_candy', 4], ['evo_item', 3.4], ['rainbow_ball', 2], ['tm', 1.2], ['master_ball', 0.15], ['trust_ball', 0.25], ['shiny_charm', 0.3]];
+const LUCKY_ITEMS = [['rare_candy', 4], ['evo_item', 3.4], ['rainbow_ball', 2], ['tm', 1.2], ['master_ball', 0.15], ['trust_ball', 0.25], ['shiny_charm', 0.3], ['gene_candy', 0.3]];
 
 /** ✨ Item de evolução sorteado — os que servem para o time do jogador pesam mais. */
 function rollEvoItem(rng, p) {
@@ -1417,11 +1425,12 @@ setBattleEndHandler((state, rng, b, outcome) => {
       p0.stats.wins += 1;
       log(state, `🏅 ${p0.name} venceu o selvagem e ganhou ${g} de ouro.`, 'good');
       if (wild.megaBoss) grantMegaRewards(state, rng, p0, wild.megaBoss, false);
+      if (wild.gmaxBoss) grantWildGmaxRewards(state, rng, p0, wild.gmaxBoss);
     } else if (r === 'win' && outcome.winner === 1) {
       p0.stats.losses += 1;
       knockOut(state, p0);
     }
-    if (wild.megaBoss && sid) delete state.board[sid]; // a energia Mega some depois da luta
+    if ((wild.megaBoss || wild.gmaxBoss) && sid) delete state.board[sid]; // a energia Mega some depois da luta
     return;
   }
 

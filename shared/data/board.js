@@ -40,6 +40,8 @@ export const BUILTIN_MAPS = [
   ...THEME_IDS.map(t => ({ id: `theme:${t}`, name: MAP_THEMES[t].name, icon: { arquipelago: '🏝️', vulcanica: '🌋', glacial: '🏔️', floresta: '🌳' }[t] || '🗺️', desc: MAP_THEMES[t].desc }))
 ];
 export const MAP_CHOICES = BUILTIN_MAPS.slice();
+/** Mapas do jogo que o admin pode editar (a Expedição muda a cada partida, então não). */
+export const REPLACEABLE = BUILTIN_MAPS.map(m => m.id).filter(id => id !== 'gen');
 /** Mapas do painel admin publicados (vêm do /api/config). Guardados inteiros para o jogo offline. */
 export const CUSTOM_MAPS = {};
 export function setCustomMaps(list) {
@@ -47,13 +49,14 @@ export function setCustomMaps(list) {
   const ok = (list || []).filter(m => m && m.id && m.name && Array.isArray(m.spaces));
   for (const m of ok) CUSTOM_MAPS[m.id] = m;
   MAP_CHOICES.length = 0;
-  MAP_CHOICES.push(...BUILTIN_MAPS, ...ok.map(m => ({ id: m.id, name: m.name, icon: '🛠️', desc: m.desc || 'Mapa criado no painel admin.' })));
+  MAP_CHOICES.push(...BUILTIN_MAPS, ...ok.filter(m => !m.replaces).map(m => ({ id: m.id, name: m.name, icon: '🛠️', desc: m.desc || 'Mapa criado no painel admin.' })));
 }
 export const mapChoiceName = id => { const c = MAP_CHOICES.find(m => m.id === id); return c ? `${c.icon} ${c.name}` : id === 'arena' ? '⚔️ Arena Royale' : '🗺️ Kanto'; };
 export const isMapId = id => id === 'kanto' || id === 'gen' || (typeof id === 'string' && (id.startsWith('theme:') && THEME_IDS.includes(id.slice(6)) || id.startsWith('custom:')));
 
-/** Casas Amarelas de encontro (Pokémon lendário) por mapa — no máximo 2. As cartas Amarelas (Raids/Santuário) não mudam. */
-export const LEGEND_SPACES_MAX = 2;
+/** Casas Amarelas de encontro (Pokémon lendário) por mapa — v64: 3 ou 4 (era 2). As cartas Amarelas (Raids/Santuário) não mudam. */
+export const LEGEND_SPACES_MAX = 4;
+export const LEGEND_SPACES_DEFAULT = 3;
 /**
  * Deixa exatamente 2 casas de Pokémon Amarelas: as indicadas em map.legendSpaces ou, sem isso, as 2 mais longe do início.
  * As outras casas de Pokémon Amarelas viram Vermelhas. Não mexe em cidades nem em casas de evento.
@@ -66,10 +69,20 @@ export function capLegendSpaces(map) {
   while (q.length) { const id = q.shift(); for (const n of byId.get(id)?.links || []) if (!dist.has(n)) { dist.set(n, dist.get(id) + 1); q.push(n); } }
   const far = (a, b) => (dist.get(b.id) ?? -1) - (dist.get(a.id) ?? -1) || a.id - b.id;
   const mons = map.spaces.filter(s => s.type === 'pokemon');
-  let keep = (map.legendSpaces || []).map(id => byId.get(id)).filter(s => s && s.type === 'pokemon');
-  if (!keep.length) keep = mons.filter(s => s.tier === 5).sort(far);
-  if (keep.length < LEGEND_SPACES_MAX) keep = keep.concat(mons.filter(s => s.tier === 4 && !keep.includes(s)).sort(far));
-  const chosen = new Set(keep.slice(0, LEGEND_SPACES_MAX).map(s => s.id));
+  const want = Math.max(1, Math.min(LEGEND_SPACES_MAX, Number(map.legendMax) || LEGEND_SPACES_DEFAULT));
+  const fixed = (map.legendSpaces || []).map(id => byId.get(id)).filter(s => s && s.type === 'pokemon').slice(0, want);
+  // completa com casas do fim do mapa (tier 5, depois 4), espalhadas: cada nova fica o mais longe possível das já escolhidas
+  const pool = [...mons.filter(s => s.tier === 5).sort(far), ...mons.filter(s => s.tier === 4).sort(far)].filter(s => !fixed.includes(s)).slice(0, 30);
+  const hop = src => { const d = new Map([[src, 0]]); const qq = [src]; while (qq.length) { const id = qq.shift(); for (const n of byId.get(id)?.links || []) if (!d.has(n)) { d.set(n, d.get(id) + 1); qq.push(n); } } return d; };
+  const keep = [...fixed];
+  while (keep.length < want && pool.length) {
+    if (!keep.length) { keep.push(pool.shift()); continue; }
+    const ds = keep.map(s => hop(s.id));
+    let bi = 0, bv = -1;
+    pool.forEach((s, i) => { const v = Math.min(...ds.map(d => d.get(s.id) ?? 99)) * 10 + (s.tier === 5 ? 5 : 0) + (dist.get(s.id) ?? 0) * 0.1; if (v > bv) { bv = v; bi = i; } });
+    keep.push(pool.splice(bi, 1)[0]);
+  }
+  const chosen = new Set(keep.map(s => s.id));
   for (const s of mons) {
     if (chosen.has(s.id)) s.tier = 5;
     else if (s.tier === 5) s.tier = 4;
@@ -119,6 +132,9 @@ export function validateCustomMap(raw) {
     ratio: Math.max(1.2, Math.min(2.6, Number(raw.ratio) || 2)), custom: true, bg: raw.bg ? String(raw.bg).replace(/[^a-z0-9_-]/gi, '').slice(0, 40) : null,
     start, elite, champion, leagueGates: [...new Set([...gates, elite, champion])], gyms,
     legendSpaces: (raw.legendSpaces || []).map(Number).filter(id => ids.has(id)).slice(0, LEGEND_SPACES_MAX),
+    legendMax: Math.max(1, Math.min(LEGEND_SPACES_MAX, Number(raw.legendMax) || LEGEND_SPACES_DEFAULT)),
+    // ✏️ v64: versão editada de um mapa do jogo (Kanto ou temático): quando publicada, as salas desse mapa usam esta
+    replaces: REPLACEABLE.includes(raw.replaces) ? raw.replaces : null,
     spaces
   };
   capLegendSpaces(map);

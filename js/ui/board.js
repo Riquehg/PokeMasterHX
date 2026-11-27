@@ -117,11 +117,21 @@ export class BoardView {
   apply(smooth) {
     this.scale = Math.max(this.min, Math.min(this.min * 6, this.scale));
     this.clamp();
-    this.stage.classList.toggle('smooth', !!smooth);
-    this.stage.style.transform = `translate(${this.x}px, ${this.y}px) scale(${this.scale})`;
-    // peões, Pokémon e nomes: quase o mesmo tamanho na tela em qualquer zoom (crescem um pouco ao aproximar)
-    const zf = Math.min(1.3, Math.max(0.85, Math.pow(this.scale / (this.portrait ? this.cover : this.min), 0.22)));
-    this.stage.style.setProperty('--ms', (zf / this.scale).toFixed(4));
+    // 📱 v64: no dedo (arrastar/pinça) junta tudo num quadro só (requestAnimationFrame) — antes cada evento
+    // reescrevia o transform e a variável --ms de centenas de casas e o celular travava
+    if (!smooth && this.gesturing) { if (!this._raf) this._raf = requestAnimationFrame(() => { this._raf = 0; this.paint(false); }); return; }
+    if (this._raf) { cancelAnimationFrame(this._raf); this._raf = 0; }
+    this.paint(smooth);
+  }
+
+  paint(smooth) {
+    if (this.stage.classList.contains('smooth') !== !!smooth) this.stage.classList.toggle('smooth', !!smooth);
+    this.stage.style.transform = `translate3d(${Math.round(this.x)}px, ${Math.round(this.y)}px, 0) scale(${this.scale})`;
+    // peões, Pokémon e nomes: quase o mesmo tamanho na tela em qualquer zoom (crescem um pouco ao aproximar).
+    // Só recalcula quando o zoom muda de verdade e nunca no meio da pinça (recalcular estilo de tudo é o que pesa).
+    if (this.pinching) return;
+    const ms = (Math.min(1.3, Math.max(0.85, Math.pow(this.scale / (this.portrait ? this.cover : this.min), 0.22))) / this.scale).toFixed(4);
+    if (ms !== this._ms) { this._ms = ms; this.stage.style.setProperty('--ms', ms); }
   }
 
   zoomAt(factor, cx, cy) {
@@ -167,13 +177,19 @@ export class BoardView {
       const r = vp.getBoundingClientRect();
       this.zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top);
     }, { passive: false });
+    // 📱 iOS: a pinça no mapa também dava zoom na página inteira (a tela "bugava") — aqui o zoom é só do mapa
+    for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) vp.addEventListener(ev, e => e.preventDefault(), { passive: false });
+    vp.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
     vp.addEventListener('pointerdown', e => {
       if (e.target.closest('.zoom-ctrl')) { armed = false; return; }
+      if (e.isPrimary && pts.size) { pts.clear(); pinch = null; this.pinching = false; } // dedo "perdido" de um gesto anterior travava tudo
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      this.gesturing = true;
       if (pts.size === 1) { last = { x: e.clientX, y: e.clientY }; moved = 0; armed = true; ptype = e.pointerType || 'mouse'; }
       if (pts.size === 2) {
         const [a, b] = [...pts.values()];
-        pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), s: this.scale };
+        pinch = { d: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), s: this.scale };
+        this.pinching = true;
       }
     });
     vp.addEventListener('pointermove', e => {
@@ -204,11 +220,17 @@ export class BoardView {
     });
     const end = e => {
       pts.delete(e.pointerId);
-      if (pts.size < 2) pinch = null;
-      if (pts.size === 0) { last = null; vp.classList.remove('dragging'); }
+      if (pts.size < 2 && pinch) {
+        pinch = null; this.pinching = false;
+        const rest = [...pts.values()][0];
+        last = rest ? { x: rest.x, y: rest.y } : null; // continua arrastando com o dedo que ficou, sem pular
+      }
+      if (pts.size === 0) { last = null; vp.classList.remove('dragging'); this.gesturing = false; this.pinching = false; this.apply(false); }
     };
     vp.addEventListener('pointerup', end);
     vp.addEventListener('pointercancel', end);
+    vp.addEventListener('lostpointercapture', end);
+    window.addEventListener('blur', () => { pts.clear(); pinch = null; last = null; this.gesturing = this.pinching = false; vp.classList.remove('dragging'); });
     // clique só conta se não arrastou
     vp.addEventListener('click', e => {
       if (e.target.closest('.zoom-ctrl')) return; // botões de zoom nunca movem o peão

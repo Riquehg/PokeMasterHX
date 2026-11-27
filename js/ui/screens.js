@@ -3,7 +3,7 @@ import { vfAttrs, vfBar, vfBind } from './vaultfilter.js';
 import { bondLevel } from '../../shared/data/companions.js';
 import { ensureSeason, divInfo, LEAGUE_DIVS, TOP_DIV, LP_PER_DIV } from '../../shared/data/league.js';
 const HARDCORE_TXT = 'Hardcore: se toda a sua equipe for derrotada você sai da partida e perde tudo o que ganhou nela (capturas, níveis e ouro). Quem sobrevive ganha o dobro de ouro da conta.';
-import { MAP_CHOICES, mapChoiceName, BUILTIN_MAPS, setCustomMaps } from '../../shared/data/board.js';
+import { MAP_CHOICES, mapChoiceName, BUILTIN_MAPS, setCustomMaps, REPLACEABLE } from '../../shared/data/board.js';
 import { regionBlurb } from '../../shared/data/regions.js';
 // 🗺️ v59: Liga e Pokémon em destaque do mapa escolhido (atualiza ao trocar o mapa)
 const mapRegion = id => (!id || id === 'kanto' ? 'kanto' : id === 'gen' || String(id).startsWith('gen:') ? 'expedicao' : String(id).startsWith('theme:') ? String(id).slice(6) : null);
@@ -46,7 +46,7 @@ import { openDuelQueue } from './tournament.js';
 import { promptInstall, isStandalone } from './install.js';
 import { BADGES_TO_USE } from '../../shared/rules/helpers.js';
 import { eloOf } from '../../shared/data/elo.js';
-import { statCard, titleHtml } from './common.js';
+import { statCard, titleHtml, tmPickerHtml, setTmSlot } from './common.js';
 import { ivPercent } from '../../shared/rules/monsters.js';
 import { typeChips } from './common.js';
 import { openShop as openDiamondShop } from './shop.js';
@@ -431,7 +431,15 @@ function collectionModal(profile, onChange) {
               return to ? `<div class="ms-opt"><img class="ms-st" src="${itemUrl(id)}" alt=""><img class="ms-mon" src="${monSprite({ sp: to, shiny: m.shiny })}" alt="">
                 <div class="grow"><b>${esc(ALL_ITEMS[id].name)}</b><div class="tiny muted">evolui para <b>${esc(getSpecies(to).name)}</b> · você tem ${n} na Mochila</div></div>
                 <button class="btn sm green" data-act="ms-evo" data-item="${id}" ${n > 0 ? '' : 'disabled'}>Evoluir</button></div>` : ''; }).join('')}
-              <p class="tiny muted">Itens de evolução caem em eventos do tabuleiro e são vendidos nas lojas das cidades (Pedras nas Azuis, itens de troca nas Vermelhas, os da Gen 8–9 nas Amarelas). Sobras ficam na Mochila da conta.</p>`; })()}</div>`);
+              <p class="tiny muted">Itens de evolução caem em eventos do tabuleiro e são vendidos nas lojas das cidades (Pedras nas Azuis, itens de troca nas Vermelhas, os da Gen 8–9 nas Amarelas). Sobras ficam na Mochila da conta.</p>`; })()}
+          <h4 style="margin:6px 0 2px">🧪 Treino com itens da Mochila</h4>
+          <div class="ms-opt"><img class="ms-st" src="${itemUrl('gene_candy')}" alt="">
+            <div class="grow"><b>🧬 Doce Genético</b><div class="tiny muted">Sorteia de novo os IVs (HP ${m.iv?.hp ?? '?'} · ATQ ${m.iv?.atk ?? '?'} · DEF ${m.iv?.def ?? '?'} · VEL ${m.iv?.spe ?? '?'}) — cada um tenta 2 vezes e fica o melhor; pode subir ou cair · você tem ${bag.gene_candy || 0}</div></div>
+            <button class="btn sm purple" data-act="ms-gene" ${(bag.gene_candy || 0) > 0 ? '' : 'disabled'}>Dar</button></div>
+          <div class="ms-opt"><img class="ms-st" src="${itemUrl('tm')}" alt="">
+            <div class="grow"><b>💿 TM</b><div class="tiny muted">Ensina um golpe novo no lugar do 2º ou do 3º · você tem ${bag.tm || 0}</div></div>
+            <button class="btn sm" data-act="ms-tm" ${(bag.tm || 0) > 0 ? '' : 'disabled'}>Usar</button></div>
+          <p class="tiny muted">🧬 O Doce Genético sai da 🍳 Cozinha da Fazenda (Nv.2) ou de eventos raros nas casas Vermelhas/Amarelas.</p></div>`);
       const hold = async item => {
         try { profile = (await api('profile', { op: 'hold_stone', uid: m.uid, item })).profile; closeModal('mstone'); redraw(); onChange(profile); toast(item ? `${ALL_ITEMS[item]?.kind === 'gear' ? '⚔️' : '💎'} ${ALL_ITEMS[item]?.name} equipado!` : 'O item voltou para a Mochila.', 'good'); }
         catch (e) { toast(e.message, 'bad'); }
@@ -444,7 +452,26 @@ function collectionModal(profile, onChange) {
         try { profile = (await api('profile', { op: 'max_soup', uid: m.uid })).profile; closeModal('mstone'); redraw(); onChange(profile); toast(`🔴 ${m.nick || getSpecies(m.sp).name} ganhou o Fator Gigantamax!`, 'good'); }
         catch (e) { toast(e.message, 'bad'); }
       };
-      bindActions(ov2, { 'ms-hold': x => hold(x.item), 'ms-off': () => hold(null), 'ms-evo': x => evoUse(x.item), 'ms-soup': soup });
+      const gene = async () => {
+        if (!confirm(`Dar o 🧬 Doce Genético para ${m.nick || getSpecies(m.sp).name}? Os IVs atuais serão sorteados de novo (podem cair).`)) return;
+        try {
+          const r = await api('profile', { op: 'gene_candy', uid: m.uid }); profile = r.profile; closeModal('mstone'); redraw(); onChange(profile);
+          const k = ['hp', 'atk', 'def', 'spe'], L = { hp: 'HP', atk: 'ATQ', def: 'DEF', spe: 'VEL' };
+          toast(`🧬 ${k.map(x => `${L[x]} ${r.gene.before[x]}→${r.gene.after[x]}`).join(' · ')}`, 'good');
+        } catch (e) { toast(e.message, 'bad'); }
+      };
+      const tmOpen = () => { // 💿 TM direto da ficha
+        const draw = () => tmPickerHtml(m, 'mtm-move');
+        const ov3 = openModal('mtm', `💿 TM — ${esc(m.nick || getSpecies(m.sp).name)}`, draw(), { wide: true });
+        bindActions(ov3, {
+          'tm-slot': x => { setTmSlot(x.slot); setModalBody('mtm', draw()); },
+          'mtm-move': async x => {
+            try { profile = (await api('profile', { op: 'use_tm', uid: m.uid, move: x.move, slot: Number(x.slot) })).profile; closeModal('mtm'); closeModal('mstone'); redraw(); onChange(profile); toast('💿 Golpe novo aprendido!', 'good'); }
+            catch (e) { toast(e.message, 'bad'); }
+          }
+        });
+      };
+      bindActions(ov2, { 'ms-hold': x => hold(x.item), 'ms-off': () => hold(null), 'ms-evo': x => evoUse(x.item), 'ms-soup': soup, 'ms-gene': gene, 'ms-tm': tmOpen });
     },
     rel: async d => {
       const m = (profile?.vault || []).find(x => x.uid === d.uid);
@@ -832,12 +859,15 @@ async function adminModal() {
     if (tab === 'mapas') {
       const maps = data.maps || [];
       return tabs + `<div class="card col"><h3>🗺️ Mapas personalizados</h3>
-        <p class="small muted">Monte mapas novos para o modo normal. Publicado = aparece para todos na escolha de mapa (Treino, salas online e offline). Só ${2} casas de Pokémon podem ser Amarelas (lendárias).</p>
+        <p class="small muted">Monte mapas novos para o modo normal. Publicado = aparece para todos na escolha de mapa (Treino, salas online e offline). Cada mapa tem 3 casas Amarelas (lendárias) por padrão — marque até 4 no editor.</p>
         <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn primary" data-act="map-new" data-from="blank">➕ Mapa em branco</button>
           <select class="input" id="a-mapfrom">${BUILTIN_MAPS.map(m => `<option value="${m.id === 'gen' ? 'gen:' + (Date.now() % 100000) : m.id}">${m.icon} ${esc(m.name)}</option>`).join('')}</select>
           <button class="btn" data-act="map-new" data-from="copy">📋 Começar de uma cópia</button></div>
+        <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"><select class="input" id="a-mapovr">${REPLACEABLE.map(id => { const b = BUILTIN_MAPS.find(m => m.id === id); const has = maps.find(m => m.replaces === id); return `<option value="${id}">${b.icon} ${esc(b.name)}${has ? ' (já editado)' : ''}</option>`; }).join('')}</select>
+          <button class="btn" data-act="map-ovr">✏️ Editar um mapa do jogo</button></div>
+        <p class="tiny muted">✏️ Editar um mapa do jogo cria uma versão editada; quando você <b>publica</b>, as salas novas desse mapa usam a sua versão (despublique para voltar ao original). Partidas em andamento não mudam.</p>
         <table class="score" style="margin-top:8px"><tr><th>Mapa</th><th>Casas</th><th>Status</th><th>Atualizado</th><th></th></tr>
-        ${maps.map(m => `<tr><td><b>${esc(m.name)}</b><div class="tiny muted">${esc(m.id)} · v${m.rev || 1}</div></td><td>${m.spaces.length}</td>
+        ${maps.map(m => `<tr><td><b>${esc(m.name)}</b><div class="tiny muted">${esc(m.id)} · v${m.rev || 1}${m.replaces ? ` · ✏️ substitui ${esc(BUILTIN_MAPS.find(b => b.id === m.replaces)?.name || m.replaces)}` : ''}</div></td><td>${m.spaces.length}</td>
           <td>${m.published ? '<span class="chip green">publicado</span>' : '<span class="chip">rascunho</span>'}</td><td class="tiny">${m.updatedAt ? new Date(m.updatedAt).toLocaleString('pt-BR') : ''}</td>
           <td class="row" style="gap:4px"><button class="btn sm" data-act="map-edit" data-id="${esc(m.id)}">✏️ Editar</button>
             <button class="btn sm" data-act="map-pub" data-id="${esc(m.id)}" data-v="${m.published ? '0' : '1'}">${m.published ? 'Despublicar' : '🚀 Publicar'}</button>
@@ -934,6 +964,16 @@ async function adminModal() {
     'acc-band': () => { if (confirm(`Tirar a Pulseira Dynamax de ${acc.trainer}?`)) accRun(() => api('admin', { op: 'remove_bracelet', item: 'dynamax_band', userId: acc.id }), '🔴 Pulseira removida.'); },
     'acc-bracelet': () => { if (confirm(`Tirar o Bracelete Mega de ${acc.trainer}?`)) accRun(() => api('admin', { op: 'remove_bracelet', userId: acc.id }), '🔗 Bracelete removido.'); },
     'map-new': d => openMapEditor(templateMap(d.from === 'blank' ? 'blank' : ov.querySelector('#a-mapfrom').value), mapsSaved),
+    'map-ovr': () => { // ✏️ v64: editar Kanto/temático (abre a versão já editada, se houver)
+      const id = ov.querySelector('#a-mapovr').value;
+      const has = (data.maps || []).find(m => m.replaces === id);
+      if (has) return openMapEditor({ ...structuredClone(has), id: has.id.replace(/^custom:/, '') }, mapsSaved);
+      const t = templateMap(id);
+      const b = BUILTIN_MAPS.find(m => m.id === id);
+      t.name = b.name; t.replaces = id; t.id = `ovr_${id.replace(/[^a-z0-9]/gi, '')}`.slice(0, 24);
+      t.bg = id === 'kanto' ? 'kanto' : `theme_${id.slice(6)}`;
+      openMapEditor(t, mapsSaved);
+    },
     'map-edit': d => { const m = (data.maps || []).find(x => x.id === d.id); if (m) openMapEditor({ ...structuredClone(m), id: m.id.replace(/^custom:/, '') }, mapsSaved); },
     'map-pub': d => { const m = (data.maps || []).find(x => x.id === d.id); if (m) run(async () => { const r = await api('admin', { op: 'save_map', map: { ...m, id: m.id.replace(/^custom:/, '') }, published: d.v === '1' }); mapsSaved(r.maps); }, d.v === '1' ? 'Mapa publicado!' : 'Mapa virou rascunho.'); },
     'map-del': d => { if (confirm('Apagar este mapa? Partidas já começadas nele continuam funcionando.')) run(async () => { const r = await api('admin', { op: 'delete_map', id: d.id }); mapsSaved(r.maps); }, 'Mapa apagado.'); }

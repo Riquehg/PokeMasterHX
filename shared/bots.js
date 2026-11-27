@@ -131,7 +131,7 @@ function battleAction(state, p) {
     if (myMult <= 0.5 && moveMatchup(cand, foe) >= 2) return { type: 'battle', move: 'switch', index: sw0 };
   }
 
-  if (b.kind === 'wild' && !foe.megaBoss && !legendCapBlocked(p, foe)) {
+  if (b.kind === 'wild' && !foe.megaBoss && !foe.gmaxBoss && !legendCapBlocked(p, foe)) {
     const sp = getSpecies(foe.sp);
     const newSpecies = !p.caught.includes(foe.sp);
     const want = newSpecies || foe.shiny || sp.tier >= 3 || p.team.length < TEAM_SIZE;
@@ -147,7 +147,7 @@ function battleAction(state, p) {
       }
       // enfraquece com o golpe mais fraco para não nocautear
       if (hpRatio(foe) > 0.25 && odds < 0.66) {
-        const weakSlot = [0, 1].map(i => ({ i, d: expectedDamage(state, si, monMoves(me)[i]) }))
+        const weakSlot = monMoves(me).map((mv, i) => ({ i, d: expectedDamage(state, si, mv) }))
           .filter(x => x.d > 0 && x.d < foe.hp * 0.85).sort((a, c) => c.d - a.d)[0];
         if (weakSlot) return { type: 'battle', move: 'attack', slot: weakSlot.i };
       }
@@ -362,9 +362,11 @@ function raidBotAction(state, p) {
       if (mv.kind === 'heal') return mon.hp < maxHpOf(mon) * 0.4 ? 999 : 0;
       if (mv.kind === 'buff') return (x.stage || 0) < 1 && r.round < 2 ? 1.5 : 0;
       if (mv.kind === 'debuff') return r.bossStage > -1 ? 1.2 : 0;
+      if (mv.kind === 'status' || mv.kind === 'transform') return 0;
       return bestAttack([mv.type], bossTypes).mult * (mv.power || 1) * (1 - (mv.miss || 0) / 6) * (getSpecies(mon.sp).types.includes(mv.type) ? 1.2 : 1);
     };
-    return { type: 'raid', op: 'attack', slot: score(moves[1]) > score(moves[0]) ? 1 : 0 };
+    const sc = moves.map(score);
+    return { type: 'raid', op: 'attack', slot: sc.indexOf(Math.max(...sc)) };
   }
   const ball = ['master_ball', 'ultra_ball', 'rainbow_ball', 'great_ball', 'poke_ball'].find(id => p.items[id] > 0)
     || Object.keys(p.items).find(id => ITEMS[id]?.kind === 'ball' && p.items[id] > 0);

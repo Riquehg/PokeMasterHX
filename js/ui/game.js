@@ -8,7 +8,7 @@ import { esc, toast, bindActions, openModal, closeModal, setModalBody } from './
 import { maxHpOf } from '../../shared/rules/monsters.js';
 import { monSprite, typeLabel, uiIcon } from '../config.js';
 import { monCard, playerColor, avatarImg, speciesName, titleHtml } from './common.js';
-import { battleHtml, outcomeText, playBattleFx } from './battle.js';
+import { battleHtml, syncAuras, outcomeText, playBattleFx } from './battle.js';
 import { BoardView } from './board.js';
 import { anim, rollDice, turnBanner, eventCard, battleIntro, captureAnim, confetti, evolutionAnim, victoryFx, miniCapture, isLite, setLite } from './fx.js';
 const vicOf = (s, pid) => s?.players?.find(x => x.id === pid)?.cosmetic?.victory || null;
@@ -614,6 +614,7 @@ export function mountGame(root, session, opts = {}) {
       }
       const lg = document.getElementById('battle-log');
       if (lg) lg.scrollTop = lg.scrollHeight;
+      syncAuras(document.getElementById('arena'));
       // clima também na arena
       const arena = document.getElementById('arena');
       if (arena && !arena.querySelector('.weather-canvas')) { ui.arenaWeather?.destroy(); ui.arenaWeather = new WeatherLayer(arena, { density: 0.7 }); }

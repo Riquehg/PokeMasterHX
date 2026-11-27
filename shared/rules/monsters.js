@@ -101,7 +101,7 @@ export function transformInto(mon, sp, moves) {
   const ratio = oldMax > 0 ? mon.hp / oldMax : 1;
   if (!mon.tf) mon.tf = { sp: mon.sp, moves: Array.isArray(mon.moves) ? [...mon.moves] : null };
   mon.sp = sp;
-  mon.moves = Array.isArray(moves) && moves.length === 2 ? [...moves] : null;
+  mon.moves = Array.isArray(moves) && moves.length >= 2 ? [...moves] : null;
   mon.hp = mon.hp <= 0 ? 0 : Math.max(1, Math.round(maxHpOf(mon) * ratio));
 }
 /** 💎 Mega Evolução: vira a forma Mega (mantém golpes e a % de HP). Volta no fim da batalha (revertForm). */
@@ -149,7 +149,7 @@ export function createMon(rng, speciesId, level, opts = {}) {
   if (getSpecies(speciesId)?.noShiny && opts.shiny) opts = { ...opts, shiny: false }; // ☠️ corrompidos não têm shiny
   const nature = opts.nature !== undefined ? opts.nature : rng.pick(NATURE_NAMES);
   const iv = opts.iv && typeof opts.iv === 'object' ? cleanIv(opts.iv) : rollIvs(rng);
-  const moves = Array.isArray(opts.moves) && opts.moves.length === 2 && opts.moves.every(id => MOVES[id]) ? [...opts.moves] : rollMoveIds(rng, speciesId);
+  const moves = Array.isArray(opts.moves) && opts.moves.length >= 2 && opts.moves.every(id => MOVES[id]) ? [...opts.moves] : rollMoveIds(rng, speciesId);
   const st = computeStats(speciesId, level, !!opts.shiny, nature, iv);
   const mon = {
     uid: makeUid(rng),

@@ -696,6 +696,7 @@ export async function farmOp(db, user, body) {
     const { prof } = await save(db, user.id, farm => {
       const b = farm.buildings?.[id];
       if (!b?.lvl) bad(`Construa o ${B.name} primeiro.`);
+      if (R.lvl && b.lvl < R.lvl) bad(`${R.icon} ${R.name} precisa da ${B.name} no Nv. ${R.lvl}.`);
       if ((b.jobs || []).length >= queueFor(b.lvl)) bad(`Fila cheia (${queueFor(b.lvl)}). Melhore o ${B.name} para produzir mais de uma vez.`);
       farm.goods = farm.goods || {};
       for (const [g, q] of Object.entries(R.in)) if ((farm.goods[g] || 0) < q) bad(`Faltam ingredientes: ${q}x ${GOODS[g].icon} ${GOODS[g].name}.`);
@@ -710,7 +711,8 @@ export async function farmOp(db, user, body) {
     const id = String(body.b || ''), B = BUILDINGS[id];
     if (!B) bad('Construção inválida.');
     const got = [];
-    const { prof } = await save(db, user.id, farm => {
+    const { prof } = await save(db, user.id, (farm, cur) => {
+      let bagOut = null;
       const b = farm.buildings?.[id];
       const ready = (b?.jobs || []).filter(j => j.done <= now);
       if (!ready.length) bad('Nada pronto ainda.');
@@ -720,10 +722,11 @@ export async function farmOp(db, user, body) {
         const R = B.recipes[j.recipe];
         if (R.out.goods) for (const [g, q] of Object.entries(R.out.goods)) farm.goods[g] = Math.min(GOODS_CAP, (farm.goods[g] || 0) + q);
         if (R.out.item) farm.items[R.out.item] = (farm.items[R.out.item] || 0) + 1;
+        if (R.out.bag) bagOut = addToBag(bagOut || cur.stats?.bag, R.out.bag); // 🧬 v64: Doce Genético vai para a Mochila
         got.push(R.icon);
         addFarmXp(farm, 15);
       }
-      return {};
+      return bagOut ? { bag: bagOut } : {};
     });
     return { farm: view(prof, current(prof, now), user.id), message: `✅ Pronto: ${got.join(' ')}` };
   }

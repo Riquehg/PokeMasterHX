@@ -3,7 +3,7 @@
 import { SPECIES_LIST, getSpecies } from '../../shared/data/pokemon.js';
 import { evoList } from '../../shared/data/evolution.js';
 import { megaBySpecies } from '../../shared/data/megas.js';
-import { movesOf, possibleSecondMoves, ROLE_LABELS } from '../../shared/data/moves.js';
+import { movesOf, possibleSecondMoves, ROLE_LABELS, megaMoveFor, MOVES } from '../../shared/data/moves.js';
 import { ABILITIES, abilityOf } from '../../shared/data/battlegear.js';
 import { baseDefOf, defFactor } from '../../shared/rules/monsters.js';
 import { against, TYPES, TYPE_COLORS } from '../../shared/rules/types.js';
@@ -55,7 +55,7 @@ function evoChain(sp, seen) {
 }
 
 const moveRow = m => `<div class="dx-move" style="--tc:${TYPE_COLORS[m.type]}"><span class="dx-ty" style="background:${TYPE_COLORS[m.type]}">${typeIcon(m.type)}${esc(typeLabel(m.type))}</span>${moveIcon(m)}
-  <b>${esc(m.name)}</b><span class="tiny muted">${m.kind === 'dmg' || m.kind === 'drain' ? `${Math.round((m.power || 1) * 100)}%` : 'suporte'}${m.miss ? ` · erra no 🎲${m.miss === 1 ? '1' : `1–${m.miss}`}` : ''}</span>${moveFxChips(m)}</div>`;
+  <b>${m.owner ? '<span class="mv-own">★</span>' : ''}${esc(m.name)}</b><span class="tiny muted">${m.kind === 'dmg' || m.kind === 'drain' ? `${Math.round((m.power || 1) * 100)}%` : m.kind === 'status' ? 'condição' : 'suporte'}${m.miss ? ` · erra no 🎲${m.miss === 1 ? '1' : `1–${m.miss}`}` : ''}</span>${moveFxChips(m)}</div>`;
 
 /**
  * HTML da ficha. ctx = { seen:Set, caught:Set, shinySeen:Set, shinyCaught:Set, vault:[], where:{tier:texto}, badges:{tier:n}, tierNames:{} }
@@ -102,8 +102,9 @@ export function dexEntryHtml(spId, ctx) {
 
     <div class="dx-sec"><h4>⚔️ Golpes</h4>
       <div class="tiny muted">1º golpe (sempre):</div>${first ? moveRow(first) : ''}
-      <div class="tiny muted" style="margin-top:6px">2º golpe — cada um nasce com uma destas variações (troque com 💿 TM):</div>
-      <div class="dx-moves">${possibleSecondMoves(sp.id).filter(Boolean).map(moveRow).join('')}</div>
+      <div class="tiny muted" style="margin-top:6px">2º e 3º golpes — cada um nasce com 2 destes (★ = exclusivo da família; troque com 💿 TM):</div>
+      <div class="dx-moves">${possibleSecondMoves(sp.id).filter(Boolean).slice(0, 40).map(moveRow).join('')}</div>
+      ${megas.length ? `<div class="tiny muted" style="margin-top:6px">💎 Na forma Mega ganha um 4º golpe: ${megas.map(m => esc((megaMoveFor(m.sp) || []).map(id => MOVES[id]?.name).filter(Boolean)[0] || '?')).join(' / ')}</div>` : ''}
       ${conds.length ? `<div class="small" style="margin-top:6px">Pode causar: ${conds.map(k => `<span class="st-chip" style="--sc:${STATUS[k].color}">${STATUS[k].icon} ${esc(STATUS[k].name)}</span>`).join(' ')}</div>` : ''}
     </div>
 

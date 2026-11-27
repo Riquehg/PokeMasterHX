@@ -78,6 +78,29 @@ function spectatorHtml(state, b) {
 }
 
 /** HTML completo. ui.sub = submenu ('switch'|'item'|'ball'). */
+/** ✨ v64: centraliza a aura no sprite de verdade (o tamanho do sprite muda com Mega, Gigantamax, Raid e layout do PC). */
+let auraRO = null;
+export function syncAuras(arena) {
+  if (!arena) return;
+  const place = () => {
+    const ar = arena.getBoundingClientRect();
+    for (const side of ['me', 'foe']) {
+      const fx = arena.querySelector(`.aura-fx.${side}`), sp = arena.querySelector(`.mon-sprite.${side}`);
+      if (!fx || !sp || !sp.offsetWidth) continue;
+      // offsetLeft/Top ignoram a animação (transform) do sprite: a aura fica parada no centro dele
+      const w = sp.offsetWidth, h = sp.offsetHeight, size = Math.max(w, h) * 1.32;
+      fx.style.left = `${sp.offsetLeft + w / 2 - size / 2}px`;
+      fx.style.top = `${sp.offsetTop + h / 2 - size / 2}px`;
+      fx.style.right = fx.style.bottom = 'auto';
+      fx.style.width = fx.style.height = `${size}px`;
+      if (!ar.width) break;
+    }
+  };
+  place();
+  requestAnimationFrame(place);
+  if (typeof ResizeObserver !== 'undefined') { auraRO?.disconnect(); auraRO = new ResizeObserver(place); auraRO.observe(arena); }
+}
+
 export function battleHtml(state, vid, ui = {}, canAct = true) {
   const b = state.battle;
   if (!b) return '';
@@ -130,7 +153,7 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
       const tag = !dmg ? `<span class="mv-tag sup">${esc(m.desc)}</span>`
         : mult === 0 ? '<span class="mv-tag bad">Não afeta</span>' : mult >= 2 ? `<span class="mv-tag good">Super efetivo x${mult}</span>` : mult < 1 ? `<span class="mv-tag bad">Pouco efetivo x${mult}</span>` : '<span class="mv-tag">Normal</span>';
       return `<button class="btn move-btn" style="--tc:${TYPE_COLORS[m.type]}" data-act="b-attack" data-slot="${i}" title="${esc(banned ? '🎀 Faixa Escolhida: só golpes de ataque' : m.desc)}" ${banned ? 'disabled' : ''}>
-        <span class="mv-name">${moveIcon(m)}${esc(m.name)}</span>
+        <span class="mv-name">${moveIcon(m)}${esc(m.name)}${m.mega ? ' <b class="mv-mega" title="Golpe da Mega: só na forma Mega">💎</b>' : ''}</span>
         <span class="mv-meta">${esc(typeLabel(m.type))}${dmg ? ` · poder ${Math.round((m.power || 1) * (stab ? 1.2 : 1) * 100)}%` : ''}${m.miss ? ` · erra no 🎲${m.miss === 1 ? '1' : `1–${m.miss}`}` : ''}</span>${tag}${dmg ? moveFxChips(m) : ''}</button>`;
     }).join('');
     // 🧬 Ditto/Mew: voltar à forma, guardar a forma e usar formas guardadas (até 3)
@@ -154,7 +177,7 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
     controls = `<div class="move-grid">${moveBtns}</div>${megaBar}${gmaxBar}${formBar}<div class="battle-actions">
         <button class="btn blue" data-act="b-sub" data-sub="switch" ${myTeam.filter(m => m.hp > 0 && canUse(p, m)).length < 2 ? 'disabled' : ''}>🔄 Trocar</button>
         <button class="btn purple" data-act="b-sub" data-sub="item" ${items.length ? '' : 'disabled'}>🎒 Itens</button>
-        <button class="btn green" data-act="b-sub" data-sub="ball" ${b.kind === 'wild' && balls.length && !foeMon.megaBoss && !legendCapBlocked(p, foeMon) ? '' : 'disabled'} ${foeMon.megaBoss ? 'title="Energia Mega: não dá para capturar — vença para ganhar fragmentos"' : legendCapBlocked(p, foeMon) ? `title="Você já capturou ${LEGEND_MATCH_LIMIT} lendários das casas Amarelas nesta partida"` : ''} ${b.kind === 'raid' ? 'title="Na Raid, vença primeiro: a captura é automática no fim"' : ''}>🔴 Capturar</button>
+        <button class="btn green" data-act="b-sub" data-sub="ball" ${b.kind === 'wild' && balls.length && !foeMon.megaBoss && !foeMon.gmaxBoss && !legendCapBlocked(p, foeMon) ? '' : 'disabled'} ${foeMon.megaBoss || foeMon.gmaxBoss ? 'title="Energia Mega/Gigantamax: não dá para capturar — vença para ganhar prêmios"' : legendCapBlocked(p, foeMon) ? `title="Você já capturou ${LEGEND_MATCH_LIMIT} lendários das casas Amarelas nesta partida"` : ''} ${b.kind === 'raid' ? 'title="Na Raid, vença primeiro: a captura é automática no fim"' : ''}>🔴 Capturar</button>
         <button class="btn" data-act="b-flee" ${official ? 'disabled' : ''}>${b.kind === 'wild' ? '🏃 Fugir' : '🏳️ Desistir'}</button>
       </div>${b.kind === 'raid' ? '<p class="tiny muted center">🔥 Raid: pokébolas bloqueadas durante a luta. Vença o chefe e depois escolha a Pokébola para tentar capturar.</p>' : ''}`;
     if (ui.sub === 'switch') controls += switchList(myTeam, me.active, p, foeMon);
@@ -162,8 +185,13 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
     if (ui.sub === 'ball') {
       controls += `<div class="subpick">${balls.map(([id, n]) => {
         const c = Math.round(captureChance(state, id) * 100);
-        return `<button class="btn sm pickbtn" data-act="b-ball" data-item="${id}"><img src="${itemUrl(id)}" alt="${esc(ITEMS[id].name)}"><span class="pb-nm">${esc(ITEMS[id].name)} ×${n}</span><span class="chip ${c >= 60 ? 'green' : c >= 34 ? 'gold' : 'red'}">${c}%</span></button>`;
-      }).join('')}</div><p class="tiny muted">Dica: HP abaixo de 50% dá +1 e abaixo de 25% dá +2; sono/congelado +2 e outras condições +1. 🎲1 sempre falha e cada erro pode fazê-lo fugir.${getSpecies(foeMon.sp)?.legendary || getSpecies(foeMon.sp)?.tier === 5 ? `<br>⚡ <b>Captura ${getSpecies(foeMon.sp)?.mythical ? 'mítica' : 'lendária'}:</b> com o HP acima de 50% ele repele a bola. Abaixo disso rola 2 dados e precisa de ${LEGEND_CAPTURE.target + (getSpecies(foeMon.sp)?.mythical ? 1 : 0)}+ (bola conta no máximo +2, HP baixo até +2, condição +1 — teto +5). 🎲🎲 1+1 sempre falha e ele foge fácil. Só a Master Ball é garantida.` : ''}</p>`;
+        // 🎯 v64: mostra o bônus real da bola contra ESTE Pokémon (bola de tipo: +3 só nos tipos dela) e quando já está no teto
+        const it = ITEMS[id], bb = it.bonus >= 99 ? null : ballBonusAgainst(id, getSpecies(foeMon.sp).types);
+        const typed = it.typeBonus && bb === it.typeBonus.bonus;
+        const capMax = getSpecies(foeMon.sp)?.legendary || getSpecies(foeMon.sp)?.tier >= 5 ? Math.min(bb, LEGEND_CAPTURE.ballMax) : bb;
+        const tag = bb === null ? '' : `<span class="tiny ${typed ? 'good' : 'muted'}">${typed ? '🎯 ' : ''}+${capMax}${capMax < bb ? ` (teto +${LEGEND_CAPTURE.ballMax})` : ''}</span>`;
+        return `<button class="btn sm pickbtn" data-act="b-ball" data-item="${id}" title="${esc(it.desc || '')}"><img src="${itemUrl(id)}" alt="${esc(it.name)}"><span class="pb-nm">${esc(it.name)} ×${n}</span>${tag}<span class="chip ${c >= 60 ? 'green' : c >= 34 ? 'gold' : 'red'}">${c}%${c === 83 ? ' máx' : ''}</span></button>`;
+      }).join('')}</div><p class="tiny muted">🎯 Bolas de tipo dão +3 só contra os tipos delas (+1 nos outros). Com 1 dado o máximo é 83% (🎲1 sempre falha). Dica: HP abaixo de 50% dá +1 e abaixo de 25% dá +2; sono/congelado +2 e outras condições +1. 🎲1 sempre falha e cada erro pode fazê-lo fugir.${getSpecies(foeMon.sp)?.legendary || getSpecies(foeMon.sp)?.tier === 5 ? `<br>⚡ <b>Captura ${getSpecies(foeMon.sp)?.mythical ? 'mítica' : 'lendária'}:</b> com o HP acima de 50% ele repele a bola. Abaixo disso rola 2 dados e precisa de ${LEGEND_CAPTURE.target + (getSpecies(foeMon.sp)?.mythical ? 1 : 0)}+ (bola conta no máximo +2, HP baixo até +2, condição +1 — teto +5). 🎲🎲 1+1 sempre falha e ele foge fácil. Só a Master Ball é garantida.` : ''}</p>`;
     }
   }
 

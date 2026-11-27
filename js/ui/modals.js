@@ -1,4 +1,4 @@
-import { tmPickerHtml } from './common.js';
+import { tmPickerHtml, setTmSlot } from './common.js';
 import { dexEntryHtml } from './dexentry.js';
 import { COMPANIONS } from '../../shared/data/companions.js';
 // Janelas da partida: loja, PC, mochila, voo, Pokédex, ficha do treinador, detalhes do Pokémon e regras.
@@ -166,7 +166,8 @@ export function openBag(session, act) {
       if (pending === 'tm') { tmIndex = Number(d.index); setModalBody('bag', render()); return; }
       const item = pending; pending = null; act({ type: 'use_item', item, index: Number(d.index) });
     },
-    'tm-move': d => { const index = tmIndex; pending = null; tmIndex = null; act({ type: 'use_item', item: 'tm', index, move: d.move }); },
+    'tm-move': d => { const index = tmIndex; pending = null; tmIndex = null; act({ type: 'use_item', item: 'tm', index, move: d.move, slot: Number(d.slot) }); },
+    'tm-slot': d => { setTmSlot(d.slot); setModalBody('bag', render()); },
     'tm-back': () => { tmIndex = null; setModalBody('bag', render()); }
   });
   refreshOnChange(session, 'bag', render);
@@ -337,7 +338,7 @@ export function openMon(session, act, index) {
         <div>${typeChips(v.types)} <span class="chip">#${String(sp.dex).padStart(3, '0')}</span>${mon.aura ? ` <span class="chip gold">aura ${esc(mon.aura)}</span>` : ''}</div>
         <div>Natureza: <b>${esc(natureLabel(mon.nature))}</b></div>
         <div>Potencial (IV): HP <b>${mon.iv?.hp ?? '?'}</b> · ATQ <b>${mon.iv?.atk ?? '?'}</b> · DEF <b>${mon.iv ? defIvOf(mon) : '?'}</b> · VEL <b>${mon.iv?.spe ?? '?'}</b> <span class="muted">(0 a 31 — cada Pokémon nasce com os seus)</span></div>
-        <div>Golpes: o 1º é sempre o rápido do tipo; o 2º é a variação deste indivíduo. Outros ${esc(v.name)} podem vir com: ${possibleSecondMoves(mon.sp).map(m => esc(m.name)).join(', ')}.</div>
+        <div>Golpes: 3 por Pokémon — o 1º é sempre um rápido do tipo; o 2º e o 3º são a variação deste indivíduo (★ exclusivos da família existem). Outros ${esc(v.name)} podem vir com: ${possibleSecondMoves(mon.sp).slice(0, 24).map(m => esc(m.name)).join(', ')}…</div>
         ${badgesNeeded(mon) ? `<div>${canUse(p, mon) ? '✅' : '🔒'} Obedece com ${badgesNeeded(mon)} insígnia${badgesNeeded(mon) > 1 ? 's' : ''} (você tem ${p.badges.length})</div>` : ''}
         <div>Evolução: ${esc(evo)}</div>
       </div></div>
@@ -418,13 +419,17 @@ export function openHelp() {
       <p><b>Natureza:</b> cada Pokémon nasce com uma das 25 naturezas dos jogos: +10% em um atributo (HP, Ataque, Defesa ou Velocidade) e −10% em outro. 5 são neutras. As de Defesa seguem os jogos: Bold, Impish, Calm, Careful, Relaxed, Sassy e Lax.</p>
       <p><b>Obediência:</b> Pokémon de casas 🌸 Rosa e 🟢 Verde obedecem sempre. 🔵 Azul precisa de 1 insígnia, 🔴 Vermelho de 2 e 🟡 Amarelo (lendários) de 3. O inicial e os capturados na <b>🤝 Bola da Confiança</b> obedecem sempre. Os que não obedecem aparecem com 🔒.</p>
       <p><b>🤝 Bola da Confiança:</b> raríssima (baús, eventos de casas altas, Raids e convites de viagem — não é vendida), com chance normal de captura. Quem for capturado nela confia em você e luta sem precisar de insígnias, até lendários — e continua assim na sua Coleção.</p>
-      <p><b>🟡 Casas Amarelas:</b> cada mapa tem só <b>2 casas de encontro lendário</b>. As cartas Amarelas (Santuário, Raids, Chuva de Estrelas) continuam iguais. <b>⚡ Limite:</b> cada jogador captura no máximo <b>2 lendários/míticos das casas Amarelas por partida</b>; depois disso ainda dá para lutar e ganhar XP, mas não capturar. Raids, eventos e Megas não entram nesse limite.</p>
+      <p><b>🟡 Casas Amarelas:</b> cada mapa tem <b>3 ou 4 casas de encontro lendário</b>, espalhadas pelo fim do mapa. As cartas Amarelas (Santuário, Raids, Chuva de Estrelas) continuam iguais. <b>⚡ Limite:</b> cada jogador captura no máximo <b>4 lendários/míticos das casas Amarelas por partida</b>; depois disso ainda dá para lutar e ganhar XP, mas não capturar. Raids, eventos e Megas não entram nesse limite.</p>
+      <p><b>⚔️ Golpes (v64):</b> cada Pokémon sabe <b>3 golpes</b> — o 1º é um golpe rápido do tipo dele; o 2º e o 3º variam de um indivíduo para outro. São ~580 golpes reais: ataques com efeitos (prioridade ⚡, recuo, crítico alto, hesitar…), golpes de condição (🌀 Thunder Wave, Will-O-Wisp, Toxic, Spore: só causam a condição) e <b>★ golpes exclusivos</b> da família (Volt Tackle, Blast Burn, Psystrike…). <b>💎 Na forma Mega</b> o Pokémon ganha um <b>4º golpe</b> (o exclusivo dele ou um golpe forte do novo tipo) até a batalha acabar. Pokémon antigos ganharam um 3º golpe fixo.</p>
+      <p><b>💎 Mega e 🔴 Gigantamax selvagens:</b> não dá para capturar, mas vencer dá prêmios pela raridade da espécie: Mega → fragmentos e chance da própria Megapedra (2% a 12%) e, raríssimo, o 🔗 Bracelete; Gigantamax → 🍄 Cogumelos Max, chance de 🍲 Sopa Max e, raríssimo, a 🔴 Pulseira Dynamax. Mega Raids e Raids Gigantamax ficaram mais frequentes.</p>
+      <p><b>🎯 Bolas de tipo:</b> Flame/Aqua/Volt/Shadow/Mystic dão +3 só contra os tipos delas (+1 nos outros) — o botão mostra o bônus real contra o Pokémon da batalha. Com 1 dado o máximo é 83% (o 🎲1 sempre falha); nos lendários o bônus da bola tem teto de +2. Na Raid, a bola de tipo só dá o bônus grande se o chefe for de um dos tipos dela.</p>
+      <p><b>🧬 Doce Genético:</b> feito na 🍳 Cozinha da Fazenda (Nv.2, 24 h) ou achado em eventos raros. Na ficha do Pokémon da Coleção (botão 🎒/✨) dá para dar o Doce: os IVs (HP, ATQ, DEF, VEL) são sorteados de novo — cada um tenta 2 vezes e fica o melhor, mas pode cair. Na mesma ficha: TM, itens de evolução, Megapedra, itens de batalha e Sopa Max.</p>
       <p><b>⏱️ Duração:</b> Treino e Online sempre terminam (30, 40, 45 ou 60 turnos). O "até o Campeão" ficou só no Offline, que não salva na conta.</p>
       <p><b>🌟 Míticos:</b> Mew, Celebi, Jirachi, Darkrai, Arceus e outros têm categoria própria. Não aparecem soltos como os lendários: só numa aparição mítica rara nas casas Amarelas (4%), em Raids e como prêmio (campeão da Série A). Nunca saem de ovos. 🌀 Ultracriaturas também ganharam rótulo.</p>
       <p><b>🗺️ Mapas:</b> Kanto, Expedição (novo a cada partida), 🏝️ Arquipélago Coral, 🌋 Terras de Fogo, 🏔️ Picos Gelados, 🌳 Mata Profunda e os mapas criados no painel admin. Os mapas temáticos e a Expedição têm o tamanho de Kanto (ou mais), cheios de bifurcações e voltas, com o ambiente do tema dominando e áreas escondidas no mar, na lava, nos picos ou na mata fechada.</p>
       <p><b>⚽ Liga das Séries:</b> Série D → C → B → A, uma temporada por mês. Inscreva 6 Pokémon como time de defesa; desafie quem está na sua série (até 5 ataques por dia) num duelo contra a defesa dele — ninguém precisa estar online. Vitória no ataque +3, defesa segurada +1. Cada série tem 20 times — dê nome e escudo ao seu. Os 4 primeiros sobem e os 4 últimos caem; 1º e 2º ganham troféu (🏆 Sala de Troféus) e um prêmio especial da série, o pódio ganha 💎 e o campeão da Série A ganha um Mítico.</p>
       <p><b>🎒 Mochila da conta:</b> no fim de cada partida salva, Pokébolas, Amuleto Shiny e TM que sobraram vão para a Mochila da conta (menu inicial). Poções, Revive, X Attack, doces e pedras são só da partida. No modo 📦 Coleção dá para levar até 20 Pokébolas (Master Ball 1), 1 Amuleto e 3 TM. Itens da Mochila também podem ser vendidos no 🏪 Mercado.</p>
-      <p><b>💿 TM:</b> item raro (Raids e eventos de casas altas, nunca vendido nas lojas). Troca o 2º golpe de um Pokémon por um golpe dos tipos dele. Use na partida ou na Mochila da conta.</p>
+      <p><b>💿 TM:</b> item raro (Raids e eventos de casas altas, nunca vendido nas lojas). Troca o 2º ou o 3º golpe (você escolhe) por um golpe dos tipos dele — são ~580 golpes reais no jogo. Use na partida ou na Mochila da conta.</p>
       <p><b>🧬 Transformar (Ditto e Mew):</b> o golpe Transformar copia o Pokémon adversário (tipos, atributos e golpes; o HP fica na mesma proporção). Durante a batalha dá para voltar à forma, guardar a forma (até 3) e usar uma forma guardada. Ditto shiny transformado bate 10% mais forte. Ao fim da batalha ele volta à forma original.</p>
       <p><b>✨ Amuleto Shiny:</b> não é mais vendido nas cidades — vem de Raids lendárias e eventos raros.</p>
       <p><b>👑 Battle Royale:</b> selvagens comuns (até casas Azuis) aparecem perto do nível do seu Pokémon mais forte. Lendários e casas Vermelhas continuam fortes.</p>

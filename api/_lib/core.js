@@ -16,12 +16,13 @@ import { duelQueue, duelQueueStatus, duelQueueCancel, duelTeam, startCup, duelFi
 import { SPECIES, STARTERS, getSpecies } from '../../shared/data/pokemon.js';
 import { dailyPokemon } from '../../shared/daily.js';
 import { cleanNick } from '../../shared/data/cosmetics.js';
-import { ITEMS, isKeepable, cleanBring, BAG_MAX_PER_ITEM, STARTING_ITEMS } from '../../shared/data/items.js';
-import { tmMovesFor, defaultMoveIds, MOVES } from '../../shared/data/moves.js';
+import { ITEMS, isKeepable, cleanBring, BAG_MAX_PER_ITEM, STARTING_ITEMS, GENE_ROLLS } from '../../shared/data/items.js';
+import { tmMovesFor, defaultMoveIds, MOVES, moveIdsOf, learnMoveIds } from '../../shared/data/moves.js';
 import { MEGAS, megaByStone } from '../../shared/data/megas.js';
 import { releaseGold } from '../../shared/data/release.js';
 import { levelEvoTarget, variantAfter, itemEvoTarget } from '../../shared/data/evolution.js';
 import { GMAX } from '../../shared/data/gmax.js';
+import { defIvOf } from '../../shared/rules/monsters.js';
 import { TITLE_BY_ID, unlockedTitles } from '../../shared/data/titles.js';
 import { bondLevel, bondGain, BOND_MAX, COMPANIONS } from '../../shared/data/companions.js';
 import { equippedCosmetic, equippedSkin, skinFor, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment, myCosmetics, refreshCosmeticInMatches } from './shop.js';
@@ -218,11 +219,10 @@ export async function profileOp(db, user, body) {
       const m = (cur.vault || []).find(x => x.uid === body.uid);
       if (!m) bad('Pokémon não encontrado na Coleção.');
       if (!tmMovesFor(m.sp).some(x => x.id === mv)) bad('Esse Pokémon não aprende esse golpe.');
-      const moves = Array.isArray(m.moves) && m.moves.length === 2 ? m.moves : defaultMoveIds(m.sp);
-      if (moves[1] === mv) bad('Ele já sabe esse golpe.');
+      if (moveIdsOf(m).includes(mv)) bad('Ele já sabe esse golpe.');
       bag.tm -= 1; if (!bag.tm) delete bag.tm;
       st.bag = bag;
-      return { stats: st, vault: cur.vault.map(x => (x.uid === body.uid ? { ...x, moves: [moves[0], mv] } : x)) };
+      return { stats: st, vault: cur.vault.map(x => (x.uid === body.uid ? { ...x, moves: learnMoveIds(m, mv, Number(body.slot) === 1 ? 1 : 2) } : x)) };
     })) };
   }
   if (body.op === 'title_equip') { // 🏅 equipar/tirar um título de conquista
@@ -286,6 +286,25 @@ export async function profileOp(db, user, body) {
       return { vault, stats: { ...(prof.stats || {}), bag } };
     });
     return { profile: await withCosmetic(db, prof) };
+  }
+  if (body.op === 'gene_candy') { // 🧬 v64: Doce Genético — sorteia os IVs de novo (cada um: melhor de 2)
+    let res = null;
+    const prof = await mutateProfile(db, user.id, prof => {
+      const bag = { ...(prof.stats?.bag || {}) };
+      if (!(bag.gene_candy > 0)) bad('Você não tem 🧬 Doce Genético na Mochila (Cozinha da Fazenda Nv.2 ou eventos raros).');
+      const vault = [...(prof.vault || [])];
+      const i = vault.findIndex(m => m.uid === body.uid);
+      if (i < 0) bad('Pokémon não encontrado.');
+      const m = vault[i];
+      const roll = () => { let best = 0; for (let k = 0; k < GENE_ROLLS; k++) best = Math.max(best, Math.floor(Math.random() * 32)); return best; };
+      const before = { hp: m.iv?.hp ?? 0, atk: m.iv?.atk ?? 0, def: defIvOf(m), spe: m.iv?.spe ?? 0 };
+      const iv = { hp: roll(), atk: roll(), def: roll(), spe: roll() };
+      vault[i] = { ...m, iv };
+      bag.gene_candy -= 1; if (bag.gene_candy <= 0) delete bag.gene_candy;
+      res = { before, after: iv };
+      return { vault, stats: { ...(prof.stats || {}), bag } };
+    });
+    return { profile: await withCosmetic(db, prof), gene: res };
   }
   if (body.op === 'evo_item') { // ✨ usar pedra / item de evolução da Mochila num Pokémon da Coleção (v54)
     const item = String(body.item || '');
@@ -603,6 +622,12 @@ export async function customMaps(db) {
   return Array.isArray(cfg?.maps) ? cfg.maps : [];
 }
 /** Dados do mapa para a partida (só publicado; sem ele a sala cai para Kanto). */
+/** ✏️ v64: se o admin publicou uma versão editada de Kanto/temático, a sala usa a versão editada. */
+async function resolveMapId(db, mapId) {
+  const id = String(mapId || 'kanto');
+  if (id.startsWith('custom:') || id === 'gen' || id.startsWith('gen:')) return mapId;
+  try { const o = (await customMaps(db)).find(x => x.published && x.replaces === id); return o ? o.id : mapId; } catch { return mapId; }
+}
 async function mapDataFor(db, mapId) {
   if (!String(mapId || '').startsWith('custom:')) return null;
   const m = (await customMaps(db)).find(x => x.id === mapId && x.published);
@@ -887,8 +912,9 @@ async function startRoom(db, row, lobby, userId) {
       players.filter(p => p.isBot).forEach(p => { p.starterLevel = Math.max(5, Math.round(avg * 0.85)); });
     }
   }
+  const mapId = await resolveMapId(db, options.map); // ✏️ v64: Kanto/temático editado no painel admin
   const state = createMatch({
-    id: row.id, mode: 'online', seed: randomSeed(), now: Date.now(), players, map: options.map, mapData: await mapDataFor(db, options.map), rules: options.rules,
+    id: row.id, mode: 'online', seed: randomSeed(), now: Date.now(), players, map: mapId, mapData: await mapDataFor(db, mapId), rules: options.rules,
     options: { dailyPokemon: await currentDaily(db), turnLimit: options.turnLimit || 0, trades: mode !== 'ranked', hardcore: !!options.hardcore, megas: !!options.megas }
   });
   state.roomMode = mode;

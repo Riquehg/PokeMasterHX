@@ -8,13 +8,16 @@ import { SPECIES } from './pokemon.js';
 export const GMAX_ROUNDS = 3;
 export const GMAX_HP = 1.5;        // HP máximo ×1,5 (a % de HP é mantida)
 export const GMAX_STR = 1.2;       // golpes Max: força ×1,2
-export const GMAX_RAID_CHANCE = 0.15; // Raid comum (sem Mega) vira Raid Gigantamax se o chefe tiver forma Gigantamax
+export const GMAX_RAID_CHANCE = 0.22; // v64: era 0,15 — // Raid comum (sem Mega) vira Raid Gigantamax se o chefe tiver forma Gigantamax
 export const BAND_ID = 'dynamax_band';
 export const BAND_DROP = 0.01;     // 🔴 Pulseira: 1% por participante de Raid Gigantamax (se ainda não tiver)
 export const FACTOR_WILD = 0.01;   // selvagem com forma Gigantamax nasce com o Fator (1%)
 export const SOUP_ID = 'max_soup';
 export const MUSHROOM_ID = 'max_mushroom';
-export const MUSHROOM_RAID = [1, 2]; // 🍄 Cogumelos Max por participante de Raid Gigantamax
+export const MUSHROOM_RAID = [1, 2];
+export const GMAX_WILD_CHANCE = 0.02; // 🔴 v64: encontro com energia Gigantamax nas casas de tier 3+ (não dá para capturar)
+/** 🔴 v64: prêmios do Gigantamax selvagem pela raridade: Cogumelos Max, chance de Sopa Max e de Pulseira. */
+export const GMAX_WILD_DROPS = { 1: { mu: [1, 1], soup: 0.02, band: 0 }, 2: { mu: [1, 2], soup: 0.03, band: 0 }, 3: { mu: [1, 2], soup: 0.05, band: 0.002 }, 4: { mu: [1, 3], soup: 0.07, band: 0.004 }, 5: { mu: [2, 3], soup: 0.1, band: 0.006 } }; // 🍄 Cogumelos Max por participante de Raid Gigantamax
 
 /** GMAX[base] = { base, sp ('gmax_<base>'), name, file } */
 export const GMAX = {};

@@ -93,9 +93,12 @@ test('Mochila: só Pokébolas/Amuleto/TM ficam; levar tira da conta; sobra volta
   assert.deepEqual(prof.stats.bag, { ultra_ball: 3, tm: 2, poke_ball: 3 });
   assert.ok(st.bagChanges[ash.id]);
   // TM num Pokémon da Coleção
-  const mv = tmMovesFor('pikachu').find(m => m.id === 'electric_x2').id;
-  const r = await profileOp(db, ash, { op: 'use_tm', uid: 'v1', move: mv });
+  const { moveIdsOf } = await import('../shared/data/moves.js');
+  const known = moveIdsOf(prof.vault.find(x => x.uid === 'v1'));
+  const mv = tmMovesFor('pikachu').find(m => !known.includes(m.id)).id;
+  const r = await profileOp(db, ash, { op: 'use_tm', uid: 'v1', move: mv, slot: 1 });
   assert.equal(r.profile.vault[0].moves[1], mv);
+  assert.equal(r.profile.vault[0].moves.length, 3);
   assert.equal(r.profile.stats.bag.tm, 1);
 });
 

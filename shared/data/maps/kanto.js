@@ -137,7 +137,8 @@ export const KANTO = {
   elite: 114,
   champion: 124,
   leagueGates: [107, 114, 124],
-  legendSpaces: [113, 123], // só 2 casas de encontro lendário (Amarelas); as outras do fim viraram Vermelhas
+  legendSpaces: [113, 123], // casas fixas de encontro lendário (Amarelas); v64: + 1 escolhida longe delas (3 no total)
+  legendMax: 3,
   gyms: { boulder: 39, cascade: 20, thunder: 60, rainbow: 70, volcano: 91, soul: 95 },
   spaces: RAW.map(r => ({ id: r.id, name: r.n || `Rota ${r.id}`, x: r.x, y: r.y, type: r.t, tier: r.tier, biome: r.b, gate: r.gate || null, links: r.c }))
 };

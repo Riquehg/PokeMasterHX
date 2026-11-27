@@ -34,7 +34,7 @@ export const ITEMS = {
   evolution_stone: { name: 'Pedra Evolutiva', kind: 'stone', price: 0, minTier: 0, image: 'evolution_stone.png', desc: 'Raríssima: evolui na hora QUALQUER Pokémon que tenha evolução (até os que precisam de pedra ou item especial).' },
   legend_charm:    { name: 'Amuleto Lendário', kind: 'charm', price: 0, minTier: 0, emoji: '🏵️', desc: 'Vale 1 SEMANA: ative na 🎒 Mochila da conta (ou leve na partida — ativa sozinho quando você passa do limite). Enquanto estiver ativo, não há limite de lendários das casas Amarelas em nenhuma partida. Ativar outro soma +7 dias. Feito na 🔨 Oficina ou na Loja PB da Torre.' },
   shiny_charm:     { name: 'Amuleto Shiny',   kind: 'charm', price: 0, minTier: 0, image: 'shiny_charm.png',     desc: 'Passivo: triplica a chance de encontrar shinies. Não acumula. Não é vendido nas cidades: vem de Raids lendárias e eventos raros (e fica na Mochila da conta).' },
-  tm:              { name: 'TM',              kind: 'tm', price: 0, minTier: 0, image: 'tm.png',                   desc: 'Ensina um novo 2º golpe a um Pokémon (escolha entre os golpes dos tipos dele). Raro: Raids e eventos. Fica na Mochila da conta e pode ser vendido no Mercado.' },
+  tm:              { name: 'TM',              kind: 'tm', price: 0, minTier: 0, image: 'tm.png',                   desc: 'Ensina um golpe novo (no lugar do 2º ou do 3º) a um Pokémon (escolha entre os golpes dos tipos dele). Raro: Raids e eventos. Fica na Mochila da conta e pode ser vendido no Mercado.' },
 
   // --- Tabuleiro ---
   bicycle:     { name: 'Bicicleta',  kind: 'move_bonus', bonus: 2, price: 200, minTier: 1, image: 'bicycle.png',     desc: 'Use antes de rolar: +2 casas no próximo movimento.' },
@@ -118,7 +118,9 @@ export function pickEvoItem(rng, useful = []) {
   return rng.weighted(Object.entries(EVO_ITEMS).map(([id, [, g]]) => [id, w[g] * (useful.includes(id) ? 4 : 1)]));
 }
 
-export const KEEP_KINDS = ['ball', 'charm', 'tm', 'megastone', 'fragment', 'gear', 'meal', 'stone', 'ingredient', 'soup'];
+ITEMS.gene_candy = { name: 'Doce Genético', kind: 'gene', price: 0, minTier: 0, emoji: '🧬', desc: 'Dê a um Pokémon da Coleção: sorteia de novo o potencial (IVs de HP, ATQ, DEF e VEL — cada um tenta 2 vezes e fica o melhor). Feito na 🍳 Cozinha da Fazenda (Nv.2) ou achado em eventos raros.' };
+export const GENE_ROLLS = 2; // cada IV: melhor de 2 sorteios (0–31) — pode subir ou cair
+export const KEEP_KINDS = ['ball', 'charm', 'tm', 'megastone', 'fragment', 'gear', 'meal', 'stone', 'ingredient', 'soup', 'gene'];
 export const isKeepable = id => !!ITEMS[id] && KEEP_KINDS.includes(ITEMS[id].kind);
 export const BAG_MAX_PER_ITEM = 99;
 /** Quanto de cada item dá para levar para uma partida (modo Coleção). */

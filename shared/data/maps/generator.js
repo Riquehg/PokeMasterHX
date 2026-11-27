@@ -33,24 +33,33 @@ const GYM_IDS = ['boulder', 'cascade', 'thunder', 'rainbow', 'volcano', 'soul'];
 export const MAP_THEMES = {
   expedicao: { name: 'Expedição', desc: 'Um mapa novo a cada partida: malha de rotas grande, ilhas e áreas escondidas diferentes.',
     weights: [['grass', 22], ['forest', 14], ['coast', 14], ['mountain', 10], ['cave', 10], ['desert', 8], ['jungle', 8], ['snow', 7], ['volcano', 7]],
-    backdrop: 'sea', holes: [5, 7], holeR: [9, 13], secrets: ['surf', 'cut', 'smash', 'flash', 'climb', 'burn', 'fly', 'surf', 'smash', 'flash'] },
+    backdrop: 'sea', holes: [5, 7], holeR: [9, 13], secrets: ['surf', 'cut', 'smash', 'flash', 'climb', 'burn', 'fly', 'surf', 'smash', 'flash'],
+    layout: { sr: 4, pr: 4, loops: 0.3, W: { h: 1, v: 1.25, d: 1.7 }, legends: 3 } },
   arquipelago: { name: 'Arquipélago Coral', seed: 4242, desc: 'Ilhas grandes ligadas por praias, com mar aberto por todo lado: muito Surf, Água e Voadores.',
     first: 'coast', weights: [['coast', 46], ['jungle', 16], ['grass', 12], ['forest', 8], ['cave', 7], ['mountain', 6], ['volcano', 5]],
+    // 🗺️ v64: começa embaixo à esquerda e sobe em diagonal até a Liga; muitas ilhas e laços curtos entre praias
+    layout: { sr: 7, pr: 1, loops: 0.38, W: { h: 1, v: 1.1, d: 1.3 }, edge: 0.55, legends: 4 },
     backdrop: 'sea', holes: [8, 10], holeR: [10, 15], holeBiome: 'sea', secrets: ['surf', 'surf', 'surf', 'fly', 'surf', 'cut', 'surf', 'flash', 'surf', 'climb'],
     towns: ['Porto Coral', 'Ilha Concha', 'Recife Azul', 'Vila Maré', 'Baía Dourada', 'Ilha Farol', 'Porto Safira', 'Atol Celeste', 'Praia Lunar', 'Ilha Palmeira'],
     places: { coast: ['Praia do Sol', 'Costa das Conchas', 'Enseada Azul', 'Praia dos Corais', 'Litoral Dourado'], jungle: ['Selva da Ilha', 'Mata Tropical'], grass: ['Campo das Palmeiras'], forest: ['Bosque Salgado'], cave: ['Gruta Marinha'], mountain: ['Morro do Farol'], volcano: ['Ilha Fumegante'], sea: ['Mar Aberto', 'Recife Perdido', 'Ilhota Secreta'] } },
   vulcanica: { name: 'Terras de Fogo', seed: 1717, desc: 'Desertos, vulcões e cânions cercados de lava: Fogo, Pedra, Terra e Dragão.',
     first: 'desert', weights: [['volcano', 38], ['desert', 30], ['mountain', 14], ['cave', 13], ['darkcave', 5]],
+    // 🗺️ v64: começa no alto e desce em zigue-zague (trilhas verticais, poucos atalhos) entre rios de lava
+    layout: { sr: 1, pr: 7, loops: 0.14, W: { h: 1.7, v: 0.7, d: 1.4 }, edge: 0.2, legends: 3 },
     backdrop: 'lava', holes: [6, 8], holeR: [9, 13], holeBiome: 'volcano', secrets: ['burn', 'climb', 'smash', 'burn', 'flash', 'climb', 'fly', 'smash', 'burn', 'climb'],
     towns: ['Vila Cinza', 'Cidade Brasa', 'Oásis Rubro', 'Monte Magma', 'Cânion Seco', 'Forja Antiga', 'Cidade Areia', 'Pico Âmbar', 'Vale Fumegante', 'Dunas Altas'],
     places: { volcano: ['Encosta de Magma', 'Cratera Viva', 'Campo de Cinzas', 'Rio de Lava'], desert: ['Dunas Vermelhas', 'Deserto Escaldante', 'Cânion do Sol'], mountain: ['Penhasco Rubro'], cave: ['Túnel de Basalto'], darkcave: ['Fenda Sombria'] } },
   glacial: { name: 'Picos Gelados', seed: 9090, desc: 'Montanhas nevadas, lagos congelados e cavernas escuras: Gelo, Pedra, Fantasma e Psíquico.',
     first: 'snow', weights: [['snow', 48], ['mountain', 20], ['cave', 13], ['darkcave', 10], ['coast', 9]],
+    // 🗺️ v64: começa no meio-baixo, encostas em diagonal e longas subidas até o pico da Liga (no alto)
+    layout: { sr: 6, pr: 2, loops: 0.18, W: { h: 1.3, v: 1.5, d: 0.8 }, edge: 0.45, jitter: 1.5, legends: 4 },
     backdrop: 'snow', holes: [6, 8], holeR: [9, 13], holeBiome: 'mountain', secrets: ['climb', 'flash', 'surf', 'climb', 'smash', 'flash', 'fly', 'climb', 'surf', 'flash'],
     towns: ['Vila Geada', 'Cidade Neblina', 'Pico Branco', 'Lago Cristal', 'Cidade Lunar', 'Gruta Azul', 'Vale do Eco', 'Forte Nevado', 'Aldeia Aurora', 'Monte Silêncio'],
     places: { snow: ['Campo Nevado', 'Trilha da Nevasca', 'Vale Congelado', 'Planície Branca'], mountain: ['Encosta Gelada', 'Pico do Vento'], cave: ['Caverna de Gelo'], darkcave: ['Gruta do Silêncio'], coast: ['Lago Congelado'] } },
   floresta: { name: 'Mata Profunda', seed: 3131, desc: 'Florestas e selvas fechadas, trilhas entrelaçadas: Planta, Inseto, Veneno e muito Cortar.',
     first: 'forest', weights: [['forest', 42], ['jungle', 30], ['grass', 14], ['coast', 5], ['cave', 5], ['mountain', 4]],
+    // 🗺️ v64: trilhas entrelaçadas (muitos laços e bifurcações), começa no alto e termina embaixo
+    layout: { sr: 2, pr: 6, loops: 0.55, W: { h: 1, v: 1, d: 1 }, edge: 0.3, legends: 3 },
     backdrop: 'forest', holes: [6, 8], holeR: [9, 13], holeBiome: 'forest', secrets: ['cut', 'cut', 'burn', 'cut', 'fly', 'surf', 'cut', 'flash', 'burn', 'smash'],
     towns: ['Vila Musgo', 'Vale Esmeralda', 'Cidade Raiz', 'Recanto do Vento', 'Clareira Sol', 'Vale das Flores', 'Aldeia Cipó', 'Bosque Antigo', 'Cidade Orvalho', 'Lagoa Serena'],
     places: { forest: ['Bosque Antigo', 'Trilha dos Carvalhos', 'Floresta Sombria', 'Mata dos Cogumelos'], jungle: ['Selva Úmida', 'Cipoal', 'Selva dos Ecos'], grass: ['Clareira Florida', 'Prado Verde'], coast: ['Margem do Rio'], cave: ['Toca das Raízes'], mountain: ['Morro Musgoso'] } }
@@ -109,13 +118,14 @@ const COLS = 22, ROWS = 9, MESH_X0 = 4, MESH_X1 = 83, MESH_Y0 = 8, MESH_Y1 = 92;
 
 function build(seed, themeId = 'expedicao') {
   const T = MAP_THEMES[themeId] || MAP_THEMES.expedicao;
+  const L = { sr: 4, pr: 4, loops: 0.3, W: { h: 1, v: 1.25, d: 1.7 }, edge: 0.35, jitter: 1, ...(T.layout || {}) };
   const rng = createRng(seed ^ 0x5bd1e995);
   const dxp = (MESH_X1 - MESH_X0) / (COLS - 1), dyp = (MESH_Y1 - MESH_Y0) / (ROWS - 1);
 
   // ---------- 1) grade com tremido
   const grid = [];
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-    grid.push({ c, r, x: MESH_X0 + c * dxp + rng.int(-6, 6) / 10 * dxp * 0.3, y: MESH_Y0 + r * dyp + (r % 2 ? 0.35 : -0.35) * dyp * 0.25 + rng.int(-6, 6) / 10 * dyp * 0.25 });
+    grid.push({ c, r, x: MESH_X0 + c * dxp + rng.int(-6, 6) / 10 * dxp * 0.3 * L.jitter, y: MESH_Y0 + r * dyp + (r % 2 ? 0.35 : -0.35) * dyp * 0.25 + rng.int(-6, 6) / 10 * dyp * 0.25 * L.jitter });
   }
   const at = (c, r) => (c >= 0 && r >= 0 && c < COLS && r < ROWS ? grid[r * COLS + c] : null);
   const gi = g => g.r * COLS + g.c;
@@ -137,17 +147,17 @@ function build(seed, themeId = 'expedicao') {
     for (const g of grid) { const dx = (g.x - cx) * RATIO / sx, dy = (g.y - cy) / sy; if (dx * dx + dy * dy < R * R) hole.add(gi(g)); }
   }
   // bordas comidas aqui e ali (o contorno não fica um retângulo)
-  for (const g of grid) if ((g.r === 0 || g.r === ROWS - 1) && rng.chance(0.35)) hole.add(gi(g));
-  const startG = at(0, 4), plateauG = at(COLS - 1, 4);
+  for (const g of grid) if ((g.r === 0 || g.r === ROWS - 1) && rng.chance(L.edge)) hole.add(gi(g));
+  const startG = at(0, L.sr), plateauG = at(COLS - 1, L.pr);
   // a última coluna fica livre (só o Planalto) para a Estrada da Vitória passar
-  for (let r = 0; r < ROWS; r++) if (r !== 4) hole.add(gi(at(COLS - 1, r)));
-  for (const g of [startG, at(1, 4), at(0, 3), at(0, 5), plateauG, at(COLS - 2, 4), at(COLS - 2, 3), at(COLS - 2, 5)]) hole.delete(gi(g));
+  for (let r = 0; r < ROWS; r++) if (r !== L.pr) hole.add(gi(at(COLS - 1, r)));
+  for (const g of [startG, at(1, L.sr), at(0, L.sr - 1), at(0, L.sr + 1), at(1, L.sr - 1), at(1, L.sr + 1), plateauG, at(COLS - 2, L.pr), at(COLS - 2, L.pr - 1), at(COLS - 2, L.pr + 1)]) if (g) hole.delete(gi(g));
 
   // ---------- 3) árvore aleatória + laços, só nas casas de terra
   const alive = i => !hole.has(i);
   const parent = grid.map((_, i) => i);
   const find = i => (parent[i] === i ? i : (parent[i] = find(parent[i])));
-  const W = { h: 1, v: 1.25, d: 1.7 };
+  const W = L.W;
   const cand = gEdges.filter(([a, b]) => alive(a) && alive(b)).map(e => ({ e, w: rng.next() * W[e[2]] })).sort((p, q) => p.w - q.w).map(p => p.e);
   const adj = grid.map(() => new Set());
   const use = (a, b) => { adj[a].add(b); adj[b].add(a); };
@@ -158,7 +168,7 @@ function build(seed, themeId = 'expedicao') {
   // laços: Kanto tem muitas bifurcações (≈ 4 em cada 10 casas) e quase nunca 4 saídas
   for (const [a, b, k] of rest) {
     if (adj[a].size >= 3 || adj[b].size >= 3) continue;
-    if (rng.chance(k === 'd' ? 0.12 : 0.3)) use(a, b);
+    if (rng.chance(k === 'd' ? L.loops * 0.4 : L.loops)) use(a, b);
   }
   // só fica o pedaço ligado ao início, e precisa chegar no Planalto
   const comp = new Set([gi(startG)]); const q0 = [gi(startG)];
@@ -318,7 +328,7 @@ function build(seed, themeId = 'expedicao') {
   GYM_IDS.forEach((g, k) => { gyms[g] = sOf.get(gymIdx[k]).id; });
   const deg = spaces.map(s => s.links.length);
   return {
-    id: `gen:${seed}`, seed, name: 'Expedição', desc: MAP_THEMES.expedicao.desc, ratio: RATIO, generated: true,
+    id: `gen:${seed}`, seed, name: 'Expedição', desc: MAP_THEMES.expedicao.desc, ratio: RATIO, generated: true, legendMax: L.legends,
     start: sOf.get(gi(startG)).id, elite: liga.id, champion: arena.id,
     leagueGates: [plateau.id, liga.id, arena.id], gyms, crossings,
     branches: deg.filter(d => d >= 3).length,

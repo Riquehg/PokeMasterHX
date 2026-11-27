@@ -7,7 +7,7 @@
 import { getSpecies } from '../data/pokemon.js';
 import { getItem, ballBonusAgainst } from '../data/items.js';
 import { against, bestAttack, effectivenessLabel, TYPE_LABELS } from './types.js';
-import { monMoves, STAB, defaultMoveIds, MAX_FORMS } from '../data/moves.js';
+import { monMoves, moveIdsOf, STAB, defaultMoveIds, MAX_FORMS } from '../data/moves.js';
 import { companionBonus, progressMission, companionLevel } from './missions.js';
 import { getCompanion, assistChance, assistMax } from '../data/companions.js';
 import { weatherMult, weatherInflict, weatherChip, weatherOf } from './weather.js';
@@ -177,8 +177,8 @@ function validateChoice(state, si, choice) {
   switch (choice.move) {
     case 'attack': {
       const slot = Number(choice.slot || 0);
-      if (![0, 1].includes(slot)) fail('Golpe inválido.');
       const me = team[side.active];
+      if (!Number.isInteger(slot) || slot < 0 || slot >= monMoves(me).length) fail('Golpe inválido.');
       const mv = monMoves(me)[slot];
       if (mv && SUPPORT.includes(mv.kind) && gearOf(me)?.id === 'choice_band') fail('🎀 Com a Faixa Escolhida só dá para usar golpes de ataque.');
       return;
@@ -206,6 +206,7 @@ function validateChoice(state, si, choice) {
     case 'ball': {
       if (b.kind !== 'wild') fail('Só dá para capturar Pokémon selvagens.');
       if (legendCapBlocked(getPlayer(state, b.sides[si].pid), sideActive(state, b.sides[1 - si]))) fail(`⚡ Você já capturou ${LEGEND_MATCH_LIMIT} lendários das casas Amarelas nesta partida — este não dá para capturar (vença para ganhar XP).`);
+      if (sideActive(state, b.sides[1 - si])?.gmaxBoss) fail('Esse Pokémon está Gigantamax — não dá para capturar. Vença para ganhar Cogumelos Max!');
       if (sideActive(state, b.sides[1 - si])?.megaBoss) fail('Esse Pokémon está cheio de energia Mega — não dá para capturar. Vença para ganhar fragmentos!');
       const it = getItem(choice.item);
       if (!it || it.kind !== 'ball') fail('Escolha uma Pokébola.');
@@ -372,7 +373,7 @@ function aiChoice(state, si, rng) {
 // ⚔️ v41 — itens de batalha segurados e habilidades
 export const gearOf = m => { const it = m?.held ? getItem(m.held) : null; return it?.kind === 'gear' ? { id: m.held, ...it } : null; };
 export const abilOf = m => abilityOf(m?.sp);
-const SUPPORT = ['heal', 'buff', 'debuff', 'transform'];
+const SUPPORT = ['heal', 'buff', 'debuff', 'transform', 'status'];
 const isDmg = mv => mv && (mv.kind === 'dmg' || mv.kind === 'drain' || !mv.kind);
 /** Habilidade de DEFESA de d, a não ser que o atacante tenha Quebra-Molde. */
 export const defAbil = (a, d) => (a && abilOf(a) === 'mold_breaker' ? null : abilOf(d));
@@ -497,7 +498,7 @@ export function expectedDamage(state, si, move) {
   const b = state.battle;
   const a = sideActive(state, b.sides[si]);
   const d = sideActive(state, b.sides[1 - si]);
-  if (!a || !d || move.kind === 'heal' || move.kind === 'buff' || move.kind === 'debuff' || move.kind === 'transform') return 0;
+  if (!a || !d || move.kind === 'heal' || move.kind === 'buff' || move.kind === 'debuff' || move.kind === 'transform' || move.kind === 'status') return 0;
   const mult = typeMultVs(move.type, d, a);
   const stab = getSpecies(a.sp).types.includes(move.type) ? STAB : 1;
   const hit = 1 - (move.miss || 0) / 6;
@@ -659,7 +660,7 @@ function attackDamage(state, rng, si, slot = 0) {
   if (move.kind === 'transform') {
     if ((d.tf ? d.tf.sp : d.sp) === 'ditto' || d.sp === 'ditto') { log(state, `${who} tentou se transformar, mas não dá para copiar um Ditto!`); return false; }
     const from = speciesName(a.sp);
-    transformInto(a, d.sp, Array.isArray(d.moves) && d.moves.length === 2 ? d.moves : defaultMoveIds(d.sp));
+    transformInto(a, d.sp, moveIdsOf(d));
     fx(state, { k: 'transform', side: si, uid: a.uid, to: a.sp, hpAfter: a.hp, maxHp: maxHpOf(a) });
     log(state, `🧬 ${from} usou Transform e virou uma cópia de ${speciesName(a.sp)}${a.shiny ? ' (shiny: cópia mais forte!)' : ''}!`, 'good');
     return false;
@@ -677,6 +678,17 @@ function attackDamage(state, rng, si, slot = 0) {
     atkSide.stage[a.uid] = st + 1;
     fx(state, { k: 'buff', side: si, uid: a.uid, move: move.name, stage: st + 1 });
     log(state, `🔺 ${who} usou ${move.name}! Ataque subiu (+${(st + 1) * 40}%).`, 'good');
+    return false;
+  }
+  if (move.kind === 'status') { // ⚔️ v64: golpe de condição (Thunder Wave, Will-O-Wisp, Toxic, Spore...)
+    log(state, `🌀 ${who} usou ${move.name}!`, 'battle');
+    defSide.status ||= {};
+    if (defSide.status[d.uid]) { log(state, `Mas ${speciesName(d.sp)} já tem uma condição.`); return false; }
+    if (statusBlocked(state, d, move.st, true)) { log(state, `Não teve efeito em ${speciesName(d.sp)}.`); return false; }
+    if (!rng.chance(Math.min(0.9, (move.acc || 100) / 100 * 0.9))) { log(state, `${who} errou!`); fx(state, { k: 'miss', side: si, move: move.name }); return false; }
+    defSide.status[d.uid] = { id: move.st, turns: move.st === 'sleep' ? rng.int(1, 3) : 0 };
+    log(state, `${STATUS[move.st].icon} ${speciesName(d.sp)} ficou ${STATUS[move.st].adj}!`, 'bad');
+    fx(state, { k: 'status', side: 1 - si, uid: d.uid, status: move.st });
     return false;
   }
   if (move.kind === 'debuff') {
@@ -907,7 +919,7 @@ function companionAssist(state, rng, si) {
 }
 
 // ⚡ Limite de lendários da casa Amarela: 2 capturas por jogador por partida (Raid, eventos e Megas não contam)
-export const LEGEND_MATCH_LIMIT = 2;
+export const LEGEND_MATCH_LIMIT = 4; // v64: era 2
 export const CHARM_DAYS = 7; // 🏵️ v58: o Amuleto Lendário vale 1 semana a partir da ativação
 export const charmActive = (player, now = Date.now()) => !!player?.legendCharmOn || (player?.legendCharmUntil || 0) > now;
 export const isLegendOrMyth = mon => { const sp = getSpecies(mon?.sp); return !!(sp && (sp.legendary || sp.mythical)); };

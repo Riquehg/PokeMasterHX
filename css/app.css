@@ -2600,3 +2600,13 @@ img.mv-ic { width: 20px !important; height: 20px !important; flex: 0 0 auto; fil
 /* v61.3 — tamanho individual do móvel */
 .hm-size { display: inline-flex; align-items: center; gap: 4px; margin: 0 4px; }
 .hm-size b { min-width: 42px; text-align: center; font-size: 13px; }
+
+/* v64 — habilidade de campo no card */
+.pk-field { font-size: 11px; margin-top: 4px; padding: 3px 6px; border-radius: 8px; background: rgba(90, 150, 255, .14); color: #cfe1ff; text-align: center; }
+.pk-field i { font-style: normal; opacity: .7; font-size: 10px; }
+/* ⚔️ v64: 3 golpes (+1 na Mega) */
+.move-grid > .move-btn:nth-child(3):last-child { grid-column: 1 / -1; }
+.mv-mega, .mv-own { color: #ffd34d; font-size: .85em; }
+/* 📱 v64: enquanto arrasta/aproxima o mapa, congela as animações das casas e peões (era o que travava no celular) */
+.board-viewport.dragging .board-stage *, .board-viewport.dragging .board-stage *::before, .board-viewport.dragging .board-stage *::after { animation-play-state: paused !important; transition: none !important; }
+.board-viewport.dragging .board-stage { pointer-events: none; }

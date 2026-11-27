@@ -400,8 +400,8 @@ export async function openFarm(ctx, profile, userId = null) {
           ${Array.from({ length: Math.max(0, q - b.jobs.length) }, () => '<div class="hb-job empty tiny muted">livre</div>').join('')}</div>
         ${b.jobs.some(j => j.ready) ? `<button class="btn sm primary" data-act="bclaim" data-b="${id}">✨ Pegar</button>` : ''}
         <div class="hb-recipes">${Object.entries(Bd.recipes).map(([rk, R]) => {
-          const ok = Object.entries(R.in).every(([g, n]) => (goods[g] || 0) >= n) && b.jobs.length < q;
-          return `<button class="hb-rec" data-act="bjob" data-b="${id}" data-r="${rk}" ${ok ? '' : 'disabled'}><span>${R.icon} <b>${esc(R.name)}</b></span><span class="tiny">${Object.entries(R.in).map(([g, n]) => `${n}x ${GOODS[g].icon}`).join(' + ')} · ${R.hours}h</span>${R.out.item ? `<span class="tiny muted">${esc(POFFIN_ITEMS[R.out.item].desc)}</span>` : ''}</button>`;
+          const ok = Object.entries(R.in).every(([g, n]) => (goods[g] || 0) >= n) && b.jobs.length < q && !(R.lvl && b.lvl < R.lvl);
+          return `<button class="hb-rec" data-act="bjob" data-b="${id}" data-r="${rk}" ${ok ? '' : 'disabled'}><span>${R.icon} <b>${esc(R.name)}</b></span><span class="tiny">${Object.entries(R.in).map(([g, n]) => `${n}x ${GOODS[g].icon}`).join(' + ')} · ${R.hours}h</span>${R.out.item ? `<span class="tiny muted">${esc(POFFIN_ITEMS[R.out.item].desc)}</span>` : ''}${R.out.bag?.gene_candy ? `<span class="tiny muted">🎒 Vai para a Mochila: dê a um Pokémon da Coleção para sortear os IVs de novo.${R.lvl && b.lvl < R.lvl ? ` <b>Precisa da ${esc(Bd.name)} Nv.${R.lvl}.</b>` : ''}</span>` : ''}</button>`;
         }).join('')}</div>
         ${b.lvl < BUILD_MAX ? `<button class="btn sm" data-act="build" data-b="${id}" title="Mais uma vaga na fila de produção">⬆️ Melhorar para Nv.${b.lvl + 1} (${costTxt})</button>` : '<span class="tiny muted">Nível máximo</span>'}</div>`;
     };

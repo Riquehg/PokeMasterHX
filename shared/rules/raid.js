@@ -23,11 +23,13 @@ export const RAID_GROUP_HP_PER_MEMBER = 0.8; // HP extra do chefe por participan
 const BALL_CATCH = { poke_ball: 0, trust_ball: 0, great_ball: 0.04, ultra_ball: 0.08, master_ball: 1 };
 
 /** Chance de captura na Raid com uma bola. */
-export function raidBallChance(p, ballId) {
+export function raidBallChance(p, ballId, bossTypes = null) {
   const it = ITEMS[ballId];
   if (!it || it.kind !== 'ball') return 0;
   if (it.bonus >= 99) return 1;
-  const extra = BALL_CATCH[ballId] ?? (it.typeBonus ? 0.1 : 0.05);
+  // 🎯 v64: bola de tipo só dá o bônus grande contra os tipos dela (antes dava sempre); nos outros vale como Great Ball
+  const typed = it.typeBonus ? (bossTypes || []).some(t => it.typeBonus.types.includes(t)) : false;
+  const extra = BALL_CATCH[ballId] ?? (it.typeBonus ? (typed ? 0.1 : 0.04) : 0.05);
   return Math.min(0.28, 0.04 + 0.015 * (p.badges?.length || 0) + extra);
 }
 
@@ -106,7 +108,7 @@ export function raidAction(state, rng, p, a) {
       return;
     }
     const slot = Number(a.slot || 0);
-    if (![0, 1].includes(slot)) fail('Golpe inválido.');
+    if (!Number.isInteger(slot) || slot < 0 || slot >= monMoves(find(p, r.party.find(y => y.pid === p.id)?.uid)).length) fail('Golpe inválido.');
     r.choices[p.id] = slot;
     if (raidWaiting(state).length === 0) resolveRaidRound(state, rng);
     return;
@@ -120,7 +122,7 @@ export function raidAction(state, rng, p, a) {
       const ball = String(a.ball || '');
       if (!(p.items[ball] > 0) || ITEMS[ball]?.kind !== 'ball') fail('Escolha uma Pokébola que você tenha.');
       takeItem(p, ball);
-      const chance = raidBallChance(p, ball);
+      const chance = raidBallChance(p, ball, getSpecies(r.boss.sp)?.types);
       const ok = rng.chance(chance);
       fx(state, { k: 'capture', pid: p.id, sp: r.boss.sp, shiny: !!r.boss.shiny, ball, ok, shakes: ok ? 3 : rng.int(0, 2), raid: true });
       r.log.push(`${p.name} jogou ${ITEMS[ball].name} (${Math.round(chance * 100)}%)... ${ok ? 'CAPTUROU!' : 'escapou!'}`);
@@ -204,11 +206,12 @@ function resolveRaidRound(state, rng) {
       continue;
     }
     if (move.kind === 'transform') { // 🧬 Ditto/Mew copiam o lendário durante a Raid
-      transformInto(m, boss.sp, Array.isArray(boss.moves) && boss.moves.length === 2 ? boss.moves : defaultMoveIds(boss.sp));
+      transformInto(m, boss.sp, Array.isArray(boss.moves) && boss.moves.length >= 2 ? boss.moves : defaultMoveIds(boss.sp));
       r.log.push(`🧬 ${p.name}: virou uma cópia de ${speciesName(boss.sp)}!`);
       continue;
     }
     if (move.kind === 'buff') { x.stage = Math.min(2, (x.stage || 0) + 1); r.log.push(`🔺 ${speciesName(m.sp)} (${p.name}) ficou mais forte!`); continue; }
+    if (move.kind === 'status') { r.bossStage = Math.max(-2, r.bossStage - 1); r.log.push(`🌀 ${speciesName(m.sp)} (${p.name}) usou ${move.name}: o lendário resistiu à condição, mas perdeu força.`); continue; }
     if (move.kind === 'debuff') { r.bossStage = Math.max(-2, r.bossStage - 1); r.log.push(`🔻 ${speciesName(m.sp)} (${p.name}) intimidou o lendário!`); continue; }
     const st = x.stage || 0;
     const atk = (statsOf(m).atk + (x.boost || 0)) * (st >= 0 ? 1 + 0.4 * st : 1);

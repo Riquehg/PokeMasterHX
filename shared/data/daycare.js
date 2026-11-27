@@ -98,7 +98,7 @@ export function makeEgg(rng, mother, father, { natureFrom = null, now = Date.now
 /** Choca: cria o Pokémon (Nv. 5). */
 export function hatchFromEgg(rng, egg, ot = null) {
   const mon = createMon(rng, egg.sp, HATCH_LEVEL, { shiny: egg.shiny, iv: egg.iv, nature: egg.nature || undefined, ot });
-  if (egg.move2) mon.moves = [mon.moves[0], egg.move2];
+  if (egg.move2 && !mon.moves.includes(egg.move2)) mon.moves = [mon.moves[0], egg.move2, ...mon.moves.slice(2)];
   if (egg.aura) mon.aura = egg.aura;
   mon.bred = true;
   if (egg.mutations?.length) mon.mutations = egg.mutations;

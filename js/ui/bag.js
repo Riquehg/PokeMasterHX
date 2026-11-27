@@ -5,7 +5,7 @@ import { getSpecies } from '../../shared/data/pokemon.js';
 import { api } from '../api.js';
 import { esc, toast, openModal, closeModal, setModalBody, bindActions } from './dom.js';
 import { itemUrl, monSprite } from '../config.js';
-import { tmPickerHtml } from './common.js';
+import { tmPickerHtml, setTmSlot } from './common.js';
 import { vfAttrs, vfBar, vfBind } from './vaultfilter.js';
 import { MEGAS, BRACELET_ID, FRAGS_PER_STONE } from '../../shared/data/megas.js';
 
@@ -81,10 +81,11 @@ export function openAccountBag(profile, onChange, openMarket) {
     tm: () => { picking = true; tmFor = null; redraw(); },
     'tm-mon': d => { tmFor = d.uid; redraw(); },
     'tm-back': () => { tmFor = null; redraw(); },
+    'tm-slot': d => { setTmSlot(d.slot); redraw(); },
     'tm-move': async d => {
       try {
         const m = (profile.vault || []).find(x => x.uid === tmFor);
-        profile = (await api('profile', { op: 'use_tm', uid: tmFor, move: d.move })).profile;
+        profile = (await api('profile', { op: 'use_tm', uid: tmFor, move: d.move, slot: Number(d.slot) })).profile;
         toast(`💿 ${getSpecies(m?.sp)?.name || 'Pokémon'} aprendeu o golpe novo!`, 'good');
         tmFor = null; picking = false; redraw(); onChange && onChange(profile);
       } catch (e) { toast(e.message, 'bad'); }

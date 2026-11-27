@@ -59,7 +59,7 @@ export function raidHtml(s, vid) {
       controls = `<div class="move-grid">${monMoves(m).map((mv, i) => {
         const dmg = mv.kind === 'dmg' || mv.kind === 'drain';
         const mult = dmg ? against(mv.type, bossTypes) : 1;
-        return `<button class="btn move-btn" style="--tc:${TYPE_COLORS[mv.type]}" data-act="raid-attack" data-slot="${i}"><span class="mv-name">${moveIcon(mv)}${esc(mv.name)}</span>
+        return `<button class="btn move-btn" style="--tc:${TYPE_COLORS[mv.type]}" data-act="raid-attack" data-slot="${i}"><span class="mv-name">${moveIcon(mv)}${esc(mv.name)}${mv.mega ? ' 💎' : ''}</span>
           <span class="mv-meta">${esc(typeLabel(mv.type))}${dmg ? ` · ${Math.round((mv.power || 1) * 100)}%` : ''}</span>${dmg ? `<span class="mv-tag ${mult >= 2 ? 'good' : mult < 1 ? 'bad' : ''}">${mult >= 2 ? 'Super efetivo' : mult < 1 ? 'Pouco efetivo' : 'Normal'}</span>` : `<span class="mv-tag sup">${esc(mv.desc)}</span>`}</button>`;
       }).join('')}</div>${raidItems(me, m, x)}`;
     } else controls = `<p class="muted center"><span class="spinner"></span> ${x && m?.hp <= 0 ? 'Seu Pokémon desmaiou — torça pelo grupo!' : `Aguardando: ${waiting.map(name).map(esc).join(', ')}`}</p>`;
@@ -68,7 +68,7 @@ export function raidHtml(s, vid) {
       const balls = Object.entries(me.items).filter(([id, n]) => ITEMS[id]?.kind === 'ball' && n > 0);
       controls = `<p class="small"><b>Sua vez de tentar capturar!</b> Escolha a Pokébola:</p>
         <div class="subpick">${balls.map(([id, n]) => `<button class="btn sm pickbtn" data-act="raid-catch" data-ball="${id}"><img src="${itemUrl(id)}" alt="">${esc(ITEMS[id].name)} ×${n}
-          <span class="tiny">${Math.round(raidBallChance(me, id) * 100)}%</span></button>`).join('') || '<p class="muted small">Você não tem Pokébolas.</p>'}</div>
+          <span class="tiny">${Math.round(raidBallChance(me, id, getSpecies(r.boss.sp).types) * 100)}%</span></button>`).join('') || '<p class="muted small">Você não tem Pokébolas.</p>'}</div>
         <button class="btn ghost sm" data-act="raid-skip">Passar a vez</button>`;
     } else controls = `<p class="muted center"><span class="spinner"></span> ${esc(name(waiting[0]))} está tentando capturar...</p>`;
   }

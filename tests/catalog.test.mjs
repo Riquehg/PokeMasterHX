@@ -32,10 +32,10 @@ test('Pokédex completa: #001 a #1025 (+ formas), ids únicos, tipos válidos, e
   for (const id of ['greninja', 'mimikyu', 'lucario', 'garchomp']) assert.ok(getSpecies(id), id);
 });
 
-test('golpes: todo Pokémon tem 2; o 1º é do 1º tipo; suporte tem golpe de suporte', () => {
+test('golpes: todo Pokémon tem 3 (v64); o 1º é do 1º tipo; suporte tem golpe de suporte', () => {
   for (const s of SPECIES_LIST) {
     const mv = movesOf(s.id);
-    assert.equal(mv.length, 2, s.id);
+    assert.equal(mv.length, s.id === 'ditto' ? 2 : 3, s.id);
     assert.equal(mv[0].type, s.types[0]);
     assert.equal(mv[0].kind, 'dmg');
     if (s.role) assert.ok(['heal', 'buff', 'debuff', 'drain'].includes(mv[1].kind), s.id);
@@ -45,7 +45,7 @@ test('golpes: todo Pokémon tem 2; o 1º é do 1º tipo; suporte tem golpe de su
   assert.equal(movesOf('gyarados')[1].kind, 'buff');
   assert.equal(movesOf('arcanine')[1].kind, 'debuff');
   assert.equal(movesOf('amoonguss')[1].kind, 'drain');
-  assert.deepEqual(movesOf('charizard').map(m => m.name), ['Ember', 'Air Slash']);
+  assert.deepEqual(movesOf('charizard').map(m => m.name).slice(0, 2), ['Ember', 'Air Slash']);
   assert.ok(SUPPORT.healer);
 });
 
@@ -59,7 +59,7 @@ function battleWith(mine, foe) {
 test('batalha: golpe escolhido define tipo; suporte cura, fortalece e intimida', () => {
   const rng = createRng(5);
   // Charizard: Ember (fogo) contra Venusaur é super efetivo
-  let s = battleWith(createMon(rng, 'charizard', 30, { starter: true, nature: 'Hardy', moves: ['fire_q', 'flying_s'] }), createMon(rng, 'venusaur', 30, { nature: 'Hardy' }));
+  let s = battleWith(createMon(rng, 'charizard', 30, { starter: true, nature: 'Hardy', moves: ['fire_q', 'flying_s'] }), createMon(rng, 'venusaur', 30, { nature: 'Hardy', moves: ['grass_q', 'poison_s', 'grass_s'] }));
   submitChoice(s, rng, 'a', { move: 'attack', slot: 0 });
   const hit = s.fx.find(f => f.k === 'hit' && f.side === 0);
   assert.equal(hit.move, 'Ember');
@@ -105,8 +105,8 @@ test('variação individual: IVs e golpes mudam de um Pikachu para outro', async
   for (let i = 0; i < 200; i++) {
     const m = createMon(rng, 'pikachu', 20);
     assert.ok(m.iv.hp >= 0 && m.iv.hp <= 31 && m.iv.atk <= 31 && m.iv.spe <= 31);
-    assert.equal(m.moves.length, 2);
-    assert.equal(monMoves(m)[0].name, 'Thunder Shock');
+    assert.equal(m.moves.length, 3);
+    assert.equal(monMoves(m)[0].type, 'electric');
     seen.add(monMoves(m)[1].name);
     pots.add(ivPercent(m));
   }
@@ -121,6 +121,6 @@ test('variação individual: IVs e golpes mudam de um Pikachu para outro', async
   assert.equal(MOVES.electric_x.miss, 2);
   assert.ok(possibleSecondMoves('pikachu').some(m => m.name === 'Iron Tail'));
   // Pokémon antigo (sem variação salva) usa a padrão da espécie
-  assert.deepEqual(monMoves({ sp: 'charizard' }).map(m => m.name), ['Ember', 'Air Slash']);
-  assert.ok(rollMoveIds(rng, 'blissey').length === 2);
+  assert.deepEqual(monMoves({ sp: 'charizard' }).map(m => m.name).slice(0, 2), ['Ember', 'Air Slash']);
+  assert.ok(rollMoveIds(rng, 'blissey').length === 3);
 });

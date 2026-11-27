@@ -105,11 +105,13 @@ export const BRACELET_ID = 'mega_bracelet';
 export const FRAGS_PER_STONE = 10;
 
 // ---- regras
-export const MEGA_RAID_CHANCE = 0.25;     // Raid comum/santuário vira Mega Raid
+export const MEGA_RAID_CHANCE = 0.32;     // v64: um pouco mais frequente (era 0,25)
 export const MEGA_RAID_FRAGS = [1, 3];    // fragmentos por participante
 export const BRACELET_DROP = 0.01;        // 🔗 Bracelete: SÓ em Mega Raid, 1% por participante (se ainda não tiver)
-export const MEGA_WILD_CHANCE = 0.015;    // encontro com energia Mega nas casas Vermelhas/Amarelas
+export const MEGA_WILD_CHANCE = 0.03;     // v64: era 0,015    // encontro com energia Mega nas casas Vermelhas/Amarelas
 export const MEGA_WILD_FRAGS = [1, 2];
+/** 💎 v64: prêmios do Mega selvagem pela raridade (tier da espécie base): fragmentos, chance de Megapedra e de Bracelete. */
+export const MEGA_WILD_DROPS = { 1: { fr: [1, 2], stone: 0.02, band: 0 }, 2: { fr: [1, 2], stone: 0.03, band: 0 }, 3: { fr: [1, 3], stone: 0.05, band: 0.002 }, 4: { fr: [2, 3], stone: 0.08, band: 0.004 }, 5: { fr: [2, 4], stone: 0.12, band: 0.006 } };
 
 /** Pode Mega Evoluir agora? (mon na batalha, jogador) */
 export function megaFor(mon) {
