@@ -95,9 +95,15 @@ export async function towerOp(db, user, body) {
     const p2 = await mutateProfile(db, user.id, cur => {
       const tw = TW(cur.stats);
       if (tw.pb < S.pb) bad(`Precisa de ${S.pb} PB.`);
-      return { stats: { ...(cur.stats || {}), tower: { ...tw, pb: tw.pb - S.pb }, bag: addToBag(cur.stats?.bag, { [item]: S.qty }) } };
+      if (S.key) { // 🔗🔴 Bracelete Mega / Pulseira Dynamax: vira chave da conta
+        if (cur.stats?.[S.key]) bad(`Você já tem ${ITEMS[item].name}.`);
+        return { stats: { ...(cur.stats || {}), tower: { ...tw, pb: tw.pb - S.pb }, [S.key]: true } };
+      }
+      const bag = addToBag(cur.stats?.bag, { [item]: S.qty });
+      if (item === 'rare_candy') bag.rare_candy = Math.min(99, (cur.stats?.bag?.rare_candy || 0) + S.qty); // 🍬 fica na Mochila para usar na Coleção
+      return { stats: { ...(cur.stats || {}), tower: { ...tw, pb: tw.pb - S.pb }, bag } };
     });
-    return { tower: pub(TW(p2.stats)), gold: p2.gold, profile: p2, message: `🛒 ${S.qty > 1 ? S.qty + '× ' : ''}${ITEMS[item].name} foi para a 🎒 Mochila!` };
+    return { tower: pub(TW(p2.stats)), gold: p2.gold, profile: p2, message: S.key ? `${item === 'mega_bracelet' ? '🔗' : '🔴'} ${ITEMS[item].name} liberado na sua conta! Agora pode ${item === 'mega_bracelet' ? 'Mega Evoluir' : 'dar Gigantamax'} nas partidas que permitirem.` : `🛒 ${S.qty > 1 ? S.qty + '× ' : ''}${ITEMS[item].name} foi para a 🎒 Mochila!` };
   }
   bad('Operação da Torre inválida.');
 }

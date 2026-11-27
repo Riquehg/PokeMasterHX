@@ -22,7 +22,7 @@ import { MEGAS, megaByStone } from '../../shared/data/megas.js';
 import { releaseGold } from '../../shared/data/release.js';
 import { levelEvoTarget, variantAfter, itemEvoTarget } from '../../shared/data/evolution.js';
 import { GMAX } from '../../shared/data/gmax.js';
-import { defIvOf } from '../../shared/rules/monsters.js';
+import { defIvOf, MAX_LEVEL } from '../../shared/rules/monsters.js';
 import { TITLE_BY_ID, unlockedTitles } from '../../shared/data/titles.js';
 import { bondLevel, bondGain, BOND_MAX, COMPANIONS } from '../../shared/data/companions.js';
 import { equippedCosmetic, equippedSkin, skinFor, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment, myCosmetics, refreshCosmeticInMatches } from './shop.js';
@@ -305,6 +305,39 @@ export async function profileOp(db, user, body) {
       return { vault, stats: { ...(prof.stats || {}), bag } };
     });
     return { profile: await withCosmetic(db, prof), gene: res };
+  }
+  if (body.op === 'evo_level' || body.op === 'rare_candy') { // ⬆️ v64b: evoluir por nível na Coleção / 🍬 Doce Raro da Mochila (+1 nível)
+    let res = null;
+    const prof = await mutateProfile(db, user.id, prof => {
+      res = null;
+      const vault = [...(prof.vault || [])];
+      const i = vault.findIndex(m => m.uid === body.uid);
+      if (i < 0) bad('Pokémon não encontrado.');
+      const m = vault[i];
+      const st = { ...(prof.stats || {}) };
+      let nm = { ...m };
+      if (body.op === 'rare_candy') {
+        const bag = { ...(st.bag || {}) };
+        if (!(bag.rare_candy > 0)) bad('Você não tem 🍬 Doce Raro na Mochila (Loja PB da Torre).');
+        if ((m.lvl || 1) >= MAX_LEVEL) bad(`Já está no nível máximo (${MAX_LEVEL}).`);
+        nm.lvl = (m.lvl || 1) + 1;
+        bag.rare_candy -= 1; if (bag.rare_candy <= 0) delete bag.rare_candy;
+        st.bag = bag;
+        res = { lvl: nm.lvl };
+      } else {
+        const to = levelEvoTarget(m);
+        if (!to) bad(`${getSpecies(m.sp)?.name || 'Esse Pokémon'} ainda não tem nível para evoluir (ou só evolui com item).`);
+        const v = variantAfter(m, to);
+        nm = { ...m, sp: to }; if (v) nm.v = v; else delete nm.v;
+        res = { from: getSpecies(m.sp).name, to: getSpecies(to).name };
+        if (m.shiny) { const sd = st.shinyDex || []; if (!sd.includes(to)) st.shinyDex = [...sd, to]; }
+      }
+      vault[i] = nm;
+      const out = { vault, stats: st };
+      if (nm.sp !== m.sp && !(prof.pokedex || []).includes(nm.sp)) out.pokedex = [...(prof.pokedex || []), nm.sp];
+      return out;
+    });
+    return { profile: await withCosmetic(db, prof), evolved: res?.to ? res : null, leveled: res?.lvl || null };
   }
   if (body.op === 'evo_item') { // ✨ usar pedra / item de evolução da Mochila num Pokémon da Coleção (v54)
     const item = String(body.item || '');

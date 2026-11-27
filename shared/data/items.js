@@ -118,7 +118,7 @@ export function pickEvoItem(rng, useful = []) {
   return rng.weighted(Object.entries(EVO_ITEMS).map(([id, [, g]]) => [id, w[g] * (useful.includes(id) ? 4 : 1)]));
 }
 
-ITEMS.gene_candy = { name: 'Doce Genético', kind: 'gene', price: 0, minTier: 0, emoji: '🧬', desc: 'Dê a um Pokémon da Coleção: sorteia de novo o potencial (IVs de HP, ATQ, DEF e VEL — cada um tenta 2 vezes e fica o melhor). Feito na 🍳 Cozinha da Fazenda (Nv.2) ou achado em eventos raros.' };
+ITEMS.gene_candy = { name: 'Doce Genético', kind: 'gene', price: 0, minTier: 0, emoji: '🧬', desc: 'Dê a um Pokémon da Coleção: sorteia de novo o potencial (IVs de HP, ATQ, DEF e VEL — cada um tenta 2 vezes e fica o melhor). Feito na 🍳 Cozinha (Construções da Fazenda) ou na 🔨 Oficina (Artesão), ou achado em eventos raros.' };
 export const GENE_ROLLS = 2; // cada IV: melhor de 2 sorteios (0–31) — pode subir ou cair
 export const KEEP_KINDS = ['ball', 'charm', 'tm', 'megastone', 'fragment', 'gear', 'meal', 'stone', 'ingredient', 'soup', 'gene'];
 export const isKeepable = id => !!ITEMS[id] && KEEP_KINDS.includes(ITEMS[id].kind);

@@ -1787,3 +1787,28 @@ test('🧬 v64: Doce Genético sorteia os IVs de novo e sai da Mochila; mapa do 
   assert.ok(solo.match.state.mapData.spaces.some(s => s.name === 'Pallet Editada'));
   useMap('kanto');
 });
+
+test('🗼 v64b: Loja PB da Torre libera Bracelete/Pulseira na conta; Coleção evolui por nível e com Doce Raro; Doce Genético na Oficina', async () => {
+  const { TOWER_SHOP } = await import('../shared/data/tower.js');
+  const { RECIPES } = await import('../shared/data/workshop.js');
+  assert.equal(TOWER_SHOP.mega_bracelet.key, 'megaBracelet');
+  assert.equal(TOWER_SHOP.dynamax_band.key, 'dynamaxBand');
+  assert.deepEqual(RECIPES.gene_candy.out, { bag: { gene_candy: 1 } });
+  const { towerOp } = await import('../api/_lib/tower.js');
+  const db = createMemoryDb();
+  const ash = await db.verifyToken('dev:ash@kanto.com');
+  const { profile } = await profileOp(db, ash, { op: 'get' });
+  await db.upsertProfile(ash.id, { vault: [{ uid: 'c1', sp: 'charmander', lvl: 30 }, { uid: 'c2', sp: 'bulbasaur', lvl: 15 }], stats: { ...(profile.stats || {}), tower: { pb: 1000 } } });
+  const r = await towerOp(db, ash, { op: 'tower_buy', item: 'mega_bracelet' });
+  assert.equal(r.profile.stats.megaBracelet, true);
+  assert.equal(r.tower.pb, 600);
+  await assert.rejects(towerOp(db, ash, { op: 'tower_buy', item: 'mega_bracelet' }), /já tem/);
+  const c = await towerOp(db, ash, { op: 'tower_buy', item: 'rare_candy' });
+  assert.equal(c.profile.stats.bag.rare_candy, 1);
+  const e = await profileOp(db, ash, { op: 'evo_level', uid: 'c1' });
+  assert.equal(e.profile.vault.find(m => m.uid === 'c1').sp, 'charmeleon');
+  await assert.rejects(profileOp(db, ash, { op: 'evo_level', uid: 'c2' }), /nível/);
+  const k = await profileOp(db, ash, { op: 'rare_candy', uid: 'c2' });
+  assert.equal(k.profile.vault.find(m => m.uid === 'c2').lvl, 16);
+  assert.ok(!k.profile.stats.bag.rare_candy);
+});

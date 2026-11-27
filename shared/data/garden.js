@@ -43,7 +43,7 @@ export const BUILDINGS = {
       poffin_razz: { name: 'Poffin Razz', icon: '🍪', in: { farinha: 1, razz: 2 }, out: { item: 'poffin_razz' }, hours: 4 },
       torta: { name: 'Torta de Abóbora', icon: '🥧', in: { farinha: 2, abobora: 1 }, out: { item: 'torta' }, hours: 5 },
       // 🧬 v64: Doce Genético — vai para a Mochila da conta; dado a um Pokémon da Coleção, sorteia o potencial (IVs) de novo
-      gene_candy: { name: 'Doce Genético', icon: '🧬', in: { farinha: 4, razz: 3, pecha: 3, abobora: 2 }, out: { bag: { gene_candy: 1 } }, hours: 24, lvl: 2 }
+      gene_candy: { name: 'Doce Genético', icon: '🧬', in: { farinha: 4, razz: 3, pecha: 3, abobora: 2 }, out: { bag: { gene_candy: 1 } }, hours: 12 }
     }
   }
 };

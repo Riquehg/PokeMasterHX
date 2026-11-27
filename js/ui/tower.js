@@ -16,11 +16,11 @@ export async function openTower(ctx, profile, onProfile) {
       <span class="chip ${profile?.stats?.megaBracelet ? 'gold' : ''}">${profile?.stats?.megaBracelet ? '🔗 Megas liberadas' : '🔗 Sem Bracelete: sem Mega'}</span>
       <div class="row" style="gap:4px;margin-left:auto"><button class="btn sm ${tab === 'tower' ? 'primary' : ''}" data-act="tab" data-t="tower">🗼 Torre</button><button class="btn sm ${tab === 'shop' ? 'primary' : ''}" data-act="tab" data-t="shop">🛒 Loja PB</button></div></div>`;
     if (tab === 'shop') {
-      return head + `<p class="small muted">Troque os Pontos de Batalha (PB) por itens. Tudo vai para a 🎒 Mochila da conta.</p>
+      return head + `<p class="small muted">Troque os Pontos de Batalha (PB) por itens. Tudo vai para a 🎒 Mochila da conta — o 🔗 Bracelete Mega e a 🔴 Pulseira Dynamax ficam liberados direto na conta.</p>
         <div class="hm-shop">${Object.entries(t.shop).map(([id, S]) => { const it = ITEMS[id] || (S.plate ? { name: 'Placa de Tipo', desc: '+20% nos golpes do tipo escolhido.' } : null); if (!it) return '';
           return `<div class="hm-shop-it">${itemIcon(S.plate ? 'plate' : id, S.plate ? '🔷' : (it.emoji || '🎁'), 'tw-shop-ic')}<b class="small">${S.qty > 1 ? S.qty + '× ' : ''}${esc(it.name)}</b>
             <span class="tiny muted">${esc((it.desc || '').slice(0, 90))}</span>${S.plate ? `<select class="input sm" id="tw-ptype">${TYPES.map(x => `<option value="${x}">${esc(TYPE_LABELS[x])}</option>`).join('')}</select>` : ''}
-            <button class="btn sm ${t.pb >= S.pb ? 'primary' : ''}" data-act="buy" data-i="${id}" ${t.pb >= S.pb ? '' : 'disabled'}>🏅 ${S.pb} PB</button></div>`; }).join('')}</div>`;
+            ${S.key && profile?.stats?.[S.key] ? '<span class="chip green">✅ Você já tem</span>' : `<button class="btn sm ${t.pb >= S.pb ? 'primary' : ''}" data-act="buy" data-i="${id}" ${t.pb >= S.pb ? '' : 'disabled'}>🏅 ${S.pb} PB</button>`}</div>`; }).join('')}</div>`;
     }
     if (t.set) {
       const vault = profile?.vault || [];

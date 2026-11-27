@@ -30,7 +30,7 @@ import { COMPANIONS } from '../../shared/data/companions.js';
 import { openCompanionPicker } from './missions.js';
 // Telas fora da partida: login, hub do treinador, lobby online, sala de espera, partida local, coleção, ranking e admin.
 import { STARTERS, getSpecies, SPECIES_LIST } from '../../shared/data/pokemon.js';
-import { evoSummary, evoItemsFor, itemEvoTarget } from '../../shared/data/evolution.js';
+import { evoSummary, evoItemsFor, itemEvoTarget, levelEvoTarget } from '../../shared/data/evolution.js';
 import { GMAX } from '../../shared/data/gmax.js';
 import { releaseGold, releaseLabel } from '../../shared/data/release.js';
 import { dailyPokemon } from '../../shared/daily.js';
@@ -333,7 +333,7 @@ function collectionModal(profile, onChange) {
   };
   // 🗂️ v58: Coleção compacta (ícones) — o card completo abre ao tocar. Preferência salva no aparelho.
   let compact = (() => { try { return localStorage.getItem('pmhx_vault_view') !== 'cards'; } catch { return true; } })();
-  const actBtns = (m, bx, evoReady) => `<div class="row" style="justify-content:center;gap:4px;margin-top:4px">${bx && view === bx.id ? `<button class="btn sm" data-act="bx-out" data-uid="${esc(m.uid)}" title="Tirar da box">↩️</button>` : ''}<button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="farm" data-uid="${esc(m.uid)}" title="Mandar para a 🌾 Fazenda (ganha XP com o tempo)">🌾</button><button class="btn sm ${m.held ? 'purple' : ''} ${evoReady(m) ? 'green' : ''}" data-act="mstone" data-uid="${esc(m.uid)}" title="${evoReady(m) ? '✨ Pode evoluir com um item da sua Mochila! · ' : ''}🎒 Item segurado (Megapedra ou item de batalha): equipar / trocar / tirar">${evoReady(m) ? '✨' : megaBySpecies(m.sp).length ? '💎' : '🎒'}</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar (o Professor paga 🪙 ${releaseGold(m)})">✕</button></div>` ;
+  const actBtns = (m, bx, evoReady) => `<div class="row" style="justify-content:center;gap:4px;margin-top:4px">${bx && view === bx.id ? `<button class="btn sm" data-act="bx-out" data-uid="${esc(m.uid)}" title="Tirar da box">↩️</button>` : ''}<button class="btn sm" data-act="fav" data-uid="${esc(m.uid)}" title="Favorito">${m.fav ? '⭐' : '☆'}</button><button class="btn sm" data-act="farm" data-uid="${esc(m.uid)}" title="Mandar para a 🌾 Fazenda (ganha XP com o tempo)">🌾</button><button class="btn sm ${m.held ? 'purple' : ''} ${evoReady(m) ? 'green' : ''}" data-act="mstone" data-uid="${esc(m.uid)}" title="${evoReady(m) ? '✨ Pode evoluir (por nível ou com item da Mochila)! · ' : ''}🎒 Item segurado (Megapedra ou item de batalha): equipar / trocar / tirar">${evoReady(m) ? '✨' : megaBySpecies(m.sp).length ? '💎' : '🎒'}</button><button class="btn sm" data-act="nick" data-uid="${esc(m.uid)}" title="${profile?.stats?.nicknames ? 'Dar apelido' : 'Apelidos: libere na 💎 Loja'}">✏️</button><button class="btn sm red" data-act="rel" data-uid="${esc(m.uid)}" title="Soltar (o Professor paga 🪙 ${releaseGold(m)})">✕</button></div>` ;
   const miniTile = (m, evo) => { const sp = getSpecies(m.sp);
     return `<button class="vm-tile t${sp?.tier || 1} ${m.shiny ? 'shiny' : ''} ${sp?.legendary ? 'legend' : ''}" data-act="vm-open" data-uid="${esc(m.uid)}" title="${esc(m.nick || sp?.name || '')}">
       <img src="${monSprite(m)}" alt="" loading="lazy" decoding="async"><span class="vm-name">${esc(m.nick || sp?.name || '?')}</span><span class="vm-lv">Nv.${m.lvl}</span>
@@ -346,7 +346,7 @@ function collectionModal(profile, onChange) {
     const all = sortCollection(vault);
     const recent = new Map(vault.map((m, i) => [m.uid, i]));
     const bagNow = profile?.stats?.bag || {};
-    const evoReady = m => evoItemsFor(m).some(id => (bagNow[id] || 0) > 0); // ✨ tem item de evolução que serve
+    const evoReady = m => !!levelEvoTarget(m) || evoItemsFor(m).some(id => (bagNow[id] || 0) > 0); // ✨ tem nível ou item de evolução que serve
     const n = k => all.filter(m => k(m)).length;
     return `<details class="info-fold"><summary class="small">ℹ️ Como funciona a Coleção</summary><p class="small muted">Tudo que você captura em partidas salvas na conta (Treino contra CPUs e Online) fica aqui, com o nível atualizado. Use no modo <b>📦 Coleção</b> para levar seu time. Limite: ${cap()}. Se lotar, só os comuns mais fracos saem e ficam em "↩️ Saíram da Coleção" para recuperar (⭐ favoritos, shinies, lendários, Vermelhos/Amarelos, Confiança e com apelido nunca saem).${profile?.stats?.vaultBonus ? '' : ' Dá para ampliar para 350 na 💎 Loja.'}</p></details>
       ${(profile?.stats?.overflow || []).length ? `<details class="vf-out"><summary>↩️ Saíram da Coleção (${profile.stats.overflow.length}) — toque para ver e recuperar</summary>
@@ -424,6 +424,16 @@ function collectionModal(profile, onChange) {
           ${GMAX[m.sp] ? `<h4 style="margin:6px 0 2px">🔴 Gigantamax</h4><div class="ms-opt ${m.gx ? 'on' : ''}"><img class="ms-st" src="${itemUrl('max_soup')}" alt=""><img class="ms-mon" src="${monSprite({ sp: GMAX[m.sp].sp, shiny: m.shiny })}" alt="">
             <div class="grow"><b>${m.gx ? '✨ Tem o Fator Gigantamax' : 'Sem o Fator Gigantamax'}</b><div class="tiny muted">${m.gx ? `Com a 🔴 Pulseira Dynamax, vira ${esc(GMAX[m.sp].name)} por 3 rodadas (no lugar da Mega).` : `🍲 Sopa Max dá o Fator para sempre · você tem ${bag.max_soup || 0}`}</div></div>
             ${m.gx ? '<span class="chip red">🔴 Fator</span>' : `<button class="btn sm red" data-act="ms-soup" ${(bag.max_soup || 0) > 0 ? '' : 'disabled'}>🍲 Dar Sopa</button>`}</div>` : ''}
+          ${(() => { // ⬆️ v64b: evolução por nível na Coleção (+ 🍬 Doce Raro)
+            const to = levelEvoTarget(m);
+            const nxt = (getSpecies(m.sp).evos || []).filter(e => e.lvl && !e.item && getSpecies(e.to)).sort((a, b) => a.lvl - b.lvl)[0];
+            const candy = bag.rare_candy || 0;
+            if (!to && !nxt && !candy) return '';
+            return `<h4 style="margin:6px 0 2px">⬆️ Evoluir por nível</h4>
+              ${to ? `<div class="ms-opt"><img class="ms-mon" src="${monSprite({ sp: to, shiny: m.shiny })}" alt=""><div class="grow"><b>${esc(getSpecies(to).name)}</b><div class="tiny muted">já tem nível para evoluir (Nv.${m.lvl})</div></div>
+                <button class="btn sm green" data-act="ms-lvl">✨ Evoluir</button></div>` : nxt ? `<p class="tiny muted">Evolui para <b>${esc(getSpecies(nxt.to).name)}</b> no Nv.${nxt.lvl} (agora Nv.${m.lvl}) — suba de nível nas partidas, na 🌾 Fazenda ou com 🍬 Doce Raro.</p>` : ''}
+              ${candy ? `<div class="ms-opt"><img class="ms-st" src="${itemUrl('rare_candy')}" alt=""><div class="grow"><b>🍬 Doce Raro</b><div class="tiny muted">+1 nível · você tem ${candy}</div></div>
+                <button class="btn sm" data-act="ms-candy" ${(m.lvl || 1) < 60 ? '' : 'disabled'}>Dar</button></div>` : ''}`; })()}
           ${(() => { // ✨ v54: evoluir com pedra / item de evolução da Mochila
             const evoIds = [...new Set([...evoItemsFor(m), ...((bag.evolution_stone || 0) > 0 && getSpecies(m.sp).evos?.length ? ['evolution_stone'] : [])])];
             if (!evoIds.length) return '';
@@ -439,7 +449,7 @@ function collectionModal(profile, onChange) {
           <div class="ms-opt"><img class="ms-st" src="${itemUrl('tm')}" alt="">
             <div class="grow"><b>💿 TM</b><div class="tiny muted">Ensina um golpe novo no lugar do 2º ou do 3º · você tem ${bag.tm || 0}</div></div>
             <button class="btn sm" data-act="ms-tm" ${(bag.tm || 0) > 0 ? '' : 'disabled'}>Usar</button></div>
-          <p class="tiny muted">🧬 O Doce Genético sai da 🍳 Cozinha da Fazenda (Nv.2) ou de eventos raros nas casas Vermelhas/Amarelas.</p></div>`);
+          <p class="tiny muted">🧬 O Doce Genético sai da 🍳 Cozinha ou da 🔨 Oficina da Fazenda, ou de eventos raros nas casas Vermelhas/Amarelas. 🍬 Doce Raro: Oficina (Artesão) ou Loja PB da Torre.</p></div>`);
       const hold = async item => {
         try { profile = (await api('profile', { op: 'hold_stone', uid: m.uid, item })).profile; closeModal('mstone'); redraw(); onChange(profile); toast(item ? `${ALL_ITEMS[item]?.kind === 'gear' ? '⚔️' : '💎'} ${ALL_ITEMS[item]?.name} equipado!` : 'O item voltou para a Mochila.', 'good'); }
         catch (e) { toast(e.message, 'bad'); }
@@ -471,7 +481,13 @@ function collectionModal(profile, onChange) {
           }
         });
       };
-      bindActions(ov2, { 'ms-hold': x => hold(x.item), 'ms-off': () => hold(null), 'ms-evo': x => evoUse(x.item), 'ms-soup': soup, 'ms-gene': gene, 'ms-tm': tmOpen });
+      const lvlOp = async op => {
+        try {
+          const r = await api('profile', { op, uid: m.uid }); profile = r.profile; closeModal('mstone'); redraw(); onChange(profile);
+          toast(r.evolved ? `✨ ${r.evolved.from} evoluiu para ${r.evolved.to}!` : `🍬 Subiu para o Nv.${r.leveled}!`, 'good');
+        } catch (e) { toast(e.message, 'bad'); }
+      };
+      bindActions(ov2, { 'ms-hold': x => hold(x.item), 'ms-off': () => hold(null), 'ms-evo': x => evoUse(x.item), 'ms-soup': soup, 'ms-gene': gene, 'ms-tm': tmOpen, 'ms-lvl': () => lvlOp('evo_level'), 'ms-candy': () => lvlOp('rare_candy') });
     },
     rel: async d => {
       const m = (profile?.vault || []).find(x => x.uid === d.uid);
@@ -534,7 +550,7 @@ function collectionModal(profile, onChange) {
     const m = (profile?.vault || []).find(x => x.uid === uid);
     if (!m) return closeModal('vault-mon');
     const bagNow = profile?.stats?.bag || {};
-    const evoReady = x => evoItemsFor(x).some(id => (bagNow[id] || 0) > 0);
+    const evoReady = x => !!levelEvoTarget(x) || evoItemsFor(x).some(id => (bagNow[id] || 0) > 0);
     const bx = boxOf(m.uid);
     const html = `<div class="vm-detail">${statCard(m, { extra: actBtns(m, bx, evoReady) })}</div>`;
     if (document.getElementById('vault-mon')) { setModalBody('vault-mon', html); return; }

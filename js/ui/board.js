@@ -124,6 +124,16 @@ export class BoardView {
     this.paint(smooth);
   }
 
+  /** Depois do gesto: o navegador redesenha o mapa nítido no zoom novo (com will-change ele só esticava a imagem). */
+  settle() {
+    clearTimeout(this._settle);
+    this._settle = setTimeout(() => {
+      if (this.gesturing) return;
+      this.stage.style.willChange = 'auto';
+      requestAnimationFrame(() => requestAnimationFrame(() => { this.stage.style.willChange = ''; }));
+    }, 180);
+  }
+
   paint(smooth) {
     if (this.stage.classList.contains('smooth') !== !!smooth) this.stage.classList.toggle('smooth', !!smooth);
     this.stage.style.transform = `translate3d(${Math.round(this.x)}px, ${Math.round(this.y)}px, 0) scale(${this.scale})`;
@@ -143,6 +153,7 @@ export class BoardView {
     this.y = cy - (cy - this.y) * k;
     this.scale = ns;
     this.apply(true);
+    clearTimeout(this._zs); this._zs = setTimeout(() => this.settle(), 300); // nítido depois da animação do zoom
   }
 
   centerOn(spaceId, scale, smooth = true) {
@@ -169,6 +180,25 @@ export class BoardView {
     const vp = this.vp;
     const pts = new Map();
     let last = null, moved = 0, pinch = null;
+    // 📱 v64b: inércia (o mapa continua deslizando um pouco ao soltar o dedo) e retângulo da tela guardado na pinça
+    let vel = { x: 0, y: 0, t: 0 }, glide = 0, rect = null;
+    const stopGlide = () => { if (glide) { cancelAnimationFrame(glide); glide = 0; } };
+    const startGlide = () => {
+      let vx = vel.x, vy = vel.y, prev = performance.now();
+      if (Math.hypot(vx, vy) < 0.25 || prev - vel.t > 80) return; // soltou parado: sem inércia
+      const step = now => {
+        const dt = Math.min(32, now - prev); prev = now;
+        const f = Math.pow(0.92, dt / 16); vx *= f; vy *= f;
+        const bx = this.x, by = this.y;
+        this.x += vx * dt; this.y += vy * dt;
+        this.scale = Math.max(this.min, Math.min(this.min * 6, this.scale)); this.clamp();
+        if (this.x === bx) vx = 0; if (this.y === by) vy = 0; // bateu na borda
+        this.paint(false);
+        glide = Math.hypot(vx, vy) > 0.02 ? requestAnimationFrame(step) : 0;
+        if (!glide) this.settle();
+      };
+      glide = requestAnimationFrame(step);
+    };
     let armed = false; // o toque começou de verdade no mapa (não num botão, menu ou janela por cima)
     let ptype = 'mouse';
     const slop = e => ((e?.pointerType || ptype) === 'touch' ? 12 : 6);
@@ -182,6 +212,7 @@ export class BoardView {
     vp.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
     vp.addEventListener('pointerdown', e => {
       if (e.target.closest('.zoom-ctrl')) { armed = false; return; }
+      stopGlide();
       if (e.isPrimary && pts.size) { pts.clear(); pinch = null; this.pinching = false; } // dedo "perdido" de um gesto anterior travava tudo
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       this.gesturing = true;
@@ -189,6 +220,7 @@ export class BoardView {
       if (pts.size === 2) {
         const [a, b] = [...pts.values()];
         pinch = { d: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), s: this.scale };
+        rect = vp.getBoundingClientRect(); // uma vez só (ler o tamanho a cada movimento força o navegador a recalcular a página)
         this.pinching = true;
       }
     });
@@ -198,7 +230,7 @@ export class BoardView {
       if (pts.size === 2 && pinch) {
         const [a, b] = [...pts.values()];
         const d = Math.hypot(a.x - b.x, a.y - b.y);
-        const r = vp.getBoundingClientRect();
+        const r = rect || (rect = vp.getBoundingClientRect());
         const cx = (a.x + b.x) / 2 - r.left, cy = (a.y + b.y) / 2 - r.top;
         const target = pinch.s * (d / pinch.d);
         const k = Math.max(this.min, Math.min(this.min * 6, target)) / this.scale;
@@ -215,6 +247,8 @@ export class BoardView {
         if (!vp.hasPointerCapture(e.pointerId)) vp.setPointerCapture(e.pointerId);
         this.x += dx; this.y += dy;
         this.apply(false);
+        const now = e.timeStamp || performance.now(), dt = Math.max(1, now - (vel.t || now - 16));
+        vel = { x: vel.x * 0.4 + (dx / dt) * 0.6, y: vel.y * 0.4 + (dy / dt) * 0.6, t: now }; // px por ms, suavizado
       }
       last = { x: e.clientX, y: e.clientY };
     });
@@ -225,7 +259,12 @@ export class BoardView {
         const rest = [...pts.values()][0];
         last = rest ? { x: rest.x, y: rest.y } : null; // continua arrastando com o dedo que ficou, sem pular
       }
-      if (pts.size === 0) { last = null; vp.classList.remove('dragging'); this.gesturing = false; this.pinching = false; this.apply(false); }
+      if (pts.size === 0) {
+        const wasDrag = vp.classList.contains('dragging') && !this.pinching && last;
+        last = null; rect = null; vp.classList.remove('dragging'); this.gesturing = false; this.pinching = false; this.apply(false);
+        if (wasDrag && e.type === 'pointerup') startGlide(); else this.settle();
+        vel = { x: 0, y: 0, t: 0 };
+      }
     };
     vp.addEventListener('pointerup', end);
     vp.addEventListener('pointercancel', end);

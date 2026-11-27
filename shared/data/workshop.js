@@ -33,6 +33,7 @@ export const RECIPES = {
   plate: { name: 'Placa de Tipo', icon: '🔷', lvl: 2, hours: 12, xp: 90, cost: { crystal: 8, ore: 8, gold: 2000 }, out: { plate: true }, desc: 'Item de batalha: escolha o tipo — +20% de dano nos golpes dele.' },
   statue: { name: 'Estátua de Pedra', icon: '🗿', lvl: 2, hours: 8, xp: 70, cost: { ore: 15, essence: 5 }, out: { decor: 'statue' }, desc: 'Decoração exclusiva da Oficina.' },
   // ⚒️ Mestre
+  gene_candy: { name: 'Doce Genético', icon: '🧬', lvl: 2, hours: 12, xp: 90, cost: { crystal: 8, essence: 8, pearl: 6, gold: 2000 }, out: { bag: { gene_candy: 1 } }, desc: 'Dê a um Pokémon da Coleção: sorteia de novo os IVs (cada um: melhor de 2).' },
   tm: { name: 'TM', icon: '💿', lvl: 3, hours: 12, xp: 150, cost: { crystal: 10, essence: 10, feather: 10, gold: 2000 }, out: { bag: { tm: 1 } } },
   rainbow: { name: 'Rainbow Ball', icon: '🌈', lvl: 3, hours: 12, xp: 150, cost: { pearl: 8, ember: 8, crystal: 8, feather: 8, gold: 1500 }, out: { bag: { rainbow_ball: 1 } } },
   incense: { name: 'Incenso Brilhante', icon: '🕯️', lvl: 3, hours: 24, xp: 250, cost: { crystal: 15, essence: 15, pearl: 10, gold: 3000 }, out: { farm: { incense: 1 } }, desc: 'Os próximos 3 ovos têm chance de shiny ×3.' },
