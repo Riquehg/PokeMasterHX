@@ -209,3 +209,30 @@ test('🛡️ v65b: não dá para passar Pokébola/TM para CPU aliada (sumiria)'
   r = applyAction(s, 'a', { type: 'team', op: 'give', to: al.id, item: 'potion' }, { now: T0 });
   assert.equal(r.error, undefined, r.error);
 });
+
+test('🛡️ v65c: duelo 6×6 não acaba mais no meio (30 rodadas); no tempo esgotado vence quem tem mais Pokémon de pé', async () => {
+  const { DUEL_MAX_ROUNDS } = await import('../shared/rules/battle.js');
+  assert.ok(DUEL_MAX_ROUNDS >= 120);
+  const sps = ['charizard', 'blastoise', 'venusaur', 'gengar', 'snorlax', 'dragonite', 'lapras', 'alakazam', 'tyranitar', 'blissey', 'chansey', 'gyarados'];
+  let timeouts = 0;
+  for (let seed = 1; seed <= 12; seed++) {
+    const mk = o => sps.slice(o, o + 6).map((sp, i) => ({ uid: sp + i + o, sp, lvl: 60 }));
+    const s = createMatch({ seed, kind: 'duel', players: [{ id: 'a', name: 'A', isBot: true, teamMons: mk(seed % 6) }, { id: 'b', name: 'B', isBot: true, teamMons: mk((seed + 3) % 6) }] });
+    assert.equal(s.status, 'finished');
+    if (s.log.some(l => /Tempo esgotado/.test(l.msg))) timeouts++;
+    // quem venceu por "derrubar o time" tem mesmo o rival sem ninguém de pé
+    const w = s.players.find(p => p.id === s.winner), l = s.players.find(p => p.id !== s.winner);
+    if (s.log.some(x => /Derrotou todo o time/.test(x.msg))) assert.equal(l.team.filter(m => m.hp > 0).length, 0);
+    else assert.ok(w.team.filter(m => m.hp > 0).length >= l.team.filter(m => m.hp > 0).length);
+  }
+  assert.ok(timeouts <= 2, `duelos que bateram no tempo: ${timeouts}`);
+});
+
+test('🛡️ v65c: lendário já capturado não aparece de novo para o mesmo jogador na partida', async () => {
+  const { rollWild } = await import('../shared/rules/monsters.js');
+  const { createRng } = await import('../shared/rules/rng.js');
+  const { useMap } = await import('../shared/data/board.js');
+  useMap('kanto');
+  const rng = createRng(3);
+  for (let i = 0; i < 300; i++) assert.notEqual(rollWild(rng, 5, { exclude: ['articuno'] }).sp, 'articuno');
+});

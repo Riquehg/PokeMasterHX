@@ -86,7 +86,7 @@ export const REGION_BADGES = {
   floresta: [B('kalos_cliff', 'Insígnia Penhasco'), B('kalos_fairy', 'Insígnia Fada'), B('kalos_voltage', 'Insígnia Voltagem'), B('kalos_plant', 'Insígnia Planta'), B('kalos_rumble', 'Insígnia Estrondo'), B('kalos_psychic', 'Insígnia Psíquica')]
 };
 // 🏟️ v62: líderes de ginásio de cada mapa (mesma ordem/força dos de Kanto; sprite em trainers/<arquivo>.png)
-const L = (leader, type, file, team) => ({ leader, type, sprite: `leaders/${file}.png`, team });
+const L = (leader, type, file, team) => ({ leader, type, sprite: `trainers/${file}.png`, team });
 export const REGION_GYMS = {
   expedicao: [L('Gordie', 'rock', 'gordie', [['rolycoly', 11], ['carkol', 13]]), L('Nessa', 'water', 'nessa', [['chewtle', 12], ['drednaw', 14]]),
     L('Raihan', 'dragon', 'raihan', [['axew', 17], ['fraxure', 18], ['flygon', 20]]), L('Milo', 'grass', 'milo', [['gossifleur', 20], ['eldegoss', 21], ['flapple', 23]]),
@@ -134,7 +134,7 @@ for (const [k, r] of Object.entries(REGIONS)) for (const id of r.legends) SIGNAT
 export const signatureRegion = id => SIGNATURE.get(id) || null;
 
 export const REGION_GEN_MULT = 3;     // Pokémon da geração da região
-export const REGION_LEGEND_MULT = 8;  // lendário em destaque no próprio mapa
+export const REGION_LEGEND_MULT = 4;  // lendário em destaque no próprio mapa (v65c: era 8 — saía o mesmo toda hora)
 export const OTHER_LEGEND_MULT = 0.25; // lendário em destaque de OUTRO mapa
 
 /** Peso de sorteio de uma espécie no mapa ativo (1 = normal). */

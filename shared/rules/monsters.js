@@ -282,8 +282,10 @@ export function rollWild(rng, tier, opts = {}) {
   const all = speciesByTier(tier);
   const myth = all.filter(s => s.mythical);
   const corrupt = all.filter(s => s.corrupt); // ☠️ v58: corrompidos só numa aparição rara (2%) nas casas Amarelas
-  const pool = tier === 5 && myth.length && rng.chance(MYTHICAL_WILD_CHANCE) ? myth
-    : tier === 5 && corrupt.length && rng.chance(CORRUPT_WILD_CHANCE) ? corrupt : all.filter(s => !s.mythical && !s.corrupt);
+  const ex = new Set(opts.exclude || []); // 🛡️ v65c: lendários que o jogador já pegou nesta partida
+  const fresh = list => { const f = list.filter(s => !ex.has(s.id) && !ex.has(s.form)); return f.length ? f : list; };
+  const pool = fresh(tier === 5 && myth.length && rng.chance(MYTHICAL_WILD_CHANCE) ? myth
+    : tier === 5 && corrupt.length && rng.chance(CORRUPT_WILD_CHANCE) ? corrupt : all.filter(s => !s.mythical && !s.corrupt));
   // ambiente da casa e clima puxam alguns tipos (ex.: mar → Água, caverna → Pedra, chuva → Água)
   const favor = opts.favorTypes?.length && rng.chance(opts.favorChance ?? 0.45) ? pool.filter(s => s.types.some(t => opts.favorTypes.includes(t))) : null;
   let speciesId = pickRegional(rng, favor?.length ? favor : pool).id; // 🗺️ v59: Pokémon da região do mapa aparecem mais

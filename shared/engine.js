@@ -673,14 +673,19 @@ function startDuel(state, rng, config) {
 function finishDuel(state, outcome) {
   const b = state.battle;
   let wi = outcome.winner;
+  let why = null;
   if (wi === null || wi === undefined) {
-    const hpLeft = si => b.sides[si] && getPlayer(state, b.sides[si].pid).team.reduce((t, m) => t + Math.max(0, m.hp), 0);
-    wi = hpLeft(0) >= hpLeft(1) ? 0 : 1;
+    // 🛡️ v65c: decisão por tempo — 1º quem tem MAIS Pokémon de pé; empate: maior % de HP somado (antes era só HP bruto)
+    const team = si => getPlayer(state, b.sides[si].pid).team;
+    const alive = si => team(si).filter(m => m.hp > 0).length;
+    const pct = si => team(si).reduce((t, m) => t + Math.max(0, m.hp) / Math.max(1, maxHpOf(m)), 0);
+    wi = alive(0) !== alive(1) ? (alive(0) > alive(1) ? 0 : 1) : pct(0) >= pct(1) ? 0 : 1;
+    why = alive(0) !== alive(1) ? `Tempo esgotado: venceu com mais Pokémon de pé (${alive(wi)} x ${alive(1 - wi)}).` : `Tempo esgotado: ${alive(wi)} x ${alive(1 - wi)} Pokémon de pé — venceu com mais HP sobrando.`;
   }
   const w = getPlayer(state, b.sides[wi].pid);
   const l = getPlayer(state, b.sides[1 - wi].pid);
   w.stats.wins += 1; w.stats.pvpWins += 1; l.stats.losses += 1;
-  finishMatch(state, w, outcome.surrender ? `${l.name} desistiu.` : `Derrotou todo o time de ${l.name}.`);
+  finishMatch(state, w, outcome.surrender ? `${l.name} desistiu.` : why || `Derrotou todo o time de ${l.name}.`);
 }
 
 // ------------------------------------------------------------------ AFK / saída
@@ -1059,7 +1064,7 @@ function wildEncounter(state, rng, p, sp, tier, opts = {}) {
     const rare = weatherRare(state) && rng.chance(weatherRare(state)) ? Math.min(4, tier + 1) : tier;
     const favorTypes = [...(BIOMES[sp.biome]?.spawn || []), ...weatherSpawn(state)];
     if (p.meal?.type) favorTypes.push(p.meal.type, p.meal.type); // 🍛 Curry: mais Pokémon desse tipo
-    mon = rollWild(rng, rare, { dailyPokemon: state.options.dailyPokemon, shinyCharm: !!p.items.shiny_charm, shinyMult: p.meal?.id === 'shiny_cake' ? SHINY_CAKE_MULT : 1, favorTypes });
+    mon = rollWild(rng, rare, { dailyPokemon: state.options.dailyPokemon, shinyCharm: !!p.items.shiny_charm, shinyMult: p.meal?.id === 'shiny_cake' ? SHINY_CAKE_MULT : 1, favorTypes, exclude: p.legendSp });
     if (p.meal?.id === 'iv_pancake' && mon.iv) { // 🥞 Panqueca: potencial mínimo
       for (const k of ['hp', 'atk', 'spe']) mon.iv[k] = Math.max(IV_PANCAKE_MIN, mon.iv[k] ?? 0);
       mon.iv.def = Math.max(IV_PANCAKE_MIN, defIvOf(mon));

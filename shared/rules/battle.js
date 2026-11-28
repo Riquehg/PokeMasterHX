@@ -24,6 +24,8 @@ import {
 } from './helpers.js';
 
 export const MAX_ROUNDS = 30;
+/** 🛡️ v65c: duelo 6×6 (Liga das Séries, Torre, Torneio) — com 3 golpes, curas e condições 30 rodadas acabavam no meio. */
+export const DUEL_MAX_ROUNDS = 150;
 // Lendários (tier 5) são difíceis: precisa 8+ (com Ultra Ball e HP cheio ≈ 17%; com HP baixo e condição passa de 50%)
 // e fogem com facilidade depois de escapar da bola. (Era 11 — ficava 0% com HP cheio.)
 export const CAPTURE_TARGET = { 1: 3, 2: 4, 3: 5, 4: 6, 5: 8 };
@@ -1205,8 +1207,10 @@ function resolveRound(state, rng, choices) {
     }
   }
 
-  if (!b.over && b.round >= MAX_ROUNDS) {
-    log(state, '⌛ A batalha se arrastou demais e terminou empatada.');
+  // 🛡️ v65c: o limite cresce com o tamanho dos times (Líder/Elite 4/Campeão com 6 Pokémon empatavam no meio)
+  const cap = state.options?.duel ? DUEL_MAX_ROUNDS : Math.max(MAX_ROUNDS, 8 * (sideTeam(state, b.sides[0]).length + sideTeam(state, b.sides[1]).length));
+  if (!b.over && b.round >= cap) {
+    log(state, state.options?.duel ? `⌛ ${DUEL_MAX_ROUNDS} rodadas! O duelo vai para a decisão: mais Pokémon de pé, depois mais HP.` : '⌛ A batalha se arrastou demais e terminou empatada.');
     endBattle(state, rng, { result: 'draw' });
   }
 }
@@ -1270,6 +1274,9 @@ export function deliverCapture(state, pid, mon, ballId) {
   if (ballId) progressMission(state, pid, { k: 'capture', sp: mon.sp });
   if (mon.yellowLegend) {
     p.legendCaught = (p.legendCaught || 0) + 1; delete mon.yellowLegend;
+    // 🛡️ v65c: a mesma espécie lendária não aparece de novo para este jogador nesta partida (era 4 Articunos seguidos)
+    const base = getSpecies(mon.sp)?.form || mon.sp;
+    p.legendSp = [...new Set([...(p.legendSp || []), mon.sp, base])];
     // 🏵️ passou do limite graças ao Amuleto Lendário (levado na Mochila): ativa por 1 semana
     if (p.legendCaught > LEGEND_MATCH_LIMIT && !charmActive(p) && (p.items?.legend_charm || 0) > 0) {
       p.items.legend_charm -= 1;

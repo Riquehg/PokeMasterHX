@@ -312,7 +312,8 @@ function soloModal(profile, ctx, preset = {}) {
     ${st.teams ? `<p class="small">🤝 <b>${st.teams === 2 ? 'Duplas' : 'Trios'}</b>: CPUs também viram seus parceiros de time. Precisa de pelo menos ${st.teams * 2 - 1} CPUs para formar ${st.teams === 2 ? '2 duplas' : '2 trios'}.</p>` : ''}
     <div class="grid2">
       <div class="field"><label>Times</label><select class="input" id="s-teams" ${raidMode() ? 'disabled' : ''}><option value="0" ${!st.teams ? 'selected' : ''}>Cada um por si</option><option value="2" ${st.teams === 2 ? 'selected' : ''}>🤝 Duplas</option><option value="3" ${st.teams === 3 ? 'selected' : ''}>🤝 Trios</option></select></div>
-      <div class="field"><label>Adversários (CPU)</label><select class="input" id="s-bots">${[1, 2, 3, 4, 5].map(n => `<option ${n === st.bots ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+      <div class="field"><label>${st.teams ? 'CPUs (parceiros + rivais)' : 'Adversários (CPU)'}</label><select class="input" id="s-bots">${[1, 2, 3, 4, 5].map(n => `<option ${n === st.bots ? 'selected' : ''}>${n}</option>`).join('')}</select>
+        ${st.teams && !raidMode() ? `<div class="tiny good">🤝 ${(() => { const n = st.bots + 1, k = Math.max(2, Math.ceil(n / st.teams)); return `${k} times de ${st.teams}: você + ${st.teams - 1} CPU parceira${st.teams > 2 ? 's' : ''} contra ${n - st.teams} CPU${n - st.teams > 1 ? 's' : ''}`; })()}</div>` : ''}</div>
       <div class="field"><label>Duração</label><select class="input" id="s-turns"><option value="30" ${st.turnLimit === 30 ? 'selected' : ''}>Rápida (30 turnos)</option><option value="45" ${st.turnLimit === 45 ? 'selected' : ''}>Média (45 turnos)</option><option value="60" ${st.turnLimit === 60 ? 'selected' : ''}>Normal (60 turnos)</option></select></div>
 <div class="field"><label>Tipo de partida</label><select class="input" id="s-rules">${Object.entries(GAME_RULES).map(([k, g]) => `<option value="${k}" ${k === (st.rules) ? 'selected' : ''} title="${esc(g.desc)}">${g.icon} ${g.name}</option>`).join('')}</select></div>
       <div class="field"><label>Mapa</label><select class="input" id="s-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (st.map) ? 'selected' : ''} title="${esc(m.desc)}">${m.icon || '🗺️'} ${esc(m.name)}</option>`).join('')}</select>${mapInfo(st.map)}</div>
@@ -328,6 +329,14 @@ function soloModal(profile, ctx, preset = {}) {
   const ov = openModal('solo', raidMode() ? '🐉 Raid em Grupo com CPUs' : st.teams ? '🤝 Treino em time com CPUs' : '🤖 Treino contra CPUs', body(), { wide: true });
   const keep = () => { st.teams = Number(ov.querySelector('#s-teams')?.value || 0); st.bots = Number(ov.querySelector('#s-bots').value); st.turnLimit = Number(ov.querySelector('#s-turns').value); st.map = ov.querySelector('#s-map').value; st.rules = ov.querySelector('#s-rules').value; st.hardcore = ov.querySelector('#s-hc').value === '1'; if (ov.querySelector('#s-megas')) st.megas = ov.querySelector('#s-megas').value === '1'; };
   const re = () => { keep(); setModalBody('solo', body()); };
+  // 🤝 v65c: escolher Duplas/Trios já ajusta o número de CPUs (dupla = você + 1 CPU contra 2 CPUs)
+  ov.addEventListener('change', e => {
+    if (!['s-teams', 's-rules', 's-bots'].includes(e.target.id)) return;
+    keep();
+    if (st.teams && !raidMode() && st.bots < st.teams * 2 - 1) st.bots = st.teams * 2 - 1;
+    if (raidMode()) { st.useTeam = true; st.bots = Math.min(st.bots, 3); }
+    setModalBody('solo', body());
+  });
   bindActions(ov, {
     'use-starter': () => { st.useTeam = false; re(); },
     'use-team': () => { st.useTeam = true; re(); },
