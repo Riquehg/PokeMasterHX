@@ -110,9 +110,14 @@ export class BoardView {
   clamp() {
     const w = this.vp.clientWidth, h = this.vp.clientHeight;
     const sw = this.baseW * this.scale, sh = this.baseH * this.scale;
-    this.x = sw <= w ? (w - sw) / 2 : Math.min(0, Math.max(w - sw, this.x));
-    this.y = sh <= h ? (h - sh) / 2 : Math.min(0, Math.max(h - sh, this.y));
+    // 📱 v65d: folga nas bordas — as casas da beirada podiam ficar embaixo dos botões/placar e não dava para vê-las
+    const px = this.edgePad(w), py = this.edgePad(h);
+    this.x = sw <= w ? (w - sw) / 2 : Math.min(px, Math.max(w - sw - px, this.x));
+    this.y = sh <= h ? (h - sh) / 2 : Math.min(py, Math.max(h - sh - py, this.y));
   }
+
+  /** Quanto o mapa pode passar da borda da tela (só quando ele é maior que a tela). */
+  edgePad(len) { return Math.round(Math.min(90, len * 0.16)); }
 
   apply(smooth) {
     this.scale = Math.max(this.min, Math.min(this.min * 6, this.scale));
@@ -253,6 +258,7 @@ export class BoardView {
       last = { x: e.clientX, y: e.clientY };
     });
     const end = e => {
+      if (!pts.has(e.pointerId)) return; // já tratado (pointerup e depois lostpointercapture do mesmo dedo)
       pts.delete(e.pointerId);
       if (pts.size < 2 && pinch) {
         pinch = null; this.pinching = false;
@@ -268,7 +274,10 @@ export class BoardView {
     };
     vp.addEventListener('pointerup', end);
     vp.addEventListener('pointercancel', end);
-    vp.addEventListener('lostpointercapture', end);
+    // 📱 v65d: o dedo que começava em cima de uma casa/peão "travava" o arrasto — ao capturar o ponteiro no mapa,
+    // o navegador avisa que a casa perdeu a captura (o aviso sobe até o mapa) e isso encerrava o gesto no meio.
+    // Agora só conta quando quem perdeu a captura foi o próprio mapa.
+    vp.addEventListener('lostpointercapture', e => { if (e.target === vp) end(e); });
     window.addEventListener('blur', () => { pts.clear(); pinch = null; last = null; this.gesturing = this.pinching = false; vp.classList.remove('dragging'); });
     // clique só conta se não arrastou
     vp.addEventListener('click', e => {

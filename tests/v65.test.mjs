@@ -236,3 +236,13 @@ test('🛡️ v65c: lendário já capturado não aparece de novo para o mesmo jo
   const rng = createRng(3);
   for (let i = 0; i < 300; i++) assert.notEqual(rollWild(rng, 5, { exclude: ['articuno'] }).sp, 'articuno');
 });
+
+test('📱 v65d: mapa no celular — arrastar começando numa casa não encerra o gesto e as bordas têm folga', async () => {
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../js/ui/board.js', import.meta.url), 'utf8');
+  // o aviso de captura perdida vindo de uma casa/peão (filho) não pode encerrar o arrasto
+  assert.match(src, /lostpointercapture', e => \{ if \(e\.target === vp\) end\(e\)/);
+  assert.match(src, /if \(!pts\.has\(e\.pointerId\)\) return;/);
+  // folga nas bordas: casa da beirada nunca fica presa embaixo dos botões
+  assert.match(src, /edgePad\(len\) \{ return Math\.round\(Math\.min\(90, len \* 0\.16\)\); \}/);
+});
