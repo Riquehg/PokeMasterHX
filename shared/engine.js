@@ -24,7 +24,7 @@ import {
 import { createRng } from './rules/rng.js';
 import { variantFor, createMon, rollWild, hatchEgg, fullHeal, healMon, maxHpOf, levelUp, evolve, TEAM_SIZE, WILD_LEVELS, gainXp, BASE_SHINY_RATE, setLevel, defIvOf, MAX_LEVEL } from './rules/monsters.js';
 import { SHINY_CAKE_MULT, IV_PANCAKE_MIN } from './data/home.js';
-import { destinations, pathTo } from './rules/movement.js';
+import { destinations, pathTo, distancesFrom } from './rules/movement.js';
 import { startBattle, submitChoice, setBattleEndHandler, deliverCapture, sideActive, sideIndexOf } from './rules/battle.js';
 import {
   GameError, fail, getPlayer, currentPlayer, log, fx, addItem, takeItem, blackout, speciesName, clone, markCaught, hasUsable, badgesNeeded
@@ -43,7 +43,7 @@ import { botAction } from './bots.js';
 import { RULE_IDS, setupRules, onRound, knockOut, rulesOf, royaleClash, royaleHealCheck, checkRoyaleEnd, royaleRank, alivePlayers,
   conquestGym, conquestBattleEnd, garrisonAction, conquestVisit, conquestRank, ownerOf } from './rules/modes.js';
 
-import { teamsOn, teamSize, assignSquads, allies, teamAction, markTeamWin, squadOf, squadIds, squadMembers, squadScore, squadName } from './rules/teams.js';
+import { teamsOn, teamSize, assignSquads, allies, teamAction, markTeamWin, squadOf, squadIds, squadMembers, squadScore, squadName, HEAL_PULSE_RANGE, shareBadge } from './rules/teams.js';
 
 export const ENGINE_VERSION = 2;
 export const AFK_SECONDS = 90;
@@ -489,6 +489,22 @@ function fieldSkill(state, rng, p, a) {
     p.surfRoll = true;
     log(state, `🌊 ${nm} de ${p.name} vai surfar com você!`, 'good');
     return roll(state, rng, p);
+  }
+  if (id === 'healpulse') { // 💗 v70: cura o aliado a até 3 casas
+    if (!teamsOn(state)) fail('O Pulso de Cura só funciona no modo equipe.');
+    const dist = distancesFrom(p, p.pos);
+    const near = state.players.filter(q => allies(state, p, q) && !q.out && !q.left && (dist[q.pos] ?? 99) <= HEAL_PULSE_RANGE);
+    const hurt = near.filter(q => q.team.some(m => m.hp > 0 && m.hp < maxHpOf(m)));
+    if (!near.length) fail(`Nenhum aliado a até ${HEAL_PULSE_RANGE} casas de você.`);
+    if (!hurt.length) fail('Seus aliados por perto já estão com a equipe inteira.');
+    done();
+    for (const q of hurt) {
+      let tot = 0;
+      for (const m of q.team) if (m.hp > 0 && m.hp < maxHpOf(m)) { const add = Math.min(maxHpOf(m) - m.hp, Math.ceil(maxHpOf(m) * 0.5)); m.hp += add; tot += add; }
+      fx(state, { k: 'ally_heal', pid: p.id, to: q.id, sp: mon.sp, amount: tot });
+      log(state, `💗 ${nm} de ${p.name} usou Pulso de Cura em ${q.name}: a equipe recuperou ${tot} HP!`, 'good');
+    }
+    return;
   }
   if (id === 'dig') {
     done();
@@ -1561,6 +1577,7 @@ setBattleEndHandler((state, rng, b, outcome) => {
       p0.badges.push(gym.id);
       log(state, `🎖️ ${p0.name} conquistou a ${gym.badge}! (${p0.badges.length}/${GYMS.length})`, 'win');
       fx(state, { k: 'badge', pid: p0.id, badge: gym.id });
+      shareBadge(state, p0, gym.id); // 🤝 v70: insígnia é do time
       grantBadgeReward(state, rng, p0);
       progressMission(state, p0.id, { k: 'badge' });
     } else if (b.kind === 'elite') {

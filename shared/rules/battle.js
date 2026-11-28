@@ -10,7 +10,7 @@ import { against, bestAttack, effectivenessLabel, TYPE_LABELS } from './types.js
 import { monMoves, moveIdsOf, STAB, defaultMoveIds, MAX_FORMS } from '../data/moves.js';
 import { companionBonus, progressMission, companionLevel } from './missions.js';
 import { getCompanion, assistChance, assistMax } from '../data/companions.js';
-import { teamsOn, nearAlly, ALLY_ASSIST_CHANCE, ALLY_ASSIST_PCT } from './teams.js';
+import { teamsOn, nearAlly, ALLY_ASSIST_CHANCE, ALLY_ASSIST_PCT, duoPartner, DUO_TARGET, DUO_PCT, SQUADS } from './teams.js';
 import { weatherMult, weatherInflict, weatherChip, weatherOf } from './weather.js';
 import { conquestMult } from './modeBonus.js';
 import { GYMS } from '../data/trainers.js';
@@ -132,6 +132,16 @@ export function startBattle(state, cfg) {
     log: [],
     over: false
   };
+
+  // 🤝 v70: batalha em dupla — aliado na mesma casa entra junto nas batalhas grandes
+  const bigFoe = ['gym', 'elite', 'champion', 'raid', 'ace'].includes(cfg.kind)
+    || (cfg.kind === 'wild' && (getSpecies(cfg.foe.mon?.sp)?.tier >= 5 || getSpecies(cfg.foe.mon?.sp)?.legendary || getSpecies(cfg.foe.mon?.sp)?.mythical));
+  const partner = bigFoe ? duoPartner(state, p) : null;
+  const pLead = partner && (partner.team.find(m => m.hp > 0 && canUse(partner, m)) || partner.team.find(m => m.hp > 0));
+  if (pLead) {
+    state.battle.partner = { pid: partner.id, uid: pLead.uid, name: partner.name, squad: partner.squad };
+    log(state, `🤝 Batalha em dupla! ${partner.name} entra com ${speciesName(pLead.sp)} (Nv. ${pLead.lvl}) ao lado de ${p.name}.`, 'good');
+  }
 
   // Pokédex: os dois lados "veem" o adversário
   const foeMon = sideActive(state, sides[1]);
@@ -921,10 +931,53 @@ function companionAssist(state, rng, si) {
   return false;
 }
 
+/** 🤝 v70: o parceiro da batalha em dupla ataca toda rodada; às vezes o inimigo acerta o parceiro. Devolve true se acabou. */
+export function partnerMon(state) {
+  const pt = state.battle?.partner;
+  if (!pt) return null;
+  const q = getPlayer(state, pt.pid);
+  return q?.team.find(m => m.uid === pt.uid) || null;
+}
+function duoStrike(state, rng) {
+  const b = state.battle;
+  const pt = b.partner;
+  if (b.over || !pt || pt.gone) return false;
+  const mon = partnerMon(state);
+  const foeSide = b.sides[1], foe = sideActive(state, foeSide);
+  if (!mon || mon.hp <= 0) { pt.gone = true; return false; }
+  if (!foe || foe.hp <= 0 || b.mustSwitch[1]) return false;
+  const q = getPlayer(state, pt.pid);
+  // o parceiro ataca com o melhor tipo dele
+  const best = bestAttack(getSpecies(mon.sp).types, getSpecies(foe.sp).types);
+  const mult = Math.max(0.5, best.mult || 0.5);
+  const lvlF = Math.max(0.6, Math.min(1.4, mon.lvl / Math.max(1, foe.lvl)));
+  let dmg = Math.max(1, Math.round(maxHpOf(foe) * DUO_PCT * mult * lvlF));
+  if (foe.raid || b.kind === 'wild') dmg = Math.min(dmg, foe.hp - 1 > 0 ? foe.hp - 1 : 1);
+  dmg = Math.min(dmg, foe.hp);
+  foe.hp -= dmg;
+  fx(state, { k: 'duo', side: 0, pid: pt.pid, name: pt.name, squad: pt.squad, color: SQUADS[pt.squad]?.color || '#6cf', sp: mon.sp, from: mon.uid, uid: foe.uid, type: best.type, dmg, mult, hpAfter: foe.hp, maxHp: maxHpOf(foe) });
+  log(state, `🤝 ${speciesName(mon.sp)} de ${q?.name || pt.name} atacou junto: ${dmg} de dano em ${speciesName(foe.sp)}${mult >= 2 ? ' (super efetivo!)' : ''}.`, 'good');
+  if (foe.hp <= 0) {
+    awardKO(state, 0, 1);
+    return handleFaint(state, rng, 1);
+  }
+  // o inimigo às vezes mira o parceiro
+  if (rng.chance(DUO_TARGET)) {
+    const m2 = Math.max(0.5, bestAttack(getSpecies(foe.sp).types, getSpecies(mon.sp).types).mult || 0.5);
+    const lvl2 = Math.max(0.6, Math.min(1.6, foe.lvl / Math.max(1, mon.lvl)));
+    const hit = Math.min(mon.hp, Math.max(1, Math.round(maxHpOf(mon) * 0.16 * m2 * lvl2)));
+    mon.hp -= hit;
+    fx(state, { k: 'duo_hit', uid: mon.uid, dmg: hit, hpAfter: mon.hp, maxHp: maxHpOf(mon) });
+    log(state, `💥 ${speciesName(foe.sp)} acertou ${speciesName(mon.sp)} de ${q?.name || pt.name}: −${hit} HP.`, 'bad');
+    if (mon.hp <= 0) { pt.gone = true; log(state, `😵 ${speciesName(mon.sp)} de ${q?.name || pt.name} desmaiou e saiu da batalha em dupla.`, 'bad'); }
+  }
+  return false;
+}
+
 /** 🤝 v65: aliado de time por perto (mesma casa ou vizinha) entra 1× por batalha com o Pokémon da frente dele. */
 function allyAssist(state, rng, si) {
   const b = state.battle;
-  if (b.over || !teamsOn(state)) return false;
+  if (b.over || !teamsOn(state) || b.partner) return false; // v70: com parceiro em dupla, a ajuda já é toda rodada
   const side = b.sides[si];
   if (side.kind !== 'player' || b.mustSwitch[si] || side.allyHelped) return false;
   const p = getPlayer(state, side.pid);
@@ -940,7 +993,7 @@ function allyAssist(state, rng, si) {
   if (foe.raid) dmg = Math.min(dmg, foe.hp - 1 > 0 ? foe.hp - 1 : 1);
   dmg = Math.min(dmg, foe.hp);
   foe.hp -= dmg;
-  fx(state, { k: 'assist', side: si, pid: p.id, ally: ally.id, sp: lead.sp, move: 'Ajuda do time', type: types[0], kind: 'dmg', uid: foe.uid, dmg, mult, hpAfter: foe.hp, maxHp: maxHpOf(foe) });
+  fx(state, { k: 'assist', side: si, pid: p.id, ally: ally.id, allyName: ally.name, allyAvatar: ally.avatar || 1, allySkin: ally.cosmetic?.skin || null, color: SQUADS[ally.squad]?.color || '#6cf', sp: lead.sp, move: 'Ajuda do time', type: types[0], kind: 'dmg', uid: foe.uid, dmg, mult, hpAfter: foe.hp, maxHp: maxHpOf(foe) });
   log(state, `🤝 ${ally.name} (time) mandou ${speciesName(lead.sp)} ajudar ${p.name}: ${dmg} de dano em ${speciesName(foe.sp)}!`, 'good');
   if (foe.hp <= 0) {
     awardKO(state, si, 1 - si);
@@ -1071,6 +1124,7 @@ function resolveRound(state, rng, choices) {
     if (companionAssist(state, rng, si)) return;
     if (allyAssist(state, rng, si)) return; // 🤝 v65
   }
+  if (duoStrike(state, rng)) return; // 🤝 v70: batalha em dupla
 
   // 2) ataques, por velocidade (nível; empate: lado 0)
   const attackers = [0, 1].filter(si => choices[si].move === 'attack');

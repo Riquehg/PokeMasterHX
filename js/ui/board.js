@@ -1,5 +1,6 @@
 import { caughtBall } from '../owned.js';
 // Tabuleiro com zoom (roda do mouse / pinça / botões), arrastar para mover e animação dos peões.
+import { teamsOn, squadOf, SQUADS } from '../../shared/rules/teams.js';
 import { SPACE_LIST, getSpace, useStateMap, GATES, BIOMES } from '../../shared/data/board.js';
 import { hasGate } from '../../shared/rules/movement.js';
 import { drawTerrain, roadsSvg } from './terrain.js';
@@ -376,7 +377,7 @@ export class BoardView {
     const fr = c.frame ? esc(c.frame) : '';
     const au = c.aura ? esc(c.aura) : '';
     const tr = c.trail ? esc(c.trail) : '';
-    const cls = ['token', state.current === i ? 'active' : '', fr || au || tr ? 'vip' : '', fr ? 'tf-' + fr : '', au ? 'ta-' + au : '', pl.out ? 'out' : '', n > 1 ? 'stacked' : '', pl.id === viewerId ? 'mine' : ''].join(' ');
+    const cls = ['token', teamsOn(state) && squadOf(pl) !== null ? 'sq sq' + squadOf(pl) : '', state.current === i ? 'active' : '', fr || au || tr ? 'vip' : '', fr ? 'tf-' + fr : '', au ? 'ta-' + au : '', pl.out ? 'out' : '', n > 1 ? 'stacked' : '', pl.id === viewerId ? 'mine' : ''].join(' ');
     const sparks = au ? `<div class="sparks">${'<i></i>'.repeat(7)}</div>` : '';
     return `<div class="${cls}" data-pid="${esc(pl.id)}" style="left:${sp.x}%;top:${sp.y}%;margin-left:calc(${off}px * var(--ms, 1));--pc:${playerColor(state, pl.id)}" title="${esc(pl.name)}${c.title ? ' — ' + esc(c.title) : ''}">
       ${fr ? '<div class="halo"></div><div class="halo h2"></div>' : ''}${sparks}${tr ? `<div class="trail tr-${tr}">${'<i></i>'.repeat(8)}</div>` : ''}
@@ -385,6 +386,7 @@ export class BoardView {
       ${pl.companion && COMPANIONS[pl.companion] ? `<img class="tk-comp" src="${leaderUrl(COMPANIONS[pl.companion].sprite)}" alt="" title="${esc(COMPANIONS[pl.companion].name)}" draggable="false">` : ''}
       ${pl.companion && (pl.bond?.[pl.companion] || 0) >= 10 ? `<span class="tk-heart" title="${esc(COMPANIONS[pl.companion]?.name || '')} é íntimo de ${esc(pl.name)}">❤️</span>` : ''}
       ${pl.megaKey ? `<img class="tk-mega" src="${itemUrl('mega_bracelet')}" alt="" title="🔗 Bracelete Mega" draggable="false" data-color="#7b4bd6">` : ''}
+      ${teamsOn(state) && squadOf(pl) !== null ? `<span class="tk-sq" title="${esc(SQUADS[squadOf(pl)].name)}">${SQUADS[squadOf(pl)].icon}</span>` : ''}
       <span class="name">${pl.id === viewerId ? 'Você' : esc(pl.name.split(' ')[0])}</span>
       ${c.title ? `<span class="ttitle ${c.titleFx ? 'pfx-' + esc(c.titleFx) : ''}" ${c.titleColor ? `style="--tc:${esc(c.titleColor)}"` : ''}>★ ${esc(c.title)}</span>` : ''}</div>`;
   }

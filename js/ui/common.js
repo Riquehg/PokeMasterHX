@@ -10,6 +10,7 @@ import { TYPE_COLORS, against } from '../../shared/rules/types.js';
 import { esc, hpClass } from './dom.js';
 import { canUse, badgesNeeded } from '../../shared/rules/helpers.js';
 import { natureLabel } from '../../shared/data/natures.js';
+import { teamsOn, squadOf, SQUADS } from '../../shared/rules/teams.js';
 import { monSprite, typeLabel, typeColor, avatarUrl, PLAYER_COLORS, itemUrl, moveIcon, typeIcon } from '../config.js';
 import { ITEMS } from '../../shared/data/items.js';
 import { MEGAS } from '../../shared/data/megas.js';
@@ -181,6 +182,9 @@ export function speciesName(id) {
 
 export function playerColor(state, pid) {
   const i = state.players.findIndex(p => p.id === pid);
+  // 🤝 v70: no modo equipe, a cor é a do time (peão, nome, lista)
+  const sq = teamsOn(state) ? squadOf(state.players[i]) : null;
+  if (sq !== null && SQUADS[sq]) return SQUADS[sq].color;
   return PLAYER_COLORS[(i < 0 ? 0 : i) % PLAYER_COLORS.length];
 }
 
@@ -215,13 +219,13 @@ export function edgeBadge(mine, foe, big = false) {
 }
 
 /** Ficha do Pokémon adversário selvagem/Raid: natureza, potencial (IV) e os golpes que ele usa. */
-export function foeIntelHtml(mon) {
+export function foeIntelHtml(mon, withMoves = true) { // 🎨 v70: na batalha só natureza + IV
   const pot = ivPercent(mon);
   const moves = monMoves(mon);
   return `<div class="foe-intel">
     <span class="fi-nat" title="${esc(natureLabel(mon.nature))}">❖ ${esc(natureLabel(mon.nature))}</span>
     <span class="fi-pot" title="Potencial (IVs) HP ${mon.iv?.hp ?? '?'} · ATQ ${mon.iv?.atk ?? '?'} · DEF ${mon.iv ? defIvOf(mon) : '?'} · VEL ${mon.iv?.spe ?? '?'} (de ${IV_MAX})">${pot === null ? '?' : `<b class="pk-stars">${potentialStars(pot)}</b> ${potentialLabel(pot)} ${pot}%`}</span>
-    <span class="fi-moves">${moves.map(m => `<span class="move-chip" style="--tc:${TYPE_COLORS[m.type]}">${moveIcon(m)}<b>${esc(m.name)}</b> <span class="tiny">${esc(typeLabel(m.type))}</span></span>`).join('')}</span>
+    ${withMoves ? `<span class="fi-moves">${moves.map(m => `<span class="move-chip" style="--tc:${TYPE_COLORS[m.type]}">${moveIcon(m)}<b>${esc(m.name)}</b> <span class="tiny">${esc(typeLabel(m.type))}</span></span>`).join('')}</span>` : ''}
   </div>`;
 }
 

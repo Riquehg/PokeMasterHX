@@ -6,13 +6,15 @@ import { ITEMS, ballBonusAgainst } from '../../shared/data/items.js';
 import { monView, maxHpOf } from '../../shared/rules/monsters.js';
 import { canUse, badgesNeeded } from '../../shared/rules/helpers.js';
 import { monMoves } from '../../shared/data/moves.js';
+import { partnerMon } from '../../shared/rules/battle.js';
+import { SQUADS } from '../../shared/rules/teams.js';
 import { STATUS, CAPTURE_TARGET, captureMath, captureProb, LEGEND_CAPTURE, megaBlock, gmaxBlock, legendCapBlocked, LEGEND_MATCH_LIMIT, gearOf, abilityImmune } from '../../shared/rules/battle.js';
 import { megaFor, BRACELET_ID } from '../../shared/data/megas.js';
 import { gmaxFor, BAND_ID } from '../../shared/data/gmax.js';
 import { bestAttack, against, effectivenessLabel, TYPE_COLORS } from '../../shared/rules/types.js';
 import { whoMustAct } from '../../shared/engine.js';
 import { esc, hpClass } from './dom.js';
-import { monSprite, itemUrl, leaderUrl, typeLabel, moveIcon } from '../config.js';
+import { monSprite, itemUrl, leaderUrl, typeLabel, moveIcon, typeIcon, avatarUrl } from '../config.js';
 import { typeChips, edgeBadge, foeIntelHtml , moveFxChips } from './common.js';
 import { canTransform } from '../../shared/rules/monsters.js';
 import { ABILITIES, abilityOf } from '../../shared/data/battlegear.js';
@@ -131,6 +133,14 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
       ${foeMon.aura ? `<div class="aura-fx foe aura-${esc(foeMon.aura)}"></div>` : ''}${myMon.aura ? `<div class="aura-fx me aura-${esc(myMon.aura)}"></div>` : ''}
       <img class="mon-sprite foe ${foeMon.shiny ? 'shiny' : ''} ${foeMon.raid ? 'raid-boss' : ''} ${foeMon.mega ? 'mega' : ''} ${getSpecies(foeMon.sp)?.gmaxOf ? 'gmax' : ''} ${foeMon.aura ? 'aura-' + esc(foeMon.aura) : ''}" data-uid="${esc(foeMon.uid)}" src="${monSprite(foeMon)}" alt="${esc(getSpecies(foeMon.sp).name)}">
       <img class="mon-sprite me ${myMon.shiny ? 'shiny' : ''} ${myMon.mega ? 'mega' : ''} ${getSpecies(myMon.sp)?.gmaxOf ? 'gmax' : ''} ${myMon.aura ? 'aura-' + esc(myMon.aura) : ''}" data-uid="${esc(myMon.uid)}" src="${monSprite(myMon)}" alt="${esc(getSpecies(myMon.sp).name)}">
+      ${(() => { // 🤝 v70: parceiro da batalha em dupla, atrás do seu Pokémon
+        const pm = partnerMon(state), pt = b.partner;
+        if (!pm || !pt || pt.gone || pm.hp <= 0) return '';
+        const r = Math.max(0, pm.hp) / (maxHpOf(pm) || 1);
+        const col = SQUADS[pt.squad]?.color || '#6cf';
+        return `<img class="mon-sprite partner ${pm.shiny ? 'shiny' : ''}" data-uid="${esc(pm.uid)}" src="${monSprite(pm)}" alt="">
+          <div class="duo-tag" style="--sq:${col}"><b>🤝 ${esc(pt.name)}</b><span>${esc(getSpecies(pm.sp).name)} Nv.${pm.lvl}</span><div class="hp ${hpClass(r)}" data-duo="${esc(pm.uid)}"><i style="width:${(r * 100).toFixed(1)}%"></i></div></div>`;
+      })()}
       ${hpBox(state, foe, foeMon, 'foe', null, vp)}
       ${hpBox(state, me, myMon, 'me', participant ? foeMon : null)}
     </div>`;
@@ -139,7 +149,7 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
   if (ui.busy) controls = `<p class="muted center" style="margin-top:10px">⚔️ ...</p>`;
   else if (!participant) controls = spectatorHtml(state, b);
   else if (!myTurn) controls = `<p class="muted center" style="margin-top:10px"><span class="spinner"></span> ${b.kind === 'pvp' ? 'Aguardando o adversário escolher...' : 'Aguarde...'}</p>`;
-  else if (mustSwitch) controls = `<p class="center" style="margin-top:10px"><b>${esc(getSpecies(myMon.sp).name)} desmaiou!</b> Escolha quem entra:</p>${switchList(sideTeam(state, me), me.active, vp, foeMon)}`;
+  else if (mustSwitch) controls = `<p class="center" style="margin-top:10px"><b>${esc(getSpecies(myMon.sp).name)} desmaiou!</b> Toque em quem entra:</p>${benchRow(sideTeam(state, me), me.active, vp, foeMon, true)}`;
   else {
     const p = state.players.find(x => x.id === vid);
     const myTeam = sideTeam(state, me);
@@ -152,10 +162,15 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
       const stab = dmg && getSpecies(myMon.sp).types.includes(m.type);
       const tag = !dmg ? `<span class="mv-tag sup">${esc(m.desc)}</span>`
         : mult === 0 ? '<span class="mv-tag bad">Não afeta</span>' : mult >= 2 ? `<span class="mv-tag good">Super efetivo x${mult}</span>` : mult < 1 ? `<span class="mv-tag bad">Pouco efetivo x${mult}</span>` : '<span class="mv-tag">Normal</span>';
-      return `<button class="btn move-btn" style="--tc:${TYPE_COLORS[m.type]}" data-act="b-attack" data-slot="${i}" title="${esc(banned ? '🎀 Faixa Escolhida: só golpes de ataque' : m.desc)}" ${banned ? 'disabled' : ''}>
-        <span class="mv-name">${moveIcon(m)}${esc(m.name)}${m.mega ? ' <b class="mv-mega" title="Golpe da Mega: só na forma Mega">💎</b>' : ''}</span>
-        <span class="mv-meta">${esc(typeLabel(m.type))}${dmg ? ` · poder ${Math.round((m.power || 1) * (stab ? 1.2 : 1) * 100)}%` : ''}${m.miss ? ` · erra no 🎲${m.miss === 1 ? '1' : `1–${m.miss}`}` : ''}</span>${tag}${dmg ? moveFxChips(m) : ''}</button>`;
-    }).join('');
+      // 🎨 v70: nome em cima, ícone grande no meio (o golpe da Mega vai para o espaço especial da direita)
+      return { mega: !!m.mega, html: `<button class="btn move-btn mv-card ${m.mega ? 'mv-special' : ''}" style="--tc:${TYPE_COLORS[m.type]}" data-act="b-attack" data-slot="${i}" title="${esc(banned ? '🎀 Faixa Escolhida: só golpes de ataque' : m.desc)}" ${banned ? 'disabled' : ''}>
+        <span class="mv-name">${esc(m.name)}${m.mega ? ' <b class="mv-mega" title="Golpe da Mega: só na forma Mega">💎</b>' : ''}</span>
+        <span class="mv-big">${moveIcon(m) || typeIcon(m.type) || `<i>${TYPE_EMOJI[m.type] || '💥'}</i>`}</span>
+        <span class="mv-meta">${esc(typeLabel(m.type))}${dmg ? ` · poder ${Math.round((m.power || 1) * (stab ? 1.2 : 1) * 100)}%` : ''}${m.miss ? ` · erra no 🎲${m.miss === 1 ? '1' : `1–${m.miss}`}` : ''}</span>
+        <span class="mv-foot">${tag}${dmg ? moveFxChips(m) : ''}</span></button>` };
+    });
+    const normalMoves = moveBtns.filter(x => !x.mega).map(x => x.html).join('');
+    const specialMove = moveBtns.find(x => x.mega)?.html || '';
     // 🧬 Ditto/Mew: voltar à forma, guardar a forma e usar formas guardadas (até 3)
     const formBar = canTransform(myMon) ? `<div class="form-bar">
         <span class="tiny"><b>🧬 ${esc(getSpecies(myMon.tf ? myMon.tf.sp : myMon.sp).name)}</b>${myMon.tf ? ` como <b>${esc(getSpecies(myMon.sp).name)}</b>${myMon.shiny ? ' <span class="chip gold" title="Shiny transformado: +10% de ataque">✨ cópia forte</span>' : ''}` : ''}</span>
@@ -167,20 +182,20 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
     const megaOk = !megaBlock(state, mySi);
     const megaInfo = megaFor(myMon);
     const megaBar = state.options?.megas && p.megaKey && !me.megaUsed && megaInfo
-      ? `<div class="mega-bar"><button class="btn mega-btn" data-act="b-mega" ${megaOk ? '' : 'disabled'} title="Não gasta a rodada · 1 vez por batalha"><img src="${itemUrl(BRACELET_ID)}" alt="">💎 Mega Evoluir → ${esc(megaInfo.name)}</button></div>`
-      : me.megaUsed && myMon.mega ? '<div class="mega-bar"><span class="chip purple">💎 Mega Evoluído</span></div>' : '';
+      ? `<button class="btn mega-btn mv-power" data-act="b-mega" ${megaOk ? '' : 'disabled'} title="Não gasta a rodada · 1 vez por batalha"><img src="${itemUrl(BRACELET_ID)}" alt=""><b>MEGA</b><span>${esc(megaInfo.name)}</span></button>`
+      : me.megaUsed && myMon.mega ? '<div class="mv-power done mega">💎<b>Mega</b><span>evoluído</span></div>' : '';
     // 🔴 Gigantamax (ação grátis, divide o "1 por batalha" com a Mega)
     const gmaxInfo = gmaxFor(myMon);
     const gmaxBar = state.options?.megas && p.dynaKey && !me.megaUsed && gmaxInfo
-      ? `<div class="mega-bar"><button class="btn gmax-btn" data-act="b-gmax" ${!gmaxBlock(state, mySi) ? '' : 'disabled'} title="Não gasta a rodada · dura 3 rodadas · 1 Mega OU Gigantamax por batalha"><img src="${itemUrl(BAND_ID)}" alt="">🔴 Gigantamax → ${esc(gmaxInfo.name)}</button></div>`
-      : myMon.gmaxLeft ? `<div class="mega-bar"><span class="chip red">🔴 Gigantamax · ${myMon.gmaxLeft} rodada${myMon.gmaxLeft > 1 ? 's' : ''}</span></div>` : '';
-    controls = `<div class="move-grid">${moveBtns}</div>${megaBar}${gmaxBar}${formBar}<div class="battle-actions">
-        <button class="btn blue" data-act="b-sub" data-sub="switch" ${myTeam.filter(m => m.hp > 0 && canUse(p, m)).length < 2 ? 'disabled' : ''}>🔄 Trocar</button>
-        <button class="btn purple" data-act="b-sub" data-sub="item" ${items.length ? '' : 'disabled'}>🎒 Itens</button>
-        <button class="btn green" data-act="b-sub" data-sub="ball" ${b.kind === 'wild' && balls.length && !foeMon.megaBoss && !foeMon.gmaxBoss && !legendCapBlocked(p, foeMon) ? '' : 'disabled'} ${foeMon.megaBoss || foeMon.gmaxBoss ? 'title="Energia Mega/Gigantamax: não dá para capturar — vença para ganhar prêmios"' : legendCapBlocked(p, foeMon) ? `title="Você já capturou ${LEGEND_MATCH_LIMIT} lendários das casas Amarelas nesta partida"` : ''} ${b.kind === 'raid' ? 'title="Na Raid, vença primeiro: a captura é automática no fim"' : ''}>🔴 Capturar</button>
+      ? `<button class="btn gmax-btn mv-power" data-act="b-gmax" ${!gmaxBlock(state, mySi) ? '' : 'disabled'} title="Não gasta a rodada · dura 3 rodadas · 1 Mega OU Gigantamax por batalha"><img src="${itemUrl(BAND_ID)}" alt=""><b>GMAX</b><span>${esc(gmaxInfo.name)}</span></button>`
+      : myMon.gmaxLeft ? `<div class="mv-power done gmax">🔴<b>Gmax</b><span>${myMon.gmaxLeft} rodada${myMon.gmaxLeft > 1 ? 's' : ''}</span></div>` : '';
+    const power = megaBar || gmaxBar ? `<div class="mv-side left">${megaBar}${gmaxBar}</div>` : '';
+    controls = `<div class="mv-band ${power ? 'has-l' : ''} ${specialMove ? 'has-r' : ''}">${power}<div class="move-grid">${normalMoves}</div>${specialMove ? `<div class="mv-side right">${specialMove}</div>` : ''}</div>
+      ${benchRow(myTeam, me.active, p, foeMon)}${formBar}<div class="battle-actions">
+        <button class="btn purple" data-act="b-sub" data-sub="item" ${items.length ? '' : 'disabled'}><img class="ba-ic" src="${itemUrl('potion')}" alt="">Itens</button>
+        <button class="btn green" data-act="b-sub" data-sub="ball" ${b.kind === 'wild' && balls.length && !foeMon.megaBoss && !foeMon.gmaxBoss && !legendCapBlocked(p, foeMon) ? '' : 'disabled'} ${foeMon.megaBoss || foeMon.gmaxBoss ? 'title="Energia Mega/Gigantamax: não dá para capturar — vença para ganhar prêmios"' : legendCapBlocked(p, foeMon) ? `title="Você já capturou ${LEGEND_MATCH_LIMIT} lendários das casas Amarelas nesta partida"` : ''} ${b.kind === 'raid' ? 'title="Na Raid, vença primeiro: a captura é automática no fim"' : ''}><img class="ba-ic" src="${itemUrl('poke_ball')}" alt="">Capturar</button>
         <button class="btn" data-act="b-flee" ${official ? 'disabled' : ''}>${b.kind === 'wild' ? '🏃 Fugir' : '🏳️ Desistir'}</button>
       </div>${b.kind === 'raid' ? '<p class="tiny muted center">🔥 Raid: pokébolas bloqueadas durante a luta. Vença o chefe e depois escolha a Pokébola para tentar capturar.</p>' : ''}`;
-    if (ui.sub === 'switch') controls += switchList(myTeam, me.active, p, foeMon);
     if (ui.sub === 'item') controls += `<div class="subpick">${items.map(([id, n]) => `<button class="btn sm pickbtn" data-act="b-item" data-item="${id}"><img src="${itemUrl(id)}" alt="${esc(ITEMS[id].name)}">${esc(ITEMS[id].name)} ×${n}</button>`).join('')}</div>`;
     if (ui.sub === 'ball') {
       controls += `<div class="subpick">${balls.map(([id, n]) => {
@@ -203,20 +218,30 @@ export function battleHtml(state, vid, ui = {}, canAct = true) {
       <img src="${leaderUrl(comp.sprite)}" alt=""><img class="b-comp-mon" src="${monSprite({ sp: comp.mon })}" alt=""><span><b>${esc(comp.name)}</b><i>💞 Nv.${cLvl}${assistMax(cLvl) ? ` · ${Math.round(assistChance(cLvl) * 100)}%` : ''}</i></span></div>` : '';
   return `<div class="battle-head"><b>${state.kind === 'duel' ? '⚔️ Duelo' : KIND_TITLE[b.kind] || 'Batalha'}${foe.kind === 'npc' ? ` · ${esc(foe.title ? foe.title + ' ' : '')}${esc(foe.name)}` : ''}</b><span class="chip">Rodada ${b.round + 1}</span>${compHtml}</div>
     ${arena}
-    ${(b.kind === 'wild' || b.kind === 'raid') && foe.kind === 'wild' ? foeIntelHtml(foeMon) : ''}
+    ${(b.kind === 'wild' || b.kind === 'raid') && foe.kind === 'wild' ? foeIntelHtml(foeMon, false) : ''}
     <div class="matchup">${matchup}</div>
     ${controls}
     <div class="battle-log" id="battle-log">${b.log.slice(-14).map(l => `<p>${esc(l)}</p>`).join('')}</div>`;
 }
 
-function switchList(team, active, player, foe) {
-  return `<div class="subpick">${team.map((m, i) => {
+const TYPE_EMOJI = { fire: '🔥', water: '💧', electric: '⚡', grass: '🍃', ice: '❄️', fighting: '👊', poison: '☠️', ground: '🪨', flying: '🪶', psychic: '🔮', bug: '🐛', rock: '🪨', ghost: '👻', dragon: '🐉', dark: '🌑', steel: '⚙️', fairy: '🌸', normal: '💫' };
+
+/** 🎨 v70: banco embaixo dos golpes — toque no Pokémon para trocar (substitui o botão Trocar). */
+function benchRow(team, active, player, foe, must = false) {
+  const list = team.map((m, i) => ({ m, i })).filter(x => x.i !== active);
+  if (!list.length) return '';
+  return `<div class="bench-row ${must ? 'must' : ''}">${list.map(({ m, i }) => {
     const v = monView(m);
     const locked = player && !canUse(player, m);
-    return `<button class="btn sm pickbtn ${locked ? 'locked-mon' : ''}" data-act="b-switch" data-index="${i}" ${m.hp <= 0 || i === active || locked ? 'disabled' : ''}>
-      <img src="${monSprite(m)}" alt="${esc(v.name)}">${foe ? edgeBadge(m, foe) : ''}${esc(v.name)} Nv.${v.lvl} <span class="tiny muted">${Math.max(0, m.hp)}/${v.maxHp}</span>${locked ? `<span class="lock-tag">🔒 ${badgesNeeded(m)} insígnias</span>` : ''}</button>`;
+    const down = m.hp <= 0;
+    const pct = Math.max(0, Math.min(100, Math.round(100 * Math.max(0, m.hp) / (v.maxHp || 1))));
+    return `<button class="bench-mon ${down ? 'down' : ''} ${locked ? 'locked-mon' : ''}" data-act="b-switch" data-index="${i}" ${down || locked ? 'disabled' : ''} title="${down ? 'Desmaiado' : locked ? `🔒 Precisa de ${badgesNeeded(m)} insígnias` : `Trocar para ${esc(v.name)}`}">
+      <img src="${monSprite(m)}" alt="">${foe && !down ? edgeBadge(m, foe) : ''}
+      <span class="bm-txt"><b>${esc(v.name)}</b><i>Nv.${v.lvl}</i></span>
+      <span class="bm-hp"><span class="bm-hpv">${Math.max(0, m.hp)}/${v.maxHp}</span><span class="bm-bar"><span class="${hpClass(Math.max(0, m.hp) / (v.maxHp || 1))}" style="width:${pct}%"></span></span></span>${locked ? `<span class="lock-tag">🔒 ${badgesNeeded(m)}</span>` : ''}</button>`;
   }).join('')}</div>`;
 }
+
 
 // ------------------------------------------------ animações dentro da arena
 const DIE_FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
@@ -372,15 +397,39 @@ export async function playBattleFx(fxList) {
     const sprite = uid => arena.querySelector(`.mon-sprite[data-uid="${uid}"]`);
     const box = uid => arena.querySelector(`.hpbox[data-uid="${uid}"]`);
     const box2 = box;
+    if (f.k === 'duo') { // 🤝 v70: parceiro da dupla ataca
+      const from = sprite(f.from), target = sprite(f.uid);
+      if (from) { from.classList.remove('lunge-me'); void from.offsetWidth; from.classList.add('lunge-me'); }
+      const tag = arena.querySelector('.duo-tag');
+      if (tag) { tag.classList.remove('pop'); void tag.offsetWidth; tag.classList.add('pop'); }
+      await moveProjectile(arena, from, target, f.type);
+      if (target) { target.classList.remove('hurt'); void target.offsetWidth; target.classList.add('hurt'); impactBurst(arena, target, f.type, f.mult >= 2); float(arena, target, `-${f.dmg}`, f.mult >= 2 ? 'crit' : ''); }
+      setHp(box2(f.uid), f.hpAfter, f.maxHp);
+      await wait(250);
+      continue;
+    }
+    if (f.k === 'duo_hit') {
+      const t = sprite(f.uid);
+      if (t) { t.classList.remove('hurt'); void t.offsetWidth; t.classList.add('hurt'); float(arena, t, `-${f.dmg}`, 'crit'); }
+      const bar = arena.querySelector(`[data-duo="${CSS.escape(f.uid)}"]`);
+      if (bar) { const r = Math.max(0, f.hpAfter) / (f.maxHp || 1); bar.className = 'hp ' + hpClass(r); bar.querySelector('i').style.width = (r * 100).toFixed(1) + '%'; }
+      if (f.hpAfter <= 0 && t) { t.classList.add('fainted'); arena.querySelector('.duo-tag')?.classList.add('gone'); }
+      await wait(300);
+      continue;
+    }
     if (f.k === 'assist') {
-      // ❤️ companheiro íntimo entra na arena com o Pokémon dele e usa o golpe especial
+      // ❤️ companheiro íntimo (ou 🤝 v70: aliado do time) entra na arena com o Pokémon dele e usa o golpe especial
       const c = COMPANIONS[f.comp];
       const mine = arena.querySelector('.mon-sprite.me');
       const sideCls = mine && f.side === 0 ? 'me' : (f.side === 0 ? 'me' : 'foe');
       const box = document.createElement('div');
-      box.className = `assist-cut ${sideCls}`;
+      box.className = `assist-cut ${sideCls} ${f.ally ? 'ally' : ''}`;
       box.style.setProperty('--tc', TYPE_COLORS[f.type] || '#ff9ccf');
-      box.innerHTML = `<img class="as-trainer" src="${leaderUrl(c?.sprite || '')}" alt=""><img class="as-mon" src="${monSprite({ sp: f.sp })}" alt="">
+      if (f.ally) box.style.setProperty('--sq', f.color || '#6cf');
+      box.innerHTML = f.ally
+        ? `<img class="as-trainer as-av" src="${avatarUrl(f.allyAvatar, f.allySkin)}" alt=""><img class="as-mon" src="${monSprite({ sp: f.sp })}" alt="">
+        <div class="as-banner"><span>🤝 ${esc(f.allyName || 'Aliado')} veio ajudar!</span><b>${esc(getSpecies(f.sp)?.name || '')} · −${f.dmg} HP${f.mult >= 2 ? ' · super efetivo!' : ''}</b></div>`
+        : `<img class="as-trainer" src="${leaderUrl(c?.sprite || '')}" alt=""><img class="as-mon" src="${monSprite({ sp: f.sp })}" alt="">
         <div class="as-banner"><span>❤️ ${esc(c?.name || '')}</span><b>${esc(f.move)}!</b></div>`;
       arena.appendChild(box);
       await wait(900);

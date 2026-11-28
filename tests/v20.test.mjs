@@ -1603,7 +1603,7 @@ test('🧭 v60: habilidades de campo (Teletransporte, Aroma, Vento, Surfar, Esca
   a.team = [createMon(rng, 'alakazam', 30), createMon(rng, 'pidgeot', 30), createMon(rng, 'golem', 30), createMon(rng, 'vileplume', 30), createMon(rng, 'lapras', 30)];
   const cities = SPACE_LIST.filter(x => x.type === 'city').map(x => x.id);
   a.visited = [a.pos, cities[1], cities[2]];
-  assert.deepEqual(fieldOptions(s, a).map(o => o.id).sort(), Object.keys(FIELD_SKILLS).sort());
+  assert.deepEqual(fieldOptions(s, a).map(o => o.id).sort(), Object.keys(FIELD_SKILLS).filter(k => !FIELD_SKILLS[k].teams).sort());
   let r = applyAction(s, 'a', { type: 'field', id: 'teleport' }, { now: 0 });
   assert.ok(!r.error, r.error);
   s = r.state;

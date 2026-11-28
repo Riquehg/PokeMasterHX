@@ -12,6 +12,8 @@ export const FIELD_SPECIES = {
   aroma: SP('oddish gloom vileplume bellossom bellsprout weepinbell victreebel bulbasaur ivysaur venusaur chikorita bayleef meganium roselia roserade budew combee vespiquen comfey spritzee aromatisse cherubi cherrim tropius sunkern sunflora hoppip skiploom jumpluff lilligant petilil floette florges flabebe bounsweet steenee tsareena cutiefly ribombee applin flapple appletun dipplin hydrapple shroomish breloom paras parasect vivillon beautifly butterfree illumise volbeat gossifleur eldegoss smoliv dolliv arboliva shaymin alcremie milcery slurpuff swirlix sewaddle swadloon leavanny cottonee whimsicott'),
   tailwind: SP('pidgey pidgeotto pidgeot spearow fearow charizard dragonite togekiss starly staravia staraptor fletchling fletchinder talonflame corviknight skarmory hoothoot noctowl taillow swellow rufflet braviary swablu altaria aerodactyl pidove tranquill unfezant wingull pelipper salamence flygon noivern articuno zapdos moltres lugia ho_oh rayquaza tornadus crobat golbat honchkrow murkrow mandibuzz vullaby toucannon pikipek trumbeak rookidee corvisquire kilowattrel wattrel bombirdier flamigo farfetchd doduo dodrio emolga hawlucha oricorio yveltal'),
   surf: SP('lapras gyarados vaporeon blastoise wartortle squirtle feraligatr croconaw totodile swampert marshtomp mudkip empoleon prinplup piplup samurott dewott oshawott greninja frogadier froakie primarina brionne popplio inteleon drizzile sobble quaquaval quaxwell quaxly milotic kingdra seadra horsea sharpedo carvanha wailord wailmer dewgong seel golduck psyduck tentacruel tentacool dragonair dratini lanturn chinchou mantine mantyke floatzel buizel walrein sealeo spheal kyogre suicune manaphy phione palkia relicanth gorebyss huntail clamperl staryu poliwrath poliwhirl poliwag politoed slowpoke azumarill marill dondozo wiglett wugtrio barraskewda arrokuda drednaw chewtle basculin basculegion alomomola jellicent frillish lumineon finneon seaking goldeen cloyster shellder kabutops omastar tatsugiri palafin finizen veluza'),
+  // 💗 v70: Pokémon curadores (só no modo equipe) — curam o aliado a até 3 casas
+  healpulse: SP('chansey blissey happiny audino alomomola comfey clefairy clefable cleffa jigglypuff wigglytuff igglybuff togepi togetic togekiss indeedee hatenna hattrem hatterene florges floette flabebe miltank lickilicky bellossom sylveon wigglytuff ribombee cutiefly vaporeon slowking slowbro mew celebi shaymin cresselia ho_oh lugia'),
   dig: SP('diglett dugtrio sandshrew sandslash cubone marowak drilbur excadrill gible gabite garchomp phanpy donphan rhyhorn rhydon rhyperior sandile krokorok krookodile mudbray mudsdale wooper quagsire clodsire onix steelix geodude graveler golem nincada ninjask trapinch vibrava flygon hippopotas hippowdon gligar gliscor groudon landorus golett golurk rolycoly carkol coalossal silicobra sandaconda nacli naclstack garganacl orthworm great_tusk ting_lu larvitar pupitar tyranitar swinub piloswine mamoswine nosepass probopass zygarde torterra grotle turtwig camerupt numel barboach whiscash gastrodon shellos stunfisk palpitoad seismitoad'),
 };
 const knows = (sp, id) => { const set = FIELD_SPECIES[id]; return !!sp && !!set && (set.has(sp.id) || set.has(sp.form) || set.has(sp.megaBase) || set.has(sp.gmaxOf)); };
@@ -25,6 +27,8 @@ export const FIELD_SKILLS = {
     desc: 'Sopra a seu favor: +2 casas na próxima rolagem.' },
   dig: { name: 'Escavar', icon: '⛏️', who: 'Diglett, Sandslash, Garchomp, Excadrill, Donphan…', minLvl: 15, cd: 7, replacesRoll: false,
     desc: 'Cava e acha um item (Poção, Pokébola, Great Ball, Reviver ou, raramente, um item de evolução).' },
+  healpulse: { name: 'Pulso de Cura', icon: '💗', who: 'Chansey, Blissey, Audino, Clefable, Togekiss, Comfey, Hatterene…', minLvl: 12, cd: 6, replacesRoll: false, teams: true,
+    desc: 'Só no modo equipe: cura 50% do HP de toda a equipe dos aliados a até 3 casas de você (só no seu turno, antes de rolar).' },
   surf: { name: 'Surfar', icon: '🌊', who: 'Lapras, Gyarados, Blastoise, Milotic, Greninja…', minLvl: 15, cd: 5, replacesRoll: true,
     desc: 'Surfa com você: rola o dado duas vezes e fica com o maior.' }
 };
@@ -45,5 +49,5 @@ export const fieldCooldown = (state, p, id) => Math.max(0, (p.fieldCd?.[id] || 0
 
 /** Lista para a interface: { id, ...skill, mon, wait }. */
 export function fieldOptions(state, p) {
-  return Object.entries(FIELD_SKILLS).map(([id, sk]) => ({ id, ...sk, mon: fieldUser(p, id), wait: fieldCooldown(state, p, id) })).filter(o => o.mon);
+  return Object.entries(FIELD_SKILLS).filter(([, sk]) => !sk.teams || (state.options?.teams >= 2 && p.squad != null)).map(([id, sk]) => ({ id, ...sk, mon: fieldUser(p, id), wait: fieldCooldown(state, p, id) })).filter(o => o.mon);
 }

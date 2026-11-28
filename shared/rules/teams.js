@@ -43,8 +43,37 @@ export function assignSquads(players, size) {
   }
 }
 
-/** Pontos do time (soma dos membros). */
-export const squadScore = (state, sq, score) => squadMembers(state, sq).reduce((a, p) => a + score(p), 0);
+export const HEAL_PULSE_RANGE = 3;     // 💗 v70: Pulso de Cura alcança aliados a até 3 casas
+export const DUO_TARGET = 0.3;         // 🤝 v70: batalha em dupla — chance do inimigo acertar o parceiro na rodada
+export const DUO_PCT = 0.1;            // dano do parceiro: % do HP máx. do alvo × efetividade × nível
+
+/** Pontos do time (soma dos membros). v70: insígnias são do time, então cada uma conta uma vez só. */
+export const squadScore = (state, sq, score) => {
+  const ms = squadMembers(state, sq);
+  const total = ms.reduce((a, p) => a + score(p), 0);
+  const dup = ms.reduce((a, p) => a + p.badges.length, 0) - new Set(ms.flatMap(p => p.badges)).size;
+  return total - dup * 100;
+};
+
+/** 🎖️ v70: insígnia conquistada vale para o time inteiro. Devolve os aliados que ganharam. */
+export function shareBadge(state, p, badgeId) {
+  if (!teamsOn(state)) return [];
+  const got = [];
+  for (const q of state.players) {
+    if (!allies(state, p, q) || q.left || q.badges.includes(badgeId)) continue;
+    q.badges.push(badgeId);
+    fx(state, { k: 'badge', pid: q.id, badge: badgeId, team: true });
+    got.push(q);
+  }
+  if (got.length) log(state, `🤝 A insígnia vale para o time: ${got.map(q => q.name).join(', ')} também ${got.length > 1 ? 'ganharam' : 'ganhou'}!`, 'win');
+  return got;
+}
+
+/** 🤝 v70: aliado na MESMA casa entra junto nas batalhas grandes (Ginásio, Elite, Campeão, Raid, lendário). */
+export function duoPartner(state, p) {
+  if (!teamsOn(state)) return null;
+  return state.players.find(q => allies(state, p, q) && !q.out && !q.left && q.pos === p.pos && q.team.some(m => m.hp > 0)) || null;
+}
 
 /** Na vitória, todo o time vence junto. */
 export function markTeamWin(state, winner) {

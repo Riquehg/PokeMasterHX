@@ -2,7 +2,8 @@
 // Também é usada para jogar por quem ficou inativo no online.
 
 import { getSpecies } from './data/pokemon.js';
-import { allies } from './rules/teams.js';
+import { allies, teamsOn, HEAL_PULSE_RANGE } from './rules/teams.js';
+import { fieldOptions } from './data/fieldskills.js';
 import { getSpace } from './data/board.js';
 import { ITEMS, shopFor, ballBonusAgainst } from './data/items.js';
 import { itemEvoTarget } from './data/evolution.js';
@@ -246,6 +247,7 @@ function chooseDestination(state, p) {
       if (g && !ourCity(state, p, g) && topLevels(p, 2) >= siegeLevel(state, g) - 2 && teamHealth(p) > 0.7) s += 35;
     }
     if (p.quest?.space === id) s += 30; // convite de viagem
+    if (teamsOn(state) && state.players.some(q => allies(state, p, q) && !q.out && q.pos === id)) s += 6; // 🤝 v70: junto do aliado (batalha em dupla)
     s += (state.seed % 7 === id % 7) ? 0.5 : 0; // desempate leve
     if (s > bestScore) { bestScore = s; best = id; }
   }
@@ -424,6 +426,9 @@ export function botAction(state, pid) {
   const lead = p.team.reduce((bi, m, i, arr) => (v(m) > v(arr[bi]) ? i : bi), 0);
   if (lead > 0 && v(p.team[lead]) > v(p.team[0]) * 1.05) return { type: 'reorder', index: lead };
 
+  const tm = teamBot(state, p); // 🤝 v70: CPU aliado ajuda de verdade
+  if (tm) return tm;
+
   if (state.phase === 'roll') return { type: 'roll' };
 
   // PvP oportunista
@@ -437,3 +442,27 @@ export function botAction(state, pid) {
 }
 
 const hasUsableBot = p => p.team.some(m => m.hp > 0);
+
+/** 🤝 v70: CPU no modo equipe — cura aliado (Pulso de Cura), passa Poção para aliado ferido e usa o Dado de Apoio. */
+function teamBot(state, p) {
+  if (!teamsOn(state)) return null;
+  const mates = state.players.filter(q => allies(state, p, q) && !q.out && !q.left);
+  if (!mates.length) return null;
+  if (state.phase === 'roll') {
+    const hp = fieldOptions(state, p).find(o => o.id === 'healpulse' && !o.wait);
+    if (hp && !state.turnFlags?.field) {
+      const d = distancesFrom(p, p.pos);
+      if (mates.some(q => (d[q.pos] ?? 99) <= HEAL_PULSE_RANGE && teamHealth(q) < 0.6)) return { type: 'field', id: 'healpulse' };
+    }
+    if (!p.supportUsed && !state.turnFlags?.supportDie && (state.turn || 0) >= 8 + 3 * (p.squad || 0)) return { type: 'team', op: 'support' };
+    return null;
+  }
+  if ((state.turnFlags?.gives || 0) >= 2) return null;
+  const sp = getSpace(p.pos);
+  const near = mates.filter(q => q.pos === p.pos || (sp?.links || []).includes(q.pos));
+  const hurt = near.filter(q => teamHealth(q) < 0.5).sort((a, b) => teamHealth(a) - teamHealth(b))[0];
+  if (!hurt) return null;
+  const pot = ['super_potion', 'potion', 'revive'].find(id => (p.items[id] || 0) >= (id === 'revive' ? 2 : 3));
+  if (!pot) return null;
+  return { type: 'team', op: 'give', to: hurt.id, item: pot, qty: 1 };
+}

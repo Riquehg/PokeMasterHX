@@ -1,4 +1,5 @@
 // Tela da partida: tabuleiro com zoom, painel de ações, equipe, jogadores, log/chat, batalha e fila de animações.
+import { distancesFrom } from '../../shared/rules/movement.js';
 import { teamsOn, squadOf, allies, SQUADS, squadName, squadMembers, squadIds, GIVE_KINDS, nearAlly } from '../../shared/rules/teams.js';
 import { fieldOptions } from '../../shared/data/fieldskills.js';
 import { getSpace, useStateMap } from '../../shared/data/board.js';
@@ -27,7 +28,7 @@ import { WeatherLayer, weatherChipHtml } from './weather.js';
 import { WEATHERS } from '../../shared/rules/weather.js';
 import { GAME_RULES, stormAt, ownerOf, citiesOf, GARRISON_MAX, alivePlayers } from '../../shared/rules/modes.js';
 
-const BATTLE_FX = new Set(['mega', 'gmax', 'gmax_end', 'transform', 'assist', 'hit', 'heal', 'faint', 'switch', 'status', 'status_dmg', 'status_skip', 'status_cure', 'buff', 'debuff', 'weather_dmg']);
+const BATTLE_FX = new Set(['duo', 'duo_hit', 'mega', 'gmax', 'gmax_end', 'transform', 'assist', 'hit', 'heal', 'faint', 'switch', 'status', 'status_dmg', 'status_skip', 'status_cure', 'buff', 'debuff', 'weather_dmg']);
 const SPEEDS = [[1, '🎬 Animações: normal'], [2, '⚡ Animações: rápidas'], [0, '⏭️ Animações: desligadas']];
 
 export function mountGame(root, session, opts = {}) {
@@ -214,10 +215,13 @@ export function mountGame(root, session, opts = {}) {
           break;
         case 'badge': {
           const g = GYMS.find(x => x.id === f.badge);
-          toast(`🎖️ ${nameOf(f.pid)} conquistou a ${g?.badge}!`, 'good');
-          if (f.pid === v) victoryFx(vicOf(next, v), 0.8);
+          toast(f.team ? `🤝 ${f.pid === v ? 'Você' : nameOf(f.pid)} também ganhou a ${g?.badge} — insígnia do time!` : `🎖️ ${nameOf(f.pid)} conquistou a ${g?.badge}!`, 'good');
+          if (f.pid === v) victoryFx(vicOf(next, v), f.team ? 0.5 : 0.8);
           break;
         }
+        case 'ally_heal': // 💗 v70: Pulso de Cura do aliado
+          toast(f.to === v ? `💗 ${nameOf(f.pid)} usou Pulso de Cura (${speciesName(f.sp)}) e curou a sua equipe: +${f.amount} HP!` : `💗 ${nameOf(f.pid)} curou a equipe de ${nameOf(f.to)} (+${f.amount} HP).`, 'good');
+          break;
         case 'mission_done':
           if (f.pid === v) {
             await eventCard({ k: 'event', pid: f.pid, id: 'mission', title: 'Missão completa!', icon: '🎯', tone: 'good', lore: f.text,
@@ -553,10 +557,22 @@ export function mountGame(root, session, opts = {}) {
     if (comp) comp.innerHTML = companionHtml(s, viewer, viewer.id === session.viewerId());
   }
 
+  // 🤝 v70: distância até cada aliado (mesma casa = batalha em dupla; até 1 casa = ajuda na batalha; até 3 = Pulso de Cura)
+  function allyDist(s, ms) {
+    const me = s.players.find(x => x.id === session.viewerId());
+    if (!me) return '';
+    const d = distancesFrom(me, me.pos);
+    return ms.filter(x => x.id !== me.id && !x.out && !x.left).map(x => {
+      const n = x.pos === me.pos ? 0 : d[x.pos] ?? null;
+      const tip = n === 0 ? '🤝 mesma casa: batalha em dupla' : n === 1 ? '🛡️ vizinho: pode ajudar na batalha' : n !== null && n <= 3 ? '💗 alcance do Pulso de Cura' : '';
+      return `<span class="tiny sq-dist">📍 ${esc(x.name.split(' ')[0])}: ${n === 0 ? 'mesma casa' : n === null ? 'longe' : `${n} casa${n > 1 ? 's' : ''}`}${tip ? ` · ${tip}` : ''}</span>`;
+    }).join('');
+  }
+
   function renderPlayers(s) {
     // 🤝 v65c: placar dos times no topo da lista (cada time com seus membros e pontos/cidades)
     const teamHead = teamsOn(s) ? `<div class="sq-head">${squadIds(s).map(sq => { const ms = squadMembers(s, sq), mine = ms.some(x => x.id === session.viewerId());
-      return `<div class="sq-box ${mine ? 'mine' : ''}" style="--sq:${SQUADS[sq].color}"><b>${SQUADS[sq].icon} ${esc(SQUADS[sq].short)}${mine ? ' (seu time)' : ''}</b><span class="tiny">${ms.map(x => esc(x.name)).join(' + ')}</span><span class="tiny">${s.rules === 'conquest' ? `🏰 ${ms.reduce((a, x) => a + citiesOf(s, x.id), 0)} cidades` : `🏅 ${ms.reduce((a, x) => a + x.badges.length, 0)} insígnias`}</span></div>`; }).join('')}</div>` : '';
+      return `<div class="sq-box ${mine ? 'mine' : ''}" style="--sq:${SQUADS[sq].color}"><b>${SQUADS[sq].icon} ${esc(SQUADS[sq].short)}${mine ? ' (seu time)' : ''}</b><span class="tiny">${ms.map(x => esc(x.name)).join(' + ')}</span><span class="tiny">${s.rules === 'conquest' ? `🏰 ${ms.reduce((a, x) => a + citiesOf(s, x.id), 0)} cidades` : `🏅 ${new Set(ms.flatMap(x => x.badges)).size} insígnias do time`}</span>${mine ? allyDist(s, ms) : ''}</div>`; }).join('')}</div>` : '';
     root.querySelector('#g-players').innerHTML = teamHead + s.players.map((pl, i) => `
       <div class="list-item" data-act="trainer" data-pid="${esc(pl.id)}" style="cursor:pointer;${s.current === i ? 'border-color:' + playerColor(s, pl.id) : ''}">
         ${avatarImg(pl, 'avatar sm', playerColor(s, pl.id))}
