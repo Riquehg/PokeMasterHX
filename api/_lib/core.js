@@ -757,7 +757,7 @@ function normalizeOptions(body, prev = {}) {
   o.hardcore = !!o.hardcore;
   // 💎 Megas: só no modo personalizado (Coleção, onde os Pokémon seguram Megapedras)
   if (body.megas !== undefined) o.megas = !!body.megas;
-  o.megas = !!o.megas && o.mode === 'collection';
+  o.megas = !!o.megas && ['collection', 'cup', 'duel'].includes(o.mode); // 💎🔴 v67: também na Copa e no Duelo
   // entrar no meio da partida (online): ligado por padrão, menos no Battle Royale e no competitivo
   if (body.lateJoin !== undefined) o.allowLate = !!body.lateJoin;
   o.allowLate = o.allowLate !== false;
@@ -949,8 +949,9 @@ async function startRoom(db, row, lobby, userId) {
     if (lobby.length !== 2 || lobby.some(e => e.isBot)) bad('O duelo é entre 2 treinadores humanos.');
     const [a, b] = await Promise.all(lobby.map(async e => ({ ...e, teamMons: await duelTeam(db, e, options.levelCap) })));
     if (!a.teamMons || !b.teamMons) bad('Os dois precisam ter Pokémon na Coleção.');
-    const state = createMatch({ kind: 'duel', id: row.id, mode: 'online', seed: randomSeed(), now: Date.now(),
-      players: [a, b].map(e => ({ id: e.id, name: e.name, avatar: e.avatar, teamMons: e.teamMons })) });
+    const keys = await Promise.all([a, b].map(e => db.getProfile(e.id).then(pr => ({ megaKey: !!pr?.stats?.megaBracelet, dynaKey: !!pr?.stats?.dynamaxBand })).catch(() => ({}))));
+    const state = createMatch({ kind: 'duel', id: row.id, mode: 'online', seed: randomSeed(), now: Date.now(), options: { megas: !!options.megas },
+      players: [a, b].map((e, i) => ({ id: e.id, name: e.name, avatar: e.avatar, teamMons: e.teamMons, ...keys[i] })) });
     return save(db, row, { status: 'playing', state, options: { ...options, ranked: true } }, userId);
   }
   if (mode === 'ranked' && lobby.filter(e => !e.isBot).length < 2) bad('O competitivo precisa de pelo menos 2 treinadores humanos.');

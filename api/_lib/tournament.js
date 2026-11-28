@@ -1,6 +1,8 @@
 // 🏆 Torneio (duelos ranqueados 1x1 com o time da Coleção) e 🏟️ Copa (chaveamento de até 8, eliminatório).
 // Duelos usam o motor normal (createMatch kind 'duel'): só a batalha, sem tabuleiro, sem XP e sem insígnias.
 import { createMatch } from '../../shared/engine.js';
+import { MEGAS, stoneItemId } from '../../shared/data/megas.js';
+import { GMAX } from '../../shared/data/gmax.js';
 import { randomSeed } from '../../shared/rules/rng.js';
 import { CUP_PRIZE, CUP_MIN_HUMANS_FOR_PRIZE, CUP_ELO_BONUS, DUEL_LEVEL_CAP, nextPow2 } from '../../shared/data/cup.js';
 import { serieFinished } from './series.js';
@@ -31,12 +33,27 @@ function botTeam(level, seed) {
   return out;
 }
 
+/** 💎🔴 v67: CPU da Copa com Megas — 1 Pokémon com a Megapedra (ou o Fator Gigantamax). */
+export function botMegaKit(team, n = 0) {
+  const megaAble = team.filter(m => Object.values(MEGAS).some(x => x.base === m.sp));
+  if (megaAble.length) { const mon = megaAble[n % megaAble.length]; mon.held = stoneItemId(Object.values(MEGAS).find(x => x.base === mon.sp)); return { megaKey: true }; }
+  const g = team.find(m => GMAX[m.sp]);
+  if (g) { g.gx = true; return { dynaKey: true }; }
+  return {};
+}
+
 /** Cria uma partida de duelo já em andamento. */
 export async function createDuelMatch(db, { name, a, b, options, hostId, megas = false }) {
   // cosméticos (skin, moldura...) de quem é gente: Torneio e Copa não traziam, e o peão aparecia com a foto padrão
   for (const e of [a, b]) {
-    if (e.cosmetic || e.isBot || String(e.id).startsWith('cpu_')) continue;
-    try { const prof = await db.getProfile(e.id); if (prof) e.cosmetic = await equippedCosmetic(db, prof); } catch { /* sem cosmético */ }
+    if (e.isBot || String(e.id).startsWith('cpu_')) continue;
+    if (e.cosmetic && (!megas || e.megaKey !== undefined)) continue;
+    try {
+      const prof = await db.getProfile(e.id);
+      if (prof && !e.cosmetic) e.cosmetic = await equippedCosmetic(db, prof);
+      // 💎🔴 v67: Bracelete Mega / Pulseira Dynamax da conta (Copa, Torneio e Duelo não traziam)
+      if (prof && e.megaKey === undefined) { e.megaKey = !!prof.stats?.megaBracelet; e.dynaKey = !!prof.stats?.dynamaxBand; }
+    } catch { /* sem cosmético */ }
   }
   const state = createMatch({
     kind: 'duel', id: 'pending', mode: 'online', seed: randomSeed(), now: Date.now(), options: { megas: !!megas },
@@ -69,7 +86,8 @@ export async function duelQueue(db, user, body, profile) {
   if (!entry.teamMons) bad('Sua Coleção está vazia. Capture Pokémon no Treino ou no Online para montar um time.');
 
   // procura alguém esperando (rating mais próximo primeiro)
-  const open = (await db.listOpenMatches()).filter(m => m.options?.mode === 'duel_queue' && m.host_id !== user.id && m.status === 'lobby');
+  const megas = !!body.megas; // 💎🔴 v67: Torneio com Mega/Gigantamax só encontra quem também escolheu
+  const open = (await db.listOpenMatches()).filter(m => m.options?.mode === 'duel_queue' && m.host_id !== user.id && m.status === 'lobby' && !!m.options?.megas === megas);
   const myRating = profile.rating ?? START_RATING;
   open.sort((x, y) => Math.abs((x.options.rating ?? START_RATING) - myRating) - Math.abs((y.options.rating ?? START_RATING) - myRating));
   for (const brief of open) {
@@ -82,18 +100,18 @@ export async function duelQueue(db, user, body, profile) {
     const other = q.lobby[0];
     other.teamMons = await duelTeam(db, other);
     if (!other.teamMons) continue;
-    const row = await createDuelMatch(db, { name: `Torneio: ${other.name} x ${entry.name}`, a: other, b: entry, options: { mode: 'duel', ranked: true }, hostId: other.id });
+    const row = await createDuelMatch(db, { name: `Torneio${megas ? ' 💎' : ''}: ${other.name} x ${entry.name}`, a: other, b: entry, options: { mode: 'duel', ranked: true, megas }, hostId: other.id, megas });
     await db.updateMatch(q.id, q.version + 1, { options: { ...q.options, duelId: row.id }, version: q.version + 2 });
     return { match: publicMatch(row, user.id) };
   }
   if (waiting) {
     const lobby = [{ ...entry, teamMons: undefined }];
-    await db.updateMatch(waiting.id, waiting.version, { lobby, version: waiting.version + 1 });
+    await db.updateMatch(waiting.id, waiting.version, { lobby, options: { ...waiting.options, megas }, version: waiting.version + 1 });
     return { queued: true, match: publicMatch({ ...waiting, lobby }, user.id) };
   }
   const row = await db.insertMatch({
     code: 'Q' + Math.random().toString(36).slice(2, 7).toUpperCase(), name: `Fila de ${profile.trainer_name}`, host_id: user.id, status: 'lobby',
-    is_public: true, has_pin: false, options: { mode: 'duel_queue', rating: myRating, maxPlayers: 1 }, lobby: [{ ...entry, teamMons: undefined }], state: null, version: 1
+    is_public: true, has_pin: false, options: { mode: 'duel_queue', rating: myRating, maxPlayers: 1, megas }, lobby: [{ ...entry, teamMons: undefined }], state: null, version: 1
   });
   await db.addMember(row.id, user.id);
   return { queued: true, match: publicMatch(row, user.id) };
@@ -139,7 +157,7 @@ export async function startCup(db, row, lobby, userId) {
     players.push(p);
   }
   const avg = Math.round(players.filter(p => p.teamMons).flatMap(p => p.teamMons.map(m => m.lvl)).reduce((a, b, _, arr) => a + b / arr.length, 0)) || 30;
-  players.filter(p => p.isBot).forEach((p, i) => { p.teamMons = botTeam(Math.max(10, Math.round(avg * 0.9)), 7 + i * 13); });
+  players.filter(p => p.isBot).forEach((p, i) => { p.teamMons = botTeam(Math.max(10, Math.round(avg * 0.9)), 7 + i * 13); if (row.options?.megas) Object.assign(p, botMegaKit(p.teamMons, i)); });
 
   const size = nextPow2(players.length);
   const seeds = shuffle(players);
@@ -151,8 +169,8 @@ export async function startCup(db, row, lobby, userId) {
     round.push({ a: a.id, b: b ? b.id : null, matchId: null, winner: null });
   }
   const cup = {
-    kind: 'cup', status: 'playing', levelCap, humans: humans.length,
-    players: players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar, skin: p.skin || null, isBot: p.isBot })),
+    kind: 'cup', status: 'playing', levelCap, humans: humans.length, megas: !!row.options?.megas,
+    players: players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar, skin: p.skin || null, isBot: p.isBot, ...(p.isBot && p.megaKey ? { megaKey: true } : {}), ...(p.isBot && p.dynaKey ? { dynaKey: true } : {}) })),
     teams: Object.fromEntries(players.map(p => [p.id, p.teamMons])),
     rounds: [round], champion: null, runnerUp: null, prize: null, log: [`🏟️ Copa iniciada com ${players.length} treinadores!`]
   };
@@ -180,7 +198,7 @@ async function launchRound(db, cupRow) {
       const duel = await createDuelMatch(db, {
         name: `Copa ${row.name} · ${roundName(r, totalRounds)}`, hostId: row.host_id,
         a: { ...A, teamMons: cup.teams[A.id] }, b: { ...B, teamMons: cup.teams[B.id] },
-        options: { mode: 'duel', cupId: row.id, round: r, slot: i, ranked: !A.isBot && !B.isBot }
+        options: { mode: 'duel', cupId: row.id, round: r, slot: i, ranked: !A.isBot && !B.isBot, megas: !!cup.megas }, megas: !!cup.megas
       });
       m.matchId = duel.id; changed = true;
       created.push(duel);

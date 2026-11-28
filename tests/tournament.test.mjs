@@ -120,3 +120,42 @@ test('modo Coleção: o PC da partida tem a Coleção inteira (menos o time)', a
   assert.equal(me.box.length, vault.length - 1);
   assert.ok(me.box.every(m => vault.some(v => v.uid === m.uid)));
 });
+
+test('💎🔴 v67: Copa, Duelo e Torneio com opção de Mega/Gigantamax', async () => {
+  const { db, admin, us: [a, b, c, d] } = await users(4);
+  for (const u of [a, b, c, d]) { const p = await db.getProfile(u.id); await db.upsertProfile(u.id, { stats: { ...p.stats, megaBracelet: true } }); }
+  // Copa com Megas + CPU com Megapedra
+  const { match } = await matchOp(db, a, { op: 'create', name: 'Copa Mega', mode: 'cup', megas: true });
+  assert.equal(match.options.megas, true);
+  await matchOp(db, a, { op: 'add_bot', matchId: match.id });
+  await matchOp(db, a, { op: 'start', matchId: match.id });
+  const cup = (await db.getMatch(match.id)).state;
+  assert.equal(cup.megas, true);
+  const duel = await db.getMatch(cup.rounds[0][0].matchId);
+  assert.equal(duel.state.options.megas, true);
+  const me = duel.state.players.find(p => p.id === a.id), cpu = duel.state.players.find(p => p.id !== a.id);
+  assert.equal(me.megaKey, true);
+  assert.ok(cpu.megaKey || cpu.dynaKey);
+  // Copa sem Megas continua sem
+  const { match: m2 } = await matchOp(db, b, { op: 'create', name: 'Copa', mode: 'cup' });
+  assert.ok(!m2.options.megas);
+  // Torneio: fila com Megas só encontra quem escolheu Megas
+  const q1 = await matchOp(db, c, { op: 'duel_queue', megas: true });
+  assert.ok(q1.queued);
+  const q2 = await matchOp(db, d, { op: 'duel_queue', megas: false });
+  assert.ok(q2.queued); // não pareou com a fila de Megas
+  await matchOp(db, d, { op: 'duel_cancel' });
+  const q3 = await matchOp(db, d, { op: 'duel_queue', megas: true });
+  assert.equal(q3.match.status, 'playing');
+  const row = await db.getMatch(q3.match.id);
+  assert.equal(row.state.options.megas, true);
+  assert.ok(row.state.players.every(p => p.megaKey));
+  // Duelo de sala com Megas
+  const { match: dm } = await matchOp(db, a, { op: 'create', name: 'Duelo', mode: 'duel', megas: true });
+  await matchOp(db, b, { op: 'join', matchId: dm.id });
+  await matchOp(db, b, { op: 'update', matchId: dm.id, ready: true });
+  await matchOp(db, a, { op: 'start', matchId: dm.id });
+  const dr = await db.getMatch(dm.id);
+  assert.equal(dr.state.options.megas, true);
+  assert.ok(dr.state.players.every(p => p.megaKey));
+});

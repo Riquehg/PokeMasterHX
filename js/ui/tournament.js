@@ -12,12 +12,16 @@ export function openDuelQueue(ctx, profile) {
   const vault = [...(profile?.vault || [])].sort((a, b) => b.lvl - a.lvl);
   const picks = [];
   let timer = null, searching = false;
+  let megas = (() => { try { return localStorage.getItem('pmhx_duel_megas') === '1'; } catch { return false; } })(); // 💎🔴 v67
   const pickView = () => `<p class="small muted">Duelo 1 contra 1 com o seu time da Coleção. Sem tabuleiro, sem insígnias (todos obedecem), nível limitado a ${DUEL_LEVEL_CAP} e kit igual para os dois. Vitória e derrota mudam o seu <b>Elo</b>.</p>
     <div class="small"><b>Escolha até 6</b> (ou deixe vazio para levar os 6 mais fortes) — ${picks.length}/6</div>
     <div class="trade-mons" style="max-height:340px">${vault.map(m => `<button type="button" class="trade-mon ${picks.includes(m.uid) ? 'on' : ''}" data-act="pick" data-uid="${esc(m.uid)}">
-      <img src="${monSprite(m)}" alt=""><span>${esc(getSpecies(m.sp)?.name)}${m.shiny ? ' ✨' : ''}</span>
+      <img src="${monSprite(m)}" alt=""><span>${esc(getSpecies(m.sp)?.name)}${m.shiny ? ' ✨' : ''}${megas && String(m.held || '').startsWith('ms_') ? ' 💎' : ''}${megas && m.gx ? ' 🔴' : ''}</span>
       <span class="tiny">Nv.${Math.min(m.lvl, DUEL_LEVEL_CAP)}${m.lvl > DUEL_LEVEL_CAP ? ` (${m.lvl})` : ''} ${picks.includes(m.uid) ? `#${picks.indexOf(m.uid) + 1}` : ''}</span>
       ${ivPercent(m) !== null ? `<span class="pk-stars-mini tiny">${potentialStars(ivPercent(m))}</span>` : ''}</button>`).join('') || '<p class="muted">Sua Coleção está vazia. Capture Pokémon no Treino ou no Online primeiro.</p>'}</div>
+    <div class="row wrap" style="gap:6px;margin-top:8px;align-items:center"><span class="small"><b>Regra:</b></span>
+      <button class="btn sm ${megas ? '' : 'primary'}" data-act="mg" data-v="0">Sem Mega/Gigantamax</button><button class="btn sm ${megas ? 'primary' : ''}" data-act="mg" data-v="1">💎🔴 Com Mega e Gigantamax</button></div>
+    <div class="tiny muted">${megas ? `Só encontra quem também escolheu. 1 Mega (🔗 Bracelete ${profile?.stats?.megaBracelet ? '✅' : '❌'} + Megapedra segurada) OU 1 Gigantamax (🔴 Pulseira ${profile?.stats?.dynamaxBand ? '✅' : '❌'} + Fator) por batalha.` : 'Duelo clássico, sem Mega e sem Gigantamax.'}</div>
     <button class="btn primary block" data-act="go" ${vault.length ? '' : 'disabled'} style="margin-top:10px">⚔️ Procurar oponente</button>`;
   const searchView = () => `<div class="center" style="padding:24px 0">
       <div class="queue-pulse">⚔️</div><h3>Procurando um oponente...</h3>
@@ -37,9 +41,10 @@ export function openDuelQueue(ctx, profile) {
       if (i >= 0) picks.splice(i, 1); else if (picks.length < 6) picks.push(d.uid);
       setModalBody('duelq', pickView());
     },
+    mg: d => { megas = d.v === '1'; try { localStorage.setItem('pmhx_duel_megas', megas ? '1' : '0'); } catch { /* ok */ } setModalBody('duelq', pickView()); },
     go: async () => {
       try {
-        const r = await api('match', { op: 'duel_queue', teamUids: picks });
+        const r = await api('match', { op: 'duel_queue', teamUids: picks, megas });
         if (r.match?.status === 'playing') return enter(r.match);
         searching = true;
         setModalBody('duelq', searchView());

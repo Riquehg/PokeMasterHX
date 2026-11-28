@@ -696,7 +696,7 @@ export async function lobbyScreen(root, ctx) {
         </div>
         <div class="field"><label>Times</label><select class="input" id="c-teams"><option value="0">Cada um por si</option><option value="2">🤝 Duplas (o time vence junto)</option><option value="3">🤝 Trios</option></select></div>
         <div class="field"><label>Dificuldade</label><select class="input" id="c-hc"><option value="0">Normal</option><option value="1">☠️ Hardcore — perdeu a equipe, está fora e perde tudo</option></select></div>
-        <div class="field hidden" id="c-megas-f"><label>Mega / Gigantamax</label><select class="input" id="c-megas" title="Mega: 🔗 Bracelete + Megapedra · Gigantamax: 🔴 Pulseira Dynamax + Fator Gigantamax"><option value="0" >💎 Desligado</option><option value="1" >💎🔴 Megas e Gigantamax liberados</option></select><div class="tiny muted">Só no modo Coleção: 1 Mega Evolução OU 1 Gigantamax por batalha (Mega: 🔗 Bracelete + Megapedra segurada · Gigantamax: 🔴 Pulseira Dynamax + Pokémon com o Fator, dura 3 rodadas).</div></div>
+        <div class="field hidden" id="c-megas-f"><label>Mega / Gigantamax</label><select class="input" id="c-megas" title="Mega: 🔗 Bracelete + Megapedra · Gigantamax: 🔴 Pulseira Dynamax + Fator Gigantamax"><option value="0" >💎 Desligado</option><option value="1" >💎🔴 Megas e Gigantamax liberados</option></select><div class="tiny muted">Coleção, 🏟️ Copa e ⚔️ Duelo: 1 Mega Evolução OU 1 Gigantamax por batalha (Mega: 🔗 Bracelete + Megapedra segurada · Gigantamax: 🔴 Pulseira Dynamax + Pokémon com o Fator, dura 3 rodadas).</div></div>
         <div class="field hidden" id="c-cap-f"><label>Nível máximo dos Pokémon levados</label><select class="input" id="c-cap"><option value="0">Sem limite</option><option value="15">15</option><option value="25">25</option><option value="35">35</option><option value="45">45</option></select></div>
         <div class="grid2">
           <div class="field"><label>PIN (opcional)</label><input class="input" id="c-pin" inputmode="numeric" maxlength="6" placeholder="só números"></div>
@@ -715,7 +715,7 @@ export async function lobbyScreen(root, ctx) {
   const v = id => root.querySelector(id).value;
   root.querySelector('#c-mode').addEventListener('change', e => {
     root.querySelector('#c-cap-f').classList.toggle('hidden', !TEAM_MODES.includes(e.target.value));
-    root.querySelector('#c-megas-f').classList.toggle('hidden', e.target.value !== 'collection');
+    root.querySelector('#c-megas-f').classList.toggle('hidden', !['collection', 'cup', 'duel'].includes(e.target.value));
     if (e.target.value === 'ranked') { root.querySelector('#c-turns').value = '40'; }
   });
   const load = async () => {
@@ -729,7 +729,7 @@ export async function lobbyScreen(root, ctx) {
   };
   const go = async p => { try { const { match } = await p; ctx.openRoom(match.id); } catch (e) { toast(e.message, 'bad'); } };
   bindActions(root, {
-    create: () => go(api('match', { op: 'create', name: v('#c-name'), mode: v('#c-mode'), maxPlayers: Number(v('#c-max')), turnLimit: Number(v('#c-turns')), levelCap: Number(v('#c-cap')), map: v('#c-map'), rules: v('#c-rules'), teams: Number(v('#c-teams')), hardcore: v('#c-hc') === '1', megas: v('#c-mode') === 'collection' && v('#c-megas') === '1', pin: v('#c-pin'), isPublic: v('#c-pub') === '1' })),
+    create: () => go(api('match', { op: 'create', name: v('#c-name'), mode: v('#c-mode'), maxPlayers: Number(v('#c-max')), turnLimit: Number(v('#c-turns')), levelCap: Number(v('#c-cap')), map: v('#c-map'), rules: v('#c-rules'), teams: Number(v('#c-teams')), hardcore: v('#c-hc') === '1', megas: ['collection', 'cup', 'duel'].includes(v('#c-mode')) && v('#c-megas') === '1', pin: v('#c-pin'), isPublic: v('#c-pub') === '1' })),
     'join-code': async () => {
       try { const { match } = await api('match', { op: 'join', code: v('#j-code'), pin: v('#j-pin') }); if (match.status === 'playing') ctx.openOnline(match.id); else ctx.openRoom(match.id); } catch (e) { toast(e.message, 'bad'); }
     },
@@ -784,7 +784,7 @@ export async function roomScreen(root, ctx, matchId) {
             <select class="input" id="o-turns">${[[30, 'Rápida (30)'], [40, 'Competitiva (40)'], [45, 'Média (45)'], [60, 'Normal (60)']].map(([v, l]) => `<option value="${v}" ${v === (o.turnLimit || 60) ? 'selected' : ''}>${l}</option>`).join('')}</select>
             ${['balanced', 'collection'].includes(mode) && o.rules !== 'bossraid' ? `<select class="input" id="o-teams"><option value="0" ${!o.teams ? 'selected' : ''}>Cada um por si</option><option value="2" ${o.teams === 2 ? 'selected' : ''}>🤝 Duplas</option><option value="3" ${o.teams === 3 ? 'selected' : ''}>🤝 Trios</option></select>` : ''}
             <select class="input" id="o-hc" title="${esc(HARDCORE_TXT)}"><option value="0" ${!o.hardcore ? 'selected' : ''}>Dificuldade normal</option><option value="1" ${o.hardcore ? 'selected' : ''}>☠️ Hardcore</option></select>
-            ${mode === 'collection' ? `<select class="input" id="o-megas" title="Mega Evolução (Bracelete Mega + Megapedra)"><option value="0" ${!o.megas ? 'selected' : ''}>💎 Sem Megas</option><option value="1" ${o.megas ? 'selected' : ''}>💎 Megas liberadas</option></select>` : ''}
+            ${['collection', 'cup', 'duel'].includes(mode) ? `<select class="input" id="o-megas" title="Mega (Bracelete + Megapedra) e Gigantamax (Pulseira + Fator)"><option value="0" ${!o.megas ? 'selected' : ''}>💎 Sem Mega/Gigantamax</option><option value="1" ${o.megas ? 'selected' : ''}>💎🔴 Mega e Gigantamax liberados</option></select>` : ''}
             ${o.rules !== 'royale' && !['ranked', 'duel', 'cup'].includes(mode) ? `<select class="input" id="o-late"><option value="1" ${o.allowLate !== false ? 'selected' : ''}>🙋 Pode entrar no meio</option><option value="0" ${o.allowLate === false ? 'selected' : ''}>🔒 Sem entrar no meio</option></select>` : ''}
             ${TEAM_MODES.includes(mode) ? `<select class="input" id="o-cap">${[[0, 'Sem limite de nível'], [15, 'Nível máx 15'], [25, 'Nível máx 25'], [35, 'Nível máx 35'], [45, 'Nível máx 45'], [50, 'Nível máx 50']].map(([v, l]) => `<option value="${v}" ${v === (o.levelCap || 0) ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}
           </div>` : ''}
