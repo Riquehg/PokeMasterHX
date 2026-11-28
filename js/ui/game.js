@@ -3,7 +3,7 @@ import { teamsOn, squadOf, allies, SQUADS, squadName, squadMembers, squadIds, GI
 import { fieldOptions } from '../../shared/data/fieldskills.js';
 import { getSpace, useStateMap } from '../../shared/data/board.js';
 import { GYMS, gymAt, ELITE_SPACE, CHAMPION_SPACE, ELITE_FOUR, BADGES_TO_LEAGUE } from '../../shared/data/trainers.js';
-import { ITEMS } from '../../shared/data/items.js';
+import { ITEMS, isKeepable } from '../../shared/data/items.js';
 import { whoMustAct, score, AFK_SECONDS } from '../../shared/engine.js';
 import { esc, toast, bindActions, openModal, closeModal, setModalBody } from './dom.js';
 import { maxHpOf } from '../../shared/rules/monsters.js';
@@ -394,8 +394,9 @@ export function mountGame(root, session, opts = {}) {
       // 🤝 v65: passar item para aliado na mesma casa ou vizinha
       const near = teamsOn(s) ? s.players.filter(q => allies(s, p, q) && !q.out && (q.pos === p.pos || (sp.links || []).includes(q.pos))) : [];
       const givable = Object.entries(p.items || {}).filter(([id, n]) => n > 0 && GIVE_KINDS.includes(ITEMS[id]?.kind));
+      const toBot = id => isKeepable(id); // CPU só recebe itens que não voltam para a conta
       if (near.length && givable.length && (s.turnFlags.gives || 0) < 2) {
-        html += `<details class="t-give"><summary>🤝 Passar item para o time</summary>${near.map(q => `<div class="tiny" style="margin-top:4px">Para <b>${esc(q.name)}</b>:</div><div class="row wrap" style="gap:4px">${givable.map(([id, n]) =>
+        html += `<details class="t-give"><summary>🤝 Passar item para o time</summary>${near.map(q => `<div class="tiny" style="margin-top:4px">Para <b>${esc(q.name)}</b>:</div><div class="row wrap" style="gap:4px">${givable.filter(([id]) => !(q.isBot && toBot(id))).map(([id, n]) =>
           `<button class="btn sm" data-act="t-give" data-to="${esc(q.id)}" data-item="${id}" title="${esc(ITEMS[id].name)}"><img class="chip-ic" src="${itemUrl(id)}" alt="">×${n}</button>`).join('')}</div>`).join('')}</details>`;
       }
       if (rivals.length && !s.turnFlags.pvp) {

@@ -1331,7 +1331,13 @@ function startBossRaid(state, rng) {
   const avg = Math.round(lv.reduce((a, b) => a + b, 0) / Math.max(1, lv.length));
   for (const p of state.players) {
     p.noRules = true; // todos obedecem
-    p.items = { ...BOSS_RAID_KIT };
+    // 🛡️ v65b: o kit da Raid SOMA com o que o jogador trouxe da Mochila (Amuleto Shiny, Pokébolas, TM...).
+    // Antes o kit substituía a mochila e os itens trazidos sumiam. O kit não volta para a conta (p.kit).
+    const brought = {};
+    for (const [id, q] of Object.entries(p.items || {})) { const n = q - (STARTING_ITEMS[id] || 0); if (n > 0) brought[id] = n; }
+    p.items = { ...brought };
+    for (const [id, q] of Object.entries(BOSS_RAID_KIT)) p.items[id] = (p.items[id] || 0) + q;
+    p.kit = { ...BOSS_RAID_KIT };
     [...p.team, ...p.box].forEach(fullHeal);
   }
   const boss = raidBoss(rng, 5, true, state.players.some(p => p.items?.shiny_charm));

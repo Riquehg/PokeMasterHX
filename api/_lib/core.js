@@ -600,7 +600,7 @@ export function bagFromMatch(p) {
   const out = {};
   for (const [id, q] of Object.entries(p.items || {})) {
     if (!isKeepable(id) || !(q > 0)) continue;
-    const n = q - (STARTING_ITEMS[id] || 0);
+    const n = q - ((p.kit || STARTING_ITEMS)[id] || 0); // v65b: na Raid em Grupo o kit (p.kit) é o que não volta
     if (n > 0) out[id] = n;
   }
   return out;

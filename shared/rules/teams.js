@@ -3,7 +3,7 @@
 // podem passar itens, se curam juntos no Centro Pokémon, ajudam nas batalhas quando estão perto e,
 // uma vez por partida, cada um pode pedir o 🎲 Dado de Apoio (rola 2 dados e fica com o maior).
 import { getSpace } from '../data/board.js';
-import { ITEMS } from '../data/items.js';
+import { ITEMS, isKeepable } from '../data/items.js';
 import { fail, getPlayer, log, fx, addItem, takeItem } from './helpers.js';
 
 export const TEAM_SIZES = [0, 2, 3];
@@ -74,6 +74,8 @@ export function teamAction(state, p, a) {
     const it = ITEMS[item];
     if (!it || !(p.items[item] > 0)) fail('Você não tem esse item.');
     if (!GIVE_KINDS.includes(it.kind)) fail('Esse item não pode ser passado.');
+    // 🛡️ v65b: CPU não tem conta — itens que voltariam para a sua Mochila (Pokébolas, TM, pedras) não podem ir para ela
+    if (q.isBot && isKeepable(item)) fail(`${q.name} é CPU: só dá para passar Poções, Revive, X Attack e Doces (o resto voltaria para a sua Mochila e se perderia).`);
     if ((state.turnFlags.gives || 0) >= 2) fail('Dá para passar no máximo 2 itens por turno.');
     const qty = Math.max(1, Math.min(p.items[item], Number(a.qty) || 1, 5));
     takeItem(p, item, qty);

@@ -171,3 +171,41 @@ test('🤝 sala online em Duplas: escolher time e iniciar', async () => {
   assert.equal(st.players.find(p => p.id === a.id).squad, 1);
   assert.ok(r.match);
 });
+
+test('🛡️ v65b: Raid em Grupo devolve os itens trazidos da Mochila (Amuleto Shiny) e o kit não vira item de graça', async () => {
+  const { actionOp } = await import('../api/_lib/core.js');
+  const { whoMustAct } = await import('../shared/engine.js');
+  const { db, admin, us: [a] } = await setup(1);
+  const prof = await db.getProfile(a.id);
+  await db.upsertProfile(a.id, { stats: { ...(prof.stats || {}), bag: { shiny_charm: 1, ultra_ball: 2 } } });
+  const team = prof.vault.slice(0, 3).map(m => m.uid);
+  const { match } = await matchOp(db, a, { op: 'solo', bots: 1, rules: 'bossraid', teamUids: team, bringItems: { shiny_charm: 1, ultra_ball: 2 } });
+  let row = await db.getMatch(match.id);
+  const me = row.state.players.find(p => p.id === a.id);
+  assert.equal(me.items.shiny_charm, 1, 'o Amuleto Shiny entrou na Raid');
+  assert.equal(me.items.ultra_ball, 2 + 3, 'Ultra Balls trazidas + kit');
+  for (let i = 0; i < 200 && row.status === 'playing'; i++) {
+    if (whoMustAct(row.state).includes(a.id)) {
+      const r = row.state.raid;
+      const mine = row.state.players.find(p => p.id === a.id);
+      const action = r.stage === 'join' ? { type: 'raid', op: 'join', uid: mine.team[0].uid, role: 'atk' } : r.stage === 'catch' ? { type: 'raid', op: 'skip' } : { type: 'raid', op: 'attack', slot: 0 };
+      await actionOp(db, a, { matchId: match.id, action });
+    }
+    row = await db.getMatch(match.id);
+  }
+  assert.equal(row.status, 'finished');
+  const bag = (await db.getProfile(a.id)).stats.bag || {};
+  assert.equal(bag.shiny_charm, 1, 'o Amuleto Shiny voltou para a Mochila');
+  assert.ok((bag.ultra_ball || 0) <= 2, 'o kit da Raid não vira Ultra Ball grátis');
+});
+
+test('🛡️ v65b: não dá para passar Pokébola/TM para CPU aliada (sumiria)', () => {
+  const s = createMatch({ seed: 5, now: T0, options: { teams: 2 }, players: ['a', 'b', 'c', 'd'].map((id, i) => ({ id, name: id, isBot: i > 0 })) });
+  const me = s.players[0], al = s.players.find(p => p.id !== 'a' && p.squad === me.squad);
+  s.current = 0; s.phase = 'action'; al.pos = me.pos;
+  me.items.ultra_ball = 2; me.items.potion = 2;
+  let r = applyAction(s, 'a', { type: 'team', op: 'give', to: al.id, item: 'ultra_ball' }, { now: T0 });
+  assert.match(r.error, /CPU/);
+  r = applyAction(s, 'a', { type: 'team', op: 'give', to: al.id, item: 'potion' }, { now: T0 });
+  assert.equal(r.error, undefined, r.error);
+});
