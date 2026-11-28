@@ -2,8 +2,9 @@
 import { bad, notFound, cleanName } from './core.js';
 import { eloOf } from '../../shared/data/elo.js';
 import { getShop, equippedSkin, equippedCosmetic } from './shop.js';
+import { guildOp } from './guild.js';
 
-export const ONLINE_WINDOW_MS = 90_000; // visto nos últimos 90 s = online
+export const ONLINE_WINDOW_MS = 150_000; // visto nos últimos 150 s = online (v63: o sinal agora é a cada 60 s)
 const CHAT_COOLDOWN_MS = 2_000;
 const MAX_FRIENDS = 100;
 
@@ -82,6 +83,7 @@ async function friendsView(db, userId) {
 
 export async function socialOp(db, user, body) {
   if (!user) bad('Faça login para usar o chat e os amigos.');
+  if (String(body.op || '').startsWith('guild_')) return guildOp(db, user, body); // 🏟️ v65: Guildas
   const now = Date.now();
   const since = new Date(now - ONLINE_WINDOW_MS).toISOString();
 

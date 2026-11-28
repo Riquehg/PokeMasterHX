@@ -2,6 +2,7 @@
 // Também é usada para jogar por quem ficou inativo no online.
 
 import { getSpecies } from './data/pokemon.js';
+import { allies } from './rules/teams.js';
 import { getSpace } from './data/board.js';
 import { ITEMS, shopFor, ballBonusAgainst } from './data/items.js';
 import { itemEvoTarget } from './data/evolution.js';
@@ -187,7 +188,7 @@ function goalSpace(p, state) {
     // cidade de ginásio mais perto que não é minha e que dá para encarar
     const dist = distancesFrom(p, p.pos);
     const best = Math.max(...p.team.map(m => m.lvl));
-    const targets = GYMS.filter(g => ownerOf(state, g.id) !== p.id && best >= siegeLevel(state, g) - 5)
+    const targets = GYMS.filter(g => !ourCity(state, p, g) && best >= siegeLevel(state, g) - 5)
       .sort((a, b) => (dist[a.space] ?? 99) - (dist[b.space] ?? 99));
     return targets[0] ? targets[0].space : 'train';
   }
@@ -236,13 +237,13 @@ function chooseDestination(state, p) {
     if (rulesOf(state) === 'royale') {
       const st = stormAt(state, id);
       if (st.soon) s -= 120;                      // fica na tempestade na próxima rodada
-      const rival = state.players.find(q => q.id !== p.id && !q.out && q.pos === id);
+      const rival = state.players.find(q => q.id !== p.id && !q.out && q.pos === id && !allies(state, p, q));
       if (rival) s += strength(p) > strength(rival) * 1.2 ? 25 : -40; // batalha obrigatória
       if (sp.type === 'city' && teamHealth(p) < 0.7 && !(p.healedAt || []).includes(id) && !st.soon) s += 30;
     }
     if (rulesOf(state) === 'conquest' && sp.type === 'city') {
       const g = gymAt(id);
-      if (g && ownerOf(state, g.id) !== p.id && topLevels(p, 2) >= siegeLevel(state, g) - 2 && teamHealth(p) > 0.7) s += 35;
+      if (g && !ourCity(state, p, g) && topLevels(p, 2) >= siegeLevel(state, g) - 2 && teamHealth(p) > 0.7) s += 35;
     }
     if (p.quest?.space === id) s += 30; // convite de viagem
     s += (state.seed % 7 === id % 7) ? 0.5 : 0; // desempate leve
@@ -301,7 +302,7 @@ function cityActions(state, p) {
     const g = gymAt(sp.id);
     if (!g) return null;
     const owner = ownerOf(state, g.id);
-    if (owner !== p.id && !state.turnFlags.gym && topLevels(p, 2) >= siegeLevel(state, g) - 2 && teamHealth(p) > 0.7) return { type: 'city', op: 'gym' };
+    if (!ourCity(state, p, g) && !state.turnFlags.gym && topLevels(p, 2) >= siegeLevel(state, g) - 2 && teamHealth(p) > 0.7) return { type: 'city', op: 'gym' };
     if (owner === p.id && !state.turnFlags.manage && !state.conquest.garrison[g.id].length && p.box.some(m => m.hp > 0 || true) && p.box.length) return { type: 'city', op: 'gym' };
     return null;
   }
@@ -346,7 +347,7 @@ function raidBotAction(state, p) {
   const r = state.raid;
   if (r.stage === 'join') {
     const best = p.team.filter(m => m.hp > 0 && canUse(p, m)).sort((a, b) => monPower(b) - monPower(a))[0];
-    return best ? { type: 'raid', op: 'join', uid: best.uid } : { type: 'raid', op: 'decline' };
+    return best ? { type: 'raid', op: 'join', uid: best.uid, role: monMoves(best).some(mv => mv.kind === 'heal') ? 'sup' : monMoves(best).some(mv => mv.kind === 'status' || mv.kind === 'debuff') ? 'ctl' : 'atk' } : { type: 'raid', op: 'decline' };
   }
   if (r.stage === 'fight') {
     const x = r.party.find(y => y.pid === p.id);
@@ -381,6 +382,12 @@ function garrisonBot(state, p) {
   const picks = box.slice(0, 2).map(m => m.uid);
   if (picks.length < 2 && team.length > 3) picks.push(...team.slice(3, 3 + (2 - picks.length)).map(m => m.uid));
   return { type: 'garrison', uids: picks.slice(0, GARRISON_MAX) };
+}
+
+/** 🤝 cidade minha ou de alguém do meu time */
+function ourCity(state, p, g) {
+  const o = ownerOf(state, g.id);
+  return o === p.id || (!!o && allies(state, p, getPlayer(state, o)));
 }
 
 /** Nível do mais forte que defende a cidade (líder se neutra, guarnição se de alguém). */
@@ -421,7 +428,7 @@ export function botAction(state, pid) {
 
   // PvP oportunista
   if (!state.turnFlags.pvp) {
-    const rival = state.players.find(q => q.id !== p.id && q.pos === p.pos && q.team.some(m => m.hp > 0));
+    const rival = state.players.find(q => q.id !== p.id && q.pos === p.pos && q.team.some(m => m.hp > 0) && !allies(state, p, q));
     if (rival && strength(p) > strength(rival) * 1.25 && p.team.some(m => m.hp > 0)) {
       return { type: 'challenge', target: rival.id };
     }

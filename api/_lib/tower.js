@@ -10,11 +10,14 @@ import { createRng, randomSeed } from '../../shared/rules/rng.js';
 import { mutateProfile, getOrCreateProfile, publicMatch, addToBag } from './core.js';
 import { createDuelMatch } from './tournament.js';
 import { equippedCosmetic } from './shop.js';
+import { GUILD_POINTS, addGuildPts } from '../../shared/data/guilds.js';
 
 const bad = msg => { const e = new Error(msg); e.status = 400; throw e; };
 const CPU = 'cpu_t_';
-const TW = st => ({ pb: 0, streak: 0, best: 0, set: null, ...(st?.tower || {}) });
-const pub = t => ({ pb: t.pb, streak: t.streak, best: t.best, set: t.set ? { n: t.set.n, team: t.set.team, wins: t.set.wins } : null, matchId: t.matchId || null, price: TOWER_PRICE, shop: TOWER_SHOP });
+const TW = st => ({ pb: 0, streak: 0, best: 0, duoStreak: 0, duoBest: 0, set: null, ...(st?.tower || {}) });
+const pub = t => ({ pb: t.pb, streak: t.streak, best: t.best, duoStreak: t.duoStreak || 0, duoBest: t.duoBest || 0, set: t.set ? { n: t.set.n, team: t.set.team, wins: t.set.wins, duo: t.set.duo || null, duoName: t.set.duoName || null, ally: (t.set.ally || []).map(m => ({ sp: m.sp, lvl: m.lvl, shiny: !!m.shiny })) } : null, matchId: t.matchId || null, price: TOWER_PRICE, shop: TOWER_SHOP });
+/** 🤝 v65: Torre em Dupla — PB ×1,5 e o parceiro ganha 1 PB por vitória. */
+export const DUO_PB_MULT = 1.5;
 const GEAR_IDS = ['leftovers', 'focus_sash', 'quick_claw', 'choice_band'];
 
 /** Time da CPU para o duelo n (1..7) com a sequência atual. */
@@ -51,6 +54,20 @@ export async function towerOp(db, user, body) {
     const uids = (body.teamUids || []).map(String).slice(0, TOWER_TEAM);
     const vault = prof.vault || [];
     if (new Set(uids).size !== TOWER_TEAM || uids.some(u => !vault.find(v => v.uid === u))) bad(`Escolha ${TOWER_TEAM} Pokémon diferentes da Coleção.`);
+    // 🤝 v65: Torre em Dupla — com o time de defesa (Liga das Séries) de um amigo, ou os 3 mais fortes dele
+    let duo = null;
+    if (body.partner) {
+      const pid = String(body.partner);
+      const fr = await db.listFriendships(user.id);
+      if (!fr.some(r => r.status === 'accepted' && (r.user_id === pid || r.friend_id === pid))) bad('A dupla precisa ser um amigo seu (aceito).');
+      const pp = await db.getProfile(pid);
+      if (!pp) bad('Amigo não encontrado.');
+      const pv = pp.vault || [];
+      let ally = (pp.stats?.serie?.defense || []).map(u => pv.find(v => v.uid === u)).filter(Boolean);
+      if (ally.length < TOWER_TEAM) ally = [...pv].sort((a, b) => (b.lvl | 0) - (a.lvl | 0)).slice(0, TOWER_TEAM);
+      if (ally.length < TOWER_TEAM) bad(`${pp.trainer_name} ainda não tem ${TOWER_TEAM} Pokémon na Coleção.`);
+      duo = { duo: pid, duoName: pp.trainer_name || 'Amigo', ally: ally.slice(0, TOWER_TEAM).map(v => ({ ...v, uid: `ally_${v.uid}`, lvl: Math.min(TOWER_LEVEL, v.lvl), tf: undefined })) };
+    }
     if ((prof.gold || 0) < TOWER_PRICE) bad(`A entrada custa 🪙 ${TOWER_PRICE}.`);
     const paid = await db.walletAdd(user.id, 0, -TOWER_PRICE);
     if (paid === null) bad('Ouro insuficiente.');
@@ -58,7 +75,7 @@ export async function towerOp(db, user, body) {
       const p2 = await mutateProfile(db, user.id, cur => {
         const tw = TW(cur.stats);
         if (tw.set) bad('Você já está numa série da Torre.');
-        return { stats: { ...(cur.stats || {}), tower: { ...tw, set: { n: 1, team: uids, wins: 0 }, matchId: null } } };
+        return { stats: { ...(cur.stats || {}), tower: { ...tw, set: { n: 1, team: uids, wins: 0, ...(duo || {}) }, matchId: null } } };
       });
       return { tower: pub(TW(p2.stats)), gold: p2.gold };
     } catch (e) { await db.walletAdd(user.id, 0, TOWER_PRICE); throw e; }
@@ -71,18 +88,28 @@ export async function towerOp(db, user, body) {
     const mine = t.set.team.map(u => vault.find(v => v.uid === u)).filter(Boolean).map(v => ({ ...v, lvl: Math.min(TOWER_LEVEL, v.lvl), tf: undefined }));
     if (mine.length < TOWER_TEAM) bad('Um Pokémon do seu time saiu da Coleção — desista desta série e monte outro time.');
     const seed = randomSeed();
-    const f = foeTeam(t.streak, t.set.n, seed);
-    const foeName = f.boss ? BOSS_NAME : TOWER_NAMES[seed % TOWER_NAMES.length];
+    const duo = !!t.set.duo;
+    const f = foeTeam(duo ? t.duoStreak || 0 : t.streak, t.set.n, seed);
+    if (duo) { // 🤝 dupla: a Torre também manda uma dupla (6 Pokémon)
+      const f2 = foeTeam(t.duoStreak || 0, t.set.n, seed ^ 0x9e3779b9);
+      f.team = [...f.team, ...f2.team.map((m, i) => ({ ...m, uid: `${m.uid}_b${i}` }))].slice(0, TOWER_TEAM * 2);
+      f.megaKey = f.megaKey || f2.megaKey; f.dynaKey = f.dynaKey || f2.dynaKey;
+      mine.push(...(t.set.ally || []));
+    }
+    const foeName = (f.boss ? BOSS_NAME : TOWER_NAMES[seed % TOWER_NAMES.length]) + (duo ? ` & ${TOWER_NAMES[(seed >>> 3) % TOWER_NAMES.length]}` : '');
     const me = { id: user.id, name: prof.trainer_name, avatar: prof.avatar || 1, cosmetic: await equippedCosmetic(db, prof).catch(() => null), teamMons: mine, megaKey: !!prof.stats?.megaBracelet, dynaKey: !!prof.stats?.dynamaxBand };
     const foe = { id: `${CPU}${seed}`, name: foeName, avatar: f.boss ? 8 : 1 + (seed % 7), isBot: true, teamMons: f.team, megaKey: f.megaKey, dynaKey: f.dynaKey, cosmetic: f.boss ? { frame: 'royal', title: 'Mestre da Torre' } : null };
-    const row = await createDuelMatch(db, { megas: true, name: `🗼 Torre — duelo ${t.set.n}/${TOWER_SET}${f.boss ? ' (👑 Mestre)' : ''}: ${me.name} x ${foe.name}`, a: me, b: foe, hostId: user.id,
-      options: { mode: 'duel', tower: { player: user.id, n: t.set.n, boss: f.boss } } });
+    if (duo) me.name = `${prof.trainer_name} & ${t.set.duoName}`;
+    const row = await createDuelMatch(db, { megas: true, name: `🗼 Torre${duo ? ' em Dupla' : ''} — duelo ${t.set.n}/${TOWER_SET}${f.boss ? ' (👑 Mestre)' : ''}: ${me.name} x ${foe.name}`, a: me, b: foe, hostId: user.id,
+      options: { mode: 'duel', tower: { player: user.id, n: t.set.n, boss: f.boss, duo: t.set.duo || null } } });
     await mutateProfile(db, user.id, cur => ({ stats: { ...(cur.stats || {}), tower: { ...TW(cur.stats), matchId: row.id } } }));
     return { match: publicMatch(row, user.id) };
   }
 
   if (op === 'tower_quit') { // desiste: a sequência acaba
-    const p2 = await mutateProfile(db, user.id, cur => { const tw = TW(cur.stats); return { stats: { ...(cur.stats || {}), tower: { ...tw, best: Math.max(tw.best, tw.streak), streak: 0, set: null, matchId: null } } }; });
+    const p2 = await mutateProfile(db, user.id, cur => { const tw = TW(cur.stats);
+      if (tw.set?.duo) return { stats: { ...(cur.stats || {}), tower: { ...tw, duoBest: Math.max(tw.duoBest || 0, tw.duoStreak || 0), duoStreak: 0, set: null, matchId: null } } };
+      return { stats: { ...(cur.stats || {}), tower: { ...tw, best: Math.max(tw.best, tw.streak), streak: 0, set: null, matchId: null } } }; });
     return { tower: pub(TW(p2.stats)), gold: p2.gold };
   }
 
@@ -118,17 +145,33 @@ export async function towerFinished(db, row) {
   await mutateProfile(db, o.player, prof => {
     const tw = TW(prof.stats);
     if (!tw.set || tw.matchId !== row.id) return null; // já contado
+    if (tw.set.duo) { // 🤝 Torre em Dupla: sequência e recorde próprios
+      const ds = tw.duoStreak || 0;
+      if (win) {
+        const streak = ds + 1;
+        let pb = Math.ceil(pbForWin(ds, o.boss) * DUO_PB_MULT);
+        const cleared = tw.set.n >= TOWER_SET;
+        if (cleared) pb += SET_CLEAR_BONUS;
+        result = { win, streak, pb, cleared, n: tw.set.n, boss: !!o.boss, duo: tw.set.duoName, partner: tw.set.duo };
+        return { stats: addGuildPts({ ...(prof.stats || {}), tower: { ...tw, pb: tw.pb + pb, duoStreak: streak, duoBest: Math.max(tw.duoBest || 0, streak), matchId: null, set: cleared ? null : { ...tw.set, n: tw.set.n + 1, wins: tw.set.wins + 1 } } }, GUILD_POINTS.tower) };
+      }
+      result = { win, streak: ds, pb: 0, n: tw.set.n, ended: true, duo: tw.set.duoName };
+      return { stats: { ...(prof.stats || {}), tower: { ...tw, duoBest: Math.max(tw.duoBest || 0, ds), duoStreak: 0, set: null, matchId: null } } };
+    }
     if (win) {
       const streak = tw.streak + 1;
       let pb = pbForWin(tw.streak, o.boss);
       const cleared = tw.set.n >= TOWER_SET;
       if (cleared) pb += SET_CLEAR_BONUS;
       result = { win, streak, pb, cleared, n: tw.set.n, boss: !!o.boss };
-      return { stats: { ...(prof.stats || {}), tower: { ...tw, pb: tw.pb + pb, streak, best: Math.max(tw.best, streak), matchId: null, set: cleared ? null : { ...tw.set, n: tw.set.n + 1, wins: tw.set.wins + 1 } } } };
+      return { stats: addGuildPts({ ...(prof.stats || {}), tower: { ...tw, pb: tw.pb + pb, streak, best: Math.max(tw.best, streak), matchId: null, set: cleared ? null : { ...tw.set, n: tw.set.n + 1, wins: tw.set.wins + 1 } } }, GUILD_POINTS.tower) };
     }
     result = { win, streak: tw.streak, pb: 0, n: tw.set.n, ended: true };
     return { stats: { ...(prof.stats || {}), tower: { ...tw, best: Math.max(tw.best, tw.streak), streak: 0, set: null, matchId: null } } };
   });
+  if (result?.win && result.partner) { // 🤝 o parceiro da dupla ganha 1 PB por vitória
+    try { await mutateProfile(db, result.partner, cur => ({ stats: { ...(cur.stats || {}), tower: { ...TW(cur.stats), pb: TW(cur.stats).pb + 1 } } })); } catch { /* ok */ }
+  }
   try { // mostra o resultado na tela do fim do duelo
     const cur = await db.getMatch(row.id);
     if (cur?.state && result) await db.updateMatch(cur.id, cur.version, { state: { ...cur.state, towerResult: result }, version: cur.version + 1 });

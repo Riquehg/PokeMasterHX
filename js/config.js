@@ -152,6 +152,8 @@ export const moveIcon = m => {
 export const typeIcon = t => (ITEM_MISS.has(typeIconUrl(t)) ? '' : `<img class="ty-ic" src="${typeIconUrl(t)}" data-fb="" alt="">`);
 export const furnIcon = (id, fb) => spriteIcon(`furniture/${id}.png`, fb, 'furn-ic');
 export const uiIcon = (id, fb) => spriteIcon(`ui/${id}.png`, fb, 'ui-ic');
+/** 🎮 v65: arte opcional do botão inteiro do menu (ui/btn_<id>.png, 440×300). Sem o arquivo, fica o botão normal. */
+export const uiBanner = id => { const u = `${CFG.sprites}ui/btn_${id}.png`; return ITEM_MISS.has(u) ? '' : `<img class="mt-banner" src="${u}" alt="" data-fb="">`; };
 export const itemUrl = id => (ITEMS[id]?.emoji && !ITEMS[id]?.image ? emojiImg(ITEMS[id].emoji) : `${CFG.sprites}items/${itemFile(id)}`);
 // Sprite de treinador/líder: aceita "pasta/arquivo.png" (ex.: "leaders/Lt. Surge.png") ou só o arquivo (vai para leaders/)
 export const leaderUrl = file => {
@@ -183,6 +185,7 @@ export function placeholder(text, color = '#3b2b1d') {
 if (typeof window !== 'undefined') {
   document.addEventListener('load', e => { // lembra o nome de arquivo alternativo que funcionou
     const el = e.target;
+    if (el instanceof HTMLImageElement && el.classList.contains('mt-banner')) el.closest('.mode-tile')?.classList.add('has-banner'); // 🎮 v65
     if (el instanceof HTMLImageElement && el.classList.contains('furn-ic')) { el.style.setProperty('--nw', el.naturalWidth); el.parentElement?.classList.add('has-img'); } // v61: móvel no tamanho real da sprite
     if (!(el instanceof HTMLImageElement) || !el.dataset.itemOk || !el.dataset.itemTry) return;
     const m = /\/items\/([^/?#]+)$/.exec(el.src || '');

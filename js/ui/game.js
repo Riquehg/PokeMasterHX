@@ -1,4 +1,5 @@
 // Tela da partida: tabuleiro com zoom, painel de ações, equipe, jogadores, log/chat, batalha e fila de animações.
+import { teamsOn, squadOf, allies, SQUADS, squadName, squadMembers, squadIds, GIVE_KINDS, nearAlly } from '../../shared/rules/teams.js';
 import { fieldOptions } from '../../shared/data/fieldskills.js';
 import { getSpace, useStateMap } from '../../shared/data/board.js';
 import { GYMS, gymAt, ELITE_SPACE, CHAMPION_SPACE, ELITE_FOUR, BADGES_TO_LEAGUE } from '../../shared/data/trainers.js';
@@ -375,6 +376,7 @@ export function mountGame(root, session, opts = {}) {
     if (s.phase === 'roll') {
       html += `<button class="btn primary pulse block" data-act="roll" style="min-height:52px;font-size:16px">🎲 Rolar dado</button>`;
       if (p.items.bicycle) html += `<button class="btn sm" data-act="use" data-item="bicycle">🚲 Usar Bicicleta (+2) ×${p.items.bicycle}</button>`;
+      if (teamsOn(s) && !p.supportUsed) html += `<button class="btn sm ${s.turnFlags?.supportDie ? 'green' : 'purple'}" data-act="t-support" ${s.turnFlags?.supportDie ? 'disabled' : ''} title="Uma vez por partida: rola 2 dados e fica com o maior">🎲 ${s.turnFlags?.supportDie ? 'Dado de Apoio pronto!' : 'Dado de Apoio do time (1×)'}</button>`;
       // 🧭 v60: habilidades de campo da equipe
       const fo = s.kind === 'duel' ? [] : fieldOptions(s, p);
       if (fo.length) html += `<div class="fs-row">${fo.map(o => `<button class="btn sm fs-btn ${o.wait || s.turnFlags?.field ? 'wait' : ''}" data-act="field" data-id="${o.id}" ${o.wait || s.turnFlags?.field ? 'disabled' : ''} title="${esc(o.desc)} (${esc(speciesName(o.mon.sp))} · recarga ${o.cd} turnos)">
@@ -388,7 +390,14 @@ export function mountGame(root, session, opts = {}) {
     }
     if (sp.type === 'city' && s.phase !== 'move') html += cityPanel(s, p, sp);
     if (s.phase === 'action') {
-      const rivals = s.players.filter(q => q.id !== p.id && q.pos === p.pos);
+      const rivals = s.players.filter(q => q.id !== p.id && q.pos === p.pos && !allies(s, p, q));
+      // 🤝 v65: passar item para aliado na mesma casa ou vizinha
+      const near = teamsOn(s) ? s.players.filter(q => allies(s, p, q) && !q.out && (q.pos === p.pos || (sp.links || []).includes(q.pos))) : [];
+      const givable = Object.entries(p.items || {}).filter(([id, n]) => n > 0 && GIVE_KINDS.includes(ITEMS[id]?.kind));
+      if (near.length && givable.length && (s.turnFlags.gives || 0) < 2) {
+        html += `<details class="t-give"><summary>🤝 Passar item para o time</summary>${near.map(q => `<div class="tiny" style="margin-top:4px">Para <b>${esc(q.name)}</b>:</div><div class="row wrap" style="gap:4px">${givable.map(([id, n]) =>
+          `<button class="btn sm" data-act="t-give" data-to="${esc(q.id)}" data-item="${id}" title="${esc(ITEMS[id].name)}"><img class="chip-ic" src="${itemUrl(id)}" alt="">×${n}</button>`).join('')}</div>`).join('')}</details>`;
+      }
       if (rivals.length && !s.turnFlags.pvp) {
         html += `<div class="small">Treinadores aqui:</div><div class="row">${rivals.map(q =>
           `<button class="btn sm red" data-act="challenge" data-pid="${esc(q.id)}">🤺 Desafiar ${esc(q.name)}</button>`).join('')}</div>`;
@@ -547,7 +556,7 @@ export function mountGame(root, session, opts = {}) {
     root.querySelector('#g-players').innerHTML = s.players.map((pl, i) => `
       <div class="list-item" data-act="trainer" data-pid="${esc(pl.id)}" style="cursor:pointer;${s.current === i ? 'border-color:' + playerColor(s, pl.id) : ''}">
         ${avatarImg(pl, 'avatar sm', playerColor(s, pl.id))}
-        <div class="grow"><b style="color:${playerColor(s, pl.id)}">${esc(pl.name)}</b>${pl.companion && COMPANIONS[pl.companion] ? ` <span class="chip ${(pl.bond?.[pl.companion] || 1) >= 10 ? 'intimate-chip' : ''}">${COMPANIONS[pl.companion].icon} ${esc(COMPANIONS[pl.companion].name)}${(pl.bond?.[pl.companion] || 1) >= 10 ? ' ❤️' : ` · Nv.${pl.bond?.[pl.companion] || 1}`}</span>` : ''}${pl.megaKey ? ` <span class="chip purple" title="🔗 Bracelete Mega${s.options?.megas ? ' — pode Mega Evoluir nesta partida' : ''}"><img class="chip-ic" src="${itemUrl('mega_bracelet')}" alt="">Mega</span>` : ''}${pl.dynaKey ? ` <span class="chip red" title="🔴 Pulseira Dynamax${s.options?.megas ? ' — pode usar Gigantamax nesta partida' : ''}">🔴 Gmax</span>` : ''}${pl.isBot ? ' <span class="chip">CPU</span>' : ''}${pl.left ? ' <span class="chip red">saiu</span>' : ''}${pl.kicked ? ' <span class="chip red">🚫 removido</span>' : pl.out ? ` <span class="chip red">💀 ${s.rules === 'royale' ? pl.place + 'º' : 'fora'}</span>` : ''}${pl.lateJoin ? ' <span class="chip green" title="Entrou no meio da partida">🙋</span>' : ''}${s.rules === 'conquest' ? ` <span class="chip">🏰 ${citiesOf(s, pl.id)}</span>` : ''}${titleHtml(pl.cosmetic, false)}
+        <div class="grow">${teamsOn(s) && squadOf(pl) !== null ? `<span class="sq-chip" style="--sq:${SQUADS[squadOf(pl)].color}" title="${esc(squadName(squadOf(pl)))}">${SQUADS[squadOf(pl)].icon}</span> ` : ''}<b style="color:${playerColor(s, pl.id)}">${esc(pl.name)}</b>${pl.companion && COMPANIONS[pl.companion] ? ` <span class="chip ${(pl.bond?.[pl.companion] || 1) >= 10 ? 'intimate-chip' : ''}">${COMPANIONS[pl.companion].icon} ${esc(COMPANIONS[pl.companion].name)}${(pl.bond?.[pl.companion] || 1) >= 10 ? ' ❤️' : ` · Nv.${pl.bond?.[pl.companion] || 1}`}</span>` : ''}${pl.megaKey ? ` <span class="chip purple" title="🔗 Bracelete Mega${s.options?.megas ? ' — pode Mega Evoluir nesta partida' : ''}"><img class="chip-ic" src="${itemUrl('mega_bracelet')}" alt="">Mega</span>` : ''}${pl.dynaKey ? ` <span class="chip red" title="🔴 Pulseira Dynamax${s.options?.megas ? ' — pode usar Gigantamax nesta partida' : ''}">🔴 Gmax</span>` : ''}${pl.isBot ? ' <span class="chip">CPU</span>' : ''}${pl.left ? ' <span class="chip red">saiu</span>' : ''}${pl.kicked ? ' <span class="chip red">🚫 removido</span>' : pl.out ? ` <span class="chip red">💀 ${s.rules === 'royale' ? pl.place + 'º' : 'fora'}</span>` : ''}${pl.lateJoin ? ' <span class="chip green" title="Entrou no meio da partida">🙋</span>' : ''}${s.rules === 'conquest' ? ` <span class="chip">🏰 ${citiesOf(s, pl.id)}</span>` : ''}${titleHtml(pl.cosmetic, false)}
           <div class="tiny muted">📍 ${esc(getSpace(pl.pos).name)} · 🪙 ${pl.gold} · 🎖️ ${pl.badges.length} · 📖 ${pl.caught.length}${pl.eliteStage ? ` · 👑 ${pl.eliteStage}/4` : ''}${pl.skip ? ' · ⏸️' : ''}</div></div>
         <div class="row" style="gap:2px">${pl.team.slice(0, 6).map(m => `<img src="${monSprite(m)}" alt="${esc(speciesName(m.sp))}" style="width:24px;height:24px;object-fit:contain;${m.hp <= 0 ? 'filter:grayscale(1);opacity:.5' : ''}">`).join('')}</div>
         ${canKick(s, pl) ? `<button class="btn sm red kick-btn" data-act="kick" data-pid="${esc(pl.id)}" title="Remover da partida (o anfitrião não precisa esperar a CPU)">🚫</button>` : ''}
@@ -743,10 +752,13 @@ export function mountGame(root, session, opts = {}) {
     const extraTh = s.rules === 'royale' ? '<th>Lugar</th>' : s.rules === 'conquest' ? '<th>Cidades</th>' : '';
     const extraTd = p => s.rules === 'royale' ? `<td><b>${p.place || 1}º</b></td>` : s.rules === 'conquest' ? `<td><b>🏰 ${citiesOf(s, p.id)}</b></td>` : '';
     const ov = openModal('over', '🏆 Fim de jogo', `
-      <div class="banner-win">${w ? avatarImg(w, 'avatar') : ''}<h2>${esc(w ? w.name : '—')} venceu!</h2>
+      ${(() => { const team = Number.isInteger(s.winnerSquad), grp = s.rules === 'bossraid';
+        const who = team ? squadMembers(s, s.winnerSquad) : grp && s.winners ? s.players.filter(x => s.winners.includes(x.id)) : null;
+        return `<div class="banner-win">${who ? who.map(x => avatarImg(x, 'avatar')).join('') : w ? avatarImg(w, 'avatar') : ''}<h2>${team ? `${SQUADS[s.winnerSquad]?.icon || '🤝'} ${esc(squadName(s.winnerSquad))} venceu!` : grp ? (s.winners ? '🐉 O grupo venceu a Raid!' : '🐉 O chefe venceu o grupo…') : `${esc(w ? w.name : '—')} venceu!`}</h2>
+        ${who ? `<p class="small">${who.map(x => esc(x.name)).join(' + ')}${grp && w ? ` · 🏅 MVP: ${esc(w.name)}` : ''}</p>` : ''}`; })()}
       <p class="muted">${esc(s.log.filter(l => l.kind === 'win').slice(-1)[0]?.msg || '')}</p></div>
       <table class="score"><tr><th>Treinador</th>${extraTh}<th>Insígnias</th><th>Pokédex</th><th>Shinies</th><th>Pontos</th>${s.ratingChanges ? '<th>Rating</th>' : ''}</tr>
-      ${ranked.map(p => { const d = s.ratingChanges?.[p.id]; return `<tr><td>${esc(p.name)}</td>${extraTd(p)}<td>${p.badges.length}</td><td>${p.caught.length}</td><td>${p.stats.shinies}</td><td><b>${score(p)}</b></td>${s.ratingChanges ? `<td style="color:${d >= 0 ? '#8ff0bd' : '#ff9b9e'}"><b>${d >= 0 ? '+' : ''}${d ?? 0}</b></td>` : ''}</tr>`; }).join('')}</table>
+      ${ranked.map(p => { const d = s.ratingChanges?.[p.id]; return `<tr><td>${teamsOn(s) && squadOf(p) !== null ? SQUADS[squadOf(p)].icon + ' ' : ''}${esc(p.name)}</td>${extraTd(p)}<td>${p.badges.length}</td><td>${p.caught.length}</td><td>${p.stats.shinies}</td><td><b>${score(p)}</b></td>${s.ratingChanges ? `<td style="color:${d >= 0 ? '#8ff0bd' : '#ff9b9e'}"><b>${d >= 0 ? '+' : ''}${d ?? 0}</b></td>` : ''}</tr>`; }).join('')}</table>
       ${leagueLine(s)}${bondLine(s)}${bagLine(s)}
       ${me()?.hardcoreLost ? '<p class="small" style="color:#ff9b9e">☠️ Hardcore: você caiu e perdeu tudo o que ganhou nesta partida.</p>' : session.kind === 'online' ? '<p class="small muted">Seus Pokémon (equipe e PC), Pokédex e estatísticas foram salvos na sua conta — veja em 📦 Coleção.</p>' : '<p class="small muted">Modo offline: o progresso não vai para a conta.</p>'}
       <button class="btn primary block" data-act="exit" style="margin-top:10px">Voltar ao menu</button>`);
@@ -763,6 +775,8 @@ export function mountGame(root, session, opts = {}) {
     gym: () => act({ type: 'city', op: 'gym' }),
     league: () => act({ type: 'city', op: 'league' }),
     challenge: d => act({ type: 'challenge', target: d.pid }),
+    't-support': () => act({ type: 'team', op: 'support' }),
+    't-give': d => act({ type: 'team', op: 'give', to: d.to, item: d.item }),
     use: d => act({ type: 'use_item', item: d.item }),
     afk: () => act({ type: 'skip_afk' }),
     shop: () => M.openShop(viewSession(), act),

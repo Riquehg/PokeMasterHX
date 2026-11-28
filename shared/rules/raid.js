@@ -19,6 +19,13 @@ export const RAID_JOIN_TIMEOUT_TURNS = 1;
 /** Itens que dá para usar na luta da Raid em grupo (no lugar do golpe da rodada). */
 export const RAID_ITEM_KINDS = ['heal', 'boost'];
 export const RAID_GROUP_HP_PER_MEMBER = 0.8; // HP extra do chefe por participante
+/** 🐉 v65: papéis na Raid em grupo. */
+export const RAID_ROLES = {
+  atk: { name: 'Atacante', icon: '⚔️', desc: '+20% de dano no chefe.' },
+  sup: { name: 'Suporte', icon: '💚', desc: 'Toda rodada cura 10% do HP do aliado mais ferido.' },
+  ctl: { name: 'Controle', icon: '🌀', desc: 'Golpes de condição/intimidação baixam o chefe 2 níveis; ataques têm 20% de chance de baixar 1.' }
+};
+export const BOSS_PHASES = [0.75, 0.5, 0.25]; // 🐉 fases do chefe (só na Raid em Grupo do menu)
 
 const BALL_CATCH = { poke_ball: 0, trust_ball: 0, great_ball: 0.04, ultra_ball: 0.08, master_ball: 1 };
 
@@ -88,8 +95,9 @@ export function raidAction(state, rng, p, a) {
       const mon = find(p, String(a.uid || ''));
       if (!mon || mon.hp <= 0) fail('Escolha um Pokémon da equipe que esteja de pé.');
       if (!canUse(p, mon)) fail('Esse Pokémon ainda não te obedece.');
-      r.party.push({ pid: p.id, uid: mon.uid, dmg: 0 });
-      r.log.push(`${p.name} entrou com ${speciesName(mon.sp)} Nv.${mon.lvl}!`);
+      const role = RAID_ROLES[a.role] ? a.role : 'atk';
+      r.party.push({ pid: p.id, uid: mon.uid, dmg: 0, role });
+      r.log.push(`${p.name} entrou com ${speciesName(mon.sp)} Nv.${mon.lvl} como ${RAID_ROLES[role].icon} ${RAID_ROLES[role].name}!`);
     }
     if (raidWaiting(state).length === 0) beginFight(state);
     return;
@@ -122,7 +130,8 @@ export function raidAction(state, rng, p, a) {
       const ball = String(a.ball || '');
       if (!(p.items[ball] > 0) || ITEMS[ball]?.kind !== 'ball') fail('Escolha uma Pokébola que você tenha.');
       takeItem(p, ball);
-      const chance = raidBallChance(p, ball, getSpecies(r.boss.sp)?.types);
+      const base = raidBallChance(p, ball, getSpecies(r.boss.sp)?.types);
+      const chance = base >= 1 ? 1 : Math.min(0.36, base + (r.coop ? 0.08 : 0)); // 🐉 Raid em Grupo: sem insígnias, +8%
       const ok = rng.chance(chance);
       fx(state, { k: 'capture', pid: p.id, sp: r.boss.sp, shiny: !!r.boss.shiny, ball, ok, shakes: ok ? 3 : rng.int(0, 2), raid: true });
       r.log.push(`${p.name} jogou ${ITEMS[ball].name} (${Math.round(chance * 100)}%)... ${ok ? 'CAPTUROU!' : 'escapou!'}`);
@@ -152,7 +161,7 @@ function beginFight(state) {
     return finishRaid(state);
   }
   const base = maxHpOf({ ...r.boss, bonusHp: 0 });
-  r.boss.bonusHp = Math.round(base * RAID_GROUP_HP_PER_MEMBER * r.party.length);
+  r.boss.bonusHp = Math.round(base * (r.coop ? 0.5 : RAID_GROUP_HP_PER_MEMBER) * r.party.length);
   r.boss.hp = maxHpOf(r.boss);
   for (const x of r.party) { const pl = getPlayer(state, x.pid); if (pl) markSeen(pl, r.boss.sp, !!r.boss.shiny); } // Pokédex (💎 Mega também)
   r.stage = 'fight';
@@ -211,12 +220,14 @@ function resolveRaidRound(state, rng) {
       continue;
     }
     if (move.kind === 'buff') { x.stage = Math.min(2, (x.stage || 0) + 1); r.log.push(`🔺 ${speciesName(m.sp)} (${p.name}) ficou mais forte!`); continue; }
+    if ((move.kind === 'status' || move.kind === 'debuff') && x.role === 'ctl') { r.bossStage = Math.max(-2, r.bossStage - 2); r.log.push(`🌀 ${speciesName(m.sp)} (${p.name}, Controle) usou ${move.name}: o chefe perdeu muita força!`); continue; }
     if (move.kind === 'status') { r.bossStage = Math.max(-2, r.bossStage - 1); r.log.push(`🌀 ${speciesName(m.sp)} (${p.name}) usou ${move.name}: o lendário resistiu à condição, mas perdeu força.`); continue; }
     if (move.kind === 'debuff') { r.bossStage = Math.max(-2, r.bossStage - 1); r.log.push(`🔻 ${speciesName(m.sp)} (${p.name}) intimidou o lendário!`); continue; }
     const st = x.stage || 0;
     const atk = (statsOf(m).atk + (x.boost || 0)) * (st >= 0 ? 1 + 0.4 * st : 1);
-    const h = hit(rng, m, atk, move, boss, playerCompanionBonus(p));
+    const h = hit(rng, m, atk * (x.role === 'atk' ? 1.2 : 1), move, boss, playerCompanionBonus(p));
     boss.hp = Math.max(0, boss.hp - h.dmg);
+    if (x.role === 'ctl' && h.dmg && rng.chance(0.2)) { r.bossStage = Math.max(-2, r.bossStage - 1); r.log.push(`🌀 O golpe de ${p.name} desequilibrou o chefe!`); }
     x.dmg += h.dmg;
     if (move.kind === 'drain' && h.dmg) healMon(m, 0, Math.ceil(h.dmg / 2));
     r.log.push(h.miss ? `${speciesName(m.sp)} (${p.name}) usou ${move.name}... errou!` : `${speciesName(m.sp)} (${p.name}) usou ${move.name} (🎲${h.roll}): ${h.dmg} de dano${h.mult >= 2 ? ' — super efetivo!' : h.mult < 1 ? ' — pouco efetivo' : ''}`);
@@ -226,10 +237,31 @@ function resolveRaidRound(state, rng) {
 
   if (boss.hp <= 0) return raidWon(state, rng);
 
+  // 💚 Suporte: cura o aliado mais ferido
+  for (const { x, p } of members.filter(o => o.x.role === 'sup')) {
+    const hurt = alive(state, r).map(y => ({ y, m: find(getPlayer(state, y.pid), y.uid) })).sort((a, b) => a.m.hp / maxHpOf(a.m) - b.m.hp / maxHpOf(b.m))[0];
+    if (hurt && hurt.m.hp < maxHpOf(hurt.m)) {
+      const h = healMon(hurt.m, 0.1);
+      if (h) r.log.push(`💚 ${p.name} (Suporte) curou ${speciesName(hurt.m.sp)}: +${h} HP.`);
+    }
+  }
+  // 🐉 fases do chefe (Raid em Grupo do menu): a 75%, 50% e 25% do HP ele fica furioso e se livra das quedas
+  if (r.coop) {
+    const pct = boss.hp / maxHpOf(boss);
+    while ((r.phase || 0) < BOSS_PHASES.length && pct <= BOSS_PHASES[r.phase || 0]) {
+      r.phase = (r.phase || 0) + 1;
+      r.bossStage = Math.max(0, r.bossStage);
+      const msg = r.phase === 1 ? 'ficou furioso! (ataque +15%)' : r.phase === 2 ? 'liberou toda a energia: ataca mais alvos!' : 'está no limite — FÚRIA TOTAL!';
+      r.log.push(`🐉 FASE ${r.phase + 1}: ${speciesName(boss.sp)} ${msg}`);
+      log(state, `🐉 Fase ${r.phase + 1} da Raid: ${speciesName(boss.sp)} ${msg}`, 'battle');
+      fx(state, { k: 'raid_phase', phase: r.phase, sp: boss.sp });
+    }
+  }
+
   // o lendário revida (em mais alvos quanto maior o grupo)
   const targets = alive(state, r);
-  const hits = Math.min(targets.length, 1 + Math.floor(r.party.length / 3));
-  const bossAtk = statsOf(boss).atk * (r.bossStage >= 0 ? 1 : 1 - 0.3 * -r.bossStage);
+  const hits = Math.min(targets.length, 1 + Math.floor(r.party.length / 3) + (r.coop && (r.phase || 0) >= 2 ? 1 : 0));
+  const bossAtk = statsOf(boss).atk * (r.bossStage >= 0 ? 1 : 1 - 0.3 * -r.bossStage) * (r.coop ? 1 + 0.15 * (r.phase || 0) : 1);
   for (let i = 0; i < hits; i++) {
     const pool = alive(state, r);
     if (!pool.length) break;
@@ -247,7 +279,7 @@ function resolveRaidRound(state, rng) {
     fx(state, { k: 'raid_end', win: false, sp: boss.sp });
     return finishRaid(state);
   }
-  if (r.round >= 25) {
+  if (r.round >= (r.coop ? 30 : 25)) {
     log(state, `⌛ ${speciesName(boss.sp)} se cansou da luta e foi embora.`);
     return finishRaid(state);
   }
@@ -271,6 +303,14 @@ function raidWon(state, rng) {
     p.stats.raids = (p.stats.raids || 0) + 1;
     progressMission(state, p.id, { k: 'raid_win' });
   }
+  // 🏅 v65: quem mais contribuiu ganha um prêmio extra
+  const top = catchOrder(r)[0];
+  if (top && r.party.length > 1) {
+    const tp = getPlayer(state, top.pid);
+    tp.gold += Math.round(g / 2); addItem(tp, 'ultra_ball', 2);
+    r.log.push(`🏅 MVP: ${tp.name} (${top.dmg} de dano) ganhou +${Math.round(g / 2)} de ouro e 2 Ultra Balls.`);
+  }
+  r.won = true;
   log(state, `🔥 O grupo derrotou ${speciesName(boss.sp)}! Cada participante ganhou ${g} de ouro e 1 Rare Candy. Agora, a captura!`, 'win');
   fx(state, { k: 'raid_end', win: true, sp: boss.sp, party: r.party.map(x => x.pid) });
   r.stage = 'catch';
@@ -281,7 +321,7 @@ function raidWon(state, rng) {
 function finishRaid(state) {
   const r = state.raid;
   for (const x of r.party || []) for (const m of getPlayer(state, x.pid)?.team || []) if (m.tf) revertForm(m);
-  state.lastRaid = { sp: r.boss.sp, log: r.log.slice(-10) };
+  state.lastRaid = { sp: r.boss.sp, log: r.log.slice(-10), won: !!r.won, coop: !!r.coop, dmg: Object.fromEntries((r.party || []).map(x => [x.pid, x.dmg])) };
   state.raid = null;
   state.phase = 'action';
 }

@@ -35,7 +35,9 @@ import { GMAX } from '../../shared/data/gmax.js';
 import { releaseGold, releaseLabel } from '../../shared/data/release.js';
 import { dailyPokemon } from '../../shared/daily.js';
 import { esc, toast, bindActions, openModal, closeModal, setModalBody } from './dom.js';
-import { monSprite, avatarUrl, itemUrl, uiIcon } from '../config.js';
+import { monSprite, avatarUrl, itemUrl, uiIcon, uiBanner } from '../config.js';
+import { openGuild } from './guild.js';
+import { SQUADS } from '../../shared/rules/teams.js';
 import { net, api, signIn, signUp, signOut, resetPassword, watchMatch } from '../api.js';
 import { LocalSession } from '../session.js';
 import { openDex } from './modals.js';
@@ -105,6 +107,14 @@ export function loginScreen(root, { onDone, onLocal }) {
 }
 
 // ================================================================ hub
+/** 🎮 v65: card de modo. Ícone = ui/mode_<id>.png (reserva: emoji); arte do botão inteiro = ui/btn_<id>.png (opcional). */
+const MODE_SPRITE = { solo: 'solo', online: 'online', teams: 'teams', war: 'war', braid: 'raid', duel: 'duel', series: 'series', cup: 'cup', tower: 'tower', guild: 'guild', safari: 'safari', farm: 'farm', 'new-local': 'offline' };
+function modeTile(act, color, emoji, name, desc, disabled, extra = '', rawIcon = false) {
+  const id = MODE_SPRITE[act] || act;
+  return `<button class="mode-tile ${color} ${extra}" data-act="${act}" ${disabled ? 'disabled' : ''}>${uiBanner(id)}<span class="mt-ic">${rawIcon ? spriteIconRaw(id, emoji) : uiIcon(`mode_${id}`, emoji)}</span><b>${name}</b><small>${desc}</small></button>`;
+}
+const spriteIconRaw = (id, html) => html; // a Liga usa o logo do jogo
+
 
 // ================================================================ componentes de modo/coleção
 export const MODE_INFO = {
@@ -187,15 +197,19 @@ export async function hubScreen(root, ctx) {
 
       <h2 class="hub-h">🎮 Jogar</h2>
       <div class="mode-tiles">
-        <button class="mode-tile t-green" data-act="solo" ${profile ? '' : 'disabled'}><span class="mt-ic">🤖</span><b>Treino contra CPUs</b><small>Salva na conta: capturas e níveis vão para a Coleção. O jeito de farmar.</small></button>
-        <button class="mode-tile t-blue" data-act="online" ${profile ? '' : 'disabled'}><span class="mt-ic">🌐</span><b>Online</b><small>Crie ou entre em salas: Balanceado, Coleção, Competitivo (Liga), Battle Royale, Conquista.</small></button>
-        <button class="mode-tile t-red" data-act="duel" ${profile ? '' : 'disabled'}><span class="mt-ic">⚔️</span><b>Torneio</b><small>Fila de duelo ranqueado 1x1 com o time da Coleção. Vale Elo e Liga.</small></button>
- <button class="mode-tile t-green" data-act="series" ${profile ? '' : 'disabled'}><span class="mt-ic"><img class="mt-logo" src="/icons/icon-192.png" alt=""></span><b>Liga das Séries</b><small>Série D → A no estilo Brasileirão. Seu time de defesa joga por você offline.${profile?.stats?.serie?.season ? ` · ${['🟤 D', '⚪ C', '🟡 B', '🏆 A'][profile.stats.serie.div | 0]} · ${profile.stats.serie.pts | 0} pts` : ''}</small></button>
-        <button class="mode-tile t-gold" data-act="cup" ${profile ? '' : 'disabled'}><span class="mt-ic">🏟️</span><b>Copa</b><small>Chaveamento de até 8 treinadores. O campeão ganha 💎.</small></button>
-        <button class="mode-tile t-purple" data-act="tower" ${profile ? '' : 'disabled'}><span class="mt-ic">🗼</span><b>Torre de Batalha</b><small>${profile?.stats?.tower?.set ? `🔥 Sequência ${profile.stats.tower.streak} · duelo ${profile.stats.tower.set.n}/7` : `Duelos em sequência contra a Torre. 🏅 ${profile?.stats?.tower?.pb || 0} PB · recorde ${profile?.stats?.tower?.best || 0}`}</small></button>
-        <button class="mode-tile t-teal" data-act="safari" ${profile ? '' : 'disabled'}><span class="mt-ic">🌿</span><b>Zona Safári</b><small>${profile?.stats?.safari && !profile.stats.safari.over ? '👣 Passeio em andamento!' : 'Capture Pokémon raros pagando a entrada com ouro.'}</small></button>
-        <button class="mode-tile t-orange" data-act="farm" ${profile ? '' : 'disabled'}><span class="mt-ic">🌾</span><b>Fazenda</b><small>${profile?.stats?.farm?.slots?.length ? `${profile.stats.farm.slots.length} Pokémon · Nv. ${profile.stats.farm.lvl || 1} · horta, construções e casa` : 'Solte seus Pokémon para treinar, plante na horta e monte sua casa.'}</small></button>
-        <button class="mode-tile t-gray" data-act="new-local"><span class="mt-ic">📱</span><b>Offline</b><small>Mesmo aparelho, com amigos e/ou CPUs. Não salva na conta.</small></button>
+        ${modeTile('solo', 't-green', '🤖', 'Treino contra CPUs', 'Salva na conta: capturas e níveis vão para a Coleção. O jeito de farmar.', !profile, 'wide')}
+        ${modeTile('online', 't-blue', '🌐', 'Online', 'Crie ou entre em salas: Balanceado, Coleção, Competitivo (Liga), Battle Royale, Conquista.', !profile)}
+        ${modeTile('teams', 't-sky', '🤝', 'Duplas e Trios', 'Jogue em time no tabuleiro: passem itens, curem juntos, ajudem nas batalhas. O time vence junto.', !profile)}
+        ${modeTile('war', 't-crimson', '🏰', 'Guerra de Regiões', 'Conquista por times: pintem as cidades com a cor do time. Cada cidade a mais rende +15% para todos.', !profile)}
+        ${modeTile('braid', 't-dragon', '🐉', 'Raid em Grupo', 'Até 4 treinadores contra um chefe lendário ou Mega em 3 fases. Papéis, MVP e captura.', !profile, 'wide')}
+        ${modeTile('duel', 't-red', '⚔️', 'Torneio', 'Fila de duelo ranqueado 1x1 com o time da Coleção. Vale Elo e Liga.', !profile)}
+        ${modeTile('series', 't-green', '<img class="mt-logo" src="/icons/icon-192.png" alt="">', 'Liga das Séries', `Série D → A no estilo Brasileirão. Seu time de defesa joga por você offline.${profile?.stats?.serie?.season ? ` · ${['🟤 D', '⚪ C', '🟡 B', '🏆 A'][profile.stats.serie.div | 0]} · ${profile.stats.serie.pts | 0} pts` : ''}`, !profile, '', true)}
+        ${modeTile('cup', 't-gold', '🏟️', 'Copa', 'Chaveamento de até 8 treinadores. O campeão ganha 💎.', !profile)}
+        ${modeTile('tower', 't-purple', '🗼', 'Torre de Batalha', profile?.stats?.tower?.set ? `🔥 Sequência ${profile.stats.tower.streak} · duelo ${profile.stats.tower.set.n}/7` : `Sozinho ou 🤝 em dupla com um amigo. 🏅 ${profile?.stats?.tower?.pb || 0} PB · recorde ${profile?.stats?.tower?.best || 0}`, !profile)}
+        ${modeTile('guild', 't-indigo', '🛡️', 'Guildas', profile?.stats?.guild ? 'Sua guilda: veja os membros e o ranking da semana.' : 'Junte até 8 treinadores, somem pontos na semana e disputem o ranking.', !profile)}
+        ${modeTile('safari', 't-teal', '🌿', 'Zona Safári', profile?.stats?.safari && !profile.stats.safari.over ? '👣 Passeio em andamento!' : 'Capture Pokémon raros pagando a entrada com ouro.', !profile)}
+        ${modeTile('farm', 't-orange', '🌾', 'Fazenda', profile?.stats?.farm?.slots?.length ? `${profile.stats.farm.slots.length} Pokémon · Nv. ${profile.stats.farm.lvl || 1} · horta, construções e casa` : 'Solte seus Pokémon para treinar, plante na horta e monte sua casa.', !profile)}
+        ${modeTile('new-local', 't-gray', '📱', 'Offline', 'Mesmo aparelho, com amigos e/ou CPUs. Não salva na conta.', false)}
       </div>
       <details class="hub-info"><summary>ℹ️ Como funcionam os modos de sala</summary>
         <div class="tiny muted">${Object.values(MODE_INFO).map(m => `${m.icon} <b>${m.name}</b>: ${m.desc}`).join('<br>')}<br>Todo modo de tabuleiro aceita Clássico, ⚔️ Battle Royale e 🏰 Conquista, e a opção ☠️ Hardcore.</div></details>
@@ -228,6 +242,11 @@ export async function hubScreen(root, ctx) {
     'resume-local': () => ctx.openLocal(LocalSession.load()),
     'new-local': () => ctx.go('local-setup'),
     solo: () => soloModal(profile, ctx),
+    // 🤝🏰🐉🛡️ v65: modos em equipe
+    teams: () => teamModeChooser(ctx, profile, { title: '🤝 Duplas e Trios', teams: 2, rules: 'classic' }),
+    war: () => teamModeChooser(ctx, profile, { title: '🏰 Guerra de Regiões', teams: 2, rules: 'conquest' }),
+    braid: () => teamModeChooser(ctx, profile, { title: '🐉 Raid em Grupo', teams: 0, rules: 'bossraid' }),
+    guild: () => openGuild(profile, p => { profile = p; }),
     vault: () => collectionModal(profile, rerender),
     companions: () => openCompanionPicker({ owned: profile?.stats?.companions || [], current: profile?.stats?.companion || null, bond: profile?.stats?.companionBond || {},
       onPick: async id => { try { profile = (await api('profile', { op: 'companion', id })).profile; toast(id ? `🤝 ${COMPANIONS[id].name} vai com você nas próximas partidas!` : 'Sem companheiro.', 'good'); rerender(profile); } catch (e) { toast(e.message, 'bad'); } } }),
@@ -264,10 +283,35 @@ export async function hubScreen(root, ctx) {
   }, 600);
 }
 
-function soloModal(profile, ctx) {
-  const st = { bots: 2, turnLimit: 60, useTeam: false, starter: 'charmander', team: [], map: 'kanto', bring: 0, rules: 'classic', hardcore: false, megas: false, items: {} };
+/** 🤝 v65: escolher entre jogar o modo de time com CPUs (treino) ou criar uma sala online para amigos. */
+function teamModeChooser(ctx, profile, o) {
+  const raid = o.rules === 'bossraid';
+  const ov = openModal('tmode', o.title, `<p class="small muted">${raid ? 'Até 4 treinadores contra um chefe lendário ou Mega em 3 fases (cada um com 1 Pokémon da Coleção e um papel: ⚔️ Atacante, 💚 Suporte ou 🌀 Controle).' : o.rules === 'conquest' ? 'Conquista em times: as cidades são do time, aliados não se atacam e cada cidade a mais rende +15% para o time.' : 'O time vence junto: passem itens, curem juntos no Centro Pokémon, ajudem nas batalhas quando estiverem perto e usem o 🎲 Dado de Apoio (1× por partida).'}</p>
+    <div class="grid2" style="margin-top:8px">
+      <button class="btn primary big" data-act="cpu">🤖 Com CPUs<br><span class="tiny">salva na conta</span></button>
+      <button class="btn blue big" data-act="room">🌐 Sala online<br><span class="tiny">chame seus amigos</span></button>
+    </div>
+    ${raid ? '' : `<div class="row" style="gap:6px;justify-content:center;margin-top:8px"><span class="small">Tamanho do time:</span><button class="btn sm ${o.teams === 2 ? 'primary' : ''}" data-act="sz" data-n="2">Duplas</button><button class="btn sm ${o.teams === 3 ? 'primary' : ''}" data-act="sz" data-n="3">Trios</button></div>`}`);
+  bindActions(ov, {
+    sz: d => { o.teams = Number(d.n); ov.querySelectorAll('[data-act="sz"]').forEach(b => b.classList.toggle('primary', b.dataset.n === d.n)); },
+    cpu: () => { closeModal('tmode'); soloModal(profile, ctx, raid ? { rules: 'bossraid', useTeam: true, bots: 2 } : { rules: o.rules, teams: o.teams, bots: o.teams * 2 - 1 }); },
+    room: async () => {
+      try {
+        const r = await api('match', { op: 'create', name: `${o.title.replace(/^\S+\s/, '')} de ${profile?.trainer_name || 'Treinador'}`, mode: raid ? 'collection' : 'balanced', maxPlayers: raid ? 4 : o.teams * 2, rules: o.rules, teams: raid ? 0 : o.teams, isPublic: true, turnLimit: 60 });
+        closeModal('tmode'); ctx.go('room', r.match.id);
+      } catch (e) { toast(e.message, 'bad'); }
+    }
+  });
+}
+
+function soloModal(profile, ctx, preset = {}) {
+  const st = { bots: 2, turnLimit: 60, useTeam: false, starter: 'charmander', team: [], map: 'kanto', bring: 0, rules: 'classic', hardcore: false, megas: false, items: {}, teams: 0, ...preset };
+  const raidMode = () => st.rules === 'bossraid';
   const body = () => `
+    ${raidMode() ? '<p class="small">🐉 <b>Raid em Grupo</b>: escolha seu time da Coleção — na hora da Raid você entra com 1 Pokémon e escolhe o papel. As CPUs entram junto com você.</p>' : ''}
+    ${st.teams ? `<p class="small">🤝 <b>${st.teams === 2 ? 'Duplas' : 'Trios'}</b>: CPUs também viram seus parceiros de time. Precisa de pelo menos ${st.teams * 2 - 1} CPUs para formar ${st.teams === 2 ? '2 duplas' : '2 trios'}.</p>` : ''}
     <div class="grid2">
+      <div class="field"><label>Times</label><select class="input" id="s-teams" ${raidMode() ? 'disabled' : ''}><option value="0" ${!st.teams ? 'selected' : ''}>Cada um por si</option><option value="2" ${st.teams === 2 ? 'selected' : ''}>🤝 Duplas</option><option value="3" ${st.teams === 3 ? 'selected' : ''}>🤝 Trios</option></select></div>
       <div class="field"><label>Adversários (CPU)</label><select class="input" id="s-bots">${[1, 2, 3, 4, 5].map(n => `<option ${n === st.bots ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
       <div class="field"><label>Duração</label><select class="input" id="s-turns"><option value="30" ${st.turnLimit === 30 ? 'selected' : ''}>Rápida (30 turnos)</option><option value="45" ${st.turnLimit === 45 ? 'selected' : ''}>Média (45 turnos)</option><option value="60" ${st.turnLimit === 60 ? 'selected' : ''}>Normal (60 turnos)</option></select></div>
 <div class="field"><label>Tipo de partida</label><select class="input" id="s-rules">${Object.entries(GAME_RULES).map(([k, g]) => `<option value="${k}" ${k === (st.rules) ? 'selected' : ''} title="${esc(g.desc)}">${g.icon} ${g.name}</option>`).join('')}</select></div>
@@ -281,8 +325,8 @@ function soloModal(profile, ctx) {
       <div class="bring-gold"><b>🎒 Levar itens da Mochila</b> <span class="tiny muted">${esc(bringSummary(st.items))}</span> <button class="btn sm" data-act="s-items">Escolher</button></div>
       <div class="bring-gold"><b>💎 Mega / 🔴 Gigantamax</b> <select class="input sm" id="s-megas" style="width:auto;display:inline-block"><option value="0" ${!st.megas ? 'selected' : ''}>Desligado</option><option value="1" ${st.megas ? 'selected' : ''}>Megas e Gigantamax liberados</option></select> <span class="tiny muted">${[profile?.stats?.megaBracelet ? '🔗 Bracelete Mega' : '', profile?.stats?.dynamaxBand ? '🔴 Pulseira Dynamax' : ''].filter(Boolean).join(' + ') || 'precisa do 🔗 Bracelete Mega ou da 🔴 Pulseira Dynamax (caem em Raids)'}</span></div>` : starterPicker(st.starter)}
     <button class="btn primary block" data-act="go" style="margin-top:10px">▶ Começar treino</button>`;
-  const ov = openModal('solo', '🤖 Treino contra CPUs', body(), { wide: true });
-  const keep = () => { st.bots = Number(ov.querySelector('#s-bots').value); st.turnLimit = Number(ov.querySelector('#s-turns').value); st.map = ov.querySelector('#s-map').value; st.rules = ov.querySelector('#s-rules').value; st.hardcore = ov.querySelector('#s-hc').value === '1'; if (ov.querySelector('#s-megas')) st.megas = ov.querySelector('#s-megas').value === '1'; };
+  const ov = openModal('solo', raidMode() ? '🐉 Raid em Grupo com CPUs' : st.teams ? '🤝 Treino em time com CPUs' : '🤖 Treino contra CPUs', body(), { wide: true });
+  const keep = () => { st.teams = Number(ov.querySelector('#s-teams')?.value || 0); st.bots = Number(ov.querySelector('#s-bots').value); st.turnLimit = Number(ov.querySelector('#s-turns').value); st.map = ov.querySelector('#s-map').value; st.rules = ov.querySelector('#s-rules').value; st.hardcore = ov.querySelector('#s-hc').value === '1'; if (ov.querySelector('#s-megas')) st.megas = ov.querySelector('#s-megas').value === '1'; };
   const re = () => { keep(); setModalBody('solo', body()); };
   bindActions(ov, {
     'use-starter': () => { st.useTeam = false; re(); },
@@ -294,7 +338,10 @@ function soloModal(profile, ctx) {
     go: async () => {
       keep();
       try {
-        const { match } = await api('match', { op: 'solo', bots: st.bots, turnLimit: st.turnLimit, map: st.map, rules: st.rules, hardcore: st.hardcore, megas: st.useTeam && st.megas, bringGold: st.useTeam ? st.bring : 0, bringItems: st.useTeam ? st.items : {}, starter: st.starter, teamUids: st.useTeam ? st.team : [] });
+        if (raidMode() && !st.team.length) return toast('🐉 Escolha seu time da Coleção para a Raid em Grupo.', 'bad');
+        if (st.teams && st.bots + 1 < st.teams * 2) return toast(`Para ${st.teams === 2 ? 'Duplas' : 'Trios'} são precisas pelo menos ${st.teams * 2 - 1} CPUs.`, 'bad');
+        if (raidMode() && st.bots > 3) return toast('🐉 A Raid em Grupo é para até 4 treinadores (até 3 CPUs).', 'bad');
+        const { match } = await api('match', { op: 'solo', teams: raidMode() ? 0 : st.teams, bots: st.bots, turnLimit: st.turnLimit, map: st.map, rules: st.rules, hardcore: st.hardcore, megas: st.useTeam && st.megas, bringGold: st.useTeam ? st.bring : 0, bringItems: st.useTeam ? st.items : {}, starter: st.starter, teamUids: st.useTeam ? st.team : [] });
         closeModal('solo');
         ctx.openOnline(match.id);
       } catch (e) { toast(e.message, 'bad'); }
@@ -634,6 +681,7 @@ export async function lobbyScreen(root, ctx) {
 <div class="field"><label>Tipo de partida</label><select class="input" id="c-rules">${Object.entries(GAME_RULES).map(([k, g]) => `<option value="${k}" ${k === ('classic') ? 'selected' : ''} title="${esc(g.desc)}">${g.icon} ${g.name}</option>`).join('')}</select></div>
           <div class="field"><label>Mapa</label><select class="input" id="c-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === ('kanto') ? 'selected' : ''} title="${esc(m.desc)}">${m.icon || '🗺️'} ${esc(m.name)}</option>`).join('')}</select>${mapInfo('kanto')}</div>
         </div>
+        <div class="field"><label>Times</label><select class="input" id="c-teams"><option value="0">Cada um por si</option><option value="2">🤝 Duplas (o time vence junto)</option><option value="3">🤝 Trios</option></select></div>
         <div class="field"><label>Dificuldade</label><select class="input" id="c-hc"><option value="0">Normal</option><option value="1">☠️ Hardcore — perdeu a equipe, está fora e perde tudo</option></select></div>
         <div class="field hidden" id="c-megas-f"><label>Mega / Gigantamax</label><select class="input" id="c-megas" title="Mega: 🔗 Bracelete + Megapedra · Gigantamax: 🔴 Pulseira Dynamax + Fator Gigantamax"><option value="0" >💎 Desligado</option><option value="1" >💎🔴 Megas e Gigantamax liberados</option></select><div class="tiny muted">Só no modo Coleção: 1 Mega Evolução OU 1 Gigantamax por batalha (Mega: 🔗 Bracelete + Megapedra segurada · Gigantamax: 🔴 Pulseira Dynamax + Pokémon com o Fator, dura 3 rodadas).</div></div>
         <div class="field hidden" id="c-cap-f"><label>Nível máximo dos Pokémon levados</label><select class="input" id="c-cap"><option value="0">Sem limite</option><option value="15">15</option><option value="25">25</option><option value="35">35</option><option value="45">45</option></select></div>
@@ -668,7 +716,7 @@ export async function lobbyScreen(root, ctx) {
   };
   const go = async p => { try { const { match } = await p; ctx.openRoom(match.id); } catch (e) { toast(e.message, 'bad'); } };
   bindActions(root, {
-    create: () => go(api('match', { op: 'create', name: v('#c-name'), mode: v('#c-mode'), maxPlayers: Number(v('#c-max')), turnLimit: Number(v('#c-turns')), levelCap: Number(v('#c-cap')), map: v('#c-map'), rules: v('#c-rules'), hardcore: v('#c-hc') === '1', megas: v('#c-mode') === 'collection' && v('#c-megas') === '1', pin: v('#c-pin'), isPublic: v('#c-pub') === '1' })),
+    create: () => go(api('match', { op: 'create', name: v('#c-name'), mode: v('#c-mode'), maxPlayers: Number(v('#c-max')), turnLimit: Number(v('#c-turns')), levelCap: Number(v('#c-cap')), map: v('#c-map'), rules: v('#c-rules'), teams: Number(v('#c-teams')), hardcore: v('#c-hc') === '1', megas: v('#c-mode') === 'collection' && v('#c-megas') === '1', pin: v('#c-pin'), isPublic: v('#c-pub') === '1' })),
     'join-code': async () => {
       try { const { match } = await api('match', { op: 'join', code: v('#j-code'), pin: v('#j-pin') }); if (match.status === 'playing') ctx.openOnline(match.id); else ctx.openRoom(match.id); } catch (e) { toast(e.message, 'bad'); }
     },
@@ -683,6 +731,13 @@ export async function lobbyScreen(root, ctx) {
   load();
   const t = setInterval(load, 6000);
   return () => clearInterval(t);
+}
+
+/** 🤝 v65: escolher o time na sala (o seu; o anfitrião escolhe o das CPUs). Sem escolha = o jogo equilibra. */
+function squadPicker(e, can, n) {
+  const cur = Number.isInteger(e.squad) ? e.squad : null;
+  if (!can) return cur === null ? '<span class="chip" title="O jogo escolhe o time">🎲</span> ' : `<span class="sq-chip" title="${esc(SQUADS[cur].name)}">${SQUADS[cur].icon}</span> `;
+  return `<span class="row" style="display:inline-flex;gap:2px;margin-right:4px">${SQUADS.slice(0, Math.min(3, n)).map((S, i) => `<button class="btn sm ${cur === i ? 'primary' : ''}" data-act="squad" data-id="${esc(e.id)}" data-sq="${i}" title="${esc(S.name)}">${S.icon}</button>`).join('')}<button class="btn sm ${cur === null ? 'primary' : ''}" data-act="squad" data-id="${esc(e.id)}" data-sq="" title="O jogo escolhe">🎲</button></span> `;
 }
 
 // ================================================================ sala de espera
@@ -707,13 +762,14 @@ export async function roomScreen(root, ctx, matchId) {
       <div class="hub-grid">
         <div class="card col">
           <div class="spread"><h3>🏟️ ${esc(match.name)}</h3><span class="chip gold" style="font-size:14px">Código: ${esc(match.code)}</span></div>
-          <div class="row">${modeChip(mode, o.levelCap)}${o.hardcore ? '<span class="chip red">☠️ Hardcore</span>' : ''}${o.megas ? '<span class="chip purple">💎🔴 Mega/Gmax</span>' : ''}<span class="small muted">${o.maxPlayers} jogadores · ${o.turnLimit || 60} turnos · ${o.rules === 'royale' ? '⚔️ Arena Royale' : mapChoiceName(o.map || 'kanto')} · ${GAME_RULES[o.rules || 'classic'].icon} ${GAME_RULES[o.rules || 'classic'].name} ${match.hasPin ? '· 🔒 PIN' : ''}</span></div>
+          <div class="row">${modeChip(mode, o.levelCap)}${o.hardcore ? '<span class="chip red">☠️ Hardcore</span>' : ''}${o.megas ? '<span class="chip purple">💎🔴 Mega/Gmax</span>' : ''}${o.teams >= 2 ? `<span class="chip blue">🤝 ${o.teams === 2 ? 'Duplas' : 'Trios'}</span>` : ''}${o.rules === 'bossraid' ? '<span class="chip purple">🐉 Raid em Grupo</span>' : ''}<span class="small muted">${o.maxPlayers} jogadores · ${o.turnLimit || 60} turnos · ${o.rules === 'royale' ? '⚔️ Arena Royale' : mapChoiceName(o.map || 'kanto')} · ${GAME_RULES[o.rules || 'classic'].icon} ${GAME_RULES[o.rules || 'classic'].name} ${match.hasPin ? '· 🔒 PIN' : ''}</span></div>
           <div class="tiny muted">${esc(MODE_INFO[mode]?.desc || '')}${o.rules && o.rules !== 'classic' ? ' · ' + esc(GAME_RULES[o.rules].desc) : ''}</div>
           ${isHost ? `<div class="grid2">
             <select class="input" id="o-mode">${Object.entries(MODE_INFO).map(([k, m]) => `<option value="${k}" ${k === mode ? 'selected' : ''}>${m.icon} ${m.name}</option>`).join('')}</select>
             ${['balanced', 'collection'].includes(mode) ? `<select class="input" id="o-rules">${Object.entries(GAME_RULES).map(([k, g]) => `<option value="${k}" ${k === (o.rules || 'classic') ? 'selected' : ''}>${g.icon} ${g.name}</option>`).join('')}</select>` : ''}
             <select class="input" id="o-map">${MAP_CHOICES.map(m => `<option value="${m.id}" ${m.id === (o.map || 'kanto') ? 'selected' : ''}>${m.icon || '🗺️'} ${esc(m.name)}</option>`).join('')}</select>${mapInfo(o.map || 'kanto')}
             <select class="input" id="o-turns">${[[30, 'Rápida (30)'], [40, 'Competitiva (40)'], [45, 'Média (45)'], [60, 'Normal (60)']].map(([v, l]) => `<option value="${v}" ${v === (o.turnLimit || 60) ? 'selected' : ''}>${l}</option>`).join('')}</select>
+            ${['balanced', 'collection'].includes(mode) && o.rules !== 'bossraid' ? `<select class="input" id="o-teams"><option value="0" ${!o.teams ? 'selected' : ''}>Cada um por si</option><option value="2" ${o.teams === 2 ? 'selected' : ''}>🤝 Duplas</option><option value="3" ${o.teams === 3 ? 'selected' : ''}>🤝 Trios</option></select>` : ''}
             <select class="input" id="o-hc" title="${esc(HARDCORE_TXT)}"><option value="0" ${!o.hardcore ? 'selected' : ''}>Dificuldade normal</option><option value="1" ${o.hardcore ? 'selected' : ''}>☠️ Hardcore</option></select>
             ${mode === 'collection' ? `<select class="input" id="o-megas" title="Mega Evolução (Bracelete Mega + Megapedra)"><option value="0" ${!o.megas ? 'selected' : ''}>💎 Sem Megas</option><option value="1" ${o.megas ? 'selected' : ''}>💎 Megas liberadas</option></select>` : ''}
             ${o.rules !== 'royale' && !['ranked', 'duel', 'cup'].includes(mode) ? `<select class="input" id="o-late"><option value="1" ${o.allowLate !== false ? 'selected' : ''}>🙋 Pode entrar no meio</option><option value="0" ${o.allowLate === false ? 'selected' : ''}>🔒 Sem entrar no meio</option></select>` : ''}
@@ -721,7 +777,7 @@ export async function roomScreen(root, ctx, matchId) {
           </div>` : ''}
           <div class="list" style="max-height:none">${match.lobby.map(e => `
             <div class="list-item"><img class="avatar sm" src="${avatarUrl(e.avatar, e.skin)}" alt="${esc(e.name)}">
-              <div class="grow"><b>${esc(e.name)}</b> ${e.id === match.hostId ? '<span class="chip gold">anfitrião</span>' : ''} ${e.isBot ? '<span class="chip">CPU</span>' : e.ready || e.id === match.hostId ? '<span class="chip green">pronto</span>' : '<span class="chip">aguardando</span>'}
+              <div class="grow">${o.teams >= 2 ? squadPicker(e, e.id === meId || (isHost && e.isBot), Math.max(2, Math.ceil((o.maxPlayers || 4) / o.teams))) : ''}<b>${esc(e.name)}</b> ${e.id === match.hostId ? '<span class="chip gold">anfitrião</span>' : ''} ${e.isBot ? '<span class="chip">CPU</span>' : e.ready || e.id === match.hostId ? '<span class="chip green">pronto</span>' : '<span class="chip">aguardando</span>'}
                 <div class="tiny muted">${teamTxt(e)}</div></div>
               ${isHost && e.id !== meId ? `<button class="btn sm red" data-act="kick" data-id="${esc(e.id)}">✕</button>` : ''}
             </div>`).join('')}</div>
@@ -755,8 +811,8 @@ export async function roomScreen(root, ctx, matchId) {
       const text = root.querySelector('#r-msg').value.trim();
       if (text) await op({ op: 'chat', text });
     });
-    const sendOpts = () => op({ op: 'options', mode: root.querySelector('#o-mode').value, map: root.querySelector('#o-map')?.value, rules: root.querySelector('#o-rules')?.value, turnLimit: Number(root.querySelector('#o-turns').value), levelCap: Number(root.querySelector('#o-cap')?.value || 0), hardcore: root.querySelector('#o-hc')?.value === '1', megas: root.querySelector('#o-megas')?.value === '1', ...(root.querySelector('#o-late') ? { lateJoin: root.querySelector('#o-late').value === '1' } : {}) });
-    root.querySelectorAll('#o-mode, #o-rules, #o-map, #o-turns, #o-cap, #o-hc, #o-late').forEach(el => el.addEventListener('change', sendOpts));
+    const sendOpts = () => op({ op: 'options', teams: Number(root.querySelector('#o-teams')?.value || 0), mode: root.querySelector('#o-mode').value, map: root.querySelector('#o-map')?.value, rules: root.querySelector('#o-rules')?.value, turnLimit: Number(root.querySelector('#o-turns').value), levelCap: Number(root.querySelector('#o-cap')?.value || 0), hardcore: root.querySelector('#o-hc')?.value === '1', megas: root.querySelector('#o-megas')?.value === '1', ...(root.querySelector('#o-late') ? { lateJoin: root.querySelector('#o-late').value === '1' } : {}) });
+    root.querySelectorAll('#o-mode, #o-rules, #o-teams, #o-map, #o-turns, #o-cap, #o-hc, #o-late').forEach(el => el.addEventListener('change', sendOpts));
   };
 
   const op = async body => {
@@ -784,6 +840,7 @@ export async function roomScreen(root, ctx, matchId) {
     bring: d => op({ op: 'update', bringGold: Number(d.v) }),
     'bring-items': () => { const mine = match.lobby.find(e => e.id === meId); bringItemsPicker(profile, mine?.bringItems, sel => op({ op: 'update', bringItems: sel })); },
     bot: () => op({ op: 'add_bot' }),
+    squad: d => op({ op: 'squad', target: d.id, squad: d.sq === '' ? null : Number(d.sq) }),
     kick: d => op({ op: 'remove', target: d.id }),
     start: () => op({ op: 'start' }),
     leave: async () => { await op({ op: 'leave' }); cleanup(); ctx.go('lobby'); }

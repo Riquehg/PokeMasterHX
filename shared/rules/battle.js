@@ -10,6 +10,7 @@ import { against, bestAttack, effectivenessLabel, TYPE_LABELS } from './types.js
 import { monMoves, moveIdsOf, STAB, defaultMoveIds, MAX_FORMS } from '../data/moves.js';
 import { companionBonus, progressMission, companionLevel } from './missions.js';
 import { getCompanion, assistChance, assistMax } from '../data/companions.js';
+import { teamsOn, nearAlly, ALLY_ASSIST_CHANCE, ALLY_ASSIST_PCT } from './teams.js';
 import { weatherMult, weatherInflict, weatherChip, weatherOf } from './weather.js';
 import { conquestMult } from './modeBonus.js';
 import { GYMS } from '../data/trainers.js';
@@ -918,6 +919,34 @@ function companionAssist(state, rng, si) {
   return false;
 }
 
+/** 🤝 v65: aliado de time por perto (mesma casa ou vizinha) entra 1× por batalha com o Pokémon da frente dele. */
+function allyAssist(state, rng, si) {
+  const b = state.battle;
+  if (b.over || !teamsOn(state)) return false;
+  const side = b.sides[si];
+  if (side.kind !== 'player' || b.mustSwitch[si] || side.allyHelped) return false;
+  const p = getPlayer(state, side.pid);
+  const ally = p && nearAlly(state, p);
+  if (!ally || b.sides.some(s => s.pid === ally.id) || !rng.chance(ALLY_ASSIST_CHANCE)) return false;
+  const lead = ally.team.find(m => m.hp > 0);
+  const foeSide = b.sides[1 - si], foe = sideActive(state, foeSide);
+  if (!lead || !foe || foe.hp <= 0) return false;
+  side.allyHelped = true;
+  const types = getSpecies(lead.sp).types;
+  const mult = Math.max(0.5, Math.max(...types.map(t => against(t, getSpecies(foe.sp).types) || 0.5)));
+  let dmg = Math.max(1, Math.round(maxHpOf(foe) * ALLY_ASSIST_PCT * mult));
+  if (foe.raid) dmg = Math.min(dmg, foe.hp - 1 > 0 ? foe.hp - 1 : 1);
+  dmg = Math.min(dmg, foe.hp);
+  foe.hp -= dmg;
+  fx(state, { k: 'assist', side: si, pid: p.id, ally: ally.id, sp: lead.sp, move: 'Ajuda do time', type: types[0], kind: 'dmg', uid: foe.uid, dmg, mult, hpAfter: foe.hp, maxHp: maxHpOf(foe) });
+  log(state, `🤝 ${ally.name} (time) mandou ${speciesName(lead.sp)} ajudar ${p.name}: ${dmg} de dano em ${speciesName(foe.sp)}!`, 'good');
+  if (foe.hp <= 0) {
+    awardKO(state, si, 1 - si);
+    if (handleFaint(state, rng, 1 - si)) return true;
+  }
+  return false;
+}
+
 // ⚡ Limite de lendários da casa Amarela: 2 capturas por jogador por partida (Raid, eventos e Megas não contam)
 export const LEGEND_MATCH_LIMIT = 4; // v64: era 2
 export const CHARM_DAYS = 7; // 🏵️ v58: o Amuleto Lendário vale 1 semana a partir da ativação
@@ -1038,6 +1067,7 @@ function resolveRound(state, rng, choices) {
   // 1b) ❤️ companheiro íntimo pode entrar na batalha
   for (let si = 0; si < 2; si++) {
     if (companionAssist(state, rng, si)) return;
+    if (allyAssist(state, rng, si)) return; // 🤝 v65
   }
 
   // 2) ataques, por velocidade (nível; empate: lado 0)

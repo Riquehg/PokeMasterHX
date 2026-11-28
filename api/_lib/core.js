@@ -23,6 +23,8 @@ import { releaseGold } from '../../shared/data/release.js';
 import { levelEvoTarget, variantAfter, itemEvoTarget } from '../../shared/data/evolution.js';
 import { GMAX } from '../../shared/data/gmax.js';
 import { defIvOf, MAX_LEVEL } from '../../shared/rules/monsters.js';
+import { isWinner } from '../../shared/rules/teams.js';
+import { GUILD_POINTS, addGuildPts } from '../../shared/data/guilds.js';
 import { TITLE_BY_ID, unlockedTitles } from '../../shared/data/titles.js';
 import { bondLevel, bondGain, BOND_MAX, COMPANIONS } from '../../shared/data/companions.js';
 import { equippedCosmetic, equippedSkin, skinFor, publishCaptures, getAnnouncement, getShop, cleanShop, creditPayment, myCosmetics, refreshCosmeticInMatches } from './shop.js';
@@ -118,7 +120,7 @@ export async function mutateProfile(db, id, fn) {
 export function accountGoldReward(state, p) {
   // o ouro trazido da conta volta à parte (refundBrought); só o ouro ganho na partida vira recompensa
   const earned = Math.max(0, p.gold - (p.broughtGold || 0));
-  const base = Math.floor(earned / 10) + 40 * p.badges.length + (state.winner === p.id ? 150 : 0) + (p.champion ? 250 : 0);
+  const base = Math.floor(earned / 10) + 40 * p.badges.length + (isWinner(state, p) ? 150 : 0) + (p.champion ? 250 : 0);
   return Math.min(1200, base);
 }
 
@@ -736,7 +738,11 @@ function normalizeOptions(body, prev = {}) {
   if (body.map !== undefined) o.map = isMapId(String(body.map)) && !String(body.map).startsWith('gen:') ? String(body.map) : 'kanto'; // Kanto, Expedição, temas ou mapa do painel
   o.map = o.map || 'kanto';
   // tipo de partida: Clássico, Battle Royale ou Conquista (funciona no Balanceado e no Coleção)
-  if (body.rules !== undefined) o.rules = ['royale', 'conquest'].includes(body.rules) ? body.rules : 'classic';
+  if (body.rules !== undefined) o.rules = ['royale', 'conquest', 'bossraid'].includes(body.rules) ? body.rules : 'classic';
+  // 🤝 v65: Duplas/Trios (não vale na Raid em Grupo, que já é cooperativa)
+  if (body.teams !== undefined) o.teams = [2, 3].includes(Number(body.teams)) ? Number(body.teams) : 0;
+  if (!['balanced', 'collection', 'solo'].includes(o.mode) || o.rules === 'bossraid') o.teams = 0;
+  o.teams = o.teams || 0;
   if (!['balanced', 'collection', 'solo'].includes(o.mode)) o.rules = 'classic';
   o.rules = o.rules || 'classic';
   o.levelCap = o.levelCap || 0;
@@ -839,6 +845,15 @@ export async function matchOp(db, user, body) {
       if (body.ready !== undefined) me.ready = !!body.ready;
       return save(db, row, { lobby }, user.id);
     }
+    case 'squad': { // 🤝 v65: escolher o time (você mesmo; o anfitrião escolhe o das CPUs)
+      if (!(row.options?.teams >= 2)) bad('Esta sala não é em times.');
+      const target = lobby.find(e => e.id === (body.target || user.id));
+      if (!target) bad('Jogador inválido.');
+      if (target.id !== user.id && !(isHost && target.isBot)) forbidden('Só o anfitrião escolhe o time das CPUs.');
+      const sq = Number(body.squad);
+      target.squad = [0, 1, 2].includes(sq) ? sq : null;
+      return save(db, row, { lobby }, user.id);
+    }
     case 'add_bot': {
       if (!isHost) forbidden('Só o anfitrião adiciona CPUs.');
       if (mode === 'ranked' || mode === 'duel') bad('Partidas competitivas são só entre humanos.');
@@ -874,6 +889,7 @@ export async function matchOp(db, user, body) {
 async function playerCfg(db, e, options) {
   const mode = options.mode;
   const p = { id: e.id, name: e.name, avatar: e.avatar, isBot: e.isBot, starter: e.starter };
+  if (Number.isInteger(e.squad)) p.squad = e.squad; // 🤝 time escolhido na sala
   const prof = e.isBot ? null : await db.getProfile(e.id);
   if (prof) { try { p.cosmetic = await equippedCosmetic(db, prof); } catch { /* sem cosmético */ } }
   if (prof?.stats?.megaBracelet) p.megaKey = true; // 🔗 Bracelete Mega (ícone no peão; Mega só se a sala permitir)
@@ -935,6 +951,10 @@ async function startRoom(db, row, lobby, userId) {
   if (mode === 'ranked' && lobby.filter(e => !e.isBot).length < 2) bad('O competitivo precisa de pelo menos 2 treinadores humanos.');
   const notReady = lobby.filter(e => !e.isBot && e.id !== row.host_id && !e.ready);
   if (notReady.length) bad(`Aguardando: ${notReady.map(e => e.name).join(', ')} marcar "Pronto".`);
+  if (options.rules === 'bossraid') { // 🐉 v65
+    if (mode !== 'collection') bad('🐉 A Raid em Grupo é no modo 📦 Coleção (cada um luta com um Pokémon do próprio time).');
+    if (lobby.length > 4) bad('🐉 A Raid em Grupo é para até 4 treinadores.');
+  }
   const players = [];
   for (const e of lobby) players.push(await playerCfg(db, e, options));
   // Coleção: CPUs ficam no nível médio das equipes humanas, para não serem atropeladas
@@ -948,7 +968,7 @@ async function startRoom(db, row, lobby, userId) {
   const mapId = await resolveMapId(db, options.map); // ✏️ v64: Kanto/temático editado no painel admin
   const state = createMatch({
     id: row.id, mode: 'online', seed: randomSeed(), now: Date.now(), players, map: mapId, mapData: await mapDataFor(db, mapId), rules: options.rules,
-    options: { dailyPokemon: await currentDaily(db), turnLimit: options.turnLimit || 0, trades: mode !== 'ranked', hardcore: !!options.hardcore, megas: !!options.megas }
+    options: { dailyPokemon: await currentDaily(db), turnLimit: options.turnLimit || 0, trades: mode !== 'ranked', hardcore: !!options.hardcore, megas: !!options.megas, teams: options.teams || 0 }
   });
   state.roomMode = mode;
   const res = await save(db, row, { status: state.status === 'finished' ? 'finished' : 'playing', state, options }, userId);
@@ -960,7 +980,7 @@ async function createRoom(db, user, body) {
   const profile = await getOrCreateProfile(db, user);
   await leaveOldLobbies(db, user);
   const name = cleanName(body.name, `Sala de ${profile.trainer_name}`).slice(0, 30);
-  const options = normalizeOptions({ mode: body.mode, maxPlayers: body.maxPlayers, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap, map: body.map, rules: body.rules, hardcore: !!body.hardcore, megas: !!body.megas });
+  const options = normalizeOptions({ mode: body.mode, maxPlayers: body.maxPlayers, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap, map: body.map, rules: body.rules, hardcore: !!body.hardcore, megas: !!body.megas, teams: body.teams });
   if (options.mode === 'solo') options.mode = 'balanced';
   const pin = String(body.pin || '').replace(/\D/g, '').slice(0, 6);
   const row = await insertRoom(db, user, { name, options, isPublic: body.isPublic !== false, pin, lobby: [lobbyEntry(profile, body, await skinFor(db, profile))] });
@@ -991,7 +1011,8 @@ async function createSolo(db, user, body) {
   await leaveOldLobbies(db, user);
   const bots = Math.max(1, Math.min(5, Number(body.bots) || 1));
   const useCollection = Array.isArray(body.teamUids) && body.teamUids.length > 0;
-  const options = normalizeOptions({ mode: useCollection ? 'collection' : 'balanced', maxPlayers: bots + 1, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap || 0, map: body.map, rules: body.rules, hardcore: !!body.hardcore, megas: !!body.megas });
+  const options = normalizeOptions({ mode: useCollection ? 'collection' : 'balanced', maxPlayers: bots + 1, turnLimit: body.turnLimit ?? 60, levelCap: body.levelCap || 0, map: body.map, rules: body.rules, hardcore: !!body.hardcore, megas: !!body.megas, teams: body.teams });
+  if (options.rules === 'bossraid' && !useCollection) bad('🐉 Na Raid em Grupo escolha seu time da Coleção (o Pokémon que vai lutar sai dele).');
   const entry = lobbyEntry(profile, body, await skinFor(db, profile));
   if (useCollection) {
     const owned = new Set((profile.vault || []).map(v => v.uid));
@@ -1254,7 +1275,7 @@ export async function recordResults(db, state, options = {}) {
     const saved = await mutateProfile(db, p.id, cur => {
       const st = { ...(cur.stats || {}) };
       st.matches = (st.matches || 0) + 1;
-      st.wins = (st.wins || 0) + (state.winner === p.id ? 1 : 0);
+      st.wins = (st.wins || 0) + (isWinner(state, p) ? 1 : 0);
       st.champion = (st.champion || 0) + (p.champion ? 1 : 0);
       st.captures = (st.captures || 0) + p.stats.captures;
       st.shinies = (st.shinies || 0) + p.stats.shinies;
@@ -1264,7 +1285,7 @@ export async function recordResults(db, state, options = {}) {
       if (p.companion && COMPANIONS[p.companion] && !p.hardcoreLost) {
         const bond = { ...(st.companionBond || {}) };
         const before = bond[p.companion] || 0;
-        const gain = (p.meal?.id === 'bond_pudding' ? 2 : 1) * bondGain({ won: state.winner === p.id, badges: p.badges.length, captures: p.stats.captures, battlesWon: p.stats.wins, missions: p.missionsDone || 0, turns: state.turn }); // 🍮 Pudim da Amizade: laço em dobro
+        const gain = (p.meal?.id === 'bond_pudding' ? 2 : 1) * bondGain({ won: isWinner(state, p), badges: p.badges.length, captures: p.stats.captures, battlesWon: p.stats.wins, missions: p.missionsDone || 0, turns: state.turn }); // 🍮 Pudim da Amizade: laço em dobro
         bond[p.companion] = Math.min(5000, before + gain);
         st.companionBond = bond;
         const lb = bondLevel(before), la = bondLevel(bond[p.companion]);
@@ -1273,7 +1294,7 @@ export async function recordResults(db, state, options = {}) {
       const patch = {};
       if (ranked) {
         st.ranked = (st.ranked || 0) + 1;
-        st.rankedWins = (st.rankedWins || 0) + (state.winner === p.id ? 1 : 0);
+        st.rankedWins = (st.rankedWins || 0) + (isWinner(state, p) ? 1 : 0);
         patch.rating = Math.max(100, (cur.rating ?? START_RATING) + (deltas[p.id] || 0));
         // 🏆 Liga: Pontos de Liga pela colocação (sobe/cai de divisão)
         const lg = leagueStats(st, places[p.id], humans.length);
@@ -1286,6 +1307,10 @@ export async function recordResults(db, state, options = {}) {
       if (p.items?.mega_bracelet > 0 && !p.hardcoreLost) st.megaBracelet = true; // 🔗 Bracelete Mega (só cai em Mega Raid)
       if (p.items?.dynamax_band > 0 && !p.hardcoreLost) st.dynamaxBand = true; // 🔴 Pulseira Dynamax (só cai em Raid Gigantamax)
       if ((p.legendCharmUntil || 0) > (st.legendCharmUntil || 0)) st.legendCharmUntil = p.legendCharmUntil; // 🏵️ Amuleto ativado na partida
+      // 🏟️ v65: Pontos de Guilda da semana
+      const G = GUILD_POINTS;
+      const gp = p.hardcoreLost || p.left ? 0 : G.match + G.badge * p.badges.length + G.capture * Math.min(20, p.stats.captures || 0) + (isWinner(state, p) ? G.win : 0) + (state.rules === 'bossraid' && state.lastRaid?.won ? G.raid : 0);
+      Object.assign(st, addGuildPts(st, gp));
       return { ...patch, stats: st, points: calcPoints(cur.pokedex || [], st) };
     });
     if (!saved) continue;
@@ -1312,7 +1337,7 @@ export function leagueStats(stats, place, players, now = new Date()) {
 
 /** Colocação final dos humanos (vencedor primeiro, depois pontos). */
 export function placements(state, humans) {
-  const order = [...humans].sort((a, b) => (b.id === state.winner) - (a.id === state.winner) || score(b) - score(a));
+  const order = [...humans].sort((a, b) => isWinner(state, b) - isWinner(state, a) || score(b) - score(a));
   return Object.fromEntries(order.map((p, i) => [p.id, i + 1]));
 }
 
@@ -1320,7 +1345,7 @@ export function placements(state, humans) {
 export async function eloDeltas(db, state, humans) {
   const ratings = {};
   for (const p of humans) ratings[p.id] = (await db.getProfile(p.id))?.rating ?? START_RATING;
-  const order = [...humans].sort((a, b) => (b.id === state.winner) - (a.id === state.winner) || score(b) - score(a));
+  const order = [...humans].sort((a, b) => isWinner(state, b) - isWinner(state, a) || score(b) - score(a));
   const place = Object.fromEntries(order.map((p, i) => [p.id, i]));
   const K = 32 / Math.max(1, humans.length - 1);
   const d = {};

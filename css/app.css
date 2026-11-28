@@ -1466,7 +1466,7 @@ body.in-game .soc-panel { height: min(520px, calc(100dvh - 80px)); }
   .hub-top { grid-template-columns: 1fr; }
   .mode-tiles { grid-template-columns: 1fr 1fr; }
   .mode-tile { min-height: 0; padding: 12px 10px; }
-  .mode-tile:first-child { grid-column: 1 / -1; }
+  .mode-tile.wide { grid-column: 1 / -1; }
 }
 .donate-intro { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 14px; margin-bottom: 10px; background: linear-gradient(135deg, rgba(255, 106, 168, .16), rgba(0,0,0,.2)); border: 1px solid rgba(255, 106, 168, .45); }
 .donate-intro > span { font-size: 38px; }
@@ -2620,7 +2620,18 @@ img.mv-ic { width: 20px !important; height: 20px !important; flex: 0 0 auto; fil
 .pk-cmp { font-size: 10px; text-align: center; margin: 3px 0 1px; font-weight: 700; }
 .pk-cmp.pos { color: #6be38a; } .pk-cmp.neg { color: #ff8a7a; } .pk-cmp.eq { color: #d8cdb6; }
 /* v64d: 9 modos — no PC o Treino ocupa 2 colunas (2 linhas cheias de 5) */
-@media (min-width: 901px) { .mode-tiles > .mode-tile:first-child { grid-column: span 2; } }
+@media (min-width: 901px) { .mode-tiles > .mode-tile.wide { grid-column: span 2; } }
+@media (max-width: 640px) { .mode-tiles > .mode-tile.wide { grid-column: 1 / -1; } }
+/* 🎮 v65: mais cores de modo, ícone/arte em sprite */
+.t-sky { --t1: #39a7d8; --t2: #134a66; } .t-crimson { --t1: #c2334f; --t2: #4f1020; } .t-dragon { --t1: #6a4be0; --t2: #2a1660; } .t-indigo { --t1: #4f5bd5; --t2: #1d2260; }
+.mode-tile { position: relative; overflow: hidden; }
+.mode-tile .mt-ic .ui-ic { width: 38px; height: 38px; object-fit: contain; display: block; image-rendering: auto; }
+.mode-tile .mt-ic .itm-emo { font-size: 30px; }
+.mode-tile .mt-banner { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; z-index: 0; }
+.mode-tile.has-banner { min-height: 150px; justify-content: flex-end; }
+.mode-tile.has-banner .mt-banner { display: block; }
+.mode-tile.has-banner .mt-ic, .mode-tile.has-banner > b { display: none; }
+.mode-tile.has-banner > small { position: relative; z-index: 1; background: rgba(0, 0, 0, .55); border-radius: 8px; padding: 3px 6px; }
 /* 🌱 v64d: sprites da horta (pixel art, sem suavizar) */
 .crop-spr { display: block; width: 64px; height: 88px; background-repeat: no-repeat; image-rendering: pixelated; image-rendering: crisp-edges; margin: -18px auto -10px; }
 .crop-spr.mini { width: 64px; height: 88px; transform: scale(.55); margin: -22px -14px -24px; }
@@ -2631,3 +2642,10 @@ img.mv-ic { width: 20px !important; height: 20px !important; flex: 0 0 auto; fil
 .hm-f.dragging, .hm-pal.dragging { cursor: grabbing; filter: drop-shadow(0 6px 6px rgba(0, 0, 0, .5)) brightness(1.1); transition: none !important; }
 .hm-pal.placed { bottom: auto; transform: translate(-50%, -88%); animation: none; }
 .hm-room.editing .hm-pal { animation: none; outline: 2px dashed rgba(255, 211, 107, .6); outline-offset: 2px; border-radius: 10px; }
+/* 🤝 v65: times */
+.sq-chip { display: inline-block; font-size: 11px; filter: drop-shadow(0 0 3px var(--sq)); }
+.t-give { margin: 6px 0; font-size: 13px; } .t-give summary { cursor: pointer; color: #8ff0bd; }
+.t-give .chip-ic { width: 20px; height: 20px; object-fit: contain; vertical-align: middle; }
+/* 🏟️ v65: guildas */
+.gd-head { display: flex; gap: 10px; align-items: center; padding: 8px; border-radius: 12px; background: linear-gradient(160deg, #2a2050, #15102a); border: 1px solid #5a46a8; }
+.gd-emb { font-size: 40px; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .5)); }

@@ -5,7 +5,9 @@ import { monMoves } from '../../shared/data/moves.js';
 import { maxHpOf } from '../../shared/rules/monsters.js';
 import { canUse } from '../../shared/rules/helpers.js';
 import { against, TYPE_COLORS } from '../../shared/rules/types.js';
-import { raidWaiting, raidBallChance, RAID_ITEM_KINDS } from '../../shared/rules/raid.js';
+import { raidWaiting, raidBallChance, RAID_ITEM_KINDS, RAID_ROLES } from '../../shared/rules/raid.js';
+let raidRole = 'atk'; // 🐉 v65: papel escolhido antes de entrar
+let lastView = null;
 import { esc, openModal, closeModal, bindActions } from './dom.js';
 import { monSprite, itemUrl, typeLabel, moveIcon } from '../config.js';
 import { typeChips, edgeBadge, foeIntelHtml } from './common.js';
@@ -15,7 +17,7 @@ function bossBar(r) {
   const pct = Math.max(0, (r.boss.hp / max) * 100);
   return `<div class="raid-boss-card"><img src="${monSprite(r.boss)}" alt="" class="${r.stage === 'catch' ? 'tired' : ''}">
     <div class="grow"><b>${esc(getSpecies(r.boss.sp).name)}${r.boss.shiny ? ' ✨' : ''}</b> <span class="tiny">Nv.${r.boss.lvl}</span> ${typeChips(getSpecies(r.boss.sp).types)}
-      <div class="raid-hp"><i style="width:${pct.toFixed(1)}%"></i></div><div class="tiny">${Math.max(0, r.boss.hp)}/${max} HP${r.bossStage < 0 ? ` · ATQ ▼${-r.bossStage}` : ''}</div></div></div>${foeIntelHtml(r.boss)}`;
+      <div class="raid-hp"><i style="width:${pct.toFixed(1)}%"></i></div><div class="tiny">${Math.max(0, r.boss.hp)}/${max} HP${r.bossStage < 0 ? ` · ATQ ▼${-r.bossStage}` : ''}${r.coop ? ` · 🐉 Fase ${(r.phase || 0) + 1}/4` : ''}</div></div></div>${foeIntelHtml(r.boss)}`;
 }
 
 /** Itens da mochila que dá para usar na Raid (no lugar do golpe da rodada). */
@@ -40,13 +42,15 @@ export function raidHtml(s, vid) {
     const p = s.players.find(y => y.id === x.pid);
     const m = x.uid ? p?.team.find(t => t.uid === x.uid) : null;
     return `<div class="raid-member ${m && m.hp <= 0 ? 'ko' : ''} ${waiting.includes(x.pid) ? 'wait' : ''}">${m ? `<img src="${monSprite(m)}" alt="">` : ''}
-      <div><b>${esc(p?.name || '?')}</b>${m ? `<div class="tiny">${edgeBadge(m, r.boss)}${esc(getSpecies(m.sp).name)} ${Math.max(0, m.hp)}/${maxHpOf(m)}</div>` : ''}<div class="tiny muted">dano: ${x.dmg}</div></div></div>`;
+      <div><b>${RAID_ROLES[x.role] ? RAID_ROLES[x.role].icon + ' ' : ''}${esc(p?.name || '?')}</b>${m ? `<div class="tiny">${edgeBadge(m, r.boss)}${esc(getSpecies(m.sp).name)} ${Math.max(0, m.hp)}/${maxHpOf(m)}</div>` : ''}<div class="tiny muted">dano: ${x.dmg}</div></div></div>`;
   }).join('')}</div>` : '';
   let controls = '';
   if (r.stage === 'join') {
     if (myTurn) {
       const opts = me.team.filter(m => m.hp > 0 && canUse(me, m));
-      controls = `<p class="small"><b>Escolha 1 Pokémon para entrar na Raid</b> (o HP do lendário cresce com o grupo):</p>
+      controls = `<p class="small"><b>Escolha seu papel</b>:</p><div class="row wrap" style="gap:4px">${Object.entries(RAID_ROLES).map(([k, R]) => `<button class="btn sm ${raidRole === k ? 'primary' : ''}" data-act="raid-role" data-role="${k}" title="${esc(R.desc)}">${R.icon} ${esc(R.name)}</button>`).join('')}</div>
+        <p class="tiny muted">${esc(RAID_ROLES[raidRole].desc)}</p>
+        <p class="small"><b>Escolha 1 Pokémon para entrar na Raid</b> (o HP do lendário cresce com o grupo):</p>
         <div class="subpick">${opts.map(m => `<button class="btn sm pickbtn" data-act="raid-join" data-uid="${esc(m.uid)}"><img src="${monSprite(m)}" alt="">${edgeBadge(m, r.boss)}${esc(getSpecies(m.sp).name)} Nv.${m.lvl} ${typeChips(getSpecies(m.sp).types)}
           <span class="tiny">${monMoves(m).map(mv => esc(mv.name)).join(' / ')}</span></button>`).join('')}</div>
         <button class="btn ghost sm" data-act="raid-decline">Ficar de fora</button>`;
@@ -79,6 +83,7 @@ export function raidHtml(s, vid) {
 export function renderRaid(s, vid, act) {
   const r = s.raid;
   if (!r) { closeModal('raid'); return; }
+  lastView = { s, vid };
   const title = r.group ? '🔥 RAID EM GRUPO' : '🔥 Raid — captura';
   const html = raidHtml(s, vid);
   const open = document.getElementById('raid');
@@ -87,7 +92,8 @@ export function renderRaid(s, vid, act) {
     const ov = openModal('raid', title, html, { wide: true, closable: false });
     ov.querySelector('.modal').classList.add('raid-modal');
     bindActions(ov, {
-      'raid-join': d => act({ type: 'raid', op: 'join', uid: d.uid }),
+      'raid-join': d => act({ type: 'raid', op: 'join', uid: d.uid, role: raidRole }),
+      'raid-role': d => { raidRole = d.role; const o = document.getElementById('raid'); if (o && lastView) o.querySelector('.body').innerHTML = raidHtml(lastView.s, lastView.vid); },
       'raid-decline': () => act({ type: 'raid', op: 'decline' }),
       'raid-attack': d => act({ type: 'raid', op: 'attack', slot: Number(d.slot) }),
       'raid-item': d => act({ type: 'raid', op: 'item', item: d.item }),

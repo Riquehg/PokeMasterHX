@@ -6,11 +6,13 @@ import { createRng } from './rng.js';
 import { getPlayer, log, fx, fail, hasUsable, blackout, addItem, speciesName, clone } from './helpers.js';
 import { maxHpOf, createMon, fullHeal, levelUp } from './monsters.js';
 import { startBattle } from './battle.js';
+import { teamsOn, allies, squadOf, squadIds, squadMembers, squadName, REGION_BONUS } from './teams.js';
 
 export const GAME_RULES = {
   classic:  { name: 'Clássico', icon: '🗺️', desc: 'Insígnias, Liga e Campeão. Vence quem derrotar o Campeão (ou tiver mais pontos no limite de turnos).' },
   royale:   { name: 'Battle Royale', icon: '⚔️', desc: 'Joga na Arena Royale (mapa simétrico: todos começam na borda, à mesma distância do centro). Uma tempestade fecha o mapa. Quem cai na casa de outro batalha. Time todo desmaiado = eliminado. Ganha o último de pé.' },
-  conquest: { name: 'Conquista', icon: '🏰', desc: 'Domine as cidades de ginásio e deixe Pokémon defendendo. Cidades rendem ouro e bônus. Ganha quem dominar mais.' }
+  conquest: { name: 'Conquista', icon: '🏰', desc: 'Domine as cidades de ginásio e deixe Pokémon defendendo. Cidades rendem ouro e bônus. Ganha quem dominar mais. Em times vira a 🏰 Guerra de Regiões: as cidades são do time e cada cidade a mais rende +15% para o time todo.' },
+  bossraid: { name: 'Raid em Grupo', icon: '🐉', desc: 'Sem tabuleiro: o grupo (até 4, com CPUs se quiser) enfrenta um chefe lendário ou Mega gigante em 3 fases. Cada um escolhe um papel: ⚔️ Atacante, 💚 Suporte ou 🌀 Controle. Prêmios por contribuição e captura do chefe.' }
 };
 export const RULE_IDS = Object.keys(GAME_RULES);
 
@@ -164,6 +166,10 @@ export function eliminate(state, p, why) {
 export function checkRoyaleEnd(state) {
   if (rulesOf(state) !== 'royale' || state.status !== 'playing') return null;
   const alive = alivePlayers(state);
+  if (teamsOn(state) && alive.length > 1 && alive.every(p => squadOf(p) === squadOf(alive[0]))) { // 🤝 sobrou só um time
+    alive.forEach(p => { p.place = 1; });
+    return { winner: alive[0], reason: `${squadName(squadOf(alive[0]))} é o último time de pé no Battle Royale!` };
+  }
   if (alive.length > 1) return null;
   const w = alive[0] || [...state.players].sort((a, b) => (a.place || 99) - (b.place || 99))[0];
   if (w) w.place = 1;
@@ -173,7 +179,7 @@ export function checkRoyaleEnd(state) {
 /** Ao parar numa casa com outro treinador vivo: batalha obrigatória. */
 export function royaleClash(state, p, sp) {
   if (rulesOf(state) !== 'royale') return false;
-  const q = state.players.find(x => x.id !== p.id && !x.out && x.pos === sp.id && hasUsable(x));
+  const q = state.players.find(x => x.id !== p.id && !x.out && x.pos === sp.id && hasUsable(x) && !allies(state, p, x)); // aliados não brigam
   if (!q || !hasUsable(p)) return false;
   log(state, `⚔️ ${p.name} encontrou ${q.name} em ${sp.name}! No Battle Royale não dá para fugir do duelo.`, 'battle');
   startBattle(state, { kind: 'pvp', pid: p.id, foe: { kind: 'player', pid: q.id } });
@@ -195,10 +201,13 @@ export const royaleRank = state => [...state.players].sort((a, b) => (a.place ||
 // ------------------------------------------------------------------ Conquista
 export const ownerOf = (state, gymId) => state.conquest?.owners[gymId] || null;
 export const citiesOf = (state, pid) => GYMS.filter(g => state.conquest?.owners[g.id] === pid).length;
+/** 🏰 Guerra de Regiões: cidades do time de um jogador. */
+export const teamCities = (state, p) => (teamsOn(state) ? squadMembers(state, squadOf(p)).reduce((a, q) => a + citiesOf(state, q.id), 0) : citiesOf(state, p.id));
 
 /** Desafio na cidade de ginásio: líder (neutra), guarnição de outro jogador, ou gerenciar a própria. */
 export function conquestGym(state, rng, p, sp, gym) {
   const owner = ownerOf(state, gym.id);
+  if (owner && owner !== p.id && allies(state, p, getPlayer(state, owner))) fail(`${sp.name} é do seu time (${getPlayer(state, owner).name}). Ataque as cidades dos rivais!`);
   if (owner === p.id) {
     if (state.turnFlags.manage) fail('Você já reorganizou a guarnição neste turno.');
     state.turnFlags.manage = true;
@@ -251,8 +260,8 @@ export function conquestBattleEnd(state, rng, b, outcome, p0, hooks) {
     log(state, `🏰 ${p0.name} DOMINOU ${sp.name}${prev ? ` (tomada de ${prev.name})` : ''}! +${prize} de ouro. Agora escolha quem fica defendendo.`, 'win');
     hooks.mission?.(p0);
     state.pending = { kind: 'garrison', pid: p0.id, city: gym.id };
-    const all = GYMS.every(g => C.owners[g.id] === p0.id);
-    if (all) { state.pending = null; return { finish: p0, reason: `Dominou todas as ${GYMS.length} cidades!` }; }
+    const all = GYMS.every(g => C.owners[g.id] === p0.id || (C.owners[g.id] && allies(state, p0, getPlayer(state, C.owners[g.id]))));
+    if (all) { state.pending = null; return { finish: p0, reason: teamsOn(state) ? `${squadName(squadOf(p0))} dominou todas as ${GYMS.length} cidades!` : `Dominou todas as ${GYMS.length} cidades!` }; }
     return true;
   }
   p0.stats.losses += 1;
@@ -301,9 +310,11 @@ function conquestIncome(state) {
     // a guarnição se recupera um pouco a cada rodada
     for (const m of C.garrison[g.id]) m.hp = Math.min(maxHpOf(m), m.hp + Math.ceil(maxHpOf(m) * 0.15));
   }
-  for (const [pid, g] of Object.entries(pay)) {
+  for (const [pid, g0] of Object.entries(pay)) {
     const p = getPlayer(state, pid);
     if (!p) continue;
+    // 🏰 Guerra de Regiões: cada cidade a mais do time rende +15% para todos do time
+    const g = teamsOn(state) ? Math.round(g0 * (1 + REGION_BONUS * Math.max(0, teamCities(state, p) - 1))) : g0;
     p.gold += g;
     log(state, `💰 ${p.name} recebeu ${g} de ouro das cidades dominadas (${citiesOf(state, pid)}).`);
   }
@@ -318,6 +329,7 @@ export function conquestVisit(state, p, sp) {
 
 /** Vencedor no limite de turnos (Conquista: mais cidades). */
 export function conquestRank(state, score) {
+  if (teamsOn(state)) return [...state.players].sort((a, b) => teamCities(state, b) - teamCities(state, a) || citiesOf(state, b.id) - citiesOf(state, a.id) || score(b) - score(a));
   return [...state.players].sort((a, b) => citiesOf(state, b.id) - citiesOf(state, a.id) || score(b) - score(a));
 }
 

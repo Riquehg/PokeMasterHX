@@ -43,6 +43,8 @@ import { botAction } from './bots.js';
 import { RULE_IDS, setupRules, onRound, knockOut, rulesOf, royaleClash, royaleHealCheck, checkRoyaleEnd, royaleRank, alivePlayers,
   conquestGym, conquestBattleEnd, garrisonAction, conquestVisit, conquestRank, ownerOf } from './rules/modes.js';
 
+import { teamsOn, teamSize, assignSquads, allies, teamAction, markTeamWin, squadOf, squadIds, squadMembers, squadScore, squadName } from './rules/teams.js';
+
 export const ENGINE_VERSION = 2;
 export const AFK_SECONDS = 90;
 export const MAX_PLAYERS = 6;
@@ -89,7 +91,8 @@ export function createMatch(config) {
       turnLimit: Number(config.options?.turnLimit) || 0,
       trades: config.options?.trades !== false,
       megas: !!config.options?.megas, // 💎 Mega Evolução liberada nesta partida
-      hardcore: config.kind !== 'duel' && !!config.options?.hardcore // perdeu a equipe = eliminado e perde tudo da partida
+      hardcore: config.kind !== 'duel' && !!config.options?.hardcore, // perdeu a equipe = eliminado e perde tudo da partida
+      teams: config.kind !== 'duel' && [2, 3].includes(Number(config.options?.teams)) && players.length >= 3 ? Number(config.options.teams) : 0 // 🤝 v65: Duplas/Trios
     },
     players,
     board: {},
@@ -103,9 +106,15 @@ export function createMatch(config) {
     fxSeq: 0
   };
   if (config.kind === 'duel') return startDuel(state, rng, config);
+  if (state.options.teams) { // 🤝 v65: separa os times (quem escolheu na sala fica onde escolheu)
+    players.forEach((p, i) => { const sq = Number(config.players[i]?.squad); p.squad = Number.isInteger(sq) ? sq : null; });
+    assignSquads(players, state.options.teams);
+  }
   setupRules(state, rng); // Battle Royale / Conquista
+  if (state.rules === 'bossraid') { startBossRaid(state, rng); state.seed = rng.state; return runBots(state, rng, config.now || 0); } // 🐉 v65
   for (const p of state.players) initMissions(state, p);
   log(state, `🏁 Partida iniciada com ${players.map(p => p.name).join(', ')}. Boa sorte, treinadores!`);
+  if (teamsOn(state)) log(state, `🤝 PARTIDA EM ${state.options.teams === 2 ? 'DUPLAS' : 'TRIOS'}: ${squadIds(state).map(sq => `${squadName(sq)} (${squadMembers(state, sq).map(p => p.name).join(' + ')})`).join(' x ')}. O time vence junto!`, 'event');
   if (state.options.hardcore) log(state, '☠️ HARDCORE: quem tiver a equipe toda derrotada está fora da partida e perde tudo o que ganhou nela.', 'bad');
   if (state.options.dailyPokemon) log(state, `⭐ Pokémon do Dia: ${speciesName(state.options.dailyPokemon)} (aparece mais, XP em dobro e shiny 1/64).`);
   // Se o primeiro jogador for CPU, já joga
@@ -393,6 +402,7 @@ function dispatch(state, rng, actorId, action, now) {
     case 'pc': return pcAction(state, actor, action);
     case 'challenge': return challenge(state, rng, actor, action.target, now);
     case 'reorder': return reorderTeam(state, actor, action);
+    case 'team': return teamAction(state, actor, action); // 🤝 v65: passar item / Dado de Apoio
     default: fail('Ação desconhecida.');
   }
 }
@@ -420,6 +430,7 @@ function roll(state, rng, p) {
   delete p.lastPlaced; // a escolha "equipe ou PC" vale até a próxima rolada
   let die = rng.d6();
   if (p.surfRoll) { const d2 = rng.d6(); log(state, `🌊 Surfando: ${die} e ${d2} — fica com ${Math.max(die, d2)}.`); die = Math.max(die, d2); delete p.surfRoll; }
+  if (state.turnFlags?.supportDie) { const d2 = rng.d6(); log(state, `🎲 Dado de Apoio: ${die} e ${d2} — fica com ${Math.max(die, d2)}.`, 'good'); die = Math.max(die, d2); delete state.turnFlags.supportDie; }
   const bonus = p.moveBonus || 0;
   p.moveBonus = 0;
   const total = die + bonus;
@@ -572,6 +583,11 @@ function checkTurnLimit(state) {
       alive.forEach((p, i) => { p.place = i + 1; });
       return finishMatch(state, alive[0] || royaleRank(state)[0], 'Tempo esgotado — sobrevivente com a equipe mais inteira.');
     }
+    if (teamsOn(state)) { // 🤝 time com mais pontos somados; dentro dele, o melhor jogador
+      const best = squadIds(state).sort((a, b) => squadScore(state, b, score) - squadScore(state, a, score))[0];
+      const top = squadMembers(state, best).sort((a, b) => score(b) - score(a))[0];
+      return finishMatch(state, top, `Limite de ${state.options.turnLimit} turnos — ${squadName(best)} somou mais pontos (${squadScore(state, best, score)}).`);
+    }
     const ranked = [...state.players].sort((a, b) => score(b) - score(a));
     finishMatch(state, ranked[0], `Limite de ${state.options.turnLimit} turnos atingido — vitória por pontos.`);
   }
@@ -586,11 +602,20 @@ function checkOutEnd(state) {
   const alive = alivePlayers(state);
   const humans = alive.filter(p => !p.left && (!p.isBot || p._afkTemp));
   if (state.players.length > 1 && alive.length <= 1) return { winner: alive[0] || null, reason: alive[0] ? 'Último treinador de pé!' : 'Ninguém sobreviveu.' };
+  if (teamsOn(state) && alive.length && alive.every(p => squadOf(p) === squadOf(alive[0]))) return { winner: alive[0], reason: 'Só sobrou um time de pé!' };
   if (!humans.length) return { winner: [...alive].sort((a, b) => score(b) - score(a))[0] || null, reason: 'Não sobrou nenhum treinador humano.' };
   return null;
 }
 
 function endByRules(state, advance = true) {
+  if (state.rules === 'bossraid' && !state.raid && state.status === 'playing') { // 🐉 Raid em Grupo terminou
+    const L = state.lastRaid || {};
+    const mvp = [...state.players].sort((a, b) => (L.dmg?.[b.id] || 0) - (L.dmg?.[a.id] || 0))[0];
+    state.battle = null;
+    finishMatch(state, L.won ? mvp : null, L.won ? `O grupo derrotou ${speciesName(L.sp)}! MVP: ${mvp?.name}.` : `${speciesName(L.sp)} venceu o grupo.`);
+    if (L.won) state.winners = state.players.filter(p => (L.dmg?.[p.id] || 0) > 0).map(p => p.id); // todo mundo que lutou vence junto
+    return;
+  }
   const end = checkRoyaleEnd(state) || checkOutEnd(state);
   if (end && state.status === 'playing') {
     state.battle = null;
@@ -614,6 +639,8 @@ function finishMatch(state, winner, reason) {
   state.winner = winner ? winner.id : null;
   state.phase = 'over';
   state.pending = null;
+  markTeamWin(state, winner); // 🤝 v65: o time inteiro vence junto
+  if (state.winners) { log(state, `🏆 ${squadName(state.winnerSquad)} venceu a partida (${squadMembers(state, state.winnerSquad).map(p => p.name).join(' + ')})! ${reason || ''}`, 'win'); fx(state, { k: 'win', pid: state.winner, squad: state.winnerSquad }); return; }
   log(state, `🏆 ${winner ? winner.name : 'Ninguém'} venceu a partida! ${reason || ''}`, 'win');
   fx(state, { k: 'win', pid: state.winner });
 }
@@ -754,6 +781,8 @@ function cityAction(state, rng, p, a) {
       royaleHealCheck(state, p, sp);
       [...p.team, ...p.box].forEach(fullHeal);
       log(state, `🏥 Enfermeira Joy curou toda a equipe de ${p.name}.`, 'good');
+      // 🤝 v65: cura em grupo — aliados na mesma cidade também saem curados
+      for (const q of state.players) if (allies(state, p, q) && q.pos === p.pos && !q.out) { [...q.team, ...q.box].forEach(fullHeal); log(state, `🤝 ${q.name} (time) também foi curado.`, 'good'); }
       return;
     }
     case 'buy': {
@@ -1295,6 +1324,26 @@ const RAID_POOL = {
 };
 export const RAID_HP_BONUS = 0.6; // chefe tem +60% de HP
 
+/** 🐉 v65 — Raid em Grupo (modo do menu): sem tabuleiro, o grupo enfrenta um chefe em 3 fases. */
+export const BOSS_RAID_KIT = { super_potion: 3, potion: 2, x_attack: 1, great_ball: 5, ultra_ball: 3 };
+function startBossRaid(state, rng) {
+  const lv = state.players.map(p => Math.max(1, ...p.team.map(m => m.lvl)));
+  const avg = Math.round(lv.reduce((a, b) => a + b, 0) / Math.max(1, lv.length));
+  for (const p of state.players) {
+    p.noRules = true; // todos obedecem
+    p.items = { ...BOSS_RAID_KIT };
+    [...p.team, ...p.box].forEach(fullHeal);
+  }
+  const boss = raidBoss(rng, 5, true, state.players.some(p => p.items?.shiny_charm));
+  setLevel(boss, Math.max(20, Math.min(60, avg + 2)));
+  boss.bonusHp = Math.round(maxHpOf({ ...boss, bonusHp: 0 }) * 0.3);
+  boss.hp = maxHpOf(boss);
+  startGroupRaid(state, boss, state.players[0].id);
+  state.raid.coop = true;
+  state.raid.log.push('🐉 RAID EM GRUPO: escolha 1 Pokémon e um papel (⚔️ Atacante, 💚 Suporte ou 🌀 Controle). O chefe tem 3 fases!');
+  log(state, `🐉 RAID EM GRUPO! ${state.players.map(p => p.name).join(', ')} contra ${speciesName(boss.sp)}${boss.shiny ? ' ✨' : ''} Nv.${boss.lvl}. Vença e tentem capturar!`, 'event');
+}
+
 function raidBoss(rng, tier, shrine, charm = false) {
   const pool = RAID_POOL[tier] || RAID_POOL[4];
   // 💎 Mega Raid: o chefe é um Pokémon Mega Evoluído (vence → fragmentos de Megapedra; Bracelete raríssimo)
@@ -1370,6 +1419,7 @@ function challenge(state, rng, p, targetId, now) {
   if (state.turnFlags.pvp) fail('Só um desafio PvP por turno.');
   const q = getPlayer(state, String(targetId));
   if (!q || q.id === p.id) fail('Adversário inválido.');
+  if (allies(state, p, q)) fail(`${q.name} é do seu time! Aliados não se enfrentam.`);
   if (q.pos !== p.pos) fail('O adversário precisa estar na mesma casa que você.');
   if (!hasUsable(p)) fail('Você não tem Pokémon de pé que te obedeça.');
   if (!hasUsable(q)) fail(`${q.name} não tem Pokémon em condições de lutar.`);
