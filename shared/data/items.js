@@ -30,7 +30,7 @@ export const ITEMS = {
   x_attack:     { name: 'X Attack',     kind: 'boost', atk: 3, price: 250,   minTier: 2, image: 'x_attack.png',     desc: '+3 de ataque para o Pokémon ativo até o fim da batalha.' },
 
   // --- Progressão ---
-  rare_candy:      { name: 'Rare Candy',      kind: 'candy', price: 900,  minTier: 4, image: 'rare_candy.png',      desc: 'Sobe 1 nível (pode evoluir).' },
+  rare_candy:      { name: 'Rare Candy',      kind: 'candy', price: 900,  minTier: 4, image: 'rare_candy.png',      desc: 'Sobe 1 nível (pode evoluir). Dá para dar vários de uma vez. Os que sobrarem (menos os comprados na loja) vão para a Mochila da conta.' },
   evolution_stone: { name: 'Pedra Evolutiva', kind: 'stone', price: 0, minTier: 0, image: 'evolution_stone.png', desc: 'Raríssima: evolui na hora QUALQUER Pokémon que tenha evolução (até os que precisam de pedra ou item especial).' },
   legend_charm:    { name: 'Amuleto Lendário', kind: 'charm', price: 0, minTier: 0, emoji: '🏵️', desc: 'Vale 1 SEMANA: ative na 🎒 Mochila da conta (ou leve na partida — ativa sozinho quando você passa do limite). Enquanto estiver ativo, não há limite de lendários das casas Amarelas em nenhuma partida. Ativar outro soma +7 dias. Feito na 🔨 Oficina ou na Loja PB da Torre.' },
   shiny_charm:     { name: 'Amuleto Shiny',   kind: 'charm', price: 0, minTier: 0, image: 'shiny_charm.png',     desc: 'Passivo: triplica a chance de encontrar shinies. Não acumula. Não é vendido nas cidades: vem de Raids lendárias e eventos raros (e fica na Mochila da conta).' },
@@ -120,13 +120,13 @@ export function pickEvoItem(rng, useful = []) {
 
 ITEMS.gene_candy = { name: 'Doce Genético', kind: 'gene', price: 0, minTier: 0, emoji: '🧬', desc: 'Dê a um Pokémon da Coleção: sorteia de novo o potencial (IVs de HP, ATQ, DEF e VEL — cada um tenta 2 vezes e fica o melhor). Feito na 🍳 Cozinha (Construções da Fazenda) ou na 🔨 Oficina (Artesão), ou achado em eventos raros.' };
 export const GENE_ROLLS = 2; // cada IV: melhor de 2 sorteios (0–31) — pode subir ou cair
-export const KEEP_KINDS = ['ball', 'charm', 'tm', 'megastone', 'fragment', 'gear', 'meal', 'stone', 'ingredient', 'soup', 'gene'];
+export const KEEP_KINDS = ['ball', 'charm', 'tm', 'megastone', 'fragment', 'gear', 'meal', 'stone', 'ingredient', 'soup', 'gene', 'candy']; // 🍬 v66: Rare Candy vai para a Mochila
 export const isKeepable = id => !!ITEMS[id] && KEEP_KINDS.includes(ITEMS[id].kind);
 export const BAG_MAX_PER_ITEM = 99;
 /** Quanto de cada item dá para levar para uma partida (modo Coleção). */
 export function bringLimit(id) {
   const it = ITEMS[id];
-  if (!it || !isKeepable(id) || ['megastone', 'fragment', 'gear', 'ingredient', 'soup'].includes(it.kind)) return 0;
+  if (!it || !isKeepable(id) || ['megastone', 'fragment', 'gear', 'ingredient', 'soup', 'candy'].includes(it.kind)) return 0; // 🍬 Doce Raro é para a Coleção, não entra na partida
   if (id === 'master_ball') return 1;
   if (it.kind === 'charm') return 1;
   if (it.kind === 'meal') return 1;

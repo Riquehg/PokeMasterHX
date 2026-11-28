@@ -69,7 +69,7 @@ test('TM na partida troca o 2º golpe', () => {
 
 test('Mochila: só Pokébolas/Amuleto/TM ficam; levar tira da conta; sobra volta', async () => {
   assert.ok(isKeepable('ultra_ball') && isKeepable('tm') && isKeepable('shiny_charm'));
-  assert.ok(!isKeepable('potion') && !isKeepable('revive') && !isKeepable('x_attack') && !isKeepable('rare_candy'));
+  assert.ok(!isKeepable('potion') && !isKeepable('revive') && !isKeepable('x_attack') && isKeepable('rare_candy')); // 🍬 v66: Rare Candy vai para a Mochila
   assert.deepEqual(cleanBring({ ultra_ball: 50, tm: 9, potion: 3 }), { ultra_ball: 10, tm: 3 });
   assert.deepEqual(bagFromMatch({ items: { poke_ball: 7, potion: 3, tm: 1, ultra_ball: 2 } }), { poke_ball: 2, tm: 1, ultra_ball: 2 });
 

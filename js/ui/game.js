@@ -683,7 +683,7 @@ export function mountGame(root, session, opts = {}) {
   }
 
   function renderGameOver(s) {
-    if (s.status === 'finished' && ui.overShown && !ui.leagueShown && (s.leagueChanges?.[vid()] || s.bondChanges?.[vid()] || s.bagChanges?.[vid()] || s.serieResult || s.towerResult) && document.getElementById('over')) {
+    if (s.status === 'finished' && ui.overShown && !ui.leagueShown && (s.leagueChanges?.[vid()] || s.bondChanges?.[vid()] || s.bagChanges?.[vid()] || s.goldChanges?.[vid()] || s.serieResult || s.towerResult) && document.getElementById('over')) {
       ui.leagueShown = true; closeModal('over'); showOver(s); return; // o resultado da Liga chega logo depois do fim
     }
     if (s.status !== 'finished' || ui.overShown) return;
@@ -732,7 +732,9 @@ export function mountGame(root, session, opts = {}) {
   function bagLine(s) {
     const b = s.bagChanges?.[session.viewerId()];
     const e = b ? Object.entries(b) : [];
-    return e.length ? `<p class="small" style="margin-top:6px">🎒 Foram para a sua Mochila da conta: <b>${e.map(([id, q]) => `${q}x ${esc(ITEMS[id]?.name || id)}`).join(', ')}</b></p>` : '';
+    const g = s.goldChanges?.[session.viewerId()] || 0; // 🪙 v66
+    return (g ? `<p class="small" style="margin-top:6px">🪙 Foram para o ouro da sua conta: <b>+${g}</b> <span class="tiny muted">(¼ do ouro que sobrou na partida + insígnias/vitória + o que você trouxe)</span></p>` : '')
+      + (e.length ? `<p class="small" style="margin-top:6px">🎒 Foram para a sua Mochila da conta: <b>${e.map(([id, q]) => `${q}x ${esc(ITEMS[id]?.name || id)}`).join(', ')}</b></p>` : '');
   }
 
   function showOver(s) {

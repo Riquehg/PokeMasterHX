@@ -22,7 +22,7 @@ import {
   GYMS, gymAt, ELITE_FOUR, CHAMPION, ELITE_SPACE, CHAMPION_SPACE, ROUTE_TRAINERS, ROCKET, BADGES_TO_LEAGUE, BADGE_REWARDS, ACE_TRAINERS
 } from './data/trainers.js';
 import { createRng } from './rules/rng.js';
-import { variantFor, createMon, rollWild, hatchEgg, fullHeal, healMon, maxHpOf, levelUp, evolve, TEAM_SIZE, WILD_LEVELS, gainXp, BASE_SHINY_RATE, setLevel, defIvOf } from './rules/monsters.js';
+import { variantFor, createMon, rollWild, hatchEgg, fullHeal, healMon, maxHpOf, levelUp, evolve, TEAM_SIZE, WILD_LEVELS, gainXp, BASE_SHINY_RATE, setLevel, defIvOf, MAX_LEVEL } from './rules/monsters.js';
 import { SHINY_CAKE_MULT, IV_PANCAKE_MIN } from './data/home.js';
 import { destinations, pathTo } from './rules/movement.js';
 import { startBattle, submitChoice, setBattleEndHandler, deliverCapture, sideActive, sideIndexOf } from './rules/battle.js';
@@ -800,6 +800,7 @@ function cityAction(state, rng, p, a) {
       if (p.gold < cost) fail(`Ouro insuficiente (precisa ${cost}).`);
       p.gold -= cost;
       addItem(p, a.item, q);
+      if (offer.kind === 'candy') (p.shopBought ||= {})[a.item] = (p.shopBought[a.item] || 0) + q; // 🍬 v66: comprado com ouro da partida não vai para a Mochila da conta
       log(state, `🛒 ${p.name} comprou ${q}x ${offer.name} por ${cost} de ouro.`);
       return;
     }
@@ -969,10 +970,16 @@ function useItem(state, rng, p, a) {
       log(state, `✨ ${speciesName(target.sp)} foi revivido.`);
       return;
     }
-    case 'candy': {
+    case 'candy': { // 🍬 v66: dá para usar vários de uma vez no mesmo Pokémon
       if (!target) fail('Escolha um Pokémon.');
-      takeItem(p, a.item);
-      levelUp(target).forEach(m => log(state, m, 'good'));
+      if (target.lvl >= MAX_LEVEL) fail(`Já está no nível máximo (${MAX_LEVEL}).`);
+      const n = Math.max(1, Math.min(p.items[a.item], MAX_LEVEL - target.lvl, Math.floor(Number(a.qty)) || 1));
+      takeItem(p, a.item, n);
+      const from = target.lvl;
+      const msgs = [];
+      for (let i = 0; i < n; i++) msgs.push(...levelUp(target));
+      if (n > 1) log(state, `🍬 ${p.name} deu ${n} Rare Candy para ${speciesName(target.sp)} (Nv. ${from} → ${target.lvl}).`, 'good');
+      msgs.filter(m => n === 1 || !/subiu para o nível/i.test(m)).forEach(m => log(state, m, 'good'));
       return;
     }
     case 'stone': { // ✨ pedras e itens de evolução (v54): cada item evolui só os Pokémon certos
@@ -1064,7 +1071,7 @@ function wildEncounter(state, rng, p, sp, tier, opts = {}) {
     const rare = weatherRare(state) && rng.chance(weatherRare(state)) ? Math.min(4, tier + 1) : tier;
     const favorTypes = [...(BIOMES[sp.biome]?.spawn || []), ...weatherSpawn(state)];
     if (p.meal?.type) favorTypes.push(p.meal.type, p.meal.type); // 🍛 Curry: mais Pokémon desse tipo
-    mon = rollWild(rng, rare, { dailyPokemon: state.options.dailyPokemon, shinyCharm: !!p.items.shiny_charm, shinyMult: p.meal?.id === 'shiny_cake' ? SHINY_CAKE_MULT : 1, favorTypes, exclude: p.legendSp });
+    mon = rollWild(rng, rare, { dailyPokemon: state.options.dailyPokemon, shinyCharm: !!p.items.shiny_charm, shinyMult: p.meal?.id === 'shiny_cake' ? SHINY_CAKE_MULT : 1, favorTypes }); // v66: pode aparecer de novo a mesma espécie (chance de um com IV melhor)
     if (p.meal?.id === 'iv_pancake' && mon.iv) { // 🥞 Panqueca: potencial mínimo
       for (const k of ['hp', 'atk', 'spe']) mon.iv[k] = Math.max(IV_PANCAKE_MIN, mon.iv[k] ?? 0);
       mon.iv.def = Math.max(IV_PANCAKE_MIN, defIvOf(mon));
@@ -1100,11 +1107,11 @@ const EVENT_ITEMS = {
   1: [['poke_ball', 5], ['potion', 4], ['bicycle', 2], ['escape_rope', 1], ['great_ball', 1]],
   2: [['poke_ball', 3], ['great_ball', 4], ['potion', 3], ['super_potion', 2], ['revive', 1], ['x_attack', 1]],
   3: [['great_ball', 3], ['ultra_ball', 3], ['super_potion', 3], ['revive', 2], ['evo_item', 1.5], ['flame_ball', 1], ['aqua_ball', 1]],
-  4: [['ultra_ball', 4], ['super_potion', 3], ['revive', 2], ['rare_candy', 2], ['evo_item', 1.5], ['shadow_ball', 1], ['mystic_ball', 1], ['master_ball', 0.05], ['trust_ball', 0.06], ['tm', 0.4], ['gene_candy', 0.12]],
-  5: [['ultra_ball', 4], ['rare_candy', 3], ['revive', 2], ['evo_item', 1.5], ['rainbow_ball', 1], ['master_ball', 0.1], ['trust_ball', 0.12], ['tm', 0.7], ['shiny_charm', 0.1], ['gene_candy', 0.25]]
+  4: [['ultra_ball', 4], ['super_potion', 3], ['revive', 2], ['rare_candy', 1], ['evo_item', 1.5], ['shadow_ball', 1], ['mystic_ball', 1], ['master_ball', 0.05], ['trust_ball', 0.06], ['tm', 0.4], ['gene_candy', 0.12]],
+  5: [['ultra_ball', 4], ['rare_candy', 1.5], ['revive', 2], ['evo_item', 1.5], ['rainbow_ball', 1], ['master_ball', 0.1], ['trust_ball', 0.12], ['tm', 0.7], ['shiny_charm', 0.1], ['gene_candy', 0.25]]
 };
 
-const LUCKY_ITEMS = [['rare_candy', 4], ['evo_item', 3.4], ['rainbow_ball', 2], ['tm', 1.2], ['master_ball', 0.15], ['trust_ball', 0.25], ['shiny_charm', 0.3], ['gene_candy', 0.3]];
+const LUCKY_ITEMS = [['rare_candy', 2], ['evo_item', 3.4], ['rainbow_ball', 2], ['tm', 1.2], ['master_ball', 0.15], ['trust_ball', 0.25], ['shiny_charm', 0.3], ['gene_candy', 0.3]];
 
 /** ✨ Item de evolução sorteado — os que servem para o time do jogador pesam mais. */
 function rollEvoItem(rng, p) {
@@ -1251,7 +1258,7 @@ function boardEvent(state, rng, p, sp, forceId = null) {
       const g = rng.int(600, 1000);
       p.gold += g;
       effects.push({ text: `+${g} de ouro`, tone: 'good', icon: '🪙' });
-      let id = rng.weighted([['master_ball', 0.1], ['rainbow_ball', 3], ['rare_candy', 3], ['evo_item', 2.3]]);
+      let id = rng.weighted([['master_ball', 0.1], ['rainbow_ball', 3], ['rare_candy', 1.5], ['evo_item', 2.3]]);
       if (id === 'evo_item') id = rollEvoItem(rng, p);
       addItem(p, id, 1);
       effects.push({ text: `+1x ${ITEMS[id].name}`, tone: id === 'master_ball' ? 'shiny' : 'good', item: id });

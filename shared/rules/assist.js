@@ -83,7 +83,8 @@ export function questVisit(state, rng, p, sp) {
   addItem(p, 'ultra_ball', 2);
   const effects = [{ text: `+${gold} de ouro`, tone: 'good', icon: '🪙' }, { text: '+2 Ultra Ball', tone: 'good', item: 'ultra_ball' }];
   if (rng.chance(0.04)) { addItem(p, 'trust_ball', 1); effects.push({ text: `+1 ${ITEMS.trust_ball.name}!`, tone: 'shiny', item: 'trust_ball' }); }
-  else { addItem(p, 'rare_candy', 1); effects.push({ text: '+1 Rare Candy', tone: 'good', item: 'rare_candy' }); }
+  else if (rng.chance(0.5)) { addItem(p, 'rare_candy', 1); effects.push({ text: '+1 Rare Candy', tone: 'good', item: 'rare_candy' }); }
+  else { addItem(p, 'great_ball', 3); effects.push({ text: '+3 Great Ball', tone: 'good', item: 'great_ball' }); } // 🍬 v66: Doce mais raro
   p.quest = null;
   fx(state, { k: 'event', pid: p.id, id: 'quest_done', title: 'Convite cumprido!', icon: '🗺️', tone: 'good', lore: `${p.name} chegou a ${sp.name} e foi recebido como convidado de honra!`, effects });
   log(state, `🗺️ ${p.name} cumpriu o convite de viagem para ${sp.name}: ${effects.map(e => e.text).join(' · ')}.`, 'good');

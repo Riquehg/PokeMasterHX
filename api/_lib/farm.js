@@ -5,7 +5,7 @@ import {
   FARM_BIOMES, RESOURCES, FARM_DECOR, DECOR_MAX, FARM_MAX_LEVEL, CARE_COOLDOWN_H, CARE_HAPPY, FEED_HAPPY, FEED_XP, HELP_HAPPY, RES_CAP,
   newFarm, tickFarm, pendingOf, slotsFor, addFarmXp, bestBiome, brtDay, decorItemId, farmLevelXp
 } from '../../shared/data/farm.js';
-import { bad, notFound, mutateProfile, getOrCreateProfile } from './core.js';
+import { bad, notFound, mutateProfile, getOrCreateProfile, collectionMax } from './core.js';
 import { canBreed, makeEgg, hatchFromEgg, eggsDue, EGG_EVERY_H, EGGS_PER_DAY, INCUBATOR_MAX, NATURE_COST, daycareDay } from '../../shared/data/daycare.js';
 import { createRng, randomSeed } from '../../shared/rules/rng.js';
 import { COMPANIONS, bondLevel } from '../../shared/data/companions.js';
@@ -512,7 +512,7 @@ export async function farmOp(db, user, body) {
       const egg = (farm.eggs || []).find(e => e.id === body.id);
       if (!egg) bad('Ovo não encontrado.');
       if (egg.readyAt > now) bad('Esse ovo ainda não está pronto.');
-      const cap = 300 + (cur.stats?.vaultBonus || 0);
+      const cap = collectionMax(cur);
       if ((cur.vault || []).length >= cap) bad('Sua Coleção está cheia. Solte alguns Pokémon antes de chocar.');
       baby = hatchFromEgg(createRng(randomSeed()), egg, cur.trainer_name);
       farm.eggs = farm.eggs.filter(e => e.id !== egg.id);

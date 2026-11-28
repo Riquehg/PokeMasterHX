@@ -6,7 +6,7 @@ import { SHOP_KINDS } from '../../shared/data/cosmetics.js';
 import { confetti, victoryFx, capFxDemo } from './fx.js';
 const CFX_ICON = { stars: '🌟', lightning: '⚡', flames: '🔥', bubbles: '🫧', sakura: '🌸', galaxy: '🌌', hearts: '💖', shadow: '🌑', rainbow: '🌈', master: 'Ⓜ️', crown: '👑', ice: '❄️' };
 const VIC_ICON = { fireworks: '🎆', stars: '⭐', hearts: '💖', pokeballs: '🔴', coins: '🪙', sakura: '🌸' };
-const svcOwned = (me, v) => (v === 'vault50' ? me.vaultBonus : v === 'nickname' ? me.nicknames : false);
+const svcOwned = (me, v) => (v === 'vault50' ? Number(me.vaultBonus) >= (me.vaultMax || 1000) : v === 'nickname' ? me.nicknames : false);
 
 const money = v => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -59,7 +59,7 @@ export async function openShop(profile, onChange, onClose, startTab = 'cosmetics
         const svc = kind === 'service' || kind === 'decor';
         const owned = kind === 'service' ? svcOwned(me, i.value) : me.owned.includes(i.id), on = me.equipped[kind] === i.id;
         return `<div class="cos ${on ? 'on' : ''}">${preview(i, profile?.avatar, profile?.cosmetic?.skin)}
-          <b>${esc(i.name)}</b><div class="tiny muted">${esc(i.desc)}</div>
+          <b>${esc(i.name)}</b><div class="tiny muted">${esc(i.kind === 'service' && i.value === 'vault50' ? 'Mais 50 vagas a cada compra — pode comprar várias vezes.' : i.desc)}</div>${i.kind === 'service' && i.value === 'vault50' ? `<div class="tiny" style="color:var(--gold)">📦 Sua Coleção: ${300 + (Number(me.vaultBonus) || 0)} vagas</div>` : ''}
           ${owned && svc ? '<span class="chip green">✔ Liberado</span>' : owned
             ? `<button class="btn sm ${on ? '' : 'green'}" data-act="equip" data-kind="${kind}" data-id="${on ? '' : esc(i.id)}">${on ? 'Desequipar' : 'Equipar'}</button>`
             : `<button class="btn sm primary" data-act="buy" data-id="${esc(i.id)}" ${me.diamonds < i.price ? 'disabled' : ''}>💎 ${i.price}</button>`}</div>`;

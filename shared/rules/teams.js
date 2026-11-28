@@ -75,11 +75,13 @@ export function teamAction(state, p, a) {
     if (!it || !(p.items[item] > 0)) fail('Você não tem esse item.');
     if (!GIVE_KINDS.includes(it.kind)) fail('Esse item não pode ser passado.');
     // 🛡️ v65b: CPU não tem conta — itens que voltariam para a sua Mochila (Pokébolas, TM, pedras) não podem ir para ela
-    if (q.isBot && isKeepable(item)) fail(`${q.name} é CPU: só dá para passar Poções, Revive, X Attack e Doces (o resto voltaria para a sua Mochila e se perderia).`);
+    if (q.isBot && isKeepable(item)) fail(`${q.name} é CPU: só dá para passar Poções, Revive e X Attack (o resto voltaria para a sua Mochila e se perderia).`);
     if ((state.turnFlags.gives || 0) >= 2) fail('Dá para passar no máximo 2 itens por turno.');
     const qty = Math.max(1, Math.min(p.items[item], Number(a.qty) || 1, 5));
+    const bought = Math.min(qty, p.shopBought?.[item] || 0); // 🍬 comprado na loja continua "comprado" com o aliado
     takeItem(p, item, qty);
     addItem(q, item, qty);
+    if (bought) (q.shopBought ||= {})[item] = (q.shopBought[item] || 0) + bought;
     state.turnFlags.gives = (state.turnFlags.gives || 0) + 1;
     log(state, `🤝 ${p.name} passou ${qty}× ${it.name} para ${q.name}.`, 'good');
     fx(state, { k: 'team_give', pid: p.id, to: q.id, item, qty });

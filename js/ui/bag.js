@@ -16,12 +16,13 @@ import { GMAX } from '../../shared/data/gmax.js';
 const USE = {
   evo: { label: '✨ Usar', ok: (m, id) => !!itemEvoTarget(m, id), op: (uid, id) => ({ op: 'evo_item', uid, item: id }), q: id => `Qual Pokémon vai usar ${ITEMS[id].name}?`, none: 'Nenhum Pokémon da sua Coleção evolui com este item.' },
   gene_candy: { label: '🧬 Dar', ok: () => true, op: uid => ({ op: 'gene_candy', uid }), q: () => 'Dar o 🧬 Doce Genético para qual Pokémon? (os IVs são sorteados de novo)', confirm: true },
-  rare_candy: { label: '🍬 Dar', ok: m => (m.lvl || 1) < 60, op: uid => ({ op: 'rare_candy', uid }), q: () => 'Dar o 🍬 Doce Raro (+1 nível) para qual Pokémon?' },
+  rare_candy: { label: '🍬 Dar', ok: m => (m.lvl || 1) < 60, op: uid => ({ op: 'rare_candy', uid, qty: candyQ }), q: () => `Dar ${candyQ > 1 ? `${candyQ} 🍬 Doces Raros (+${candyQ} níveis, até o Nv.60)` : 'o 🍬 Doce Raro (+1 nível)'} para qual Pokémon?` },
   max_soup: { label: '🍲 Dar', ok: m => !!GMAX[m.sp] && !m.gx, op: uid => ({ op: 'max_soup', uid }), q: () => 'Dar a 🍲 Sopa Max para qual Pokémon? (só quem tem forma Gigantamax)', none: 'Nenhum Pokémon da Coleção tem forma Gigantamax sem o Fator.' },
   gear: { label: '⚔️ Equipar', ok: () => true, op: (uid, id) => ({ op: 'hold_stone', uid, item: id }), q: id => `Quem vai segurar ${ITEMS[id].name}?` }
 };
 const useKind = id => (EVO_ITEMS[id] ? 'evo' : USE[id] ? id : ITEMS[id]?.kind === 'gear' ? 'gear' : null);
 
+let candyQ = 1; // 🍬 v66: quantos Doces Raros de uma vez
 const bagOf = profile => Object.entries(profile?.stats?.bag || {}).filter(([id, n]) => ITEMS[id] && n > 0);
 
 export function openAccountBag(profile, onChange, openMarket) {
@@ -55,7 +56,9 @@ export function openAccountBag(profile, onChange, openMarket) {
     if (useFor) {
       const U = USE[useKind(useFor)];
       const vault = (profile?.vault || []).filter(m => U.ok(m, useFor));
-      extra = `<div class="divider"></div><b>${esc(U.q(useFor))}</b>
+      const cq = useFor === 'rare_candy' ? (() => { const have = profile?.stats?.bag?.rare_candy || 0; candyQ = Math.max(1, Math.min(candyQ, have));
+        return `<div class="row wrap" style="gap:4px;margin:4px 0"><span class="small">Quantos:</span>${[...new Set([1, 5, 10, 20, have].filter(q => q <= have))].map(q => `<button class="btn sm ${q === candyQ ? 'primary' : ''}" data-act="cq" data-q="${q}">${q === have && q > 1 ? `Todos (${q})` : q}</button>`).join('')}</div>`; })() : '';
+      extra = `<div class="divider"></div><b>${esc(U.q(useFor))}</b>${cq}
         ${vault.length ? `<div class="vf-scope">${vfBar('use-pick', { compact: true })}<div class="pick-grid" style="max-height:300px;overflow:auto">${vault.map((m, i) => {
           const to = useKind(useFor) === 'evo' ? itemEvoTarget(m, useFor) : null;
           return `<div class="pick" ${vfAttrs(m, i)} data-act="use-mon" data-uid="${esc(m.uid)}"><img src="${monSprite(m)}" alt=""><b>${esc(m.nick || getSpecies(m.sp)?.name)}</b><br><span class="tiny">Nv.${m.lvl}${to ? ` → ${esc(getSpecies(to)?.name)}` : ''}${m.held && useKind(useFor) === 'gear' ? ` · segura ${esc(ITEMS[m.held]?.name || '')}` : ''}</span></div>`; }).join('')}</div></div>`
@@ -116,6 +119,7 @@ export function openAccountBag(profile, onChange, openMarket) {
     stone: d => { stoneFor = d.item; picking = false; tmFor = null; useFor = null; redraw(); },
     use: d => { useFor = d.item; stoneFor = null; picking = false; tmFor = null; redraw(); ov.querySelector('.divider')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
     'use-back': () => { useFor = null; redraw(); },
+    cq: d => { candyQ = Number(d.q) || 1; redraw(); },
     'use-mon': async d => {
       const U = USE[useKind(useFor)];
       const m = (profile.vault || []).find(x => x.uid === d.uid);
@@ -124,7 +128,7 @@ export function openAccountBag(profile, onChange, openMarket) {
         const r = await api('profile', U.op(d.uid, useFor));
         profile = r.profile;
         const nm = m?.nick || getSpecies(m?.sp)?.name || 'Pokémon';
-        toast(r.evolved ? `✨ ${r.evolved.from || nm} evoluiu para ${r.evolved.to || getSpecies(r.evolved)?.name || '?'}!` : r.leveled ? `🍬 ${nm} subiu para o Nv.${r.leveled}!` : r.gene ? `🧬 ${nm}: ${['hp', 'atk', 'def', 'spe'].map(k => `${({ hp: 'HP', atk: 'ATQ', def: 'DEF', spe: 'VEL' })[k]} ${r.gene.before[k]}→${r.gene.after[k]}`).join(' · ')}` : `✅ ${ITEMS[useFor]?.name} usado em ${nm}!`, 'good');
+        toast(r.evolved ? `✨ ${r.evolved.from || nm} evoluiu para ${r.evolved.to || getSpecies(r.evolved)?.name || '?'}!` : r.leveled ? `🍬 ${r.used > 1 ? `${r.used} Doces: ` : ''}${nm} subiu para o Nv.${r.leveled}!` : r.gene ? `🧬 ${nm}: ${['hp', 'atk', 'def', 'spe'].map(k => `${({ hp: 'HP', atk: 'ATQ', def: 'DEF', spe: 'VEL' })[k]} ${r.gene.before[k]}→${r.gene.after[k]}`).join(' · ')}` : `✅ ${ITEMS[useFor]?.name} usado em ${nm}!`, 'good');
         if (!(profile?.stats?.bag?.[useFor] > 0)) useFor = null;
         redraw(); onChange && onChange(profile);
       } catch (e) { toast(e.message, 'bad'); }

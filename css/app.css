@@ -2653,3 +2653,7 @@ img.mv-ic { width: 20px !important; height: 20px !important; flex: 0 0 auto; fil
 .sq-box { flex: 1; display: flex; flex-direction: column; gap: 1px; padding: 5px 7px; border-radius: 10px; border: 1px solid var(--sq); background: color-mix(in srgb, var(--sq) 16%, transparent); font-size: 12px; min-width: 0; }
 .sq-box.mine { box-shadow: 0 0 0 2px var(--sq); }
 .sq-box .tiny { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 🏷️ v66: tipos (ícones) nos cards da Coleção */
+.vm-tile .vm-ty { display: flex; gap: 3px; justify-content: center; margin-top: 2px; min-height: 18px; }
+.vm-tile .vm-ty i { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; box-shadow: 0 1px 2px rgba(0,0,0,.5); }
+.vm-tile .vm-ty img.ty-ic { width: 14px !important; height: 14px !important; margin: 0 !important; vertical-align: 0; }

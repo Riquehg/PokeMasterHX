@@ -3,7 +3,7 @@ import { SAFARI_PRICE, SAFARI_DAILY, SAFARI_BALLS, SAFARI_STEPS, SAFARI_ENCOUNTE
 import { createRng, randomSeed } from '../../shared/rules/rng.js';
 import { createMon, BASE_SHINY_RATE } from '../../shared/rules/monsters.js';
 import { getSpecies } from '../../shared/data/pokemon.js';
-import { mutateProfile, getOrCreateProfile } from './core.js';
+import { mutateProfile, getOrCreateProfile, collectionMax } from './core.js';
 
 const bad = msg => { const e = new Error(msg); e.status = 400; throw e; };
 
@@ -97,7 +97,7 @@ export async function safariOp(db, user, body) {
         if (s.balls <= 0) bad('Sem Safari Balls.');
         s.balls--;
         if (rng.chance(catchChance(e))) {
-          const cap = 300 + (cur.stats?.vaultBonus || 0);
+          const cap = collectionMax(cur);
           if ((cur.vault || []).length >= cap) bad('Sua Coleção está cheia — solte alguns Pokémon antes de capturar.');
           caughtMon = { ...e.mon, ot: cur.trainer_name, caughtAt: Date.now(), safari: true };
           delete caughtMon.hp;

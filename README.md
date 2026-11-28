@@ -170,6 +170,7 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 - **v65c** — 🛡️ revisão: duelos 6×6 (Liga das Séries, Torre, Torneio) acabavam por tempo na rodada 30 e o vencedor saía pelo HP bruto, com a mensagem errada "derrotou todo o time" — agora o limite é 150 rodadas e, se bater, vence quem tem mais Pokémon de pé (depois % de HP), com o motivo certo; batalhas de Líder/Elite 4/Campeão também ganharam limite proporcional ao time. Lendário já capturado não reaparece para o mesmo jogador na partida e o peso do lendário em destaque caiu de 8× para 4×. Times: placar dos times na lista de jogadores e o Treino em Duplas/Trios ajusta o número de CPUs sozinho.
 
 - **v65d** — 📱 mapa no celular: arrastar começando em cima de uma casa ou peão parava sozinho (o mapa "travava"); agora o arrasto segue o dedo. As bordas ganharam folga para as casas da beirada não ficarem escondidas atrás dos botões de zoom e do placar.
+- **v66** — 📦 +50 vagas na Coleção dá para comprar várias vezes (até 1.300). 🍬 Rare Candy mais raro na partida, os que sobram vão para a Mochila da conta (menos os comprados na loja da cidade) e dá para dar vários de uma vez (na partida e na Coleção). 🪙 1/4 do ouro que sobra na partida vai para a conta (antes 1/10, máx. 4.000) — e partida encerrada pelo admin/parada também paga ouro e itens. ⭐ Lendário da mesma espécie pode aparecer de novo. 🏷️ Ícones de tipo nos cards da Coleção.
 ## 3. Publicar (passo a passo, só pelo navegador)
 
 ### 3.1 Supabase

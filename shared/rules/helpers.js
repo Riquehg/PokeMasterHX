@@ -45,6 +45,8 @@ export function takeItem(player, itemId, qty = 1) {
   if ((player.items[itemId] || 0) < qty) return false;
   player.items[itemId] -= qty;
   if (player.items[itemId] <= 0) delete player.items[itemId];
+  // 🍬 v66: gasta primeiro os comprados na loja da partida (esses não vão para a Mochila da conta)
+  if (player.shopBought?.[itemId]) { player.shopBought[itemId] -= Math.min(qty, player.shopBought[itemId]); if (player.shopBought[itemId] <= 0) delete player.shopBought[itemId]; }
   return true;
 }
 

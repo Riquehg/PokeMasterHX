@@ -125,7 +125,7 @@ test('dado, cenário, cartão e vitória vão para a partida; conveniências lib
   prof = (await profileOp(db, ash, { op: 'nickname', uid, nick: '  <b>Sparky</b> do Ash ' })).profile;
   assert.equal(prof.vault.find(m => m.uid === uid).nick, 'bSparky/b do');
   const v = await shopOp(db, ash, { op: 'buy', itemId: 'svc_vault50' });
-  assert.equal(v.me.vaultBonus, true);
+  assert.equal(v.me.vaultBonus, 50);
   const { collectionMax } = await import('../api/_lib/core.js');
   assert.equal(collectionMax((await profileOp(db, ash, { op: 'get' })).profile), 350);
   // o apelido entra na partida do modo Coleção
@@ -151,7 +151,7 @@ test('ouro da conta: levar para partida da Coleção (desconta e o que sobra vol
   // devolução: sobra até o valor trazido; recompensa só sobre o que ganhou
   assert.equal(C.refundBrought({ gold: 700, broughtGold: 1000 }), 700);
   assert.equal(C.refundBrought({ gold: 1600, broughtGold: 1000 }), 1000);
-  assert.equal(C.accountGoldReward({ winner: null }, { gold: 1600, broughtGold: 1000, badges: [] }), 60);
+  assert.equal(C.accountGoldReward({ winner: null }, { gold: 1600, broughtGold: 1000, badges: [] }), 150); // v66: 1/4 do que sobrou
   // Centro de Treino por ouro virou a Fazenda (v26)
   await assert.rejects(profileOp(db, ash, { op: 'train', uid, levels: 2 }), /Fazenda/);
 });

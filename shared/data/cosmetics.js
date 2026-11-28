@@ -53,7 +53,9 @@ export const VICTORY_PRESETS = { fireworks: 'Fogos de artifício', stars: 'Chuva
 
 // Conveniências (compra única, não equipa): não dão força
 export const SERVICE_PRESETS = { vault50: '+50 vagas na Coleção', nickname: 'Apelidos para Pokémon' };
-export const VAULT_BONUS = 50;
+export const VAULT_BONUS = 50; // 📦 vagas por compra
+export const VAULT_BONUS_MAX = 1000; // v66: dá para comprar várias vezes (até +1000 → 1.300 vagas)
+export const vaultExtra = st => Math.max(0, Math.min(VAULT_BONUS_MAX, Number(st?.vaultBonus) || 0));
 
 export const SHOP_KINDS = {
   ball_style: 'Brilho dos capturados',
@@ -130,7 +132,7 @@ export const DEFAULT_SHOP = {
     { id: 'win_pokeballs', kind: 'victory', value: 'pokeballs', name: 'Vitória: Pokébolas', price: 90, active: true, desc: 'Chuva de Pokébolas quando você vence.' },
     { id: 'win_coins', kind: 'victory', value: 'coins', name: 'Vitória: Chuva de Ouro', price: 90, active: true, desc: 'Moedas caem quando você vence.' },
     { id: 'win_sakura', kind: 'victory', value: 'sakura', name: 'Vitória: Pétalas', price: 70, active: true, desc: 'Pétalas de cerejeira quando você vence.' },
-    { id: 'svc_vault50', kind: 'service', value: 'vault50', name: '+50 vagas na Coleção', price: 150, active: true, desc: 'A Coleção passa de 300 para 350 Pokémon. Compra única.' },
+    { id: 'svc_vault50', kind: 'service', value: 'vault50', name: '+50 vagas na Coleção', price: 150, active: true, desc: 'Mais 50 vagas na Coleção a cada compra (pode comprar várias vezes, até 1.300 vagas).' },
     { id: 'svc_nickname', kind: 'service', value: 'nickname', name: 'Apelidos para Pokémon', price: 80, active: true, desc: 'Dê apelidos aos Pokémon da sua Coleção (aparecem nas partidas). Compra única.' }
   ],
   packages: [

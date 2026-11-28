@@ -15,7 +15,7 @@ import { towerOp } from './tower.js';
 import { duelQueue, duelQueueStatus, duelQueueCancel, duelTeam, startCup, duelFinished } from './tournament.js';
 import { SPECIES, STARTERS, getSpecies } from '../../shared/data/pokemon.js';
 import { dailyPokemon } from '../../shared/daily.js';
-import { cleanNick } from '../../shared/data/cosmetics.js';
+import { cleanNick, vaultExtra } from '../../shared/data/cosmetics.js';
 import { ITEMS, isKeepable, cleanBring, BAG_MAX_PER_ITEM, STARTING_ITEMS, GENE_ROLLS } from '../../shared/data/items.js';
 import { tmMovesFor, defaultMoveIds, MOVES, moveIdsOf, learnMoveIds } from '../../shared/data/moves.js';
 import { MEGAS, megaByStone } from '../../shared/data/megas.js';
@@ -41,7 +41,7 @@ export const notFound = msg => { throw new HttpError(404, msg || 'Não encontrad
 
 export const COLLECTION_MAX = 300;
 /** Vagas da Coleção desta conta (300, ou 350 com a conveniência da Loja de Diamantes). */
-export const collectionMax = prof => COLLECTION_MAX + Math.max(0, Math.min(50, Number(prof?.stats?.vaultBonus) || 0));
+export const collectionMax = prof => COLLECTION_MAX + vaultExtra(prof?.stats); // 📦 v66: +50 por compra na 💎 Loja
 export const START_RATING = 1000;
 const BOT_NAMES = ['Brendan', 'May', 'Dawn', 'Lucas', 'Hilda', 'Nate', 'Serena', 'Calem', 'Red', 'Leaf'];
 
@@ -120,9 +120,12 @@ export async function mutateProfile(db, id, fn) {
 export function accountGoldReward(state, p) {
   // o ouro trazido da conta volta à parte (refundBrought); só o ouro ganho na partida vira recompensa
   const earned = Math.max(0, p.gold - (p.broughtGold || 0));
-  const base = Math.floor(earned / 10) + 40 * p.badges.length + (isWinner(state, p) ? 150 : 0) + (p.champion ? 250 : 0);
-  return Math.min(1200, base);
+  // 🪙 v66: 1/4 do ouro que sobrou na partida vai para a conta (antes 1/10, até 1.200)
+  const base = Math.floor(earned * GOLD_KEEP_RATE) + 40 * (p.badges?.length || 0) + (isWinner(state, p) ? 150 : 0) + (p.champion ? 250 : 0);
+  return Math.min(GOLD_REWARD_MAX, base);
 }
+export const GOLD_KEEP_RATE = 0.25;
+export const GOLD_REWARD_MAX = 4000;
 
 /** Devolve o que sobrou do ouro trazido da conta (até o valor trazido). */
 export const refundBrought = p => Math.max(0, Math.min(p.gold, p.broughtGold || 0));
@@ -320,12 +323,14 @@ export async function profileOp(db, user, body) {
       let nm = { ...m };
       if (body.op === 'rare_candy') {
         const bag = { ...(st.bag || {}) };
-        if (!(bag.rare_candy > 0)) bad('Você não tem 🍬 Doce Raro na Mochila (Loja PB da Torre).');
+        if (!(bag.rare_candy > 0)) bad('Você não tem 🍬 Doce Raro na Mochila (sobras das partidas ou Loja PB da Torre).');
         if ((m.lvl || 1) >= MAX_LEVEL) bad(`Já está no nível máximo (${MAX_LEVEL}).`);
-        nm.lvl = (m.lvl || 1) + 1;
-        bag.rare_candy -= 1; if (bag.rare_candy <= 0) delete bag.rare_candy;
+        // 🍬 v66: vários de uma vez (até o nível máximo)
+        const n = Math.max(1, Math.min(bag.rare_candy, MAX_LEVEL - (m.lvl || 1), Math.floor(Number(body.qty)) || 1));
+        nm.lvl = (m.lvl || 1) + n;
+        bag.rare_candy -= n; if (bag.rare_candy <= 0) delete bag.rare_candy;
         st.bag = bag;
-        res = { lvl: nm.lvl };
+        res = { lvl: nm.lvl, used: n };
       } else {
         const to = levelEvoTarget(m);
         if (!to) bad(`${getSpecies(m.sp)?.name || 'Esse Pokémon'} ainda não tem nível para evoluir (ou só evolui com item).`);
@@ -339,7 +344,7 @@ export async function profileOp(db, user, body) {
       if (nm.sp !== m.sp && !(prof.pokedex || []).includes(nm.sp)) out.pokedex = [...(prof.pokedex || []), nm.sp];
       return out;
     });
-    return { profile: await withCosmetic(db, prof), evolved: res?.to ? res : null, leveled: res?.lvl || null };
+    return { profile: await withCosmetic(db, prof), evolved: res?.to ? res : null, leveled: res?.lvl || null, used: res?.used || 0 };
   }
   if (body.op === 'evo_item') { // ✨ usar pedra / item de evolução da Mochila num Pokémon da Coleção (v54)
     const item = String(body.item || '');
@@ -600,7 +605,7 @@ export function bagFromMatch(p) {
   const out = {};
   for (const [id, q] of Object.entries(p.items || {})) {
     if (!isKeepable(id) || !(q > 0)) continue;
-    const n = q - ((p.kit || STARTING_ITEMS)[id] || 0); // v65b: na Raid em Grupo o kit (p.kit) é o que não volta
+    const n = q - ((p.kit || STARTING_ITEMS)[id] || 0) - (p.shopBought?.[id] || 0); // v65b: na Raid em Grupo o kit (p.kit) é o que não volta · v66: nem o Doce comprado na loja
     if (n > 0) out[id] = n;
   }
   return out;
@@ -1241,9 +1246,11 @@ export async function refundAbandoned(db, state) {
   if (!state?.players || state.options?.hardcore) return;
   for (const p of state.players) {
     if (String(p.id).startsWith('cpu_') || p.left || p.hardcoreLost) continue;
-    const items = {};
-    for (const [id, q] of Object.entries(p.broughtItems || {})) { const n = Math.min(q, p.items?.[id] || 0); if (n > 0) items[id] = n; }
-    const gold = refundBrought(p);
+    // 🪙🎒 v66: partida encerrada (pelo admin ou parada): leva também o ouro ganho (mesma conta do fim normal, sem
+    // bônus de vitória) e os itens que sobraram — antes só voltava o que tinha trazido
+    const items = bagFromMatch(p);
+    const gold = refundBrought(p) + accountGoldReward(state, p);
+    (state.goldChanges ||= {})[p.id] = gold;
     try {
       if (Object.keys(items).length) await mutateProfile(db, p.id, cur => ({ stats: { ...(cur.stats || {}), bag: addToBag(cur.stats?.bag, items) } }));
       if (gold > 0 && db.walletAdd) await db.walletAdd(p.id, 0, gold);
@@ -1316,7 +1323,8 @@ export async function recordResults(db, state, options = {}) {
     if (!saved) continue;
     if (leagueReward && db.walletAdd) { try { await db.walletAdd(p.id, leagueReward, 0); } catch (e) { console.error('[season]', e.message); } }
     // Hardcore: quem caiu não leva nada (nem o ouro trazido); quem sobreviveu ganha o dobro de ouro da conta
-    const coins = p.hardcoreLost ? 0 : (state.options?.hardcore ? Math.min(2400, accountGoldReward(state, p) * 2) : accountGoldReward(state, p)) + refundBrought(p);
+    const coins = p.hardcoreLost ? 0 : (state.options?.hardcore ? Math.min(GOLD_REWARD_MAX * 2, accountGoldReward(state, p) * 2) : accountGoldReward(state, p)) + refundBrought(p);
+    (state.goldChanges ||= {})[p.id] = coins; // mostrado no resultado
     if (coins > 0 && db.walletAdd) {
       try { await db.walletAdd(p.id, 0, coins); } catch (e) { console.error('[gold]', e.message); }
     }

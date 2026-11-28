@@ -35,7 +35,7 @@ import { GMAX } from '../../shared/data/gmax.js';
 import { releaseGold, releaseLabel } from '../../shared/data/release.js';
 import { dailyPokemon } from '../../shared/daily.js';
 import { esc, toast, bindActions, openModal, closeModal, setModalBody } from './dom.js';
-import { monSprite, avatarUrl, itemUrl, uiIcon, uiBanner } from '../config.js';
+import { monSprite, avatarUrl, itemUrl, uiIcon, uiBanner, typeIcon, typeLabel, typeColor } from '../config.js';
 import { openGuild } from './guild.js';
 import { SQUADS } from '../../shared/rules/teams.js';
 import { net, api, signIn, signUp, signOut, resetPassword, watchMatch } from '../api.js';
@@ -53,7 +53,7 @@ import { ivPercent } from '../../shared/rules/monsters.js';
 import { typeChips } from './common.js';
 import { openShop as openDiamondShop } from './shop.js';
 import { showAnnouncement } from './notify.js';
-import { AURA_PRESETS, FRAME_PRESETS, SHOP_KINDS } from '../../shared/data/cosmetics.js';
+import { AURA_PRESETS, FRAME_PRESETS, SHOP_KINDS, vaultExtra, VAULT_BONUS_MAX } from '../../shared/data/cosmetics.js';
 
 const LOGO = `<div class="logo"><h1>Pokémon Master Trainer</h1><p>HEX Edition · v2</p></div>`;
 
@@ -359,7 +359,7 @@ function soloModal(profile, ctx, preset = {}) {
 }
 
 function collectionModal(profile, onChange) {
-  const cap = () => 300 + (profile?.stats?.vaultBonus ? 50 : 0);
+  const cap = () => 300 + vaultExtra(profile?.stats);
   // 📦 boxes (organização): view = 'all' | id da box; picking = escolhendo Pokémon para a box
   let view = 'all', picking = null;
   const boxes = () => profile?.stats?.boxes || [];
@@ -393,6 +393,7 @@ function collectionModal(profile, onChange) {
   const miniTile = (m, evo) => { const sp = getSpecies(m.sp);
     return `<button class="vm-tile t${sp?.tier || 1} ${m.shiny ? 'shiny' : ''} ${sp?.legendary ? 'legend' : ''}" data-act="vm-open" data-uid="${esc(m.uid)}" title="${esc(m.nick || sp?.name || '')}">
       <img src="${monSprite(m)}" alt="" loading="lazy" decoding="async"><span class="vm-name">${esc(m.nick || sp?.name || '?')}</span><span class="vm-lv">Nv.${m.lvl}</span>
+      <span class="vm-ty">${(sp?.types || []).map(t => `<i style="background:${typeColor(t)}" title="${esc(typeLabel(t))}">${typeIcon(t)}</i>`).join('')}</span>
       <span class="vm-badges">${m.shiny ? '✨' : ''}${m.fav ? '⭐' : ''}${m.gx ? '🔴' : ''}${m.held ? '🎒' : ''}${evo ? '<b class="vm-evo">✨</b>' : ''}</span></button>`; };
   // 🕊️ v59: soltar vários de uma vez
   const relLocked = m => m.fav || (profile?.stats?.serie?.defense || []).includes(m.uid) || (profile?.stats?.farm?.slots || []).some(s => s?.uid === m.uid) || [profile?.stats?.farm?.daycare?.a, profile?.stats?.farm?.daycare?.b].includes(m.uid);
@@ -404,7 +405,7 @@ function collectionModal(profile, onChange) {
     const bagNow = profile?.stats?.bag || {};
     const evoReady = m => !!levelEvoTarget(m) || evoItemsFor(m).some(id => (bagNow[id] || 0) > 0); // ✨ tem nível ou item de evolução que serve
     const n = k => all.filter(m => k(m)).length;
-    return `<details class="info-fold"><summary class="small">ℹ️ Como funciona a Coleção</summary><p class="small muted">Tudo que você captura em partidas salvas na conta (Treino contra CPUs e Online) fica aqui, com o nível atualizado. Use no modo <b>📦 Coleção</b> para levar seu time. Limite: ${cap()}. Se lotar, só os comuns mais fracos saem e ficam em "↩️ Saíram da Coleção" para recuperar (⭐ favoritos, shinies, lendários, Vermelhos/Amarelos, Confiança e com apelido nunca saem).${profile?.stats?.vaultBonus ? '' : ' Dá para ampliar para 350 na 💎 Loja.'}</p></details>
+    return `<details class="info-fold"><summary class="small">ℹ️ Como funciona a Coleção</summary><p class="small muted">Tudo que você captura em partidas salvas na conta (Treino contra CPUs e Online) fica aqui, com o nível atualizado. Use no modo <b>📦 Coleção</b> para levar seu time. Limite: ${cap()}. Se lotar, só os comuns mais fracos saem e ficam em "↩️ Saíram da Coleção" para recuperar (⭐ favoritos, shinies, lendários, Vermelhos/Amarelos, Confiança e com apelido nunca saem).${vaultExtra(profile?.stats) >= VAULT_BONUS_MAX ? '' : ' Dá para ampliar +50 vagas por compra na 💎 Loja (várias vezes).'}</p></details>
       ${(profile?.stats?.overflow || []).length ? `<details class="vf-out"><summary>↩️ Saíram da Coleção (${profile.stats.overflow.length}) — toque para ver e recuperar</summary>
         <p class="tiny muted">Pokémon que você soltou ou que saíram sozinhos quando a Coleção lotou (só saem os comuns, tier até Azul). Ficam aqui por um tempo (últimos 120).</p>
         <div class="pk-grid">${profile.stats.overflow.map(m => statCard(m, { extra: `<div class="tiny muted">${m.why === 'solto' ? 'Solto por você' : 'Coleção cheia'} · ${new Date(m.outAt).toLocaleDateString('pt-BR')}</div><button class="btn sm green" data-act="restore" data-uid="${esc(m.uid)}">↩️ Recuperar${m.paid ? ` (devolve 🪙 ${m.paid})` : ''}</button>` })).join('')}</div></details>` : ''}
@@ -488,8 +489,11 @@ function collectionModal(profile, onChange) {
             return `<h4 style="margin:6px 0 2px">⬆️ Evoluir por nível</h4>
               ${to ? `<div class="ms-opt"><img class="ms-mon" src="${monSprite({ sp: to, shiny: m.shiny })}" alt=""><div class="grow"><b>${esc(getSpecies(to).name)}</b><div class="tiny muted">já tem nível para evoluir (Nv.${m.lvl})</div></div>
                 <button class="btn sm green" data-act="ms-lvl">✨ Evoluir</button></div>` : nxt ? `<p class="tiny muted">Evolui para <b>${esc(getSpecies(nxt.to).name)}</b> no Nv.${nxt.lvl} (agora Nv.${m.lvl}) — suba de nível nas partidas, na 🌾 Fazenda ou com 🍬 Doce Raro.</p>` : ''}
-              ${candy ? `<div class="ms-opt"><img class="ms-st" src="${itemUrl('rare_candy')}" alt=""><div class="grow"><b>🍬 Doce Raro</b><div class="tiny muted">+1 nível · você tem ${candy}</div></div>
-                <button class="btn sm" data-act="ms-candy" ${(m.lvl || 1) < 60 ? '' : 'disabled'}>Dar</button></div>` : ''}`; })()}
+              ${candy ? (() => { // 🍬 v66: vários de uma vez
+                const room = Math.max(0, 60 - (m.lvl || 1)), max = Math.min(candy, room);
+                const qs = [...new Set([1, 5, 10].filter(q => q < max).concat(max ? [max] : []))];
+                return `<div class="ms-opt ms-candy"><img class="ms-st" src="${itemUrl('rare_candy')}" alt=""><div class="grow"><b>🍬 Doce Raro</b><div class="tiny muted">+1 nível cada · você tem ${candy}${room ? '' : ' · já está no Nv.60'}</div></div>
+                <div class="ms-cq">${qs.map(q => `<button class="btn sm ${q === max && q > 1 ? 'green' : ''}" data-act="ms-candy" data-q="${q}" title="Nv.${(m.lvl || 1)} → Nv.${(m.lvl || 1) + q}">${q === max && q > 1 ? `Até Nv.${(m.lvl || 1) + q}` : `+${q}`}</button>`).join('')}</div></div>`; })() : ''}`; })()}
           ${(() => { // ✨ v54: evoluir com pedra / item de evolução da Mochila
             const evoIds = [...new Set([...evoItemsFor(m), ...((bag.evolution_stone || 0) > 0 && getSpecies(m.sp).evos?.length ? ['evolution_stone'] : [])])];
             if (!evoIds.length) return '';
@@ -505,7 +509,7 @@ function collectionModal(profile, onChange) {
           <div class="ms-opt"><img class="ms-st" src="${itemUrl('tm')}" alt="">
             <div class="grow"><b>💿 TM</b><div class="tiny muted">Ensina um golpe novo no lugar do 2º ou do 3º · você tem ${bag.tm || 0}</div></div>
             <button class="btn sm" data-act="ms-tm" ${(bag.tm || 0) > 0 ? '' : 'disabled'}>Usar</button></div>
-          <p class="tiny muted">🧬 O Doce Genético sai da 🍳 Cozinha ou da 🔨 Oficina da Fazenda, ou de eventos raros nas casas Vermelhas/Amarelas. 🍬 Doce Raro: Oficina (Artesão) ou Loja PB da Torre.</p></div>`);
+          <p class="tiny muted">🧬 O Doce Genético sai da 🍳 Cozinha ou da 🔨 Oficina da Fazenda, ou de eventos raros nas casas Vermelhas/Amarelas. 🍬 Doce Raro: os que sobram nas partidas (menos os comprados na loja), Oficina (Artesão) ou Loja PB da Torre.</p></div>`);
       const hold = async item => {
         try { profile = (await api('profile', { op: 'hold_stone', uid: m.uid, item })).profile; closeModal('mstone'); redraw(); onChange(profile); toast(item ? `${ALL_ITEMS[item]?.kind === 'gear' ? '⚔️' : '💎'} ${ALL_ITEMS[item]?.name} equipado!` : 'O item voltou para a Mochila.', 'good'); }
         catch (e) { toast(e.message, 'bad'); }
@@ -537,13 +541,13 @@ function collectionModal(profile, onChange) {
           }
         });
       };
-      const lvlOp = async op => {
+      const lvlOp = async (op, qty) => {
         try {
-          const r = await api('profile', { op, uid: m.uid }); profile = r.profile; closeModal('mstone'); redraw(); onChange(profile);
-          toast(r.evolved ? `✨ ${r.evolved.from} evoluiu para ${r.evolved.to}!` : `🍬 Subiu para o Nv.${r.leveled}!`, 'good');
+          const r = await api('profile', { op, uid: m.uid, qty }); profile = r.profile; closeModal('mstone'); redraw(); onChange(profile);
+          toast(r.evolved ? `✨ ${r.evolved.from} evoluiu para ${r.evolved.to}!` : `🍬 ${r.used > 1 ? `${r.used} Doces Raros: ` : ''}subiu para o Nv.${r.leveled}!${levelEvoTarget({ ...m, lvl: r.leveled }) ? ' Já pode evoluir (⬆️ Evoluir).' : ''}`, 'good');
         } catch (e) { toast(e.message, 'bad'); }
       };
-      bindActions(ov2, { 'ms-hold': x => hold(x.item), 'ms-off': () => hold(null), 'ms-evo': x => evoUse(x.item), 'ms-soup': soup, 'ms-gene': gene, 'ms-tm': tmOpen, 'ms-lvl': () => lvlOp('evo_level'), 'ms-candy': () => lvlOp('rare_candy') });
+      bindActions(ov2, { 'ms-hold': x => hold(x.item), 'ms-off': () => hold(null), 'ms-evo': x => evoUse(x.item), 'ms-soup': soup, 'ms-gene': gene, 'ms-tm': tmOpen, 'ms-lvl': () => lvlOp('evo_level'), 'ms-candy': x => lvlOp('rare_candy', Number(x.q) || 1) });
     },
     rel: async d => {
       const m = (profile?.vault || []).find(x => x.uid === d.uid);

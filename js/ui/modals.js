@@ -137,6 +137,7 @@ export function openPlaceCaught(session, act, uid) {
 const USABLE = ['heal', 'revive', 'candy', 'stone', 'move_bonus', 'escape', 'fly', 'tm'];
 export function openBag(session, act) {
   let pending = null; // item aguardando escolha de alvo
+  let candyQ = 1; // 🍬 v66
   let tmIndex = null; // TM: Pokémon escolhido (falta escolher o golpe)
   const render = () => {
     const p = me(session);
@@ -149,10 +150,14 @@ export function openBag(session, act) {
         <div><b>${esc(it.name)}</b> <span class="chip">×${n}</span><div class="tiny muted">${esc(it.desc)}</div></div>
         <div>${canUse ? `<button class="btn sm primary" data-act="use" data-item="${id}">Usar</button>` : it.kind === 'ball' ? '<span class="tiny muted">em batalha</span>' : it.kind === 'boost' ? '<span class="tiny muted">em batalha</span>' : '<span class="tiny muted">passivo</span>'}</div></div>`;
     }).join('');
-    const target = pending && tmIndex === null ? `<div class="divider"></div><b>Usar ${esc(ITEMS[pending].name)} em:</b>
+    const have = pending ? p.items[pending] || 0 : 0;
+    if (pending && ITEMS[pending]?.kind === 'candy') candyQ = Math.max(1, Math.min(candyQ, have));
+    const cq = pending && ITEMS[pending]?.kind === 'candy' && have > 1 // 🍬 v66: vários de uma vez
+      ? `<div class="row wrap" style="gap:4px;margin:4px 0"><span class="small">Quantos:</span>${[...new Set([1, 3, 5, 10, have].filter(q => q <= have))].map(q => `<button class="btn sm ${q === candyQ ? 'primary' : ''}" data-act="cq" data-q="${q}">${q === have ? `Todos (${q})` : q}</button>`).join('')}</div>` : '';
+    const target = pending && tmIndex === null ? `<div class="divider"></div><b>Usar ${ITEMS[pending]?.kind === 'candy' && candyQ > 1 ? `${candyQ}× ` : ''}${esc(ITEMS[pending].name)} em:</b>${cq}
       <div class="team bag-target">${p.team.map((m, i) => monCard(m, { index: i, act: 'target' })).join('')}</div>` : '';
     const tm = pending === 'tm' && tmIndex !== null && p.team[tmIndex] ? `<div class="divider"></div>${tmPickerHtml(p.team[tmIndex])}<button class="btn sm" data-act="tm-back">← Outro Pokémon</button>` : '';
-    return `<p class="small muted">Itens fora de batalha só podem ser usados na sua vez. 🎒 No fim da partida, Pokébolas, Amuleto Shiny e TM que sobrarem vão para a Mochila da sua conta.</p><div class="col">${list || '<p class="muted">Mochila vazia.</p>'}</div>${target}${tm}`;
+    return `<p class="small muted">Itens fora de batalha só podem ser usados na sua vez. 🎒 No fim da partida, Pokébolas, Amuleto Shiny, TM, pedras e 🍬 Rare Candy que sobrarem vão para a Mochila da sua conta (Rare Candy comprado na loja não vai).</p><div class="col">${list || '<p class="muted">Mochila vazia.</p>'}</div>${target}${tm}`;
   };
   const ov = openModal('bag', '🎒 Mochila', render(), { wide: true });
   bindActions(ov, {
@@ -164,8 +169,9 @@ export function openBag(session, act) {
     },
     target: d => {
       if (pending === 'tm') { tmIndex = Number(d.index); setModalBody('bag', render()); return; }
-      const item = pending; pending = null; act({ type: 'use_item', item, index: Number(d.index) });
+      const item = pending; pending = null; act({ type: 'use_item', item, index: Number(d.index), ...(ITEMS[item]?.kind === 'candy' ? { qty: candyQ } : {}) });
     },
+    cq: d => { candyQ = Number(d.q) || 1; setModalBody('bag', render()); },
     'tm-move': d => { const index = tmIndex; pending = null; tmIndex = null; act({ type: 'use_item', item: 'tm', index, move: d.move, slot: Number(d.slot) }); },
     'tm-slot': d => { setTmSlot(d.slot); setModalBody('bag', render()); },
     'tm-back': () => { tmIndex = null; setModalBody('bag', render()); }
@@ -372,7 +378,7 @@ export function openHelp() {
       <p><b>🗺️ Mapas:</b> <b>Kanto</b> (o clássico) ou <b>Expedição</b> (um mapa novo a cada partida). As rotas desenhadas são exatamente por onde dá para andar. Cada região tem um ambiente — mar, floresta, deserto, caverna, neve, vulcão — e os Pokémon de lá aparecem mais (ex.: mar → Água, caverna → Pedra).</p>
       <p><b>🧭 Caminhos escondidos:</b> casas com ícone exigem uma habilidade: 🌊 Surf (Água), 🌿 Cortar (Planta/Inseto), 🪨 Quebra-Pedra (Lutador/Pedra), 💡 Flash (Elétrico/Psíquico), ⛰️ Escalada (Terra/Dragão), 🔥 Queimar (Fogo), 🪶 Voar (Voador). Vale ter um Pokémon de pé desse tipo <b>ou</b> com um golpe desse tipo. Lá dentro os Pokémon são de tier maior.</p>
       <p><b>☁️ Clima:</b> muda a cada 3–5 rodadas. ☀️ Sol: Fogo +30%, Água −30%. 🌧️ Chuva: Água +30%, Fogo −30%. ⛈️ Tempestade: Elétrico +30%, paralisia 2×. 🌨️ Nevasca: Gelo +30%, quem não é Gelo perde HP. 🏜️ Areia: Pedra/Terra +20%, quem não é Pedra/Terra/Aço perde HP. 🌫️ Neblina: Fantasma/Psíquico/Sombrio +20% e Pokémon mais raros. O clima também muda quem aparece.</p>
-      <p><b>🪙 Ouro da conta:</b> no modo Coleção você pode levar ouro da conta para a partida (o que sobrar volta no fim). Também serve no Mercado.</p>
+      <p><b>🪙 Ouro da conta:</b> no fim de cada partida, 1/4 do ouro que sobrou vira ouro da conta. No modo Coleção você pode levar ouro da conta para a partida (o que sobrar volta no fim). Também serve no Mercado.</p>
       <p><b>🌾 Fazenda:</b> coloque Pokémon da Coleção soltos nos biomas: eles ganham XP com o tempo (até o Nv. 50, evoluem no caminho; do 50 ao 60 só batalhando ou com 🍬 Doce Raro da Oficina; bioma certo e felicidade alta rendem mais; limite diário), produzem recursos (🍓🫧🔥⛏️💠🌑🪶) e ficam felizes com carinho e Frutinhas. Visite amigos para curtir ❤️ e cuidar 🤝 (1 vez por dia cada). Vagas sobem com o nível da Fazenda; diamantes só compram decoração. 🏡 Casinha (grátis): seu companheiro equipado mora nela e cuida da Fazenda — felicidade cai 40% mais devagar, +20% de XP nos Pokémon do tipo dele e cada carinho dá +3 de laço. ♂/♀: os Pokémon agora têm sexo.</p>
       <p><b>🥚 Creche (na Fazenda):</b> um macho ♂ e uma fêmea ♀ da mesma família ou com um tipo em comum (ou Ditto com qualquer um) botam um ovo a cada 6 h (até 4 por dia, incubadora de 3). O filhote nasce no Nv. 5 na forma básica, herda 3 dos 4 potenciais dos pais (e a natureza, gastando 3 💠) e pode herdar o 2º golpe do pai. Mutações raras: ✨ shiny (1/150; 1/40 com pais shiny), 🌈 aura (1/40) e 💯 potencial máximo (1/80). Lendários e Míticos não fazem ovos.</p>
       <p><b>🔨 Oficina (na Fazenda):</b> transforme recursos em itens nas bancadas (levam horas; +1 bancada no Nv. 4 e no Nv. 7 da Fazenda). Receitas boas pedem recursos de vários biomas. Fabricar e entregar os 📋 Pedidos do dia sobem o Nível de Artesão (Aprendiz → Artesão → Mestre → Grão-Mestre), que libera Ultra/Rainbow Ball, Doce Raro, Amuleto de Incubação, Incenso Brilhante (shiny ×3 nos ovos), TM, Bola da Confiança e Master Ball (1 por semana) e decorações exclusivas.</p>
@@ -433,6 +439,7 @@ export function openHelp() {
       <p><b>🧬 Doce Genético:</b> feito na 🍳 Cozinha (12 h) ou na 🔨 Oficina da Fazenda (Artesão), ou achado em eventos raros. Na ficha do Pokémon da Coleção (botão 🎒/✨) dá para dar o Doce: os IVs (HP, ATQ, DEF, VEL) são sorteados de novo — cada um tenta 2 vezes e fica o melhor, mas pode cair. Na mesma ficha: TM, itens de evolução, Megapedra, itens de batalha e Sopa Max.</p>
       <p><b>⏱️ Duração:</b> Treino e Online sempre terminam (30, 40, 45 ou 60 turnos). O "até o Campeão" ficou só no Offline, que não salva na conta.</p>
       <p><b>🌟 Míticos:</b> Mew, Celebi, Jirachi, Darkrai, Arceus e outros têm categoria própria. Não aparecem soltos como os lendários: só numa aparição mítica rara nas casas Amarelas (4%), em Raids e como prêmio (campeão da Série A). Nunca saem de ovos. 🌀 Ultracriaturas também ganharam rótulo.</p>
+      <p><b>🍬 Rare Candy e 🪙 ouro (v66):</b> o Rare Candy ficou mais raro; os que sobram no fim da partida vão para a 🎒 Mochila da conta (os comprados na loja da cidade não vão) e dá para dar vários de uma vez — na partida e na Coleção (ficha ✨/🎒 do Pokémon ou Mochila). No fim da partida, 1/4 do ouro que sobrou vai para o ouro da conta (até 🪙 4.000, mais insígnias e vitória); partida encerrada antes do fim também paga. Na 💎 Loja, +50 vagas na Coleção pode ser comprado várias vezes (até 1.300).</p>
       <p><b>📱 Mapa no celular (v65d):</b> arraste com um dedo (pode começar em cima de uma casa ou peão), afaste/aproxime com dois dedos, ◎ centraliza no seu peão e ⤢ mostra o mapa inteiro. O mapa passa um pouco da borda para as casas da beirada saírem de trás dos botões.</p>
       <p><b>🗺️ Mapas:</b> Kanto, Expedição (novo a cada partida), 🏝️ Arquipélago Coral, 🌋 Terras de Fogo, 🏔️ Picos Gelados, 🌳 Mata Profunda e os mapas criados no painel admin. Os mapas temáticos e a Expedição têm o tamanho de Kanto (ou mais), cheios de bifurcações e voltas, com o ambiente do tema dominando e áreas escondidas no mar, na lava, nos picos ou na mata fechada.</p>
       <p><b>⚽ Liga das Séries:</b> Série D → C → B → A, uma temporada por mês. Inscreva 6 Pokémon como time de defesa; desafie quem está na sua série (até 5 ataques por dia) num duelo contra a defesa dele — ninguém precisa estar online. Vitória no ataque +3, defesa segurada +1. Cada série tem 20 times — dê nome e escudo ao seu. Os 4 primeiros sobem e os 4 últimos caem; 1º e 2º ganham troféu (🏆 Sala de Troféus) e um prêmio especial da série, o pódio ganha 💎 e o campeão da Série A ganha um Mítico.</p>

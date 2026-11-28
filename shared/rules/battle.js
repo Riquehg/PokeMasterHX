@@ -1274,9 +1274,7 @@ export function deliverCapture(state, pid, mon, ballId) {
   if (ballId) progressMission(state, pid, { k: 'capture', sp: mon.sp });
   if (mon.yellowLegend) {
     p.legendCaught = (p.legendCaught || 0) + 1; delete mon.yellowLegend;
-    // 🛡️ v65c: a mesma espécie lendária não aparece de novo para este jogador nesta partida (era 4 Articunos seguidos)
-    const base = getSpecies(mon.sp)?.form || mon.sp;
-    p.legendSp = [...new Set([...(p.legendSp || []), mon.sp, base])];
+    // v66: a exclusão da mesma espécie (v65c) saiu a pedido — pegar outro Articuno com IV melhor vale a pena
     // 🏵️ passou do limite graças ao Amuleto Lendário (levado na Mochila): ativa por 1 semana
     if (p.legendCaught > LEGEND_MATCH_LIMIT && !charmActive(p) && (p.items?.legend_charm || 0) > 0) {
       p.items.legend_charm -= 1;

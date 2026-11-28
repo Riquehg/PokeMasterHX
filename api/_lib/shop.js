@@ -2,7 +2,7 @@ import { TITLE_BY_ID, unlockedTitles } from '../../shared/data/titles.js';
 // Loja de Diamantes (cosméticos) + pagamento Pix pelo Mercado Pago + feed global + avisos do admin.
 import { createHmac, randomUUID } from 'node:crypto';
 import { HttpError, getOrCreateProfile, mutateProfile } from './core.js';
-import { DEFAULT_SHOP, SHOP_KINDS, EQUIP_KINDS, PRESETS_BY_KIND, VAULT_BONUS, sanitizeCosmetic } from '../../shared/data/cosmetics.js';
+import { DEFAULT_SHOP, SHOP_KINDS, EQUIP_KINDS, PRESETS_BY_KIND, VAULT_BONUS, VAULT_BONUS_MAX, vaultExtra, sanitizeCosmetic } from '../../shared/data/cosmetics.js';
 import { getSpecies } from '../../shared/data/pokemon.js';
 
 const bad = m => { throw new HttpError(400, m); };
@@ -46,7 +46,7 @@ export function cleanShop(input) {
 /** Conveniência já comprada? (guardada em stats para não depender da vitrine) */
 export function serviceOwned(profile, value) {
   const st = profile?.stats || {};
-  return value === 'vault50' ? !!st.vaultBonus : value === 'nickname' ? !!st.nicknames : false;
+  return value === 'vault50' ? vaultExtra(st) >= VAULT_BONUS_MAX : value === 'nickname' ? !!st.nicknames : false;
 }
 
 export function myCosmetics(profile) {
@@ -112,7 +112,7 @@ export async function shopOp(db, user, body, req) {
   const profile = await getOrCreateProfile(db, user);
   const shop = await getShop(db);
   const mine = myCosmetics(profile);
-  const view = p => ({ diamonds: p.diamonds || 0, ...myCosmetics(p), vaultBonus: !!p.stats?.vaultBonus, nicknames: !!p.stats?.nicknames });
+  const view = p => ({ diamonds: p.diamonds || 0, ...myCosmetics(p), vaultBonus: vaultExtra(p.stats), vaultMax: VAULT_BONUS_MAX, nicknames: !!p.stats?.nicknames });
 
   switch (body.op) {
     case 'catalog':
@@ -127,8 +127,8 @@ export async function shopOp(db, user, body, req) {
     case 'buy': {
       const item = shop.items.find(i => i.id === body.itemId && i.active);
       if (!item) bad('Item indisponível.');
-      if (mine.owned.includes(item.id)) bad('Você já tem este item.');
-      if (item.kind === 'service' && serviceOwned(profile, item.value)) bad('Você já tem esta conveniência.');
+      if (mine.owned.includes(item.id) && !(item.kind === 'service' && item.value === 'vault50')) bad('Você já tem este item.');
+      if (item.kind === 'service' && serviceOwned(profile, item.value)) bad(item.value === 'vault50' ? `A Coleção já está no máximo (+${VAULT_BONUS_MAX} vagas).` : 'Você já tem esta conveniência.');
       const left = await db.addDiamonds(user.id, -item.price);
       if (left === null) bad('Diamantes insuficientes.');
       if (item.kind === 'decor') { // 🌾 decoração: só fica liberada (não "equipa")
@@ -138,11 +138,11 @@ export async function shopOp(db, user, body, req) {
       if (item.kind === 'service') {
         const p = await mutateProfile(db, user.id, prof => {
           const c = myCosmetics(prof), st = { ...(prof.stats || {}) };
-          if (item.value === 'vault50') st.vaultBonus = VAULT_BONUS;
+          if (item.value === 'vault50') st.vaultBonus = Math.min(VAULT_BONUS_MAX, vaultExtra(st) + VAULT_BONUS); // 📦 v66: soma a cada compra
           if (item.value === 'nickname') st.nicknames = true;
           return { stats: st, cosmetics: { owned: [...new Set([...c.owned, item.id])], equipped: c.equipped } };
         });
-        return { me: view(p), message: item.value === 'vault50' ? 'Coleção ampliada para 350 vagas!' : 'Apelidos liberados! Abra a Coleção e toque no ✏️ de um Pokémon.' };
+        return { me: view(p), message: item.value === 'vault50' ? `Coleção ampliada para ${300 + vaultExtra(p.stats)} vagas!` : 'Apelidos liberados! Abra a Coleção e toque no ✏️ de um Pokémon.' };
       }
       const cosmetics = { owned: [...mine.owned, item.id], equipped: { ...mine.equipped, [item.kind]: item.id } };
       const p = await db.upsertProfile(user.id, { cosmetics });
