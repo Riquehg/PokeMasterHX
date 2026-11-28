@@ -1447,6 +1447,8 @@ body.in-game .soc-panel { height: min(520px, calc(100dvh - 80px)); }
 .mode-tile small { font-size: 12px; opacity: .85; line-height: 1.3; }
 .t-green { --t1: #2fae63; --t2: #145a32; } .t-blue { --t1: #3d7fe0; --t2: #1a3a73; } .t-red { --t1: #d9434b; --t2: #6e1c22; }
 .t-gold { --t1: #e0a43a; --t2: #6e4a12; } .t-gray { --t1: #5d5246; --t2: #2a231c; }
+.t-purple { --t1: #8a5ad8; --t2: #36195f; } .t-teal { --t1: #2aa39a; --t2: #0f4a45; } .t-orange { --t1: #e3793a; --t2: #6b2c0c; }
+.mode-tile .mt-logo { width: 34px; height: 34px; object-fit: contain; display: block; }
 .hub-info { font-size: 13px; padding: 6px 10px; border-radius: 10px; background: rgba(255,255,255,.03); }
 .hub-info summary { cursor: pointer; color: #cdbb9f; }
 .acct-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
@@ -2617,3 +2619,15 @@ img.mv-ic { width: 20px !important; height: 20px !important; flex: 0 0 auto; fil
 .pk-dv.pos { color: #6be38a; } .pk-dv.neg { color: #ff8a7a; } .pk-dv.eq { color: #b8ad98; }
 .pk-cmp { font-size: 10px; text-align: center; margin: 3px 0 1px; font-weight: 700; }
 .pk-cmp.pos { color: #6be38a; } .pk-cmp.neg { color: #ff8a7a; } .pk-cmp.eq { color: #d8cdb6; }
+/* v64d: 9 modos — no PC o Treino ocupa 2 colunas (2 linhas cheias de 5) */
+@media (min-width: 901px) { .mode-tiles > .mode-tile:first-child { grid-column: span 2; } }
+/* 🌱 v64d: sprites da horta (pixel art, sem suavizar) */
+.crop-spr { display: block; width: 64px; height: 88px; background-repeat: no-repeat; image-rendering: pixelated; image-rendering: crisp-edges; margin: -18px auto -10px; }
+.crop-spr.mini { width: 64px; height: 88px; transform: scale(.55); margin: -22px -14px -24px; }
+.hp-crop.spr { font-size: 0; line-height: 0; }
+/* ✋ v64d: arrastar móveis e personagens no Arrumar */
+.hm-room.editing { touch-action: none; }
+.hm-room.editing .hm-f, .hm-room.editing .hm-pal { cursor: grab; }
+.hm-f.dragging, .hm-pal.dragging { cursor: grabbing; filter: drop-shadow(0 6px 6px rgba(0, 0, 0, .5)) brightness(1.1); transition: none !important; }
+.hm-pal.placed { bottom: auto; transform: translate(-50%, -88%); animation: none; }
+.hm-room.editing .hm-pal { animation: none; outline: 2px dashed rgba(255, 211, 107, .6); outline-offset: 2px; border-radius: 10px; }

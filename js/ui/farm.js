@@ -9,7 +9,13 @@ import { monSprite, avatarUrl, leaderUrl, itemIcon, furnIcon } from '../config.j
 import { canBreed, EGGS_PER_DAY, INCUBATOR_MAX, NATURE_COST, EGG_EVERY_H } from '../../shared/data/daycare.js';
 import { statCard, miniMon } from './common.js';
 import { RECIPES, FARM_ITEMS as FARM_ITEMS0, ARTISAN_LEVELS } from '../../shared/data/workshop.js';
-import { CROPS, GOODS, BUILDINGS, BUILD_MAX, queueFor, POFFIN_ITEMS, plotsFor } from '../../shared/data/garden.js';
+import { CROPS, GOODS, BUILDINGS, BUILD_MAX, queueFor, POFFIN_ITEMS, plotsFor, CROP_SHEET } from '../../shared/data/garden.js';
+/** 🌱 sprite da planta: stage 0 semente, 1 muda, 2 pronta (quadro de 144×96; mostra a faixa central 64×88). */
+const cropSprite = (k, stage, cls = '') => {
+  const s = CROP_SHEET[k];
+  if (!s) return '';
+  return `<i class="crop-spr ${cls}" style="background-image:url(/img/farm/crops${s[0]}.png);background-position:-${stage * 144 + 40}px -${s[1] * 96}px" aria-hidden="true"></i>`;
+};
 const FARM_ITEMS = { ...FARM_ITEMS0, ...POFFIN_ITEMS };
 import { MEGAS, MEGA_KEYS, fragItemId } from '../../shared/data/megas.js';
 import { TYPES, TYPE_LABELS } from '../../shared/rules/types.js';
@@ -235,6 +241,47 @@ export async function openFarm(ctx, profile, userId = null) {
 
   // ---------------------------------------------------------------- 🏡 casa por dentro (v49)
   let homeSub = 'room', homeEdit = false, homeDraft = null, homePick = null, homeSel = null;
+  // ✋ v64d: no ✏️ Arrumar, arrastar móveis e personagens com o mouse ou o dedo (solta na casa mais perto)
+  let dragEndAt = 0;
+  const dragJustEnded = () => Date.now() - dragEndAt < 350;
+  const bindHomeDrag = () => {
+    const room = ov.querySelector('.hm-room.editing');
+    if (!room || room._drag) return;
+    room._drag = true;
+    let g = null;
+    const toCell = (cx, cy) => {
+      const r = room.getBoundingClientRect();
+      const fx = (cx - r.left) / r.width, fy = (cy - r.top) / r.height;
+      return { x: Math.max(0, Math.min(ROOM_W - 1, Math.floor(fx * ROOM_W))), y: Math.max(0, Math.min(ROOM_H - 1, Math.floor(((fy - 0.32) / 0.68) * ROOM_H))), fx, fy };
+    };
+    room.addEventListener('pointerdown', e => {
+      const el = e.target.closest('.hm-f, .hm-pal');
+      if (!el || !room.contains(el)) return;
+      g = { el, id: e.pointerId, sx: e.clientX, sy: e.clientY, moved: false };
+    });
+    room.addEventListener('pointermove', e => {
+      if (!g || e.pointerId !== g.id) return;
+      if (!g.moved && Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < 8) return;
+      if (!g.moved) { g.moved = true; g.el.classList.add('dragging'); try { room.setPointerCapture(e.pointerId); } catch { /* ok */ } }
+      e.preventDefault();
+      const c = toCell(e.clientX, e.clientY);
+      g.el.style.left = `${Math.max(0, Math.min(1, c.fx)) * 100}%`;
+      if (!g.el.classList.contains('onwall')) { g.el.style.top = `${Math.max(0.32, Math.min(1, c.fy)) * 100}%`; g.el.style.bottom = 'auto'; }
+      g.el.style.zIndex = 90;
+    });
+    const up = e => {
+      if (!g || e.pointerId !== g.id) return;
+      const gg = g; g = null;
+      if (!gg.moved) return;
+      dragEndAt = Date.now();
+      const c = toCell(e.clientX, e.clientY);
+      if (gg.el.dataset.pal) (homeDraft.pals ||= {})[gg.el.dataset.pal] = { x: c.x, y: c.y };
+      else { const i = Number(gg.el.dataset.i); if (homeDraft[i]) homeDraft[i] = { ...homeDraft[i], x: c.x, y: FURNITURE[homeDraft[i].f]?.wall ? homeDraft[i].y : c.y }; homeSel = i; }
+      render();
+    };
+    room.addEventListener('pointerup', up);
+    room.addEventListener('pointercancel', up);
+  };
   const H = () => farm.home || { placed: [], wall: 'plain', floor: 'wood' };
   const homeOwnedLeft = f => ((H().owned || {})[f] || 0) - (homeDraft || []).filter(x => x.f === f).length;
   const roomHtml = () => {
@@ -242,6 +289,7 @@ export async function openFarm(ctx, profile, userId = null) {
     const placed = homeEdit ? homeDraft : h.placed;
     const wall = WALLS[homeEdit ? homeDraft.wall || h.wall : h.wall] || WALLS.plain, floor = FLOORS[homeEdit ? homeDraft.floor || h.floor : h.floor] || FLOORS.wood;
     const comp = farm.companion, fav = h.fav;
+    const palAt = k => (homeEdit ? homeDraft.pals?.[k] : h.pals?.[k]) || null;
     const cell = (x, y) => `left:${((x + 0.5) / ROOM_W) * 100}%;top:${32 + ((y + 0.5) / ROOM_H) * 68}%;z-index:${10 + y}`;
     return `<div class="hm-room ${homeEdit ? 'editing' : ''}" style="--wall:${wall.css};--floor:${floor.css};--hm-k:${hmK()}">
       <div class="hm-wall"></div><div class="hm-floor"></div>
@@ -249,8 +297,8 @@ export async function openFarm(ctx, profile, userId = null) {
       ${placed.map((p, i) => { const F = FURNITURE[p.f]; if (!F) return '';
         const pos = F.wall ? `left:${((p.x + 0.5) / ROOM_W) * 100}%;top:${17 + (p.y % 2) * 6}%;z-index:3` : cell(p.x, p.y); // móveis de parede ficam na parede
         return `<span class="hm-f ${F.part ? 'part' : ''} ${F.glow ? 'glow' : ''} ${F.floor ? 'flat' : ''} ${F.wall ? 'onwall' : ''} hmf-${p.f} ${homeEdit && homeSel === i ? 'sel' : ''}" data-act="hm-f" data-i="${i}" data-f="${p.f}" style="${pos};--fl:${p.fl ? -1 : 1};--fw:${furnW(p.f) * (p.s || 1)}">${F.part ? '' : furnIcon(p.f, F.icon)}</span>`; }).join('')}
-      ${comp ? `<button class="hm-pal hm-comp" data-act="hm-talk" title="${esc(comp.name)}"><img src="${leaderUrl(comp.sprite)}" alt=""><span class="hm-bubble">${farm.mine && !h.talked ? '💬' : '💞'}</span></button>` : ''}
-      ${fav ? `<button class="hm-pal hm-fav" data-act="hm-play" title="${esc(fav.nick || getSpecies(fav.sp).name)}"><img src="${monSprite({ sp: fav.sp, shiny: fav.shiny })}" alt=""><span class="hm-bubble">${farm.mine && !h.played ? '🎾' : '♪'}</span></button>` : ''}
+      ${comp ? `<button class="hm-pal hm-comp ${palAt('comp') ? 'placed' : ''}" data-act="hm-talk" data-pal="comp" style="${palAt('comp') ? cell(palAt('comp').x, palAt('comp').y) : ''}" title="${esc(comp.name)}"><img src="${leaderUrl(comp.sprite)}" alt=""><span class="hm-bubble">${farm.mine && !h.talked ? '💬' : '💞'}</span></button>` : ''}
+      ${fav ? `<button class="hm-pal hm-fav ${palAt('fav') ? 'placed' : ''}" data-act="hm-play" data-pal="fav" style="${palAt('fav') ? cell(palAt('fav').x, palAt('fav').y) : ''}" title="${esc(fav.nick || getSpecies(fav.sp).name)}"><img src="${monSprite({ sp: fav.sp, shiny: fav.shiny })}" alt=""><span class="hm-bubble">${farm.mine && !h.played ? '🎾' : '♪'}</span></button>` : ''}
     </div>`;
   };
   const homeView = () => {
@@ -374,13 +422,14 @@ export async function openFarm(ctx, profile, userId = null) {
       if (!pl) return `<div class="hp-plot empty ${plantAt === i ? 'sel' : ''}" data-act="plot" data-i="${i}"><span class="hp-soil">🟫</span><span class="tiny">Plantar</span></div>`;
       const C = CROPS[pl.crop];
       const pct = Math.min(100, ((Date.now() - pl.at) / Math.max(1, pl.readyAt - pl.at)) * 100);
-      const stage = pl.ready ? C.icon : pct < 35 ? '🌱' : pct < 75 ? '🌿' : '🪴';
-      return `<div class="hp-plot ${pl.ready ? 'ready' : ''} ${pl.watered ? 'wet' : ''}"><span class="hp-crop">${stage}</span><b class="tiny">${esc(C.name)}</b>
+      const st = pl.ready ? 2 : pct < 40 ? 0 : 1;
+      const stage = CROP_SHEET[pl.crop] ? cropSprite(pl.crop, st) : pl.ready ? C.icon : pct < 35 ? '🌱' : pct < 75 ? '🌿' : '🪴';
+      return `<div class="hp-plot ${pl.ready ? 'ready' : ''} ${pl.watered ? 'wet' : ''}"><span class="hp-crop ${CROP_SHEET[pl.crop] ? 'spr' : ''}">${stage}</span><b class="tiny">${esc(C.name)}</b>
         ${pl.ready ? '<span class="tiny hp-ok">Pronto!</span>' : `<span class="tiny">⏳ ${fmtT(pl.readyAt - Date.now())}</span><div class="fm-bar small"><i style="width:${pct}%"></i></div>`}${pl.watered ? '<span class="hp-drop" title="Regado">💧</span>' : ''}</div>`;
     };
     const picker = plantAt === null ? '' : `<div class="hp-picker"><b>Plantar no canteiro ${plantAt + 1}:</b><div class="hp-seeds">${Object.entries(CROPS).map(([k, C]) => {
       const lock = farm.lvl < C.lvl;
-      return `<button class="hp-seed" data-act="plant" data-k="${k}" ${lock || (me?.gold || 0) < C.cost ? 'disabled' : ''} title="${lock ? `Libera no Nv. ${C.lvl}` : ''}"><span>${C.icon}</span><b>${esc(C.name)}</b><span class="tiny">${C.hours}h · 🪙 ${C.cost}</span>${lock ? `<span class="tiny">🔒 Nv. ${C.lvl}</span>` : `<span class="tiny muted">colhe ${C.yield[0]}–${C.yield[1]}</span>`}</button>`;
+      return `<button class="hp-seed" data-act="plant" data-k="${k}" ${lock || (me?.gold || 0) < C.cost ? 'disabled' : ''} title="${lock ? `Libera no Nv. ${C.lvl}` : ''}"><span>${CROP_SHEET[k] ? cropSprite(k, 2, 'mini') : C.icon}</span><b>${esc(C.name)}</b><span class="tiny">${C.hours}h · 🪙 ${C.cost}</span>${lock ? `<span class="tiny">🔒 Nv. ${C.lvl}</span>` : `<span class="tiny muted">colhe ${C.yield[0]}–${C.yield[1]}</span>`}</button>`;
     }).join('')}</div><button class="btn sm" data-act="plot-x">Cancelar</button></div>`;
     const anyReady = G.plots.some(p => p?.ready), anyDry = G.plots.some(p => p && !p.watered && !p.ready);
     const B = farm.buildings || {};
@@ -533,6 +582,7 @@ export async function openFarm(ctx, profile, userId = null) {
     if (!farm) return;
     const bodyHtml = head() + (tab === 'res' ? resView() : tab === 'visit' ? visitView() : tab === 'add' ? addView() : tab === 'creche' ? crecheView() : tab === 'pair' ? pairView() : tab === 'oficina' ? oficinaView() : tab === 'horta' ? hortaView() : tab === 'art' ? artView() : tab === 'exp' ? expView() : tab === 'home' ? homeView() : scene() + actions() + monPanel());
     setModalBody('farm', bodyHtml);
+    bindHomeDrag();
   }
 
   const run = async (fn, okMsg) => { try { const r = await fn(); if (r?.farm) farm = r.farm; if (r?.profile) { me = r.profile; ctx?.onProfile?.(me); } render(); if (okMsg) toast(typeof okMsg === 'function' ? okMsg(r) : okMsg, 'good'); return r; } catch (e) { toast(e.message, 'bad'); } };
@@ -685,14 +735,15 @@ export async function openFarm(ctx, profile, userId = null) {
     dpick: d => { decorPick = d.k; render(); },
     expand: d => run(() => api('profile', { op: 'farm_expand', k: d.k }), r => r.message),
     'hm-sub': d => { homeSub = d.s || 'room'; homeEdit = false; render(); },
-    'hm-edit': () => { const h = H(); homeDraft = (h.placed || []).map(x => ({ ...x })); homeDraft.wall = h.wall; homeDraft.floor = h.floor; homeEdit = true; homeSel = null; homePick = Object.keys(h.owned || {}).find(f => homeOwnedLeft(f) > 0) || null; render(); },
+    'hm-edit': () => { const h = H(); homeDraft = (h.placed || []).map(x => ({ ...x })); homeDraft.wall = h.wall; homeDraft.floor = h.floor; homeDraft.pals = structuredClone(h.pals || {}); homeEdit = true; homeSel = null; homePick = Object.keys(h.owned || {}).find(f => homeOwnedLeft(f) > 0) || null; render(); },
     'hm-pick': d => { homePick = d.f; homeSel = null; render(); },
-    'hm-cell': d => { if (!homeEdit) return; if (homeSel !== null) { homeDraft[homeSel] = { ...homeDraft[homeSel], x: Number(d.x), y: Number(d.y) }; homeSel = null; render(); return; }
+    'hm-cell': d => { if (!homeEdit || dragJustEnded()) return; if (homeSel !== null) { homeDraft[homeSel] = { ...homeDraft[homeSel], x: Number(d.x), y: Number(d.y) }; homeSel = null; render(); return; }
       if (!homePick || homeOwnedLeft(homePick) <= 0) return toast('Escolha um móvel (ou compre mais na 🛒 Loja).', 'bad');
       const isPart = !!FURNITURE[homePick]?.part, nSame = homeDraft.filter(x => !!FURNITURE[x.f]?.part === isPart).length;
       if (nSame >= (isPart ? PART_MAX : HOME_MAX)) return toast(isPart ? `Máximo de ${PART_MAX} pedaços de parede.` : `Máximo de ${HOME_MAX} móveis.`, 'bad');
       homeDraft.push({ f: homePick, x: Number(d.x), y: Number(d.y) }); if (homeOwnedLeft(homePick) <= 0) homePick = Object.keys(H().owned || {}).find(f => homeOwnedLeft(f) > 0) || null; render(); },
-    'hm-f': d => { if (!homeEdit && d.f === 'fridge') return openFridge(); if (!homeEdit && d.f === 'tv') return openTv();
+    'hm-f': d => { if (dragJustEnded()) return; if (!homeEdit && d.f === 'fridge') return openFridge(); if (!homeEdit && d.f === 'tv') return openTv();
+      if (!homeEdit && FURNITURE[d.f]?.perk === 'cook') { homeSub = 'cook'; return render(); } // 🍳 v64d: tocar no Fogão abre a Cozinha
       if (!homeEdit) { const el = ov.querySelector(`.hm-f[data-i="${d.i}"]`); el?.classList.remove('tapped'); void el?.offsetWidth; el?.classList.add('tapped'); return; } homeSel = Number(d.i); render(); },
     'hm-size': d => { if (homeSel === null) return; const it = homeDraft[homeSel]; it.s = Math.round(Math.max(0.4, Math.min(3, (it.s || 1) + 0.1 * Number(d.d))) * 10) / 10; render(); },
     'hm-flip': () => { if (homeSel === null) return; homeDraft[homeSel].fl = homeDraft[homeSel].fl ? 0 : 1; render(); },
@@ -700,11 +751,11 @@ export async function openFarm(ctx, profile, userId = null) {
     'hm-unsel': () => { homeSel = null; render(); },
     'hm-cancel': () => { homeEdit = false; render(); },
     'hm-save': () => { const wall = ov.querySelector('#hm-wall')?.value, floor = ov.querySelector('#hm-floor')?.value;
-      return run(async () => { const r = await api('profile', { op: 'home_place', placed: homeDraft.map(({ f, x, y, fl, s }) => ({ f, x, y, fl, s })), wall, floor }); homeEdit = false; return r; }, r => r.message); },
+      return run(async () => { const r = await api('profile', { op: 'home_place', placed: homeDraft.map(({ f, x, y, fl, s }) => ({ f, x, y, fl, s })), wall, floor, pals: homeDraft.pals || {} }); homeEdit = false; return r; }, r => r.message); },
     'hm-buy': d => run(() => api('profile', { op: 'home_buy', kind: d.k, id: d.id }), r => r.message),
     'hm-favset': d => run(async () => { const r = await api('profile', { op: 'home_fav', uid: d.index || d.i || null }); homeSub = 'room'; return r; }, r => r.message),
-    'hm-talk': () => { if (!farm.mine || H().talked || homeEdit) return; return run(() => api('profile', { op: 'home_talk' }), r => r.message).then(r => r && burst(['💞', '💬', '💖'])); },
-    'hm-play': () => { if (!farm.mine || H().played || homeEdit) return; return run(() => api('profile', { op: 'home_play' }), r => r.message); },
+    'hm-talk': () => { if (dragJustEnded()) return; if (!farm.mine || H().talked || homeEdit) return; return run(() => api('profile', { op: 'home_talk' }), r => r.message).then(r => r && burst(['💞', '💬', '💖'])); },
+    'hm-play': () => { if (dragJustEnded()) return; if (!farm.mine || H().played || homeEdit) return; return run(() => api('profile', { op: 'home_play' }), r => r.message); },
     'hm-cook': d => run(() => api('profile', { op: 'home_cook', meal: d.m, ptype: ov.querySelector('#hm-ctype')?.value }), r => r.message),
     'hm-claim': () => run(() => api('profile', { op: 'home_claim' }), r => r.message),
     'art-edit': d => { artOpen(Number(d.i)); tab = 'art'; render(); },

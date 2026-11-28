@@ -1824,3 +1824,17 @@ test('📊 v64c: status normal da espécie (IV médio, natureza neutra) para o c
   assert.match(html, /acima do normal/);
   assert.match(html, /pk-norm/);
 });
+
+test('🧍 v64d: casa guarda onde ficam o companheiro e o favorito; 🌱 horta com sprite para todas as plantas', async () => {
+  const { CROPS, CROP_SHEET } = await import('../shared/data/garden.js');
+  for (const k of Object.keys(CROPS)) assert.ok(CROP_SHEET[k], k);
+  const used = new Set(Object.values(CROP_SHEET).map(x => x.join(':')));
+  assert.equal(used.size, Object.keys(CROP_SHEET).length, 'cada planta numa linha diferente');
+  const { db, admin, us: [a] } = await users(1);
+  await adminOp(db, admin, { op: 'give_gold', userId: a.id, amount: 9000 });
+  await profileOp(db, a, { op: 'farm_get' });
+  await profileOp(db, a, { op: 'home_buy', kind: 'furniture', id: 'chair' });
+  const r = await profileOp(db, a, { op: 'home_place', placed: [{ f: 'chair', x: 1, y: 1 }], pals: { comp: { x: 3, y: 5 }, fav: { x: 99, y: -4 } } });
+  assert.deepEqual(r.farm.home.pals.comp, { x: 3, y: 5 });
+  assert.deepEqual(r.farm.home.pals.fav, { x: 11, y: 0 });
+});

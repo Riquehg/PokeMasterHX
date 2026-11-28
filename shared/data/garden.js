@@ -14,6 +14,8 @@ export const CROPS = {
   lum:     { name: 'Baga Lum',    icon: '🍏', hours: 10, yield: [1, 2], cost: 180, lvl: 5 },
   starf:   { name: 'Baga Starf',  icon: '⭐', hours: 24, yield: [1, 1], cost: 400, lvl: 8 }
 };
+/** 🌱 v64d: sprites da horta (estilo RPG Maker: folha 432×384, 3 colunas = semente/muda/pronta × 4 linhas = plantas). */
+export const CROP_SHEET = { trigo: [1, 2], lum: [1, 1], pecha: [1, 0], sitrus: [1, 3], razz: [2, 0], starf: [2, 1], abobora: [2, 2], oran: [2, 3] };
 export const CROP_IDS = Object.keys(CROPS);
 /** Produtos guardados (colheita + farinha) */
 export const GOODS = { ...Object.fromEntries(CROP_IDS.map(k => [k, { name: CROPS[k].name, icon: CROPS[k].icon }])), farinha: { name: 'Farinha', icon: '🥡' },

@@ -8,6 +8,19 @@ import { itemUrl, monSprite } from '../config.js';
 import { tmPickerHtml, setTmSlot } from './common.js';
 import { vfAttrs, vfBar, vfBind } from './vaultfilter.js';
 import { MEGAS, BRACELET_ID, FRAGS_PER_STONE } from '../../shared/data/megas.js';
+import { EVO_ITEMS } from '../../shared/data/items.js';
+import { itemEvoTarget, levelEvoTarget } from '../../shared/data/evolution.js';
+import { GMAX } from '../../shared/data/gmax.js';
+
+// ✨ v64d: itens que dá para usar direto da Mochila num Pokémon da Coleção
+const USE = {
+  evo: { label: '✨ Usar', ok: (m, id) => !!itemEvoTarget(m, id), op: (uid, id) => ({ op: 'evo_item', uid, item: id }), q: id => `Qual Pokémon vai usar ${ITEMS[id].name}?`, none: 'Nenhum Pokémon da sua Coleção evolui com este item.' },
+  gene_candy: { label: '🧬 Dar', ok: () => true, op: uid => ({ op: 'gene_candy', uid }), q: () => 'Dar o 🧬 Doce Genético para qual Pokémon? (os IVs são sorteados de novo)', confirm: true },
+  rare_candy: { label: '🍬 Dar', ok: m => (m.lvl || 1) < 60, op: uid => ({ op: 'rare_candy', uid }), q: () => 'Dar o 🍬 Doce Raro (+1 nível) para qual Pokémon?' },
+  max_soup: { label: '🍲 Dar', ok: m => !!GMAX[m.sp] && !m.gx, op: uid => ({ op: 'max_soup', uid }), q: () => 'Dar a 🍲 Sopa Max para qual Pokémon? (só quem tem forma Gigantamax)', none: 'Nenhum Pokémon da Coleção tem forma Gigantamax sem o Fator.' },
+  gear: { label: '⚔️ Equipar', ok: () => true, op: (uid, id) => ({ op: 'hold_stone', uid, item: id }), q: id => `Quem vai segurar ${ITEMS[id].name}?` }
+};
+const useKind = id => (EVO_ITEMS[id] ? 'evo' : USE[id] ? id : ITEMS[id]?.kind === 'gear' ? 'gear' : null);
 
 const bagOf = profile => Object.entries(profile?.stats?.bag || {}).filter(([id, n]) => ITEMS[id] && n > 0);
 
@@ -15,13 +28,14 @@ export function openAccountBag(profile, onChange, openMarket) {
   let tmFor = null; // uid do Pokémon escolhido para o TM
   let picking = false;
   let stoneFor = null; // 💎 Megapedra escolhida para equipar
+  let useFor = null; // ✨ item escolhido para usar num Pokémon
   let trash = null; // 🗑️ v59: { id: qtd } escolhidos para jogar fora
   const trashN = () => Object.values(trash || {}).reduce((a, b) => a + b, 0);
   const render = () => {
     const items = bagOf(profile).sort((a, b) => (ITEMS[a[0]].kind === 'fragment') - (ITEMS[b[0]].kind === 'fragment'));
     const list = items.map(([id, n]) => `<div class="shop-item"><img src="${itemUrl(id)}" alt="${esc(ITEMS[id].name)}">
       <div><b>${esc(ITEMS[id].name)}</b> <span class="chip">×${n}</span><div class="tiny muted">${esc(ITEMS[id].desc)}</div></div>
-      <div class="col" style="gap:4px">${id === 'tm' ? '<button class="btn sm primary" data-act="tm">💿 Usar</button>' : ''}${ITEMS[id].kind === 'megastone' ? `<button class="btn sm purple" data-act="stone" data-item="${id}">💎 Equipar</button>` : ''}${ITEMS[id].kind === 'fragment' ? `<span class="tiny muted">${n}/${FRAGS_PER_STONE} p/ a pedra</span>` : ''}
+      <div class="col" style="gap:4px">${id === 'tm' ? '<button class="btn sm primary" data-act="tm">💿 Usar</button>' : ''}${useKind(id) ? `<button class="btn sm green" data-act="use" data-item="${id}">${USE[useKind(id)].label}</button>` : ''}${ITEMS[id].kind === 'megastone' ? `<button class="btn sm purple" data-act="stone" data-item="${id}">💎 Equipar</button>` : ''}${ITEMS[id].kind === 'fragment' ? `<span class="tiny muted">${n}/${FRAGS_PER_STONE} p/ a pedra</span>` : ''}
         ${trash ? `<div class="row" style="gap:4px"><button class="btn sm" data-act="tr-dec" data-item="${id}" ${trash[id] ? '' : 'disabled'}>−</button><b style="min-width:22px;text-align:center">${trash[id] || 0}</b><button class="btn sm" data-act="tr-inc" data-item="${id}" ${(trash[id] || 0) >= n ? 'disabled' : ''}>+</button><button class="btn sm" data-act="tr-all" data-item="${id}">Tudo</button></div>`
           : `<button class="btn sm" data-act="sell" data-item="${id}">🏷️ Vender</button>`}</div></div>`).join('');
     let extra = '';
@@ -38,7 +52,16 @@ export function openAccountBag(profile, onChange, openMarket) {
           <div class="tiny muted">${on ? `Sem limite de lendários até ${new Date(until).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.` : 'Ative para ficar 7 dias sem limite de lendários das casas Amarelas.'}${on && n ? ' Ativar outro soma +7 dias.' : ''}</div></div>
           ${n ? `<button class="btn sm green" data-act="charm-on">🏵️ Ativar 7 dias</button>` : ''}</div>` : ''; })()}
       ${holders.length ? `<div class="row wrap" style="gap:6px;margin-top:6px">${holders.map(m => `<span class="chip"><img class="chip-ic" src="${itemUrl(m.held)}" alt="">${esc(m.nick || getSpecies(m.sp)?.name)} <button class="btn sm x" data-act="unhold" data-uid="${esc(m.uid)}" title="Tirar a pedra (volta para a Mochila)">✕</button></span>`).join('')}</div>` : ''}</div>`;
-    if (stoneFor) {
+    if (useFor) {
+      const U = USE[useKind(useFor)];
+      const vault = (profile?.vault || []).filter(m => U.ok(m, useFor));
+      extra = `<div class="divider"></div><b>${esc(U.q(useFor))}</b>
+        ${vault.length ? `<div class="vf-scope">${vfBar('use-pick', { compact: true })}<div class="pick-grid" style="max-height:300px;overflow:auto">${vault.map((m, i) => {
+          const to = useKind(useFor) === 'evo' ? itemEvoTarget(m, useFor) : null;
+          return `<div class="pick" ${vfAttrs(m, i)} data-act="use-mon" data-uid="${esc(m.uid)}"><img src="${monSprite(m)}" alt=""><b>${esc(m.nick || getSpecies(m.sp)?.name)}</b><br><span class="tiny">Nv.${m.lvl}${to ? ` → ${esc(getSpecies(to)?.name)}` : ''}${m.held && useKind(useFor) === 'gear' ? ` · segura ${esc(ITEMS[m.held]?.name || '')}` : ''}</span></div>`; }).join('')}</div></div>`
+          : `<p class="muted small">${esc(U.none || 'Nenhum Pokémon pode usar agora.')}</p>`}
+        <button class="btn sm" data-act="use-back">← Voltar</button>`;
+    } else if (stoneFor) {
       const mg = MEGAS[ITEMS[stoneFor]?.mega];
       const vault = (profile?.vault || []).filter(m => m.sp === mg?.base);
       extra = `<div class="divider"></div><b>💎 Quem segura a ${esc(ITEMS[stoneFor]?.name)}?</b> <span class="tiny muted">(só ${esc(getSpecies(mg?.base)?.name || '')})</span>
@@ -53,7 +76,7 @@ export function openAccountBag(profile, onChange, openMarket) {
       extra = m ? `<div class="divider"></div>${tmPickerHtml(m)}<button class="btn sm" data-act="tm-back">← Outro Pokémon</button>` : '';
     }
     return `<p class="small muted">No fim de cada partida salva (Treino e Online), as <b>Pokébolas</b>, o <b>Amuleto Shiny</b>, os <b>TM</b> e os <b>💠 Fragmentos/💎 Megapedras</b> que sobraram vêm para cá.
-      Poções, Revive, X Attack, doces, pedras e itens de tabuleiro são só da partida. Leve itens para partidas do modo 📦 Coleção (até ${BRING_BALLS_MAX} Pokébolas, 1 Amuleto e 3 TM) ou venda no 🏪 Mercado.</p>
+      ✨ Pedras/itens de evolução, 🧬 Doce Genético, 🍬 Doce Raro, 🍲 Sopa Max e itens de batalha podem ser usados aqui mesmo (botão verde). Poções, Revive, X Attack e itens de tabuleiro são só da partida. Leve itens para partidas do modo 📦 Coleção (até ${BRING_BALLS_MAX} Pokébolas, 1 Amuleto e 3 TM) ou venda no 🏪 Mercado.</p>
       ${megaBox}${items.length ? (trash ? `<div class="bx-pick rel" style="position:sticky;top:0;z-index:2">🗑️ Escolha quanto jogar fora de cada item · <b>${trashN()}</b> item(ns)
         <button class="btn sm red" data-act="tr-ok" ${trashN() ? '' : 'disabled'}>🗑️ Jogar fora</button><button class="btn sm" data-act="tr-cancel">Cancelar</button></div>`
         : '<div class="row" style="justify-content:flex-end;margin:6px 0"><button class="btn sm" data-act="tr-start">🗑️ Jogar fora vários</button></div>') : ''}<div class="col">${list || '<p class="muted">Mochila vazia. Jogue partidas salvas para juntar itens!</p>'}</div>${extra}`;
@@ -90,7 +113,22 @@ export function openAccountBag(profile, onChange, openMarket) {
         tmFor = null; picking = false; redraw(); onChange && onChange(profile);
       } catch (e) { toast(e.message, 'bad'); }
     },
-    stone: d => { stoneFor = d.item; picking = false; tmFor = null; redraw(); },
+    stone: d => { stoneFor = d.item; picking = false; tmFor = null; useFor = null; redraw(); },
+    use: d => { useFor = d.item; stoneFor = null; picking = false; tmFor = null; redraw(); ov.querySelector('.divider')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+    'use-back': () => { useFor = null; redraw(); },
+    'use-mon': async d => {
+      const U = USE[useKind(useFor)];
+      const m = (profile.vault || []).find(x => x.uid === d.uid);
+      if (U.confirm && !confirm(`${U.q(useFor)}\n\n${m?.nick || getSpecies(m?.sp)?.name}: continuar?`)) return;
+      try {
+        const r = await api('profile', U.op(d.uid, useFor));
+        profile = r.profile;
+        const nm = m?.nick || getSpecies(m?.sp)?.name || 'Pokémon';
+        toast(r.evolved ? `✨ ${r.evolved.from || nm} evoluiu para ${r.evolved.to || getSpecies(r.evolved)?.name || '?'}!` : r.leveled ? `🍬 ${nm} subiu para o Nv.${r.leveled}!` : r.gene ? `🧬 ${nm}: ${['hp', 'atk', 'def', 'spe'].map(k => `${({ hp: 'HP', atk: 'ATQ', def: 'DEF', spe: 'VEL' })[k]} ${r.gene.before[k]}→${r.gene.after[k]}`).join(' · ')}` : `✅ ${ITEMS[useFor]?.name} usado em ${nm}!`, 'good');
+        if (!(profile?.stats?.bag?.[useFor] > 0)) useFor = null;
+        redraw(); onChange && onChange(profile);
+      } catch (e) { toast(e.message, 'bad'); }
+    },
     'stone-back': () => { stoneFor = null; redraw(); },
     'stone-mon': async d => {
       try {

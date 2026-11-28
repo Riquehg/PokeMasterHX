@@ -96,7 +96,7 @@ function view(prof, farm, viewerId) {
       const vm2 = vaultMap(prof);
       const fav = h.fav && vm2.get(h.fav) ? { uid: h.fav, sp: vm2.get(h.fav).sp, shiny: !!vm2.get(h.fav).shiny, lvl: vm2.get(h.fav).lvl, nick: vm2.get(h.fav).nick || null } : null;
       const day = brtDay(Date.now());
-      return { placed: h.placed || [], wall: h.wall || 'plain', floor: h.floor || 'wood', fav,
+      return { placed: h.placed || [], wall: h.wall || 'plain', floor: h.floor || 'wood', fav, pals: h.pals || {},
         ...(mine ? { owned: h.owned || {}, walls: h.walls || [], floors: h.floors || [], talked: h.talkDay === day, played: h.playDay === day,
           cook: (h.cook || []).map(j => ({ ...j, ready: j.done <= Date.now() })), cookMax: cookQueue(h) } : {}) };
     })(),
@@ -376,7 +376,10 @@ export async function farmOp(db, user, body) {
     })).filter(it => FURNITURE[it.f] && (used[it.f] = (used[it.f] || 0) + 1) <= ((h0.owned || {})[it.f] || 0));
     const wall = WALLS[body.wall] && (!WALLS[body.wall].price || (h0.walls || []).includes(body.wall)) ? body.wall : h0.wall || 'plain';
     const floor = FLOORS[body.floor] && (!FLOORS[body.floor].price || (h0.floors || []).includes(body.floor)) ? body.floor : h0.floor || 'wood';
-    const { prof } = await save(db, user.id, farm => { farm.home = { ...(farm.home || {}), placed, wall, floor }; return {}; });
+    // 🧍 v64d: onde ficam o companheiro e o favorito (arrastados no Arrumar)
+    const pals = {};
+    for (const k of ['comp', 'fav']) { const q = body.pals?.[k]; if (q && Number.isFinite(Number(q.x)) && Number.isFinite(Number(q.y))) pals[k] = { x: Math.max(0, Math.min(ROOM_W - 1, Math.floor(Number(q.x)))), y: Math.max(0, Math.min(ROOM_H - 1, Math.floor(Number(q.y)))) }; }
+    const { prof } = await save(db, user.id, farm => { farm.home = { ...(farm.home || {}), placed, wall, floor, ...(body.pals ? { pals } : {}) }; return {}; });
     return { farm: view(prof, current(prof, now), user.id), message: '🏡 Casa arrumada!' };
   }
   if (body.op === 'home_fav') { // ⭐ Pokémon favorito que mora na casa
