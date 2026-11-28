@@ -11,6 +11,7 @@ import { startSocial } from './ui/social.js';
 import { cupScreen } from './ui/tournament.js';
 import { initInstall } from './ui/install.js';
 import { showWall } from './ui/wall.js';
+import { initPvp } from './ui/pvp.js';
 import { installSpriteFallback } from './config.js';
 import { setCustomMaps } from '../shared/data/board.js';
 
@@ -23,8 +24,19 @@ const ctx = {
   go,
   openRoom: id => go('room', id),
   openOnline: id => go('online', id),
-  openLocal: s => go('local', s)
+  openLocal: s => go('local', s),
+  where: { screen: 'hub' }, // ⚔️ v69: onde o jogador está (para voltar depois do Duelo PVP)
+  returnTo: null,
+  /** Motivo para não sair agora (null = pode ir duelar). */
+  busy() {
+    if (ctx.where.screen === 'local') return 'Termine (ou saia d)a partida offline antes de duelar — ela não fica salva.';
+    if (ctx.where.duel) return 'Você já está num duelo.';
+    const st = session?.state;
+    if (ctx.where.screen === 'online' && st?.kind !== 'duel' && st?.status === 'playing' && st.players?.[st.current]?.id === session.me) return 'É a sua vez na partida — jogue primeiro e depois aceite.';
+    return null;
+  }
 };
+initPvp(ctx);
 
 function fresh() {
   if (typeof cleanup === 'function') cleanup();
@@ -39,6 +51,8 @@ function fresh() {
 
 async function go(screen, arg) {
   if (net.user) startSocial(ctx);
+  ctx.where = { screen, arg: screen === 'local' ? null : arg };
+  document.body.classList.remove('in-duel');
   document.body.classList.toggle('in-game', screen === 'online' || screen === 'local');
   showWall(screen === 'hub' && !!net.user);
   const el = fresh();
@@ -69,7 +83,13 @@ async function go(screen, arg) {
         session = new OnlineSession(match, me);
         session.on((state, m, err) => { if (err) { toast('Você não faz mais parte desta partida.', 'bad'); go('hub'); } });
         const cupId = match.options?.cupId;
-        cleanup = mountGame(el, session, { onExit: () => (cupId ? go('online', cupId) : go('hub')), backLabel: cupId ? 'Voltar para a Copa' : null });
+        // ⚔️ v69: Duelo PVP — ao terminar, volta para onde estava (partida, sala ou menu)
+        const back = match.options?.pvp && ctx.returnTo && !(ctx.returnTo.screen === 'online' && ctx.returnTo.arg === arg) ? ctx.returnTo : null;
+        if (match.state?.kind === 'duel') { ctx.where.duel = true; document.body.classList.add('in-duel'); }
+        cleanup = mountGame(el, session, {
+          onExit: () => { if (back) { ctx.returnTo = null; return go(back.screen, back.arg); } return cupId ? go('online', cupId) : go('hub'); },
+          backLabel: back ? (back.screen === 'online' ? '↩️ Voltar para a minha partida' : back.screen === 'room' ? '↩️ Voltar para a sala' : '↩️ Voltar') : cupId ? 'Voltar para a Copa' : null
+        });
         return;
       }
     }

@@ -122,13 +122,74 @@ export async function duelQueueStatus(db, user) {
   const mine = await db.myMatches(user.id);
   const live = await full(db, mine.find(m => m.options?.mode === 'duel' && m.status === 'playing'));
   if (live) return { match: publicMatch(live, user.id) };
-  const waiting = await full(db, mine.find(m => m.options?.mode === 'duel_queue' && m.status === 'lobby'));
-  return { queued: !!waiting, match: waiting ? publicMatch(waiting, user.id) : null };
+  const waiting = await full(db, mine.find(m => ['duel_queue', 'duel_call'].includes(m.options?.mode) && m.status === 'lobby'));
+  const live2 = waiting && waiting.options?.mode === 'duel_call' && waiting.options.until > Date.now();
+  return { queued: !!waiting && (waiting.options?.mode !== 'duel_call' || live2), calling: !!live2, until: live2 ? waiting.options.until : 0, match: waiting ? publicMatch(waiting, user.id) : null };
+}
+
+// ---------------------------------------------------------------- ⚔️ v69: Duelo PVP (chamado para todos os online)
+export const DUEL_CALL_MS = 3 * 60 * 1000; // o chamado vale 3 minutos
+export const DUEL_CALL_GAP_MS = 30 * 1000;  // e não dá para chamar de novo em menos de 30 s
+
+/** Chama todo mundo online para um duelo: cria o "chamado" e avisa no feed (aparece no canto da tela de todos). */
+export async function duelCall(db, user, body, profile) {
+  const mine = await db.myMatches(user.id);
+  if (mine.some(m => m.options?.mode === 'duel' && m.status === 'playing')) bad('Você já está num duelo.');
+  const last = profile.stats?.duelCallAt || 0;
+  if (Date.now() - last < DUEL_CALL_GAP_MS) bad(`Espere ${Math.ceil((DUEL_CALL_GAP_MS - (Date.now() - last)) / 1000)} s para chamar de novo.`);
+  await duelQueueCancel(db, user); // um chamado por vez
+  const entry = { id: user.id, name: profile.trainer_name, avatar: profile.avatar || 1, skin: await skinFor(db, profile), teamUids: (body.teamUids || []).map(String).slice(0, 6) };
+  if (!(await duelTeam(db, entry))) bad('Sua Coleção está vazia. Capture Pokémon no Treino ou no Online para montar um time.');
+  const megas = !!body.megas, until = Date.now() + DUEL_CALL_MS;
+  await mutateProfile(db, user.id, cur => ({ stats: { ...(cur.stats || {}), duelCallAt: Date.now() } }));
+  const row = await db.insertMatch({
+    code: 'P' + Math.random().toString(36).slice(2, 7).toUpperCase(), name: `Duelo PVP de ${profile.trainer_name}`, host_id: user.id, status: 'lobby',
+    is_public: true, has_pin: false, options: { mode: 'duel_call', megas, until, maxPlayers: 1, rating: profile.rating ?? START_RATING }, lobby: [entry], state: null, version: 1
+  });
+  await db.addMember(row.id, user.id);
+  if (db.insertFeed) {
+    try {
+      await db.insertFeed({ kind: 'duel_call', text: `⚔️ ${profile.trainer_name} está procurando um Duelo PVP${megas ? ' (com 💎 Mega/🔴 Gigantamax)' : ''}! Aceita?`,
+        data: { matchId: row.id, uid: user.id, name: profile.trainer_name, avatar: profile.avatar || 1, skin: entry.skin || null, megas, until, rating: profile.rating ?? START_RATING } });
+    } catch (e) { console.error('[duel_call]', e.message); }
+  }
+  return { calling: true, until, match: publicMatch(row, user.id) };
+}
+
+/** Chamados abertos agora (de outros jogadores). */
+export async function duelCalls(db, user) {
+  const now = Date.now();
+  const calls = (await db.listOpenMatches()).filter(m => m.options?.mode === 'duel_call' && m.status === 'lobby' && m.options.until > now && m.host_id !== user.id)
+    .map(m => ({ matchId: m.id, name: m.lobby?.[0]?.name || '?', avatar: m.lobby?.[0]?.avatar || 1, skin: m.lobby?.[0]?.skin || null, megas: !!m.options.megas, until: m.options.until, rating: m.options.rating ?? START_RATING }));
+  return { calls };
+}
+
+/** Aceitar um chamado: o time é escolhido sozinho (o salvo no aparelho ou os 6 mais fortes) e o duelo começa. */
+export async function duelAccept(db, user, body, profile) {
+  const q = await db.getMatch(String(body.matchId || ''));
+  if (!q || q.options?.mode !== 'duel_call') notFound('Esse chamado não existe mais.');
+  if (q.host_id === user.id) bad('Esse chamado é seu.');
+  if (q.status !== 'lobby' || !(q.options.until > Date.now())) bad('Alguém já aceitou ou o chamado expirou.');
+  const mine = await db.myMatches(user.id);
+  if (mine.some(m => m.options?.mode === 'duel' && m.status === 'playing')) bad('Você já está num duelo.');
+  const me = { id: user.id, name: profile.trainer_name, avatar: profile.avatar || 1, skin: await skinFor(db, profile), teamUids: (body.teamUids || []).map(String).slice(0, 6) };
+  me.teamMons = await duelTeam(db, me);
+  if (!me.teamMons) bad('Sua Coleção está vazia. Capture Pokémon primeiro.');
+  const other = { ...q.lobby[0] };
+  other.teamMons = await duelTeam(db, other);
+  if (!other.teamMons) bad('O outro treinador não tem mais Pokémon na Coleção.');
+  // trava o chamado (só um consegue aceitar)
+  if (!(await db.updateMatch(q.id, q.version, { status: 'finished', version: q.version + 1 }))) bad('Alguém aceitou primeiro!');
+  await duelQueueCancel(db, user); // se eu também estava chamando, cancela o meu
+  const megas = !!q.options.megas;
+  const row = await createDuelMatch(db, { name: `⚔️ Duelo PVP${megas ? ' 💎' : ''}: ${other.name} x ${me.name}`, a: other, b: me, options: { mode: 'duel', ranked: true, megas, pvp: true }, hostId: other.id, megas });
+  await db.updateMatch(q.id, q.version + 1, { options: { ...q.options, duelId: row.id }, version: q.version + 2 });
+  return { match: publicMatch(row, user.id) };
 }
 
 export async function duelQueueCancel(db, user) {
   const mine = await db.myMatches(user.id);
-  for (const b of mine.filter(x => x.options?.mode === 'duel_queue' && x.status === 'lobby')) {
+  for (const b of mine.filter(x => ['duel_queue', 'duel_call'].includes(x.options?.mode) && x.status === 'lobby')) {
     const m = await db.getMatch(b.id);
     if (!m) continue;
     await db.updateMatch(m.id, m.version, { status: 'finished', version: m.version + 1 });

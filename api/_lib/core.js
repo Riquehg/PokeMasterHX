@@ -12,7 +12,7 @@ import { serieOp } from './series.js';
 import { farmOp } from './farm.js';
 import { safariOp } from './safari.js';
 import { towerOp } from './tower.js';
-import { duelQueue, duelQueueStatus, duelQueueCancel, duelTeam, startCup, duelFinished } from './tournament.js';
+import { duelQueue, duelQueueStatus, duelQueueCancel, duelTeam, startCup, duelFinished, duelCall, duelAccept, duelCalls } from './tournament.js';
 import { SPECIES, STARTERS, getSpecies } from '../../shared/data/pokemon.js';
 import { dailyPokemon } from '../../shared/daily.js';
 import { cleanNick, vaultExtra } from '../../shared/data/cosmetics.js';
@@ -683,7 +683,7 @@ const ageMin = r => (Date.now() - new Date(r.updated_at || r.updatedAt || 0).get
 
 async function closeStale(db, rows) {
   for (const r of rows) {
-    const old = r.status === 'lobby' ? ageMin(r) > LOBBY_CLOSE_MIN : r.status === 'playing' && ageMin(r) > PLAYING_CLOSE_MIN && !['duel', 'cup'].includes(r.options?.mode);
+    const old = r.status === 'lobby' ? ageMin(r) > LOBBY_CLOSE_MIN || (r.options?.mode === 'duel_call' && r.options.until < Date.now() - 60000) : r.status === 'playing' && ageMin(r) > PLAYING_CLOSE_MIN && !['duel', 'cup'].includes(r.options?.mode);
     if (!old) continue;
     try {
       const full = await db.getMatch(r.id);
@@ -705,13 +705,13 @@ export async function listRooms(db, user) {
     players: (r.lobby || []).filter(e => !e.left).length, maxPlayers: r.options?.maxPlayers || 4,
     host: (r.lobby || []).find(e => e.id === r.host_id)?.name || '?', updatedAt: r.updated_at
   });
-  return { rooms: rows.filter(r => !['solo', 'duel_queue'].includes(r.options?.mode)).map(brief), mine: mine.filter(r => r.options?.mode !== 'duel_queue').map(brief) };
+  return { rooms: rows.filter(r => !['solo', 'duel_queue', 'duel_call'].includes(r.options?.mode)).map(brief), mine: mine.filter(r => !['duel_queue', 'duel_call'].includes(r.options?.mode)).map(brief) };
 }
 
 /** Quem cria uma sala nova sai das salas de espera antigas dele (evita salas duplicadas no limbo). */
 async function leaveOldLobbies(db, user) {
   for (const b of await db.myMatches(user.id)) {
-    if (b.status !== 'lobby' || ['duel_queue'].includes(b.options?.mode)) continue;
+    if (b.status !== 'lobby' || ['duel_queue', 'duel_call'].includes(b.options?.mode)) continue;
     try { const row = await db.getMatch(b.id); if (row?.status === 'lobby') await leaveRoom(db, user, row); } catch { /* ok */ }
   }
 }
@@ -753,7 +753,7 @@ function normalizeOptions(body, prev = {}) {
   o.levelCap = o.levelCap || 0;
   // ☠️ Hardcore: vale em todos os modos de tabuleiro (não no duelo/copa)
   if (body.hardcore !== undefined) o.hardcore = !!body.hardcore;
-  if (['duel', 'cup', 'duel_queue'].includes(o.mode)) o.hardcore = false;
+  if (['duel', 'cup', 'duel_queue', 'duel_call'].includes(o.mode)) o.hardcore = false;
   o.hardcore = !!o.hardcore;
   // 💎 Megas: só no modo personalizado (Coleção, onde os Pokémon seguram Megapedras)
   if (body.megas !== undefined) o.megas = !!body.megas;
@@ -777,6 +777,9 @@ export async function matchOp(db, user, body) {
   if (/^tower_/.test(String(op || ''))) return towerOp(db, user, body); // 🗼 Torre de Batalha
   if (op === 'duel_queue') return duelQueue(db, user, body, await getOrCreateProfile(db, user));
   if (op === 'duel_status') return duelQueueStatus(db, user);
+  if (op === 'duel_call') return duelCall(db, user, body, await getOrCreateProfile(db, user)); // ⚔️ v69: Duelo PVP
+  if (op === 'duel_accept') return duelAccept(db, user, body, await getOrCreateProfile(db, user));
+  if (op === 'duel_calls') return duelCalls(db, user);
   if (op === 'duel_cancel') return duelQueueCancel(db, user);
   if (op === 'get') {
     // 💸 v55: o cliente diz qual versão já tem; se nada mudou, responde só "igual" (sem baixar o estado inteiro do Supabase)

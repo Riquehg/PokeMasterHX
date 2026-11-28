@@ -44,7 +44,7 @@ import { openDex } from './modals.js';
 import { openMarket } from './market.js';
 import { openAccountBag, bringItemsPicker, bringSummary } from './bag.js';
 import { ITEMS as ALL_ITEMS, isKeepable } from '../../shared/data/items.js';
-import { openDuelQueue } from './tournament.js';
+import { openPvp } from './pvp.js';
 import { promptInstall, isStandalone } from './install.js';
 import { BADGES_TO_USE } from '../../shared/rules/helpers.js';
 import { eloOf } from '../../shared/data/elo.js';
@@ -52,7 +52,7 @@ import { statCard, titleHtml, tmPickerHtml, setTmSlot } from './common.js';
 import { ivPercent } from '../../shared/rules/monsters.js';
 import { typeChips } from './common.js';
 import { openShop as openDiamondShop } from './shop.js';
-import { showAnnouncement } from './notify.js';
+import { showAnnouncement, showFeedBanner } from './notify.js';
 import { AURA_PRESETS, FRAME_PRESETS, SHOP_KINDS, vaultExtra, VAULT_BONUS_MAX } from '../../shared/data/cosmetics.js';
 
 const LOGO = `<div class="logo"><h1>Pokémon Master Trainer</h1><p>HEX Edition · v2</p></div>`;
@@ -202,7 +202,7 @@ export async function hubScreen(root, ctx) {
         ${modeTile('teams', 't-sky', '🤝', 'Duplas e Trios', 'Jogue em time no tabuleiro: passem itens, curem juntos, ajudem nas batalhas. O time vence junto.', !profile)}
         ${modeTile('war', 't-crimson', '🏰', 'Guerra de Regiões', 'Conquista por times: pintem as cidades com a cor do time. Cada cidade a mais rende +15% para todos.', !profile)}
         ${modeTile('braid', 't-dragon', '🐉', 'Raid em Grupo', 'Até 4 treinadores contra um chefe lendário ou Mega em 3 fases. Papéis, MVP e captura.', !profile, 'wide')}
-        ${modeTile('duel', 't-red', '⚔️', 'Torneio', 'Fila de duelo ranqueado 1x1 com o time da Coleção. Vale Elo e Liga.', !profile)}
+        ${modeTile('duel', 't-red', '⚔️', 'Duelo PVP', 'Chame todos os online para um duelo 1x1 (ou aceite um desafio). Vale Elo. No fim, volta para onde estava.', !profile)}
         ${modeTile('series', 't-green', '<img class="mt-logo" src="/icons/icon-192.png" alt="">', 'Liga das Séries', `Série D → A no estilo Brasileirão. Seu time de defesa joga por você offline.${profile?.stats?.serie?.season ? ` · ${['🟤 D', '⚪ C', '🟡 B', '🏆 A'][profile.stats.serie.div | 0]} · ${profile.stats.serie.pts | 0} pts` : ''}`, !profile, '', true)}
         ${modeTile('cup', 't-gold', '🏟️', 'Copa', 'Chaveamento de até 8 treinadores. O campeão ganha 💎.', !profile)}
         ${modeTile('tower', 't-purple', '🗼', 'Torre de Batalha', profile?.stats?.tower?.set ? `🔥 Sequência ${profile.stats.tower.streak} · duelo ${profile.stats.tower.set.n}/7` : `Sozinho ou 🤝 em dupla com um amigo. 🏅 ${profile?.stats?.tower?.pb || 0} PB · recorde ${profile?.stats?.tower?.best || 0}`, !profile)}
@@ -251,7 +251,7 @@ export async function hubScreen(root, ctx) {
     companions: () => openCompanionPicker({ owned: profile?.stats?.companions || [], current: profile?.stats?.companion || null, bond: profile?.stats?.companionBond || {},
       onPick: async id => { try { profile = (await api('profile', { op: 'companion', id })).profile; toast(id ? `🤝 ${COMPANIONS[id].name} vai com você nas próximas partidas!` : 'Sem companheiro.', 'good'); rerender(profile); } catch (e) { toast(e.message, 'bad'); } } }),
     dex: () => openDex(null, profile?.pokedex || [], profile?.pokedex_seen || [], { shinyCaught: profile?.stats?.shinyDex || [], shinySeen: profile?.stats?.shinySeen || [], megaDex: profile?.stats?.megaDex || null, vault: profile?.vault || [] }),
-    duel: () => openDuelQueue(ctx, profile),
+    duel: () => openPvp(ctx, profile), // ⚔️ v69: Duelo PVP (no lugar da fila do Torneio)
     series: () => openSeries(ctx, profile),
     trophies: () => openTrophies(profile),
     titles: () => openTitles(profile, p => { profile = p; rerender(); }),
@@ -642,7 +642,7 @@ async function rankingModal(myRating = null, myLeagueRaw = null, myName = '') {
           <div class="lg-bar"><i style="width:${mine.div === TOP_DIV ? 100 : Math.min(100, mine.lp)}%"></i></div>
           <div class="tiny muted">${mine.lp} PL${nextD ? ` · faltam ${LP_PER_DIV - mine.lp} para ${nextD.icon} ${esc(nextD.name)}` : ' · topo da Liga 👑'} · ${mine.wins}V ${mine.losses}D${mine.streak >= 2 ? ` · 🔥 ${mine.streak} seguidas` : ''}${mine.shield ? ` · 🛡️ proteção (${mine.shield})` : ''}</div>
           <div class="lg-last">${(mine.last || []).map(x => `<i class="${x === 'V' ? 'w' : x === 'D' ? 'l' : 'm'}">${x}</i>`).join('')}</div></div></div>`
-      : '<p class="small muted">Jogue um 🏆 Competitivo ou um ⚔️ Duelo ranqueado (Torneio) para entrar na Liga.</p>';
+      : '<p class="small muted">Jogue um 🏆 Competitivo ou um ⚔️ Duelo PVP para entrar na Liga.</p>';
     const ladder = `<div class="lg-ladder">${[...LEAGUE_DIVS].reverse().map(x => `<span class="lg-step ${mine && mine.div === x.idx ? 'on' : ''}" style="--ec:${x.color}" title="${esc(x.name)}">${x.icon}<small>${esc(x.name.replace(/^(\S+) /, ''))}</small></span>`).join('')}</div>`;
     const table = `<table class="score lg-table"><tr><th>#</th><th>Treinador</th><th>Divisão</th><th>PL</th><th>V</th><th>D</th><th>Últimas</th></tr>
       ${lg.table.map((r, i) => { const x = divInfo(r.div); return `<tr class="${r.name === myName ? 'me' : ''}"><td>${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</td><td>${esc(r.name)}</td><td style="color:${x.color}"><b>${x.icon} ${esc(x.name)}</b></td><td><b>${r.lp}</b></td><td>${r.wins}</td><td>${r.losses}</td><td class="lg-last">${(r.last || []).slice(-5).map(y => `<i class="${y === 'V' ? 'w' : y === 'D' ? 'l' : 'm'}">${y}</i>`).join('')}</td></tr>`; }).join('') || '<tr><td colspan="7" class="muted">Ninguém jogou ranqueado nesta temporada ainda.</td></tr>'}</table>`;
@@ -970,6 +970,9 @@ async function adminModal() {
         <div class="row"><select class="input grow" id="a-item">${Object.entries(ALL_ITEMS).filter(([id]) => isKeepable(id) || id === 'mega_bracelet' || id === 'dynamax_band').map(([id, it]) => `<option value="${id}">${esc(it.name)}</option>`).join('')}</select>
           <input class="input" id="a-iq" type="number" min="1" max="999" value="1" style="width:80px">
           <button class="btn" data-act="grant-item">🎒 Dar item (vai para a Mochila)</button></div></div>
+      <div class="card col" style="margin-top:10px"><h3>👀 Testar os avisos (só na sua tela)</h3>
+        <p class="tiny muted">Mostra o aviso de captura do jeito que os jogadores veem, usando o Pokémon escolhido em "Dar Pokémon". Não publica nada para ninguém nem vai para o Mural. Para aparecer de verdade no Mural, a captura tem que acontecer numa partida salva.</p>
+        <div class="row wrap" style="gap:6px"><button class="btn" data-act="pv-cap" data-k="sl">🌟 Lendário shiny</button><button class="btn" data-act="pv-cap" data-k="legendary">⚡ Lendário</button><button class="btn" data-act="pv-cap" data-k="shiny">✨ Shiny</button><button class="btn" data-act="pv-cap" data-k="duel">⚔️ Chamado de Duelo PVP</button></div></div>
       <div class="card col" style="margin-top:10px"><h3>🔐 Conta do jogador (suporte)</h3>
         <p class="tiny muted">Ninguém vê a senha (nem o admin) — dá para <b>definir uma nova</b>. Use o jogador escolhido em "Dar presente" ou procure pelo e-mail.</p>
         <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn" data-act="acc-info">🔎 Ver conta do jogador escolhido</button>
@@ -1032,6 +1035,12 @@ async function adminModal() {
     'save-shop': () => { collect(); run(() => api('admin', { op: 'save_shop', shop: data.shop }), 'Loja salva!'); },
     credit: d => { if (confirm('Creditar manualmente? Use só se o Pix foi pago e não caiu sozinho.')) run(() => api('admin', { op: 'credit_payment', paymentId: d.id }), 'Creditado.'); },
     daily: () => run(async () => { const r = await api('admin', { op: 'set_daily', species: ov.querySelector('#a-daily').value || null }); toast(`Pokémon do Dia: ${getSpecies(r.dailyPokemon).name}`, 'good'); }),
+    'pv-cap': d => { // 👀 v69: pré-visualização local dos avisos
+      const sp = ov.querySelector('#a-sp').value, spn = getSpecies(sp)?.name || sp, me = {};
+      if (d.k === 'duel') return showFeedBanner({ kind: 'duel_call', text: '', data: { matchId: 'preview', uid: 'preview', name: 'Treinador Teste', avatar: me.avatar || 1, megas: true, until: Date.now() + 20000 } });
+      const shiny = d.k !== 'legendary';
+      showFeedBanner({ kind: shiny ? 'shiny' : 'legendary', text: `${me.trainer_name || 'Você'} capturou ${d.k === 'shiny' ? '' : 'o lendário '}${spn}${shiny ? ' ✨SHINY✨' : ''}!`, data: { sp, shiny, name: me.trainer_name, avatar: me.avatar } });
+    },
     'give-gd': () => run(() => api('admin', { op: 'give_gold', userId: ov.querySelector('#a-user').value, amount: Number(ov.querySelector('#a-gd').value) }), 'Ouro enviado!'),
     'give-dm': () => run(() => api('admin', { op: 'give_diamonds', userId: ov.querySelector('#a-user').value, amount: Number(ov.querySelector('#a-dm').value) }), 'Diamantes enviados!'),
     'grant-item': () => run(() => api('admin', { op: 'grant_item', userId: ov.querySelector('#a-user').value, item: ov.querySelector('#a-item').value, qty: ov.querySelector('#a-iq').value }), 'Enviado para a Mochila!'),

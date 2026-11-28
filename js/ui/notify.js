@@ -3,6 +3,8 @@ import { esc } from './dom.js';
 import { monSprite, avatarUrl } from '../config.js';
 import { net, api } from '../api.js';
 import { confetti } from './fx.js';
+import { duelCallBanner } from './pvp.js';
+import { getSpecies } from '../../shared/data/pokemon.js';
 
 let lastId = null;
 let started = false;
@@ -35,16 +37,23 @@ export function showAnnouncement(a, force = false) {
 
 /** Banner no topo da tela (some sozinho). */
 export function showFeedBanner(ev) {
+  if (ev.kind === 'duel_call') { // ⚔️ v69: chamado de Duelo PVP — no canto, com botão de aceitar
+    let cb = document.getElementById('duel-calls');
+    if (!cb) { cb = document.createElement('div'); cb.id = 'duel-calls'; document.body.appendChild(cb); }
+    duelCallBanner(ev, cb);
+    return;
+  }
   let box = document.getElementById('feed-banners');
   if (!box) { box = document.createElement('div'); box.id = 'feed-banners'; document.body.appendChild(box); }
   const d = ev.data || {};
   const el = document.createElement('div');
-  el.className = `feed-banner ${ev.kind}`;
+  const shinyLegend = ev.kind === 'shiny' && d.sp && (getSpecies(d.sp)?.tier >= 5 || getSpecies(d.sp)?.legendary || getSpecies(d.sp)?.mythical); // 🌟 v69
+  el.className = `feed-banner ${ev.kind}${shinyLegend ? ' shiny-legend' : ''}`;
   const pic = d.sp ? `<img src="${monSprite(d.sp, d.shiny)}" alt="">` : d.avatar ? `<img src="${avatarUrl(d.avatar, d.skin)}" alt="">` : '<span style="font-size:30px">👑</span>';
-  el.innerHTML = `${pic}<div><div class="fb-kick">${ev.kind === 'legendary' ? '⚡ CAPTURA LENDÁRIA' : ev.kind === 'shiny' ? '✨ CAPTURA SHINY' : ev.kind === 'champion' ? '👑 NOVO CAMPEÃO' : ev.kind === 'market' ? '🏪 MERCADO GLOBAL' : '📢'}</div><div class="fb-text">${esc(ev.text)}</div></div>`;
+  el.innerHTML = `${pic}<div><div class="fb-kick">${shinyLegend ? '🌟 LENDÁRIO SHINY!' : ev.kind === 'legendary' ? '⚡ CAPTURA LENDÁRIA' : ev.kind === 'shiny' ? '✨ CAPTURA SHINY' : ev.kind === 'champion' ? '👑 NOVO CAMPEÃO' : ev.kind === 'market' ? '🏪 MERCADO GLOBAL' : '📢'}</div><div class="fb-text">${esc(ev.text)}</div></div>`;
   box.appendChild(el);
-  if (ev.kind === 'legendary' || ev.kind === 'champion') confetti(60);
-  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, 6000);
+  if (ev.kind === 'legendary' || ev.kind === 'champion' || shinyLegend) confetti(shinyLegend ? 120 : 60);
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, shinyLegend ? 9000 : 6000);
 }
 
 async function poll() {
@@ -68,7 +77,7 @@ export function startNotifications(config) {
   started = true;
   if (config?.announcement) showAnnouncement(config.announcement);
   poll();
-  setInterval(poll, net.mode === 'dev' ? 4000 : 20000);
+  setInterval(() => { if (!document.hidden) poll(); }, net.mode === 'dev' ? 4000 : 60000); // 💸 v63: o aviso em tempo real já chega na hora; a consulta é só reserva
   if (net.mode === 'prod' && net.sb) {
     net.sb.channel('global-feed')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'global_feed' }, () => poll())

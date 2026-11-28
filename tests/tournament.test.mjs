@@ -159,3 +159,32 @@ test('💎🔴 v67: Copa, Duelo e Torneio com opção de Mega/Gigantamax', async
   assert.equal(dr.state.options.megas, true);
   assert.ok(dr.state.players.every(p => p.megaKey));
 });
+
+test('⚔️ v69: Duelo PVP — chamar todos, aviso no feed, aceitar e duelar', async () => {
+  const { db, us: [a, b, c] } = await users(3);
+  const r = await matchOp(db, a, { op: 'duel_call', megas: false });
+  assert.ok(r.calling && r.until > Date.now());
+  await assert.rejects(matchOp(db, a, { op: 'duel_call' }), /Espere/); // não dá para chamar de novo logo em seguida
+  const ev = (await db.listFeed(0, 20)).find(e => e.kind === 'duel_call');
+  assert.ok(ev && ev.data.matchId === r.match.id);
+  // a sala do chamado não aparece na lista de salas
+  const { listRooms } = await import('../api/_lib/core.js');
+  const rooms = await listRooms(db, b);
+  assert.ok(!(rooms.rooms || []).some(x => x.id === r.match.id));
+  const calls = (await matchOp(db, b, { op: 'duel_calls' })).calls;
+  assert.equal(calls.length, 1); assert.equal(calls[0].name, 'T0');
+  assert.equal((await matchOp(db, a, { op: 'duel_calls' })).calls.length, 0); // o meu não aparece para mim
+  await assert.rejects(matchOp(db, a, { op: 'duel_accept', matchId: r.match.id }), /seu/);
+  const acc = await matchOp(db, b, { op: 'duel_accept', matchId: r.match.id });
+  assert.equal(acc.match.status, 'playing');
+  assert.equal(acc.match.options.pvp, true);
+  await assert.rejects(matchOp(db, c, { op: 'duel_accept', matchId: r.match.id }), /aceitou|expirou/);
+  // quem chamou descobre o duelo pelo duel_status
+  const st = await matchOp(db, a, { op: 'duel_status' });
+  assert.equal(st.match.id, acc.match.id);
+  // cancelar
+  const { db: db2, us: [x] } = await users(1);
+  await matchOp(db2, x, { op: 'duel_call' });
+  await matchOp(db2, x, { op: 'duel_cancel' });
+  assert.ok(!(await matchOp(db2, x, { op: 'duel_status' })).calling);
+});
