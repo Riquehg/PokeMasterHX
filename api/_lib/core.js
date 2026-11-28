@@ -1419,7 +1419,7 @@ export async function adminOp(db, user, body) {
         return { ok: true };
       }
       if (!isKeepable(body.item)) bad('Só dá para dar Pokébolas, Amuleto Shiny e TM.');
-      const qty = Math.max(1, Math.min(99, Math.floor(Number(body.qty) || 1)));
+      const qty = Math.max(1, Math.min(BAG_MAX_PER_ITEM, Math.floor(Number(body.qty) || 1)));
       const ok = await mutateProfile(db, body.userId, prof => ({ stats: { ...(prof.stats || {}), bag: addToBag(prof.stats?.bag, { [body.item]: qty }) } }));
       if (!ok) notFound('Usuário não encontrado.');
       return { ok: true };

@@ -21,7 +21,7 @@ export const CROP_IDS = Object.keys(CROPS);
 export const GOODS = { ...Object.fromEntries(CROP_IDS.map(k => [k, { name: CROPS[k].name, icon: CROPS[k].icon }])), farinha: { name: 'Farinha', icon: '🥡' },
   // v49: o que alguns Pokémon dão no ❤️ Carinho
   leite: { name: 'Leite Moomoo', icon: '🥛' }, ovo: { name: 'Ovo', icon: '🥚' }, mel: { name: 'Mel', icon: '🍯' } };
-export const GOODS_CAP = 99;
+export const GOODS_CAP = 999; // v68: era 99
 
 /** Canteiros pelo nível da Fazenda: 2 no Nv. 1, +1 a cada 2 níveis, até 8. */
 export const plotsFor = lvl => Math.min(8, 2 + Math.floor((Math.max(1, lvl) - 1) / 2));

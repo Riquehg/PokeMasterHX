@@ -4,7 +4,7 @@ import { TOWER_PRICE, TOWER_TEAM, TOWER_LEVEL, TOWER_SET, pbForWin, SET_CLEAR_BO
 import { GEAR } from '../../shared/data/battlegear.js';
 import { MEGAS, stoneItemId } from '../../shared/data/megas.js';
 import { GMAX } from '../../shared/data/gmax.js';
-import { ITEMS } from '../../shared/data/items.js';
+import { ITEMS, BAG_MAX_PER_ITEM } from '../../shared/data/items.js';
 import { TYPES } from '../../shared/rules/types.js';
 import { createRng, randomSeed } from '../../shared/rules/rng.js';
 import { mutateProfile, getOrCreateProfile, publicMatch, addToBag } from './core.js';
@@ -127,7 +127,7 @@ export async function towerOp(db, user, body) {
         return { stats: { ...(cur.stats || {}), tower: { ...tw, pb: tw.pb - S.pb }, [S.key]: true } };
       }
       const bag = addToBag(cur.stats?.bag, { [item]: S.qty });
-      if (item === 'rare_candy') bag.rare_candy = Math.min(99, (cur.stats?.bag?.rare_candy || 0) + S.qty); // 🍬 fica na Mochila para usar na Coleção
+      if (item === 'rare_candy') bag.rare_candy = Math.min(BAG_MAX_PER_ITEM, (cur.stats?.bag?.rare_candy || 0) + S.qty); // 🍬 fica na Mochila para usar na Coleção
       return { stats: { ...(cur.stats || {}), tower: { ...tw, pb: tw.pb - S.pb }, bag } };
     });
     return { tower: pub(TW(p2.stats)), gold: p2.gold, profile: p2, message: S.key ? `${item === 'mega_bracelet' ? '🔗' : '🔴'} ${ITEMS[item].name} liberado na sua conta! Agora pode ${item === 'mega_bracelet' ? 'Mega Evoluir' : 'dar Gigantamax'} nas partidas que permitirem.` : `🛒 ${S.qty > 1 ? S.qty + '× ' : ''}${ITEMS[item].name} foi para a 🎒 Mochila!` };

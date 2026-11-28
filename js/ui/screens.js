@@ -968,7 +968,7 @@ async function adminModal() {
           <input class="input" id="a-lv" type="number" min="1" max="60" value="5" style="width:80px"><label class="small"><input type="checkbox" id="a-shiny"> shiny</label>
           <button class="btn" data-act="grant">🎁 Dar Pokémon (vai para a Coleção)</button></div>
         <div class="row"><select class="input grow" id="a-item">${Object.entries(ALL_ITEMS).filter(([id]) => isKeepable(id) || id === 'mega_bracelet' || id === 'dynamax_band').map(([id, it]) => `<option value="${id}">${esc(it.name)}</option>`).join('')}</select>
-          <input class="input" id="a-iq" type="number" min="1" max="99" value="1" style="width:80px">
+          <input class="input" id="a-iq" type="number" min="1" max="999" value="1" style="width:80px">
           <button class="btn" data-act="grant-item">🎒 Dar item (vai para a Mochila)</button></div></div>
       <div class="card col" style="margin-top:10px"><h3>🔐 Conta do jogador (suporte)</h3>
         <p class="tiny muted">Ninguém vê a senha (nem o admin) — dá para <b>definir uma nova</b>. Use o jogador escolhido em "Dar presente" ou procure pelo e-mail.</p>

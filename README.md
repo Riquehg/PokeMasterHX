@@ -172,6 +172,7 @@ Jogo de tabuleiro Pokémon para o navegador, com **multiplayer online de verdade
 - **v65d** — 📱 mapa no celular: arrastar começando em cima de uma casa ou peão parava sozinho (o mapa "travava"); agora o arrasto segue o dedo. As bordas ganharam folga para as casas da beirada não ficarem escondidas atrás dos botões de zoom e do placar.
 - **v66** — 📦 +50 vagas na Coleção dá para comprar várias vezes (até 1.300). 🍬 Rare Candy mais raro na partida, os que sobram vão para a Mochila da conta (menos os comprados na loja da cidade) e dá para dar vários de uma vez (na partida e na Coleção). 🪙 1/4 do ouro que sobra na partida vai para a conta (antes 1/10, máx. 4.000) — e partida encerrada pelo admin/parada também paga ouro e itens. ⭐ Lendário da mesma espécie pode aparecer de novo. 🏷️ Ícones de tipo nos cards da Coleção.
 - **v67** — 💎🔴 Mega e Gigantamax como opção da sala também na 🏟️ Copa e no ⚔️ Duelo (e as CPUs da Copa vêm com Megapedra ou Fator), e no ⚔️ Torneio dá para entrar na fila "Com Mega e Gigantamax" (só encontra quem escolheu o mesmo). Bracelete e Pulseira da conta agora contam nesses duelos.
+- **v68** — 📦 Limite por item subiu de 99 para 999: Mochila da conta (todos os itens), recursos e produtos da 🌾 Fazenda/Horta, Loja PB da Torre e o "dar item" do Admin. Amuleto Shiny (1) e Amuleto Lendário (3) continuam iguais.
 ## 3. Publicar (passo a passo, só pelo navegador)
 
 ### 3.1 Supabase

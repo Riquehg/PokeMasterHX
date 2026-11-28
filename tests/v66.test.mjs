@@ -77,3 +77,14 @@ test('⭐ v66: lendário da mesma espécie pode aparecer de novo (a exclusão da
   const src = fs.readFileSync(new URL('../shared/engine.js', import.meta.url), 'utf8');
   assert.ok(!/exclude: p\.legendSp/.test(src));
 });
+
+test('📦 v68: limites de 99 viraram 999 (Mochila, recursos e produtos da Fazenda)', async () => {
+  const { BAG_MAX_PER_ITEM } = await import('../shared/data/items.js');
+  const { RES_CAP } = await import('../shared/data/farm.js');
+  const { GOODS_CAP } = await import('../shared/data/garden.js');
+  const { addToBag } = await import('../api/_lib/core.js');
+  assert.equal(BAG_MAX_PER_ITEM, 999); assert.equal(RES_CAP, 999); assert.equal(GOODS_CAP, 999);
+  assert.equal(addToBag({ ultra_ball: 90 }, { ultra_ball: 50 }).ultra_ball, 140);
+  assert.equal(addToBag({ ultra_ball: 990 }, { ultra_ball: 50 }).ultra_ball, 999);
+  assert.equal(addToBag({}, { shiny_charm: 3 }).shiny_charm, 1); // Amuleto continua 1
+});

@@ -122,7 +122,7 @@ ITEMS.gene_candy = { name: 'Doce Genético', kind: 'gene', price: 0, minTier: 0,
 export const GENE_ROLLS = 2; // cada IV: melhor de 2 sorteios (0–31) — pode subir ou cair
 export const KEEP_KINDS = ['ball', 'charm', 'tm', 'megastone', 'fragment', 'gear', 'meal', 'stone', 'ingredient', 'soup', 'gene', 'candy']; // 🍬 v66: Rare Candy vai para a Mochila
 export const isKeepable = id => !!ITEMS[id] && KEEP_KINDS.includes(ITEMS[id].kind);
-export const BAG_MAX_PER_ITEM = 99;
+export const BAG_MAX_PER_ITEM = 999; // v68: era 99
 /** Quanto de cada item dá para levar para uma partida (modo Coleção). */
 export function bringLimit(id) {
   const it = ITEMS[id];
